@@ -6,21 +6,23 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QDockWidget, QFileDialog, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar, QWidget)
+from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMessageBox,
+                               QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar)
 
-from .. import APP_NAME
-from ..io.dgn import ConversionError
-from ..io.dxf_loader import DrawingLoadError, load_drawing
+from .. import APP_NAME, __version__
 from ..checks.base import Issue
+from ..io.dgn import DGN_NAVOD
+from ..io.dxf_loader import load_drawing
 from ..model import Drawing
-from ..project import Project
+from ..project import PROJECT_EXT, Project, default_projects_dir
 from ..runner import CheckResult, carry_states, compare, run_checks
-from .drawing_view import DrawingView
+from .drawing_view import DrawingView, prepare_drawing
+from .image_viewer import ImageBrowser, load_pixmap
 from .issue_panel import IssuePanel
 from .layers_panel import LayersPanel
 from .settings_dialog import SettingsDialog
 from .worker import BackgroundTask
+from .zadani_tab import ZadaniTab
 
 DRAWING_FILTER = "Výkresy (*.dxf *.dgn *.dwg);;DXF (*.dxf);;DGN (*.dgn);;Všechny soubory (*)"
 
@@ -54,8 +56,15 @@ class MainWindow(QMainWindow):
         self.split.setStretchFactor(1, 2)
         self.split.setSizes([860, 540])
 
+        self.zadani = ZadaniTab(lambda: self.drawing)
+        self.zadani.rulesChanged.connect(self._rules_changed)
+        self.zadani.projectModified.connect(self._project_modified)
+        self.zadani.backgroundChanged.connect(self._apply_background)
+        self.zadani.showSketchBeside.connect(self.show_sketch_beside)
+
         self.tabs = QTabWidget()
         self.tabs.addTab(self.split, "Výkres a chyby")
+        self.tabs.addTab(self.zadani, "Zadání")
         self.setCentralWidget(self.tabs)
 
         self.layers = LayersPanel()
@@ -64,6 +73,16 @@ class MainWindow(QMainWindow):
         self.layers_dock.setObjectName("hladiny")
         self.layers_dock.setWidget(self.layers)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.layers_dock)
+
+        self.sketch = ImageBrowser(compact=True)
+        self.sketch.noteChanged.connect(self._sketch_note_changed)
+        self.zadani.noteChangedSignal.connect(self.sketch.sync_note)
+        self.sketch_dock = QDockWidget("Náčrt a fotky", self)
+        self.sketch_dock.setObjectName("nacrt")
+        self.sketch_dock.setWidget(self.sketch)
+        self.sketch_dock.setToolTip("Panel lze odpojit do plovoucího okna tlačítkem v jeho záhlaví.")
+        self.addDockWidget(Qt.RightDockWidgetArea, self.sketch_dock)
+        self.sketch_dock.hide()
 
         self._build_status()
         self._build_actions()
@@ -122,21 +141,48 @@ class MainWindow(QMainWindow):
         self.a_prev = self._act("◀ Předchozí chyba", lambda: self.issue_panel.step(-1), None,
                                 "Předchozí chyba (F7)")
         self.a_next = self._act("Další chyba ▶", lambda: self.issue_panel.step(1), None, "Další chyba (F8)")
+        self.a_new_project = self._act("Nový projekt…", self.new_project, "Ctrl+N")
+        self.a_open_project = self._act("Otevřít projekt…", self.open_project_dialog, "Ctrl+Shift+O",
+                                        "Otevřít projekt ze souboru .kontrola nebo ze složky")
+        self.a_save_project = self._act("Uložit projekt", self.save_project, "Ctrl+S")
+        self.a_save_project_as = self._act("Uložit projekt jako soubor .kontrola…", self.save_project_as,
+                                           "Ctrl+Shift+S", "Celý projekt (výkres, pravidla, podklady, stav "
+                                           "chyb) do jednoho souboru")
+        self.a_exp_csv = self._act("Seznam chyb do CSV…", lambda: self.export("csv"))
+        self.a_exp_xlsx = self._act("Seznam chyb do Excelu…", lambda: self.export("xlsx"))
+        self.a_exp_pdf = self._act("Protokol do PDF…", lambda: self.export("pdf"))
+        self.a_exp_dxf = self._act("DXF s hladinou KONTROLA_CHYBY…", lambda: self.export("dxf"))
+        self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
+                                  "Zobrazit náčrt a fotky v panelu vedle výkresu (panel lze odpojit)")
 
         m_file = self.menuBar().addMenu("&Soubor")
         m_file.addAction(self.a_open)
+        m_file.addSeparator()
+        m_file.addAction(self.a_new_project)
+        m_file.addAction(self.a_open_project)
+        m_file.addAction(self.a_save_project)
+        m_file.addAction(self.a_save_project_as)
+        m_file.addSeparator()
+        m_exp = m_file.addMenu("Export")
+        for a in (self.a_exp_csv, self.a_exp_xlsx, self.a_exp_pdf, self.a_exp_dxf):
+            m_exp.addAction(a)
         m_file.addSeparator()
         m_file.addAction(self.a_quit)
         m_view = self.menuBar().addMenu("&Zobrazení")
         m_view.addAction(self.a_fit)
         m_view.addAction(self.a_light)
         m_view.addAction(self.a_labels)
+        m_view.addAction(self.a_sketch)
         m_view.addAction(self.layers_dock.toggleViewAction())
+        m_view.addAction(self.sketch_dock.toggleViewAction())
         m_check = self.menuBar().addMenu("&Kontrola")
         m_check.addAction(self.a_check)
         m_check.addAction(self.a_recheck)
         m_check.addSeparator()
         m_check.addAction(self.a_settings)
+        m_help = self.menuBar().addMenu("&Nápověda")
+        m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
+        m_help.addAction(self._act("O aplikaci", self._about))
 
         tb = QToolBar("Hlavní panel")
         tb.setObjectName("hlavni_panel")
@@ -151,6 +197,9 @@ class MainWindow(QMainWindow):
         tb.addAction(self.a_labels)
         tb.addAction(self.a_prev)
         tb.addAction(self.a_next)
+        tb.addSeparator()
+        tb.addAction(self.a_sketch)
+        tb.addAction(self.a_exp_pdf)
         self.addToolBar(tb)
         self.toolbar = tb
 
@@ -190,11 +239,70 @@ class MainWindow(QMainWindow):
             project = Project.new_in_default_location("Můj projekt")
         self.set_project(project)
 
+    def new_project(self):
+        name, ok = QInputDialog.getText(self, "Nový projekt", "Název projektu (např. Mapování 2026 – úloha 3):")
+        if not ok or not name.strip():
+            return
+        if self.project is not None:
+            self.project.save()
+        self.drawing = None
+        self.view.clear_drawing()
+        self.layers.set_drawing(None)
+        self.set_project(Project.new_in_default_location(name.strip()))
+        self.statusBar().showMessage(f"Projekt vytvořen ve složce {self.project.root}", 10000)
+
+    def open_project_dialog(self):
+        start = self.settings.value("cesty/projekt", str(default_projects_dir()))
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Otevřít projekt", start, "Projekt kontroly (*.kontrola projekt.yaml);;Vše (*)")
+        if path:
+            self.settings.setValue("cesty/projekt", str(Path(path).parent))
+            self.open_project(path)
+
+    def open_project(self, path: str):
+        p = Path(path)
+        try:
+            if p.suffix.lower() == PROJECT_EXT:
+                project = Project.import_zip(p)
+                self.statusBar().showMessage(f"Projekt rozbalen do {project.root}", 10000)
+            else:
+                project = Project.open(p.parent if p.is_file() else p)
+        except Exception as exc:
+            QMessageBox.warning(self, APP_NAME, f"Projekt nelze otevřít: {exc}")
+            return
+        if self.project is not None:
+            self.project.save()
+        self.drawing = None
+        self.view.clear_drawing()
+        self.layers.set_drawing(None)
+        self.set_project(project)
+
+    def save_project(self):
+        if self.project is not None:
+            self.project.store_issues(self.issues)
+            self.project.save()
+            self.statusBar().showMessage(f"Projekt uložen ({self.project.root})", 6000)
+
+    def save_project_as(self):
+        if self.project is None:
+            return
+        start = str(Path(self.settings.value("cesty/projekt", str(Path.home()))) / (self.project.name + PROJECT_EXT))
+        path, _ = QFileDialog.getSaveFileName(self, "Uložit projekt jako", start, "Projekt kontroly (*.kontrola)")
+        if not path:
+            return
+        self.settings.setValue("cesty/projekt", str(Path(path).parent))
+        self.project.store_issues(self.issues)
+        out = self.project.export_zip(path)
+        self.statusBar().showMessage(f"Projekt uložen do {out}", 10000)
+
     def set_project(self, project: Project):
         self.project = project
         self.settings.setValue("projekt/posledni", str(project.root))
         self._update_title()
         self.set_issues([])
+        self.zadani.set_project(project)
+        self.sketch.set_project(project)
+        self._apply_background(project.meta.get("podklad") or {})
         path = project.drawing_path_for_loading()
         if path is not None:
             stored = project.load_issues()
@@ -222,12 +330,18 @@ class MainWindow(QMainWindow):
     def open_path(self, path: str):
         """Otevře soubor přetažený do okna nebo vybraný v dialogu."""
         suffix = Path(path).suffix.lower()
-        if suffix in (".dxf", ".dgn", ".dwg"):
-            self.load_drawing_file(Path(path), add_to_project=True)
+        if suffix == PROJECT_EXT:
+            self.open_project(path)
+        elif suffix in (".dxf", ".dgn", ".dwg"):
+            if self.tabs.currentWidget() is self.zadani and \
+                    self.zadani.tabs.currentWidget() is self.zadani.template_page:
+                self.zadani.template_page.set_template(path)
+            else:
+                self.load_drawing_file(Path(path), add_to_project=True)
         else:
-            QMessageBox.information(self, APP_NAME,
-                                    f"Soubor {Path(path).name} není výkres. Podklady (tabulky, náčrty, "
-                                    f"fotky) přidejte na záložce Zadání.")
+            # tabulky, náčrty a fotky patří do Zadání
+            self.tabs.setCurrentWidget(self.zadani)
+            self.zadani.handle_files([path])
 
     def load_drawing_file(self, path: Path, add_to_project: bool = True, after=None, keep_view=False):
         if self.task is not None and self.task.is_running():
@@ -236,16 +350,19 @@ class MainWindow(QMainWindow):
         oda = self.project.config.oda_cesta if self.project else None
 
         def job(progress, cancelled):
-            return load_drawing(path, progress, oda)
+            drawing = load_drawing(path, lambda p, m="": progress(int(p * 0.85), m), oda)
+            progress(90, "Připravuji zobrazení…")
+            return drawing, prepare_drawing(drawing)
 
-        def done(drawing: Drawing):
+        def done(result):
+            drawing, prepared = result
             if add_to_project and self.project is not None:
                 try:
                     self.project.set_drawing(path)
                     self.project.save()
                 except OSError as exc:
                     QMessageBox.warning(self, APP_NAME, f"Výkres se nepodařilo zkopírovat do projektu: {exc}")
-            self.set_drawing(drawing, keep_view=keep_view)
+            self.set_drawing(drawing, keep_view=keep_view, prepared=prepared)
             if after:
                 after(drawing)
 
@@ -255,10 +372,10 @@ class MainWindow(QMainWindow):
         title = "Výkres nelze otevřít"
         QMessageBox.warning(self, title, msg)
 
-    def set_drawing(self, drawing: Drawing, keep_view: bool = False):
+    def set_drawing(self, drawing: Drawing, keep_view: bool = False, prepared=None):
         self.drawing = drawing
         tr, center = self.view.transform(), self.view.mapToScene(self.view.viewport().rect().center())
-        self.view.set_drawing(drawing)
+        self.view.set_drawing(drawing, prepared)
         if keep_view:
             self.view.setTransform(tr)
             self.view.centerOn(center)
@@ -331,6 +448,135 @@ class MainWindow(QMainWindow):
             self.project.config = dlg.result_config()
             dlg.apply_rules_settings(self.project.rules)
             self.project.save()
+
+    def _rules_changed(self):
+        self.statusBar().showMessage(f"Pravidla: {len(self.project.rules.pravidla)}. Pro jejich použití "
+                                     f"spusťte kontrolu (F5).", 8000)
+
+    def _project_modified(self):
+        self.sketch.refresh()
+        self._update_title()
+
+    def _sketch_note_changed(self, rel: str, text: str):
+        self.project.save()
+        self.zadani.images_page.browser.sync_note(rel, text)
+
+    def show_sketch_beside(self):
+        self.sketch.refresh()
+        if not self.sketch.images():
+            QMessageBox.information(self, APP_NAME, "V projektu zatím nejsou žádné náčrty ani fotky. "
+                                                    "Přidejte je na záložce Zadání → Náčrt a fotky.")
+            self.tabs.setCurrentWidget(self.zadani)
+            self.zadani.tabs.setCurrentWidget(self.zadani.images_page)
+            return
+        self.tabs.setCurrentWidget(self.split)
+        was_hidden = not self.sketch_dock.isVisible()
+        self.sketch_dock.show()
+        self.sketch_dock.raise_()
+        if was_hidden and not self.sketch_dock.isFloating():
+            self.resizeDocks([self.sketch_dock], [max(320, self.width() // 4)], Qt.Horizontal)
+
+    def _apply_background(self, bg: dict):
+        if not bg or not bg.get("zapnuto") or not bg.get("obrazek") or self.project is None:
+            self.view.set_background_image(None)
+            return
+        path = self.project.root / bg["obrazek"]
+        if not path.is_file():
+            self.view.set_background_image(None)
+            return
+        self.view.set_background_image(load_pixmap(path), float(bg.get("x", 0)), float(bg.get("y", 0)),
+                                       float(bg.get("meritko", 0.1)), float(bg.get("rotace", 0)),
+                                       float(bg.get("pruhlednost", 0.5)))
+
+    def _dgn_help(self):
+        QMessageBox.information(self, "Převod DGN na DXF", DGN_NAVOD)
+
+    def _about(self):
+        QMessageBox.about(self, APP_NAME,
+                          f"<h3>{APP_NAME} {__version__}</h3>"
+                          "Předkontrola topologie a atributů geodetických výkresů (DXF z MicroStationu) "
+                          "před odevzdáním.<br><br>Všechna data zůstávají na tomto počítači, nic se "
+                          "nikam neodesílá.<br><br>Knihovny: PySide6 (Qt), ezdxf, shapely, openpyxl, "
+                          "pdfplumber, reportlab.")
+
+    # ------------------------------------------------------------------ export
+    def export(self, kind: str):
+        if not self.issues:
+            QMessageBox.information(self, "Export", "Není co exportovat – nejdřív spusťte kontrolu (F5).")
+            return
+        from ..export import dxf_export, tables
+        base = Path(self.drawing.source_path or self.drawing.path).stem if self.drawing else "vykres"
+        start_dir = Path(self.settings.value("cesty/export", str(Path.home())))
+        spec = {
+            "csv": ("Uložit seznam chyb", f"{base}_chyby.csv", "CSV (*.csv)"),
+            "xlsx": ("Uložit seznam chyb", f"{base}_chyby.xlsx", "Excel (*.xlsx)"),
+            "pdf": ("Uložit protokol", f"{base}_protokol.pdf", "PDF (*.pdf)"),
+            "dxf": ("Uložit DXF s chybami", f"{base}_kontrola.dxf", "DXF (*.dxf)"),
+        }[kind]
+        path, _ = QFileDialog.getSaveFileName(self, spec[0], str(start_dir / spec[1]), spec[2])
+        if not path:
+            return
+        self.settings.setValue("cesty/export", str(Path(path).parent))
+        visible = self.issue_panel.visible_numbers()
+        issues = [i for i in self.issues if i.number in visible]
+        if len(issues) != len(self.issues):
+            ans = QMessageBox.question(self, "Export", f"Filtr zobrazuje {len(issues)} z {len(self.issues)} "
+                                       "chyb. Exportovat jen zobrazené?\n\n(Ne = exportovat všechny)",
+                                       QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            if ans == QMessageBox.Cancel:
+                return
+            if ans == QMessageBox.No:
+                issues = list(self.issues)
+        try:
+            if kind == "csv":
+                tables.export_csv(issues, path)
+            elif kind == "xlsx":
+                tables.export_xlsx(issues, path, drawing_name=base + ".dxf")
+            elif kind == "dxf":
+                if self.drawing is None:
+                    raise ValueError("Není otevřený výkres.")
+                dxf_export.export_dxf(self.drawing, issues, path)
+            elif kind == "pdf":
+                self._export_pdf(issues, path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Export", f"Export se nezdařil: {exc}")
+            return
+        self.statusBar().showMessage(f"Uloženo: {path}", 10000)
+        if QMessageBox.question(self, "Export", f"Uloženo do\n{path}\n\nOtevřít soubor?") == QMessageBox.Yes:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def _export_pdf(self, issues: list[Issue], path: str):
+        from PySide6.QtCore import QBuffer, QIODevice
+
+        from ..export.pdf_report import export_pdf
+        def png(pm) -> bytes:
+            buf = QBuffer()
+            buf.open(QIODevice.WriteOnly)
+            pm.save(buf, "PNG")
+            return bytes(buf.data())
+
+        images: dict[int, bytes] = {}
+        limit = 60
+        overview = None
+        self.view.set_print_mode(True)
+        try:
+            if self.drawing is not None:
+                for iss in [i for i in issues if i.state == "nová"][:limit]:
+                    span = 20.0
+                    if iss.geometry is not None and not iss.geometry.is_empty:
+                        b = iss.geometry.bounds
+                        span = min(80.0, max(span, (b[2] - b[0]) * 1.3, (b[3] - b[1]) * 1.3))
+                    images[iss.number] = png(self.view.render_region(iss.x, iss.y, span, 420))
+                overview = png(self.view.render_overview(issues, 900))
+        finally:
+            self.view.set_print_mode(False)
+        drawing_name = Path(self.drawing.source_path or self.drawing.path).name if self.drawing else ""
+        export_pdf(issues, path, drawing_name=drawing_name, project_name=self.project.name,
+                   rules_count=len(self.project.rules.pravidla), images=images, overview=overview,
+                   notes=getattr(self, "last_notes", []), tolerance=self.project.config.tolerance,
+                   image_limit=limit)
 
     def _on_issue_selected(self, number: int):
         self.view.highlight_issue(number, zoom=True)

@@ -11,11 +11,12 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Iterable
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QPainter, QPainterPath,
-                           QPainterPathStroker, QPen, QPixmap, QTransform)
+                           QPen, QPixmap, QPolygonF, QTransform)
 from PySide6.QtWidgets import (QGraphicsItem, QGraphicsPathItem, QGraphicsPixmapItem,
                                QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView)
 
@@ -155,6 +156,112 @@ class IssueMarker(QGraphicsItem):
             painter.drawText(rect, Qt.AlignCenter, self._label)
 
 
+class PathBuilder:
+    """Převod geometrie na QPainterPath (bez grafických prvků – lze volat i mimo hlavní vlákno)."""
+
+    def __init__(self, origin: tuple[float, float]):
+        self.origin = origin
+
+    def to_scene(self, x: float, y: float) -> QPointF:
+        return QPointF(x - self.origin[0], -(y - self.origin[1]))
+
+    def add_geometry(self, path: QPainterPath, geom):
+        if geom is None or geom.is_empty:
+            return
+        gt = geom.geom_type
+        if gt == "LineString":
+            self.add_coords(path, geom.coords, False)
+        elif gt == "Polygon":
+            self.add_coords(path, geom.exterior.coords, True)
+            for i in geom.interiors:
+                self.add_coords(path, i.coords, True)
+        elif hasattr(geom, "geoms"):
+            for g in geom.geoms:
+                self.add_geometry(path, g)
+
+    def add_coords(self, path: QPainterPath, coords: Iterable, closed: bool):
+        ox, oy = self.origin
+        pts = [QPointF(c[0] - ox, oy - c[1]) for c in coords]
+        if not pts:
+            return
+        path.addPolygon(QPolygonF(pts))
+        if closed:
+            path.closeSubpath()
+
+    def add_insert(self, path: QPainterPath, f: Feature, drawing: Drawing, cross: float,
+                   block_cache: dict[str, QPainterPath]):
+        bg = drawing.blocks.get(f.block_name or "")
+        c = self.to_scene(*f.vertices[0])
+        if bg is None or (not bg.paths and not bg.points):
+            path.moveTo(c.x() - cross, c.y() - cross); path.lineTo(c.x() + cross, c.y() + cross)
+            path.moveTo(c.x() - cross, c.y() + cross); path.lineTo(c.x() + cross, c.y() - cross)
+            return
+        sub = block_cache.get(bg.name)
+        if sub is None:
+            sub = QPainterPath()
+            for pts, closed in zip(bg.paths, bg.closed):
+                sub.addPolygon(QPolygonF([QPointF(x, y) for x, y in pts]))
+                if closed:
+                    sub.closeSubpath()
+            for x, y in bg.points:
+                sub.moveTo(x - cross / 3, y)
+                sub.lineTo(x + cross / 3, y)
+            block_cache[bg.name] = sub
+        t = QTransform()
+        t.translate(c.x(), c.y())
+        t.rotate(-f.rotation)
+        t.scale(f.scale[0], -f.scale[1])
+        t.translate(-bg.base_point[0], -bg.base_point[1])
+        path.addPath(t.map(sub))
+
+
+@dataclass
+class PreparedDrawing:
+    drawing: Drawing
+    origin: tuple[float, float]
+    groups: dict[str, dict[tuple, QPainterPath]]
+    fills: dict[str, dict[tuple, QPainterPath]]
+    texts: list[Feature]
+
+
+def prepare_drawing(drawing: Drawing) -> PreparedDrawing:
+    """Sestaví cesty pro kreslení seskupené podle hladiny a stylu. Bezpečné ve vlákně na pozadí."""
+    b = drawing.bounds() or (0, 0, 100, 100)
+    origin = (b[0], b[1])
+    pb = PathBuilder(origin)
+    diag = max(1.0, math.hypot(b[2] - b[0], b[3] - b[1]))
+    cross = max(0.1, min(0.5, diag / 800))
+    groups: dict[str, dict[tuple, QPainterPath]] = {}
+    fills: dict[str, dict[tuple, QPainterPath]] = {}
+    texts: list[Feature] = []
+    block_cache: dict[str, QPainterPath] = {}
+    for f in drawing.features:
+        if f.geom_type == GeomType.TEXT:
+            texts.append(f)
+            continue
+        if f.dxftype == "HATCH":
+            path = fills.setdefault(f.layer, {}).setdefault((f.color_rgb, f.fill), QPainterPath())
+            pb.add_geometry(path, f.geometry)
+            continue
+        key = (f.color_rgb, round(f.lineweight, 2), dash_pattern(f.linetype) and f.linetype.upper())
+        path = groups.setdefault(f.layer, {}).setdefault(key, QPainterPath())
+        if f.dxftype == "INSERT":
+            pb.add_insert(path, f, drawing, cross, block_cache)
+            for (t, x, y, h, rot) in f.display_texts:
+                texts.append(Feature(fid=-1, dxftype="ATTRIB", geom_type=GeomType.TEXT, geometry=None,
+                                     layer=f.layer, color_rgb=f.color_rgb, text=t, text_height=h,
+                                     rotation=rot, vertices=[(x, y)]))
+        elif f.dxftype == "CIRCLE":
+            path.addEllipse(pb.to_scene(*f.vertices[0]), f.radius, f.radius)
+        elif f.dxftype == "POINT":
+            c = pb.to_scene(*f.vertices[0])
+            path.moveTo(c.x() - cross, c.y()); path.lineTo(c.x() + cross, c.y())
+            path.moveTo(c.x(), c.y() - cross); path.lineTo(c.x(), c.y() + cross)
+        else:
+            pb.add_geometry(path, f.geometry)
+    return PreparedDrawing(drawing, origin, groups, fills, texts)
+
+
 class DrawingView(QGraphicsView):
     """Zobrazení výkresu s kroužky chyb."""
 
@@ -221,10 +328,13 @@ class DrawingView(QGraphicsView):
             self._highlight = None
         self.drawing = None
 
-    def set_drawing(self, drawing: Drawing):
+    def set_drawing(self, drawing: Drawing, prepared: "PreparedDrawing | None" = None):
+        """Zobrazí výkres. ``prepared`` lze připravit předem ve vlákně na pozadí (:func:`prepare_drawing`)."""
         self.clear_drawing()
-        b = drawing.bounds() or (0, 0, 100, 100)
-        self.origin = (b[0], b[1])
+        if prepared is None or prepared.drawing is not drawing:
+            prepared = prepare_drawing(drawing)
+        self.origin = prepared.origin
+        self._prepared = prepared
         self._build(drawing)
         self.fit_all()
 
@@ -234,37 +344,10 @@ class DrawingView(QGraphicsView):
             sc.removeItem(it)
         self.layer_items.clear()
         self.drawing = drawing
-        b = drawing.bounds() or (0, 0, 100, 100)
-        diag = max(1.0, math.hypot(b[2] - b[0], b[3] - b[1]))
-        cross = max(0.1, min(0.5, diag / 800))
-        groups: dict[str, dict[tuple, QPainterPath]] = {}
-        fills: dict[str, dict[tuple, QPainterPath]] = {}
-        texts: list[Feature] = []
-        for f in drawing.features:
-            if f.geom_type == GeomType.TEXT:
-                texts.append(f)
-                continue
-            key = (f.color_rgb, round(f.lineweight, 2), dash_pattern(f.linetype) and f.linetype.upper())
-            if f.dxftype == "HATCH":
-                path = fills.setdefault(f.layer, {}).setdefault((f.color_rgb, f.fill), QPainterPath())
-                self._add_geometry(path, f.geometry)
-                continue
-            path = groups.setdefault(f.layer, {}).setdefault(key, QPainterPath())
-            if f.dxftype == "INSERT":
-                self._add_insert(path, f, drawing, cross)
-                for (t, x, y, h, rot) in f.display_texts:
-                    texts.append(Feature(fid=-1, dxftype="ATTRIB", geom_type=GeomType.TEXT, geometry=None,
-                                         layer=f.layer, color_rgb=f.color_rgb, text=t, text_height=h,
-                                         rotation=rot, vertices=[(x, y)]))
-            elif f.dxftype == "CIRCLE":
-                c = self.to_scene(*f.vertices[0])
-                path.addEllipse(c, f.radius, f.radius)
-            elif f.dxftype == "POINT":
-                c = self.to_scene(*f.vertices[0])
-                path.moveTo(c.x() - cross, c.y()); path.lineTo(c.x() + cross, c.y())
-                path.moveTo(c.x(), c.y() - cross); path.lineTo(c.x(), c.y() + cross)
-            else:
-                self._add_geometry(path, f.geometry)
+        prep = getattr(self, "_prepared", None)
+        if prep is None or prep.drawing is not drawing:
+            prep = self._prepared = prepare_drawing(drawing)
+        groups, fills, texts = prep.groups, prep.fills, prep.texts
         all_layers = set(groups) | set(fills) | {t.layer for t in texts} | set(drawing.layers)
         for name in sorted(all_layers):
             li = LayerItem(name)
@@ -303,54 +386,8 @@ class DrawingView(QGraphicsView):
         self.scene().setSceneRect(rect.adjusted(-m, -m, m, m))
 
     def _add_geometry(self, path: QPainterPath, geom):
-        if geom is None or geom.is_empty:
-            return
-        gt = geom.geom_type
-        if gt == "LineString":
-            self._add_coords(path, geom.coords, False)
-        elif gt == "Polygon":
-            self._add_coords(path, geom.exterior.coords, True)
-            for i in geom.interiors:
-                self._add_coords(path, i.coords, True)
-        elif hasattr(geom, "geoms"):
-            for g in geom.geoms:
-                self._add_geometry(path, g)
+        PathBuilder(self.origin).add_geometry(path, geom)
 
-    def _add_coords(self, path: QPainterPath, coords: Iterable, closed: bool):
-        first = True
-        for x, y, *_ in coords:
-            p = self.to_scene(x, y)
-            if first:
-                path.moveTo(p)
-                first = False
-            else:
-                path.lineTo(p)
-        if closed:
-            path.closeSubpath()
-
-    def _add_insert(self, path: QPainterPath, f: Feature, drawing: Drawing, cross: float):
-        bg = drawing.blocks.get(f.block_name or "")
-        c = self.to_scene(*f.vertices[0])
-        if bg is None or (not bg.paths and not bg.points):
-            path.moveTo(c.x() - cross, c.y() - cross); path.lineTo(c.x() + cross, c.y() + cross)
-            path.moveTo(c.x() - cross, c.y() + cross); path.lineTo(c.x() + cross, c.y() - cross)
-            return
-        t = QTransform()
-        t.translate(c.x(), c.y())
-        t.rotate(-f.rotation)
-        t.scale(f.scale[0], -f.scale[1])
-        t.translate(-bg.base_point[0], -bg.base_point[1])
-        for pts, closed in zip(bg.paths, bg.closed):
-            sub = QPainterPath()
-            sub.moveTo(*pts[0])
-            for x, y in pts[1:]:
-                sub.lineTo(x, y)
-            if closed:
-                sub.closeSubpath()
-            path.addPath(t.map(sub))
-        for x, y in bg.points:
-            p = t.map(QPointF(x, y))
-            path.moveTo(p.x() - cross / 3, p.y()); path.lineTo(p.x() + cross / 3, p.y())
 
     def _add_text(self, f: Feature):
         if not f.text:
@@ -558,11 +595,66 @@ class DrawingView(QGraphicsView):
         event.acceptProposedAction()
 
     # ---------------------------------------------------------------- snímky
+    def render_overview(self, issues, size: int = 900) -> QPixmap:
+        """Celý výkres s kroužky (bez popisků) – přehledka do protokolu."""
+        from PySide6.QtGui import QImage
+        rect = self._content_rect if not self._content_rect.isEmpty() else self.scene().itemsBoundingRect()
+        rect = rect.adjusted(-rect.width() * 0.03, -rect.height() * 0.03, rect.width() * 0.03, rect.height() * 0.03)
+        ratio = rect.height() / rect.width() if rect.width() else 1.0
+        w, h = size, max(100, int(size * ratio))
+        img = QImage(w, h, QImage.Format_ARGB32)
+        img.fill(QColor(255, 255, 255))
+        painter = QPainter(img)
+        painter.setRenderHint(QPainter.Antialiasing)
+        labels = IssueMarker.show_labels
+        IssueMarker.show_labels = False
+        hidden = [m for m in self.markers.values() if m.isVisible()]
+        for m in hidden:
+            m.setVisible(False)
+        self.scene().render(painter, QRectF(0, 0, w, h), rect, Qt.KeepAspectRatio)
+        # kroužky kreslíme sami, aby měly pevnou velikost v obrázku
+        sx = w / rect.width()
+        sy = h / rect.height()
+        s = min(sx, sy)
+        ox = (w - rect.width() * s) / 2
+        oy = (h - rect.height() * s) / 2
+        for iss in issues:
+            p = self.to_scene(iss.x, iss.y)
+            x = ox + (p.x() - rect.x()) * s
+            y = oy + (p.y() - rect.y()) * s
+            painter.setPen(QPen(SEVERITY_COLORS.get(iss.severity, QColor(128, 128, 128)), 2))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(QPointF(x, y), 8, 8)
+        painter.end()
+        for m in hidden:
+            m.setVisible(True)
+        IssueMarker.show_labels = labels
+        return QPixmap.fromImage(img)
+
+    def set_print_mode(self, on: bool):
+        """Dočasně přestaví barvy výkresu pro tisk na bílé pozadí (a zpět)."""
+        if self.drawing is None:
+            return
+        if on:
+            self._saved_light = self.light_bg
+            light = True
+        else:
+            light = getattr(self, "_saved_light", self.light_bg)
+        if self._highlight is not None:
+            self._highlight.setVisible(not on)
+        if light == self.light_bg:
+            return
+        vis = {n: it.isVisible() for n, it in self.layer_items.items()}
+        self.light_bg = light
+        self._build(self.drawing)
+        for n, v in vis.items():
+            self.set_layer_visible(n, v)
+
     def render_region(self, x: float, y: float, span: float, size: int = 480) -> QPixmap:
         """Vykreslí okolí bodu (pro protokol PDF)."""
         from PySide6.QtGui import QImage
         img = QImage(size, size, QImage.Format_ARGB32)
-        img.fill(self.backgroundBrush().color())
+        img.fill(QColor(255, 255, 255))
         c = self.to_scene(x, y)
         src = QRectF(c.x() - span / 2, c.y() - span / 2, span, span)
         painter = QPainter(img)

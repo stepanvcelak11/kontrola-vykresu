@@ -270,14 +270,31 @@ class CheckContext:
             self._cache[key] = (texts, shapely.STRtree(geoms) if len(geoms) else None)
         return self._cache[key]
 
+    def area_geometry(self, f: Feature, rule=None) -> BaseGeometry | None:
+        """Plocha prvku: polygon, nebo neuzavřená linie, která má být podle pravidla polygonem."""
+        if f.geom_type == GeomType.POLYGON:
+            if f.geometry.is_valid:
+                return f.geometry
+            from shapely.validation import make_valid
+            return make_valid(f.geometry)
+        rule = rule if rule is not None else self.rule_for(f)
+        if (f.geom_type == GeomType.LINIE and rule is not None and rule.geometrie == GeomType.POLYGON
+                and len(f.geometry.coords) >= 3):
+            from shapely.geometry import Polygon
+            from shapely.validation import make_valid
+            poly = Polygon(list(f.geometry.coords))
+            return poly if poly.is_valid else make_valid(poly)
+        return None
+
     def text_for(self, f: Feature, rule) -> Feature | None:
         """Najde text patřící k prvku: uvnitř polygonu, jinak nejbližší v okruhu."""
         texts, tree = self.text_tree(rule.text.hladina if rule.text else None)
         if tree is None:
             return None
         g = f.geometry
-        if f.geom_type == GeomType.POLYGON and (rule.text is None or rule.text.uvnitr):
-            idx = tree.query(g, predicate="contains")
+        area = self.area_geometry(f, rule)
+        if area is not None and (rule.text is None or rule.text.uvnitr):
+            idx = tree.query(area, predicate="contains")
             if len(idx):
                 return texts[int(idx[0])]
             return None

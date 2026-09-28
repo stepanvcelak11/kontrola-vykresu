@@ -1,0 +1,215 @@
+# =============================================================================
+#  Ukázková konfigurace aplikace Kontrola výkresu
+# =============================================================================
+#  Soubor obsahuje dvě části:
+#    1) nastavení kontrol (tolerance, zapnutí/vypnutí, závažnost, parametry),
+#    2) pravidla kontrol atributů (číselník prvků od učitele).
+#
+#  Načtení:
+#    * v aplikaci: Kontrola → Nastavení kontrol → „Načíst z YAML…“ (nastavení)
+#      a Zadání → Pravidla → „Načíst YAML…“ (pravidla),
+#    * z příkazové řádky: python -m kontrola zkontroluj vykres.dxf --pravidla ukazky/konfigurace.yaml
+#
+#  Všechny délky jsou v metrech. Pravidla odpovídají ukázkovému výkresu
+#  ukazky/ukazkovy_vykres.dxf a tabulce ukazky/tabulka_atributu.xlsx.
+# =============================================================================
+
+nastaveni:
+  tolerance: 0.05          # hledací tolerance: chybějící napojení, body téměř na sobě
+  presnost: 0.0001         # body bližší než 0,1 mm jsou totožné (přesně napojené)
+  okruh_textu: 5.0         # do jaké vzdálenosti se hledá popis k bodu nebo linii
+  max_chyb_na_kontrolu: 5000
+  ignorovane_hladiny:      # hladiny, které se vůbec nekontrolují
+    - KONTROLA_CHYBY       # kroužky chyb vyexportované touto aplikací
+    - DEFPOINTS
+  oda_cesta: ""            # cesta k ODAFileConverter.exe (pro DGN); prázdné = hledat automaticky
+
+# Každá kontrola: zapnuto (true/false), zavaznost (chyba / varování / info)
+# a případné parametry. Parametr „hladiny“ omezí kontrolu jen na vybrané
+# hladiny (čárkou oddělené, lze použít * – např. "PLOTY, KOMUNIKACE*").
+kontroly:
+  # ---------------- topologie ----------------
+  nezavrene_polygony:
+    zapnuto: true
+    zavaznost: chyba
+    max_mezera: 1.0        # u prvků bez pravidla hlásit jen lomené čáry s mezerou do 1 m
+    hladiny: ""
+  visici_konce:
+    zapnuto: true
+    zavaznost: varování    # volně končící ploty apod. mohou být v pořádku
+    hladiny: ""
+  chybejici_napojeni:
+    zapnuto: true
+    zavaznost: chyba
+    hladiny: ""
+  duplicity:
+    zapnuto: true
+    zavaznost: chyba
+    stejna_hladina: true   # hranice budovy a parcely se smějí krýt (různé hladiny)
+    hladiny: ""
+  samoprotnuti:
+    zapnuto: true
+    zavaznost: chyba
+    hladiny: ""
+  pruseciky_bez_uzlu:
+    zapnuto: true
+    zavaznost: chyba
+    napojeni_bez_uzlu: true  # hlásit i T-spoj, kde linie končí na jiné linii bez lomového bodu
+    hladiny: ""
+  nulova_delka:
+    zapnuto: true
+    zavaznost: chyba
+    hladiny: ""
+  prekryvy_polygonu:
+    zapnuto: true
+    zavaznost: chyba
+    min_plocha: 0.001      # m² – menší překryvy se ignorují
+    stejna_hladina: true
+    hladiny: ""
+  mezery_polygonu:
+    zapnuto: true
+    zavaznost: varování
+    max_sirka: 0.1         # m – širší mezery se považují za záměrné
+    max_plocha_diry: 0.5   # m² – malé díry uvnitř souvislé plochy
+    min_plocha: 0.00001
+    hladiny: "PARCELY"     # mezery hledat jen mezi parcelami
+  mimo_rozsah:
+    zapnuto: true
+    zavaznost: chyba
+    hladiny: ""
+  body_blizko:
+    zapnuto: true
+    zavaznost: varování
+    stejna_hladina: false
+    hladiny: ""
+  # ---------------- atributy a konvence ----------------
+  atributy:
+    zapnuto: true
+    zavaznost: chyba
+  symbologie:
+    zapnuto: true
+    zavaznost: varování
+    kontrolovat_barvu: true
+    kontrolovat_styl: true
+    kontrolovat_tloustku: true
+  nepovolene_hladiny:
+    zapnuto: true
+    zavaznost: chyba
+    jedna_na_hladinu: false  # true = jedna chyba za celou hladinu místo za každý prvek
+  nekodovane:
+    zapnuto: true
+    zavaznost: varování
+  texty:
+    zapnuto: true
+    zavaznost: varování
+    hlasit_text_mimo: true
+  typ_geometrie:
+    zapnuto: true
+    zavaznost: chyba
+
+# -----------------------------------------------------------------------------
+#  Pravidla atributů
+# -----------------------------------------------------------------------------
+# paleta: jak číst čísla barev – autocad (ACI, jak je uloží DXF)
+#         nebo microstation (výchozí color.tbl, barvy 0–15).
+paleta: autocad
+
+# rozsah výkresu pro kontrolu „Prvek mimo rozsah“:
+#   rozsah: sjtsk                      # celé území ČR v S-JTSK (záporné i kladné souřadnice)
+#   rozsah: {xmin: .., ymin: .., xmax: .., ymax: ..}
+rozsah:
+  xmin: -743250
+  ymin: -1043550
+  xmax: -743050
+  ymax: -1043380
+
+# hladiny, na kterých smějí být prvky i bez kódu (rám, klad listů, pomocné čáry…)
+povolene_hladiny:
+  - RAM
+
+# Jedno pravidlo = jeden typ prvku. Jak se prvku přiřadí kód:
+#   1) atribut KOD (z buňky/ATTRIB nebo XDATA), jinak
+#   2) název buňky (blok), jinak
+#   3) hladina (při více pravidlech na hladině rozhodne typ geometrie, barva a styl).
+# Pole:
+#   kod, nazev             – kód a název prvku
+#   geometrie              – bod / linie / polygon / text
+#   hladina                – název hladiny, smí obsahovat * (např. POPIS_*)
+#   barva                  – číslo (dle palety), název (červená) nebo "#RRGGBB"
+#   styl_cary              – CONTINUOUS, DASHED, DASHDOT… (česky: plná, čárkovaná, čerchovaná)
+#   tloustka               – tloušťka čáry v mm
+#   blok                   – název buňky (bloku) u bodových značek
+#   povinne_atributy       – seznam atributů, které musí být vyplněné
+#   povolene_hodnoty       – číselník hodnot pro atributy (lze použít * a ?)
+#   text                   – požadavek na popis: povinny, hladina, atribut (text se použije
+#                            jako hodnota atributu), uvnitr (text musí ležet v polygonu)
+#   obrazek                – odkaz na náčrt/fotku v projektu (podklady/obrazky/…)
+#   poznamka, zdroj        – libovolný text
+pravidla:
+  - kod: "101"
+    nazev: Budova
+    geometrie: polygon
+    hladina: BUDOVY
+    barva: 1
+    styl_cary: CONTINUOUS
+    text:
+      povinny: true
+      hladina: POPIS_BUDOV
+      atribut: CP            # popis uvnitř budovy se uloží jako atribut CP (číslo popisné)
+  - kod: "102"
+    nazev: Parcela
+    geometrie: polygon
+    hladina: PARCELY
+    barva: 3
+    styl_cary: CONTINUOUS
+    text:
+      povinny: true
+      hladina: PARCELNI_CISLA
+  - kod: "201"
+    nazev: Okraj silnice
+    geometrie: linie
+    hladina: KOMUNIKACE
+    barva: 8
+    styl_cary: CONTINUOUS
+  - kod: "202"
+    nazev: Okraj chodníku
+    geometrie: linie
+    hladina: KOMUNIKACE
+    barva: 9
+    styl_cary: DASHED
+  - kod: "301"
+    nazev: Plot
+    geometrie: linie
+    hladina: PLOTY
+    barva: 5
+    styl_cary: DASHDOT
+  - kod: "401"
+    nazev: Podrobný bod
+    geometrie: bod
+    hladina: BODY
+    blok: BOD
+    povinne_atributy: [CISLO, KOD]
+  - kod: "402"
+    nazev: Strom listnatý
+    geometrie: bod
+    hladina: VEGETACE
+    barva: 3
+    blok: STROM_L
+    povinne_atributy: [DRUH]
+    povolene_hodnoty:
+      DRUH: [lípa, dub, javor, bříza, buk]
+  - kod: "403"
+    nazev: Šachta
+    geometrie: bod
+    hladina: SITE
+    barva: 6
+    blok: SACHTA
+  - kod: "501"
+    nazev: Popis budovy (č. p.)
+    geometrie: text
+    hladina: POPIS_BUDOV
+  - kod: "502"
+    nazev: Parcelní číslo
+    geometrie: text
+    hladina: PARCELNI_CISLA
+    barva: 3

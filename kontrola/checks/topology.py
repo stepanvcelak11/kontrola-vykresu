@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, MultiPoint, Point
+import shapely.errors
+from shapely.geometry import LineString, Point
+from shapely.validation import make_valid
 
 from ..model import Feature, GeomType
 from .base import Check, CheckContext, Param, Severity, fmt_m, fmt_num, register
@@ -217,3 +220,375 @@ class Duplicity(Check):
             if key[0] == "text":
                 msg = f"Duplicitní text „{(first.text or '')[:20]}“ ({len(fs)}×)"
             yield ctx.issue(self, fs, msg, geometry=first.geometry)
+
+
+_COORD_RE = re.compile(r"\[\s*([-+\d.eE]+)\s+([-+\d.eE]+)")
+
+
+def _points_of(g) -> list[tuple[float, float]]:
+    if g is None or g.is_empty:
+        return []
+    t = g.geom_type
+    if t == "Point":
+        return [(g.x, g.y)]
+    if t in ("MultiPoint", "GeometryCollection"):
+        out = []
+        for part in g.geoms:
+            out += _points_of(part)
+        return out
+    return []
+
+
+def _valid(g):
+    return g if g.is_valid else make_valid(g)
+
+
+def _safe_intersection(g1, g2):
+    try:
+        return g1.intersection(g2)
+    except shapely.errors.GEOSException:
+        return shapely.GeometryCollection()
+
+
+@register
+class Samoprotnuti(Check):
+    id = "samoprotnuti"
+    nazev = "Samoprotnutí"
+    skupina = "Topologie"
+    popis = "Linie nebo polygon, který protíná sám sebe (např. „motýlek“ nebo smyčka)."
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [LAYERS_PARAM]
+
+    def run(self, ctx: CheckContext):
+        feats = ctx.linear()
+        for i, f in enumerate(feats):
+            if i % 2000 == 0:
+                ctx.progress(i / max(1, len(feats)))
+            g = f.geometry
+            if f.geom_type == GeomType.POLYGON:
+                if g.is_valid:
+                    continue
+                reason = shapely.is_valid_reason(g)
+                m = _COORD_RE.search(reason)
+                at = (float(m.group(1)), float(m.group(2))) if m else None
+                if "Self-intersection" in reason or "self-intersection" in reason.lower():
+                    msg = "Samoprotnutí polygonu"
+                elif "Too few points" in reason:
+                    msg = "Polygon má příliš málo bodů"
+                else:
+                    msg = "Neplatný polygon (" + reason.split("[")[0].strip() + ")"
+                yield ctx.issue(self, f, msg, at=at)
+            elif not g.is_simple:
+                for p in self._self_crossings(g, f.closed)[:3]:
+                    yield ctx.issue(self, f, "Samoprotnutí linie", at=p)
+
+    @staticmethod
+    def _self_crossings(g: LineString, closed: bool) -> list[tuple[float, float]]:
+        c = np.asarray(g.coords)[:, :2]
+        n = len(c) - 1
+        if n < 2:
+            return []
+        segs = shapely.linestrings(np.stack([c[:-1], c[1:]], axis=1))
+        tree = shapely.STRtree(segs)
+        a, b = tree.query(segs, predicate="intersects")
+        mask = (b > a + 1) & ~((a == 0) & (b == n - 1) & (np.allclose(c[0], c[-1])))
+        pts: list[tuple[float, float]] = []
+        seen = set()
+        for i, j in zip(a[mask], b[mask]):
+            inter = segs[i].intersection(segs[j])
+            found = _points_of(inter)
+            if not found and not inter.is_empty:  # překrývající se úseky
+                rp = inter.representative_point()
+                found = [(rp.x, rp.y)]
+            for p in found:
+                key = (round(p[0], 3), round(p[1], 3))
+                if key not in seen:
+                    seen.add(key)
+                    pts.append(p)
+        return pts
+
+
+@register
+class PrusecikyBezUzlu(Check):
+    id = "pruseciky_bez_uzlu"
+    nazev = "Průsečík bez uzlu"
+    skupina = "Topologie"
+    popis = ("Místo, kde se dvě linie kříží nebo kde linie končí na jiné linii, ale v tomto místě "
+             "není lomový bod (uzel) na obou liniích.")
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [
+        Param("napojeni_bez_uzlu", "Hlásit i napojení (T-spoj) bez uzlu", "bool", True,
+              "Konec linie leží na jiné linii, ta ale v tom místě nemá lomový bod."),
+        LAYERS_PARAM,
+    ]
+
+    def run(self, ctx: CheckContext):
+        report_t = bool(ctx.param("napojeni_bez_uzlu", True))
+        feats = ctx.linear()
+        if len(feats) < 2:
+            return
+        geoms = np.array([ctx.boundary(f) for f in feats], dtype=object)
+        verts = [np.asarray(f.vertices, dtype=float).reshape(-1, 2) for f in feats]
+        tree = shapely.STRtree(geoms)
+        a, b = tree.query(geoms, predicate="intersects")
+        mask = a < b
+        a, b = a[mask], b[mask]
+        eps = max(ctx.precision, 1e-6)
+        seen: set[tuple[float, float]] = set()
+
+        def has_vertex(k: int, p) -> bool:
+            v = verts[k]
+            if not len(v):
+                return False
+            return bool(np.min(np.hypot(v[:, 0] - p[0], v[:, 1] - p[1])) <= eps)
+
+        def is_end(k: int, p) -> bool:
+            f = feats[k]
+            if f.geom_type != GeomType.LINIE:
+                return False
+            c = f.geometry.coords
+            return math.dist(c[0][:2], p) <= eps or math.dist(c[-1][:2], p) <= eps
+
+        # průniky počítáme vektorově po dávkách; úsekové (liniové) průniky sdílených hran přeskočíme
+        total = max(1, len(a))
+        step = 20000
+        inters = np.empty(0, dtype=object)
+        keep_a, keep_b = [], []
+        for s in range(0, len(a), step):
+            ctx.progress(0.8 * s / total)
+            try:
+                chunk = shapely.intersection(geoms[a[s:s + step]], geoms[b[s:s + step]])
+            except shapely.errors.GEOSException:
+                chunk = np.array([_safe_intersection(geoms[i], geoms[j])
+                                  for i, j in zip(a[s:s + step], b[s:s + step])], dtype=object)
+            types = shapely.get_type_id(chunk)
+            m = np.isin(types, (0, 4, 7))  # Point, MultiPoint, GeometryCollection
+            inters = np.concatenate([inters, chunk[m]])
+            keep_a.append(a[s:s + step][m])
+            keep_b.append(b[s:s + step][m])
+        a = np.concatenate(keep_a) if keep_a else a[:0]
+        b = np.concatenate(keep_b) if keep_b else b[:0]
+        for i, j, inter in zip(a, b, inters):
+            for p in _points_of(inter):
+                vi, vj = has_vertex(i, p), has_vertex(j, p)
+                if vi and vj:
+                    continue
+                key = (round(p[0], 3), round(p[1], 3))
+                if key in seen:
+                    continue
+                if is_end(i, p) or is_end(j, p):
+                    if not report_t:
+                        continue
+                    msg = "Napojení na linii bez uzlu"
+                else:
+                    msg = "Průsečík linií bez uzlu"
+                seen.add(key)
+                yield ctx.issue(self, [feats[i], feats[j]], msg, at=p, geometry=Point(p).buffer(0.01))
+
+
+@register
+class NulovaDelka(Check):
+    id = "nulova_delka"
+    nazev = "Prvek nulové délky"
+    skupina = "Topologie"
+    popis = "Linie nulové délky, polygon s nulovou plochou, kružnice s nulovým poloměrem, prázdný text."
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [LAYERS_PARAM]
+
+    def run(self, ctx: CheckContext):
+        eps = max(ctx.precision, 1e-9)
+        for f in ctx.features(ctx.layer_filter()):
+            g = f.geometry
+            if f.geom_type == GeomType.LINIE:
+                if g.is_empty or g.length <= eps:
+                    yield ctx.issue(self, f, "Linie nulové délky")
+            elif f.geom_type == GeomType.POLYGON:
+                # neplatný polygon („motýlek“) může mít nulovou plochu – ten hlásí kontrola samoprotnutí
+                if g.is_empty or g.length <= eps or (g.is_valid and g.area <= eps * eps * 10):
+                    yield ctx.issue(self, f, "Polygon s nulovou plochou")
+            elif f.geom_type == GeomType.TEXT:
+                if not (f.text or "").strip():
+                    yield ctx.issue(self, f, "Prázdný text")
+            elif f.dxftype == "CIRCLE" and f.radius <= eps:
+                yield ctx.issue(self, f, "Kružnice s nulovým poloměrem")
+            elif f.dxftype == "INSERT" and (abs(f.scale[0]) <= 1e-12 or abs(f.scale[1]) <= 1e-12):
+                yield ctx.issue(self, f, f"Buňka {f.block_name} s nulovým měřítkem")
+
+
+def _polygons_by_layer(ctx: CheckContext, same_layer: bool) -> dict[str, list[tuple[Feature, object]]]:
+    groups: dict[str, list[tuple[Feature, object]]] = defaultdict(list)
+    for f in ctx.features(ctx.layer_filter()):
+        if f.geom_type != GeomType.POLYGON or f.dxftype == "HATCH" or f.geometry.is_empty:
+            continue
+        g = _valid(f.geometry)
+        if g.area <= 0:
+            continue
+        groups[f.layer.upper() if same_layer else ""].append((f, g))
+    return groups
+
+
+@register
+class PrekryvyPolygonu(Check):
+    id = "prekryvy_polygonu"
+    nazev = "Překryv polygonů"
+    skupina = "Topologie"
+    popis = "Dva polygony (výchozí na stejné hladině) se částečně nebo úplně překrývají."
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [
+        Param("min_plocha", "Hlásit od plochy [m²]", "float", 0.001),
+        Param("stejna_hladina", "Jen polygony na stejné hladině", "bool", True,
+              "Budova uvnitř parcely se nehlásí, protože leží na jiné hladině."),
+        LAYERS_PARAM,
+    ]
+
+    def run(self, ctx: CheckContext):
+        min_area = float(ctx.param("min_plocha", 0.001))
+        groups = _polygons_by_layer(ctx, bool(ctx.param("stejna_hladina", True)))
+        for gi, items in enumerate(groups.values()):
+            ctx.progress(gi / max(1, len(groups)))
+            if len(items) < 2:
+                continue
+            geoms = np.array([g for _, g in items], dtype=object)
+            tree = shapely.STRtree(geoms)
+            a, b = tree.query(geoms, predicate="intersects")
+            m = a < b
+            a, b = a[m], b[m]
+            if not len(a):
+                continue
+            try:
+                inters = shapely.intersection(geoms[a], geoms[b])
+            except shapely.errors.GEOSException:
+                inters = np.array([_safe_intersection(geoms[i], geoms[j]) for i, j in zip(a, b)], dtype=object)
+            areas = shapely.area(inters)
+            sel = areas > min_area
+            for i, j, inter, area in zip(a[sel], b[sel], inters[sel], areas[sel]):
+                yield ctx.issue(self, [items[i][0], items[j][0]],
+                                f"Překryv polygonů, plocha {fmt_num(area, 3)} m²", at=inter, geometry=inter)
+
+
+@register
+class MezeryPolygonu(Check):
+    id = "mezery_polygonu"
+    nazev = "Mezera mezi polygony"
+    skupina = "Topologie"
+    popis = ("Úzká mezera (štěrbina) mezi sousedními polygony na stejné hladině nebo malá díra, "
+             "kterou polygony neuzavírají – typicky nepřesně navazující parcely.")
+    vychozi_zavaznost = Severity.VAROVANI
+    parametry = [
+        Param("max_sirka", "Max. šířka mezery [m]", "float", 0.1),
+        Param("max_plocha_diry", "Hlásit díry do plochy [m²]", "float", 0.5),
+        Param("min_plocha", "Ignorovat mezery menší než [m²]", "float", 0.00001),
+        LAYERS_PARAM,
+    ]
+
+    def run(self, ctx: CheckContext):
+        w = float(ctx.param("max_sirka", 0.1))
+        max_hole = float(ctx.param("max_plocha_diry", 0.5))
+        min_area = float(ctx.param("min_plocha", 0.00001))
+        groups = _polygons_by_layer(ctx, True)
+        for gi, (layer, items) in enumerate(groups.items()):
+            ctx.progress(gi / max(1, len(groups)))
+            if len(items) < 2:
+                continue
+            union = shapely.union_all([g for _, g in items])
+            gaps = []
+            if w > 0:
+                closed = union.buffer(w / 2, join_style="mitre", mitre_limit=5).buffer(
+                    -w / 2, join_style="mitre", mitre_limit=5)
+                gaps += list(getattr(closed.difference(union), "geoms", [closed.difference(union)]))
+            polys = getattr(union, "geoms", [union])
+            for p in polys:
+                for ring in getattr(p, "interiors", []):
+                    hole = shapely.Polygon(ring)
+                    if hole.area <= max_hole:
+                        gaps.append(hole)
+            seen = set()
+            feats = [f for f, _ in items]
+            tree = shapely.STRtree(np.array([g for _, g in items], dtype=object))
+            for gap in gaps:
+                if gap.is_empty or gap.area <= min_area:
+                    continue
+                c = gap.representative_point()
+                key = (round(c.x, 2), round(c.y, 2))
+                if key in seen:
+                    continue
+                seen.add(key)
+                width = 2 * gap.area / gap.length if gap.length else 0
+                near = [feats[k] for k in tree.query(gap, predicate="dwithin", distance=w)][:4]
+                yield ctx.issue(self, near or feats[:1],
+                                f"Mezera mezi polygony, šířka {fmt_m(width)}", at=c, geometry=gap)
+
+
+@register
+class MimoRozsah(Check):
+    id = "mimo_rozsah"
+    nazev = "Prvek mimo rozsah"
+    skupina = "Topologie"
+    popis = ("Prvek leží mimo definovaný rozsah výkresu (obdélník z nastavení nebo území ČR v S-JTSK). "
+             "Rozsah se nastavuje v Nastavení kontrol → Obecné, nebo v YAML (rozsah).")
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [LAYERS_PARAM]
+
+    SJTSK = [(-905000.0, -1230000.0, -430000.0, -935000.0), (430000.0, 935000.0, 905000.0, 1230000.0)]
+
+    def run(self, ctx: CheckContext):
+        r = ctx.rules.rozsah
+        if not r:
+            ctx.notes.append("rozsah výkresu není nastaven – kontrola přeskočena.")
+            return
+        if isinstance(r, str) and r.lower() in ("sjtsk", "s-jtsk", "cr", "čr"):
+            boxes = [shapely.box(*b) for b in self.SJTSK]
+            name = "území ČR v S-JTSK"
+        else:
+            try:
+                boxes = [shapely.box(float(r["xmin"]), float(r["ymin"]), float(r["xmax"]), float(r["ymax"]))]
+            except (KeyError, TypeError, ValueError):
+                ctx.notes.append("rozsah výkresu má neplatný formát (čekám xmin, ymin, xmax, ymax).")
+                return
+            name = "rozsah výkresu"
+        area = shapely.union_all(boxes)
+        for f in ctx.features(ctx.layer_filter()):
+            g = f.geometry
+            if g is None or g.is_empty or area.contains(g):
+                continue
+            if area.intersects(g):
+                yield ctx.issue(self, f, f"Prvek zasahuje mimo {name}")
+            else:
+                yield ctx.issue(self, f, f"Prvek mimo {name} ({fmt_num(area.distance(g), 1)} m od hranice)")
+
+
+@register
+class BodyBlizko(Check):
+    id = "body_blizko"
+    nazev = "Body téměř na sobě"
+    skupina = "Topologie"
+    popis = ("Dva body (body, buňky, kružnice) jsou blíž než tolerance, ale nejsou totožné – "
+             "obvykle omylem dvakrát zaměřený nebo posunutý bod.")
+    vychozi_zavaznost = Severity.VAROVANI
+    parametry = [
+        Param("stejna_hladina", "Jen body na stejné hladině", "bool", False),
+        LAYERS_PARAM,
+    ]
+
+    def run(self, ctx: CheckContext):
+        same = bool(ctx.param("stejna_hladina", False))
+        feats = [f for f in ctx.features(ctx.layer_filter()) if f.geom_type == GeomType.BOD]
+        if len(feats) < 2:
+            return
+        pts = np.array([f.geometry for f in feats], dtype=object)
+        tree = shapely.STRtree(pts)
+        a, b = tree.query(pts, predicate="dwithin", distance=ctx.tolerance)
+        mask = a < b
+        a, b = a[mask], b[mask]
+        if not len(a):
+            return
+        d = shapely.distance(pts[a], pts[b])
+        for i, j, dist in zip(a, b, d):
+            if dist <= ctx.precision:
+                continue
+            fi, fj = feats[i], feats[j]
+            if same and fi.layer != fj.layer:
+                continue
+            mid = ((fi.geometry.x + fj.geometry.x) / 2, (fi.geometry.y + fj.geometry.y) / 2)
+            yield ctx.issue(self, [fi, fj], f"Body téměř na sobě, vzdálenost {fmt_m(dist)}", at=mid,
+                            geometry=LineString([fi.geometry, fj.geometry]))

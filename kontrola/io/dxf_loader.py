@@ -245,11 +245,14 @@ class _Loader:
                 return
             closed = bool(e.closed) if t == "LWPOLYLINE" else bool(e.is_closed)
             if t == "LWPOLYLINE":
-                verts = [self.ctx.xy(p) for p in e.get_points("xy")]
+                raw = list(e.get_points("xyb"))
+                verts = [self.ctx.xy(p) for p in raw]
+                has_arc = any(abs(p[2]) > 1e-12 for p in raw)
             else:
                 verts = [self.ctx.xy(v.dxf.location) for v in e.vertices]
+                has_arc = any(abs(v.dxf.get("bulge", 0.0)) > 1e-12 for v in e.vertices)
             verts = _dedupe(verts)
-            pts = _flatten(e, self.ctx) if len(verts) > 1 else verts
+            pts = _flatten(e, self.ctx) if (has_arc and len(verts) > 1) else list(verts)
             if closed and pts and pts[0] != pts[-1]:
                 pts = pts + [pts[0]]
             geom, gt = _linear_geometry(pts, closed)
