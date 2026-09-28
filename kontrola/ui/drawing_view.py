@@ -102,10 +102,11 @@ class IssueMarker(QGraphicsItem):
         self._label_h = fm.height() + 4
 
     def color(self) -> QColor:
-        c = QColor(SEVERITY_COLORS.get(self.issue.severity, QColor(128, 128, 128)))
-        if self.issue.state != "nová":
-            c.setAlpha(110)
-        return c
+        if self.issue.state == "opraveno":
+            return QColor(34, 170, 80, 200)
+        if self.issue.state == "ignorovat":
+            return QColor(140, 140, 150, 170)
+        return QColor(SEVERITY_COLORS.get(self.issue.severity, QColor(128, 128, 128)))
 
     def boundingRect(self) -> QRectF:  # noqa: N802
         r = self.RADIUS + 8
@@ -142,10 +143,19 @@ class IssueMarker(QGraphicsItem):
         fill.setAlpha(35)
         painter.setBrush(fill)
         painter.drawEllipse(QPointF(0, 0), r, r)
-        painter.setPen(QPen(c, 1.5))
-        painter.drawLine(QPointF(-3, 0), QPointF(3, 0))
-        painter.drawLine(QPointF(0, -3), QPointF(0, 3))
-        if IssueMarker.show_labels:
+        state = self.issue.state
+        if state == "opraveno":  # fajfka
+            painter.setPen(QPen(c, 2.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            painter.drawPolyline([QPointF(-6, 0), QPointF(-2, 4.5), QPointF(6.5, -5)])
+        elif state == "ignorovat":  # křížek
+            painter.setPen(QPen(c, 2.2, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(QPointF(-5, -5), QPointF(5, 5))
+            painter.drawLine(QPointF(-5, 5), QPointF(5, -5))
+        else:
+            painter.setPen(QPen(c, 1.5))
+            painter.drawLine(QPointF(-3, 0), QPointF(3, 0))
+            painter.drawLine(QPointF(0, -3), QPointF(0, 3))
+        if IssueMarker.show_labels and state == "nová":
             rect = QRectF(r + 4, -r - self._label_h + 2, self._label_w, self._label_h)
             bg = QColor(255, 255, 255, 225)
             painter.setPen(QPen(c, 1))

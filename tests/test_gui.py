@@ -70,3 +70,24 @@ def test_odebrani_tabulky_i_s_pravidly(window, tmp_path):
     assert len(p.rules.pravidla) == 2
     assert p.remove_table(rel) == 2
     assert p.rules.pravidla == [] and not (p.root / rel).exists()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_opraveno_a_ignorovat(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 2)
+    p = w.issue_panel
+    p.table.selectRow(0)
+    first = p.current_issue()
+    p.b_fixed.click()
+    assert first.state == "opraveno"
+    second = p.current_issue()  # výběr sám přeskočí na další nevyřešenou chybu
+    assert second is not first and second.state == "nová"
+    p.b_ignore.click()
+    assert second.state == "ignorovat"
+    assert p.cards[None].text() == str(len(w.issues) - 2)
+    # stav se uloží do projektu a přežije novou kontrolu
+    states = w.project.issue_states()
+    assert first.key in states and states[first.key]["stav"] == "opraveno"

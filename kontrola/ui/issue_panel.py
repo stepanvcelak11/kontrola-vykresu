@@ -6,7 +6,7 @@ from collections import Counter
 
 from PySide6.QtCore import (QAbstractTableModel, QItemSelectionModel, QModelIndex, QSortFilterProxyModel,
                             Qt, Signal)
-from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, QGroupBox, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
                                QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget)
@@ -14,7 +14,10 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, 
 from ..checks.base import ISSUE_STATES, Issue, Severity, fmt_num
 from .drawing_view import SEVERITY_COLORS
 
-COLUMNS = ["Č.", "Typ kontroly", "Závažnost", "Popis", "Hladina", "X", "Y", "Stav"]
+COLUMNS = ["Č.", "Závažnost", "Stav", "Typ kontroly", "Popis", "Hladina", "X", "Y"]
+C_SEV, C_STATE, C_DESC = 1, 2, 4
+STATE_LABEL = {"nová": "k opravě", "opraveno": "✓ opraveno", "ignorovat": "✕ ignorováno"}
+STATE_COLOR = {"opraveno": QColor(22, 150, 70), "ignorovat": QColor(120, 120, 130)}
 
 
 def fmt_coord(v: float) -> str:
@@ -68,17 +71,31 @@ class IssueModel(QAbstractTableModel):
             return None
         iss = self.issues[index.row()]
         c = index.column()
+        done = iss.state != "nová"
         if role == Qt.DisplayRole:
-            return [str(iss.number), iss.check_name, iss.severity.value, iss.message, iss.layer,
-                    fmt_coord(iss.x), fmt_coord(iss.y), iss.state][c]
+            return [str(iss.number), iss.severity.value, STATE_LABEL.get(iss.state, iss.state), iss.check_name,
+                    iss.message, iss.layer, fmt_coord(iss.x), fmt_coord(iss.y)][c]
         if role == Qt.UserRole:  # řazení
-            return [iss.number, iss.check_name, iss.severity.rank, iss.message, iss.layer,
-                    iss.x, iss.y, ISSUE_STATES.index(iss.state) if iss.state in ISSUE_STATES else 0][c]
+            return [iss.number, iss.severity.rank, ISSUE_STATES.index(iss.state) if iss.state in ISSUE_STATES else 0,
+                    iss.check_name, iss.message, iss.layer, iss.x, iss.y][c]
         if role == Qt.ForegroundRole:
-            if iss.state != "nová":
-                return QBrush(QColor(140, 140, 140))
-            if c == 2:
+            if c == C_STATE and done:
+                return QBrush(STATE_COLOR.get(iss.state, QColor(120, 120, 130)))
+            if done:
+                return QBrush(QColor(150, 150, 155))
+            if c == C_SEV:
                 return QBrush(SEVERITY_COLORS.get(iss.severity))
+            if c == C_STATE:
+                return QBrush(QColor(107, 114, 128))
+        if role == Qt.FontRole and done:
+            f = QFont()
+            if c == C_STATE:
+                f.setBold(True)
+            elif c in (C_DESC, 3):
+                f.setStrikeOut(True)
+            return f
+        if role == Qt.BackgroundRole and iss.state == "opraveno":
+            return QBrush(QColor(236, 253, 243))
         if role == Qt.ToolTipRole:
             tip = f"{iss.check_name}: {iss.message}"
             if iss.handles:
@@ -86,9 +103,9 @@ class IssueModel(QAbstractTableModel):
             if iss.note:
                 tip += f"\nPoznámka: {iss.note}"
             return tip
-        if role == Qt.DecorationRole and c == 2:
+        if role == Qt.DecorationRole and c == C_SEV:
             return _dot(SEVERITY_COLORS.get(iss.severity), iss.state != "nová")
-        if role == Qt.TextAlignmentRole and c in (0, 5, 6):
+        if role == Qt.TextAlignmentRole and c in (0, 6, 7):
             return int(Qt.AlignRight | Qt.AlignVCenter)
         return None
 
@@ -137,6 +154,7 @@ class IssueFilter(QSortFilterProxyModel):
 
 class IssuePanel(QWidget):
     issueSelected = Signal(int)
+    message = Signal(str)  # krátká zpráva do stavového řádku
     filterChanged = Signal(object)  # set[int] viditelných čísel chyb
     stateChanged = Signal()
 
@@ -152,7 +170,8 @@ class IssuePanel(QWidget):
         cards = QHBoxLayout()
         cards.setSpacing(6)
         self.cards: dict[object, QLabel] = {}
-        for key, title, color in ((None, "celkem", "#1F2937"),
+        self.card_caps: dict[object, QLabel] = {}
+        for key, title, color in ((None, "k opravě", "#1F2937"),
                                   (Severity.CHYBA, "chyby", SEVERITY_COLORS[Severity.CHYBA].name()),
                                   (Severity.VAROVANI, "varování", SEVERITY_COLORS[Severity.VAROVANI].name()),
                                   (Severity.INFO, "info", SEVERITY_COLORS[Severity.INFO].name())):
@@ -177,6 +196,7 @@ class IssuePanel(QWidget):
                 fr.mousePressEvent = lambda _e: self.show_all()
                 fr.setCursor(Qt.PointingHandCursor)
             self.cards[key] = num
+            self.card_caps[key] = cap
             cards.addWidget(fr, 1)
         lay.addLayout(cards)
         self.summary = QLabel("Zatím neproběhla žádná kontrola. Otevřete výkres a stiskněte Zkontrolovat (F5).")
@@ -251,7 +271,7 @@ class IssuePanel(QWidget):
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(False)
-        for c, w in enumerate((46, 160, 100, 300, 130, 110, 110, 80)):
+        for c, w in enumerate((46, 96, 128, 160, 300, 130, 110, 110)):
             self.table.setColumnWidth(c, w)
         self.table.selectionModel().currentRowChanged.connect(self._current_changed)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -267,9 +287,14 @@ class IssuePanel(QWidget):
         self.b_next.setShortcut("F8")
         self.b_next.setToolTip("Další chyba (F8)")
         self.b_next.clicked.connect(lambda: self.step(1))
-        self.b_fixed = QPushButton("Opraveno")
+        self.b_fixed = QPushButton("✓ Opraveno")
+        self.b_fixed.setToolTip("Označit vybranou chybu jako opravenou a přejít na další (Ctrl+Enter)")
+        self.b_fixed.setShortcut("Ctrl+Return")
+        self.b_fixed.setProperty("uspech", True)
         self.b_fixed.clicked.connect(lambda: self.set_state("opraveno"))
-        self.b_ignore = QPushButton("Ignorovat")
+        self.b_ignore = QPushButton("✕ Ignorovat")
+        self.b_ignore.setToolTip("Chybu nebrat v úvahu (např. záměr) a přejít na další (Ctrl+Delete)")
+        self.b_ignore.setShortcut("Ctrl+Delete")
         self.b_ignore.clicked.connect(lambda: self.set_state("ignorovat"))
         self.b_new = QPushButton("Vrátit")
         self.b_new.setToolTip("Vrátit stav na „nová“")
@@ -287,7 +312,6 @@ class IssuePanel(QWidget):
         tl.addLayout(nrow)
         split.addWidget(tw)
         split.setSizes([230, 520])
-        self.b_next.setProperty("primarni", True)
 
     # ------------------------------------------------------------ data
     def set_issues(self, issues: list[Issue], summary: str = ""):
@@ -320,15 +344,23 @@ class IssuePanel(QWidget):
         self.layer_combo.setCurrentIndex(max(0, idx))
         self._updating = False
         self.summary.setText(summary or self._default_summary(issues))
-        self.cards[None].setText(str(len(issues)))
-        for sev in Severity:
-            self.cards[sev].setText(str(sev_counts.get(sev, 0)))
+        self._update_cards()
         self._filters_changed()
 
     def _default_summary(self, issues: list[Issue]) -> str:
         if not issues:
             return "Zatím žádné nálezy. Otevřete výkres a stiskněte Zkontrolovat (F5)."
         return "Kliknutím na řádek se výkres přiblíží na chybu. Kliknutím na kartu nahoře vyfiltrujete závažnost."
+
+    def _update_cards(self):
+        issues = self.model.issues
+        open_ = [i for i in issues if i.state == "nová"]
+        c = Counter(i.severity for i in open_)
+        self.cards[None].setText(str(len(open_)))
+        done = len(issues) - len(open_)
+        self.card_caps[None].setText(f"k opravě (vyřešeno {done} z {len(issues)})" if done else "k opravě")
+        for sev in Severity:
+            self.cards[sev].setText(str(c.get(sev, 0)))
 
     def _only_severity(self, sev: Severity):
         self._updating = True
@@ -457,8 +489,12 @@ class IssuePanel(QWidget):
 
     # ------------------------------------------------------------ stav
     def set_state(self, state: str):
+        sel = self.selected_issues()
+        if not sel:
+            self.message.emit("Nejdřív vyberte chybu v seznamu (klikněte na řádek).")
+            return
         changed = False
-        for iss in self.selected_issues():
+        for iss in sel:
             if iss.state != state:
                 iss.state = state
                 self.model.refresh_row(self.model.row_of(iss.number))
@@ -467,6 +503,30 @@ class IssuePanel(QWidget):
             self.stateChanged.emit()
             if self.proxy.hide_done:
                 self._filters_changed()
+        self._update_cards()
+        what = {"opraveno": "označena jako opravená", "ignorovat": "ignorována", "nová": "vrácena k opravě"}[state]
+        left = sum(1 for i in self.model.issues if i.state == "nová")
+        nums = ", ".join(f"#{i.number}" for i in sel[:5]) + ("…" if len(sel) > 5 else "")
+        self.message.emit(f"Chyba {nums} {what}. Zbývá opravit: {left}.")
+        if state != "nová" and len(sel) == 1:
+            self.next_open()
+
+    def next_open(self):
+        """Přejde na další chybu, která ještě není opravená ani ignorovaná."""
+        n = self.proxy.rowCount()
+        if n == 0:
+            return
+        cur = self.table.currentIndex()
+        start = cur.row() if cur.isValid() else -1
+        for k in range(1, n + 1):
+            r = (start + k) % n
+            iss = self.model.issues[self.proxy.mapToSource(self.proxy.index(r, 0)).row()]
+            if iss.state == "nová":
+                idx = self.proxy.index(r, 0)
+                self.table.selectionModel().setCurrentIndex(
+                    idx, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+                self.table.scrollTo(idx)
+                return
 
     def _table_menu(self, pos):
         m = QMenu(self)

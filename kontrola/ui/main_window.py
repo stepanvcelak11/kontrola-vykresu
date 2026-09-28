@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
         self.issue_panel.issueSelected.connect(self._on_issue_selected)
         self.issue_panel.filterChanged.connect(self.view.set_visible_issues)
         self.issue_panel.stateChanged.connect(self._on_states_changed)
+        self.issue_panel.message.connect(lambda t: self.statusBar().showMessage(t, 6000))
 
         self.split = QSplitter(Qt.Horizontal)
         self.split.addWidget(self.view)
