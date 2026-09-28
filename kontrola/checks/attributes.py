@@ -429,7 +429,8 @@ class NepovoleneHladiny(Check):
                     continue
                 reported.add(f.layer)
                 feats = [x for x in ctx.features() if x.layer == f.layer]
-                msg = f"Vrstva {f.layer} není ve Směrnici: {_kinds(feats)}"
+                name = f.layer if re.match(r"(?i)(vrstva|level|hladina)\b", f.layer) else f"Vrstva {f.layer}"
+                msg = f"{name} není ve Směrnici: {_kinds(feats)}"
                 guess = guess_layer(feats, ctx.rules, ctx.drawing)
                 if guess:
                     msg += f" – podle vzhledu patří na vrstvu {guess}"

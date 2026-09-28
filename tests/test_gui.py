@@ -320,3 +320,19 @@ def test_novy_seznam_skryje_stary_navod(window):
     assert p.hint.isVisibleTo(p) and p.b_find.isEnabled()
     w.set_issues([])
     assert not p.hint.isVisibleTo(p) and not p.b_find.isEnabled()
+
+
+DOC1 = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "Zadání-Microstation.doc"
+
+
+@pytest.mark.skipif(not DOC1.exists(), reason="zadání chybí")
+def test_word_se_zadanim_prida_vrstvy(window):
+    w = window
+    w.open_path(str(DOC1))  # QMessageBox.question → Ano (přidat vrstvy)
+    page = w.zadani.documents_page
+    assert w.zadani.tabs.currentWidget() is page
+    assert page.list.count() == 1 and page.req.rowCount() > 0 and page.lay_table.rowCount() == 3
+    assert {r.hladina for r in w.project.rules.pravidla} >= {"58", "59", "60"}
+    assert "jsou v pravidlech" in page.rules_state.text()
+    page._remove()  # odebrání dokumentu odebere i jeho pravidla
+    assert not {r.hladina for r in w.project.rules.pravidla} & {"58", "59", "60"}

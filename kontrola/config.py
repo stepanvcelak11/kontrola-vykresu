@@ -11,7 +11,7 @@ import yaml
 from .checks.base import REGISTRY, Severity
 
 
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 # Rozpracovaný výkres: kontroly a hlášení, která vznikají jen tím, že kresba ještě není hotová
 WIP_SKIP_CHECKS = ("visici_konce", "nezavrene_polygony", "mezery_polygonu")
 WIP_SKIP_MESSAGES = {"texty": (": chybí popis",)}
@@ -104,7 +104,8 @@ class Config:
             rozpracovany=bool(n.get("rozpracovany", False)),
             kontroly={},
         )
-        old = int(d.get("verze_nastaveni", 1) or 1) < CONFIG_VERSION and ("nastaveni" in d or "kontroly" in d)
+        ver = int(d.get("verze_nastaveni", 1) or 1) if ("nastaveni" in d or "kontroly" in d) else CONFIG_VERSION
+        old = ver < 2
         if old:
             # starší projekty: tolerance podle MGEO (učitelova kontrola) místo původních výchozích hodnot
             if abs(cfg.tolerance - 0.05) < 1e-9:
@@ -119,9 +120,13 @@ class Config:
                         v.pop(k)
                 if cid == "kratke_linie" and v.get("zavaznost") == "varování":
                     v.pop("zavaznost")
+            if ver < 3 and cid == "visici_konce" and v.get("zavaznost") in ("chyba", Severity.CHYBA):
+                v.pop("zavaznost")  # dřív omylem „chyba“: volné konce uvnitř jsou varování, na okraji info
+            cls_ = REGISTRY.get(cid)
+            default_sev = cls_.vychozi_zavaznost if cls_ is not None else Severity.CHYBA
             cs = CheckSettings(
                 zapnuto=bool(v.pop("zapnuto", True)),
-                zavaznost=Severity.parse(v.pop("zavaznost", "chyba")),
+                zavaznost=Severity.parse(v.pop("zavaznost", default_sev.value)),
                 parametry=v,
             )
             cfg.kontroly[cid] = cs

@@ -845,7 +845,10 @@ class ZadaniTab(QWidget):
         self.images_page.showBeside.connect(self.showSketchBeside)
         self.template_page = TemplatePage(self)
         self.attachments_page = AttachmentsPage(self)
+        from .documents_page import DocumentsPage
+        self.documents_page = DocumentsPage(self)
         self.tabs.addTab(self.table_page, "Tabulka atributů")
+        self.tabs.addTab(self.documents_page, "Pokyny ze zadání (Word)")
         self.tabs.addTab(self.rules_editor, "Pravidla")
         self.tabs.addTab(self.images_page, "Náčrt a fotky")
         self.tabs.addTab(self.template_page, "Vzorový výkres")
@@ -865,6 +868,7 @@ class ZadaniTab(QWidget):
         self.rules_editor.set_images([(rel, Path(rel).name) for rel in self.images_page.browser.images()])
         self.template_page.refresh()
         self.attachments_page.refresh()
+        self.documents_page.refresh()
 
     # ---- volání ze stránek
     def project_changed(self):
@@ -921,6 +925,8 @@ class ZadaniTab(QWidget):
                     self.table_page.import_file(f)
                 elif self.tabs.currentWidget() is self.images_page:
                     imgs.append(f)
+                elif self.tabs.currentWidget() is self.documents_page:
+                    self.documents_page.add_file(f)
                 else:
                     choice = QMessageBox.question(self, "PDF", f"{Path(f).name}\n\nJe to tabulka atributů? "
                                                   "(Ne = náčrt/fotka)")
@@ -933,7 +939,10 @@ class ZadaniTab(QWidget):
             elif suf in (".yaml", ".yml"):
                 self.tabs.setCurrentWidget(self.rules_editor)
                 self.rules_editor.load_yaml(f)
-            elif suf in (".doc", ".docx", ".odt", ".rtf", ".txt", ".zip", ".zap"):
+            elif suf in (".doc", ".docx", ".odt", ".rtf"):
+                self.tabs.setCurrentWidget(self.documents_page)
+                self.documents_page.add_file(f)
+            elif suf in (".txt", ".zip", ".zap"):
                 self.project.add_attachment("dokumenty", f)
                 self.project_changed()
                 self.tabs.setCurrentWidget(self.attachments_page)

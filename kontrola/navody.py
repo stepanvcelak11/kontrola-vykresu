@@ -41,7 +41,9 @@ _ATTR = {
     "nepovolene_hladiny": "Celá vrstva není ve Směrnici. Všechny její prvky najednou: Správce vrstev (Level "
                           "Manager) → pravým na vrstvu → Vybrat prvky (nebo Výběr podle atributů), pak Změnit "
                           "atributy prvku → Vrstva = správná vrstva ze Směrnice a klik do výkresu. Pomocné prvky, "
-                          "které do výkresu nepatří, smažte. U bodů z Gromy zkontrolujte vrstvy v nastavení importu.",
+                          "které do výkresu nepatří, smažte. U bodů z Gromy zkontrolujte vrstvy v nastavení importu. Je-li vrstva popsaná ve Wordu se "
+                          "zadáním (např. „Vrstva 58 – podrobné body“), nahrajte Word do Zadání → Pokyny ze zadání "
+                          "a přidejte vrstvy do pravidel.",
     "nekodovane": "Prvek neodpovídá žádnému pravidlu – je na vrstvě, kam takový prvek nepatří. Přesuňte ho na "
                   "vrstvu podle Směrnice nebo změňte jeho typ.",
     "jednotnost_hladiny": "Prvky na jedné vrstvě mají různou symbologii. Sjednoťte je podle Směrnice "

@@ -208,6 +208,25 @@ def checklist_for(project, drawing, config) -> list[tuple[bool | None, str]]:
             fresh = src.stat().st_mtime >= dgn.stat().st_mtime - 2
             out.append((fresh, "DXF je uložené po poslední změně DGN" if fresh else
                         "DGN je novější než DXF – v MicroStationu znovu uložte DXF, jinak kontrolujete starý stav."))
+    docs = [a for a in project.attachments("dokumenty")
+            if Path(a.name).suffix.lower() in (".doc", ".docx", ".odt", ".rtf", ".pdf")]
+    if docs:
+        from ..importer.dokument import layer_rules, read_document, requirements
+        n_req, missing = 0, []
+        for a in docs:
+            try:
+                d = read_document(a.path)
+            except Exception:  # noqa: BLE001
+                continue
+            n_req += sum(1 for q in requirements(d) if q.druh == "Pokyn")
+            have = {r.hladina for r in project.rules.pravidla}
+            missing += [r.hladina for r in layer_rules(d) if r.hladina not in have]
+        if missing:
+            out.append((False, f"Vrstvy {', '.join(missing)} ze zadání (Word) nejsou v pravidlech – Zadání → Pokyny "
+                               "ze zadání → Přidat vrstvy do pravidel."))
+        if n_req:
+            out.append((None, f"Projděte {n_req} pokynů ze zadání (Zadání → Pokyny ze zadání) – např. název "
+                              "souboru, komprimace výkresu, tabulka barev."))
     vp = project.meta.get("vypocet") or {}
     if vp.get("zapisnik"):
         out.append((None, "Výpočet souřadnic ze zápisníku jste si ověřili v okně Kontrola výpočtu souřadnic."))

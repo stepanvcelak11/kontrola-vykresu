@@ -1,0 +1,49 @@
+"""Zadání ve Wordu: text, požadavky a popisy vrstev → pravidla."""
+
+import zipfile
+from pathlib import Path
+
+import pytest
+
+from kontrola.importer.dokument import layer_rules, read_document, requirements
+from kontrola.model import GeomType
+
+DOC = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "Zadání-Microstation.doc"
+
+
+@pytest.mark.skipif(not DOC.exists(), reason="zadání chybí")
+def test_stary_word_doc_vrstvy_58_59_60():
+    d = read_document(DOC)
+    assert "Vrstva 58" in d.text and "CS WORKING" in d.text
+    rules = {r.hladina: r for r in layer_rules(d)}
+    assert set(rules) == {"58", "59", "60"}
+    assert rules["58"].geometrie == GeomType.BOD and rules["58"].barva == 0 and rules["58"].tloustka == 2
+    t = rules["59"]
+    assert t.geometrie == GeomType.TEXT and t.barva == 86 and t.font == "CS WORKING"
+    assert t.vyska_textu == 0.75 and t.zarovnani == "vlevo nahoře"  # 1,5 m pro 1:1000 → 1:500
+    assert layer_rules(d, 500)[1].vyska_textu == 1.5  # pravidla v mm na papíře
+    druhy = {q.druh for q in requirements(d)}
+    assert {"Měřítko", "Písmo", "Pokyn"} <= druhy
+
+
+def _docx(path: Path, paras: list[str], table: list[list[str]]):
+    W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    p = "".join(f"<w:p><w:r><w:t>{t}</w:t></w:r></w:p>" for t in paras)
+    rows = "".join("<w:tr>" + "".join(f"<w:tc><w:p><w:r><w:t>{c}</w:t></w:r></w:p></w:tc>" for c in r) + "</w:tr>"
+                   for r in table)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><w:document {W}><w:body>{p}<w:tbl>{rows}</w:tbl></w:body></w:document>'
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("word/document.xml", xml)
+
+
+def test_docx_text_tabulka_a_pozadavky(tmp_path):
+    f = tmp_path / "zadani.docx"
+    _docx(f, ["Kresbu proveďte v měřítku 1 : 500.", "Čísla bodů musí být písmem Arial Narrow.",
+              "Vrstva 12 – Ploty", "Typy kresebných prvků lomená čára Barva 3 Tloušťka čáry 1"],
+          [["Vrstva", "Barva", "Styl"], ["PLOTY", "3", "0"]])
+    d = read_document(f)
+    assert d.tabulky == [[["Vrstva", "Barva", "Styl"], ["PLOTY", "3", "0"]]]
+    reqs = {(q.druh, q.hodnota) for q in requirements(d)}
+    assert ("Měřítko", "1:500") in reqs and ("Písmo", "Arial Narrow") in reqs
+    (r,) = layer_rules(d)
+    assert r.hladina == "12" and r.geometrie == GeomType.LINIE and r.barva == 3 and r.tloustka == 1
