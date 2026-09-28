@@ -324,6 +324,81 @@ def _what(f: Feature) -> str:
     return name or f.dxftype.capitalize()
 
 
+def _kinds(feats: list[Feature]) -> str:
+    from collections import Counter
+    c = Counter(_what(f).split(" ")[0].lower() for f in feats)
+    return ", ".join(f"{n}× {k}" for k, n in c.most_common(3))
+
+
+def _rule_score(r, f: Feature, rs) -> float | None:
+    """Jak dobře prvek odpovídá pravidlu podle vzhledu (0–1); None = jiný druh prvku."""
+    if r.geometrie is not None and r.geometrie != f.geom_type:
+        return None
+    if f.geom_type == GeomType.TEXT and not (r.font or r.vyska_textu or r.geometrie == GeomType.TEXT):
+        return None
+    if f.geom_type != GeomType.TEXT and (r.font or r.vyska_textu) and r.geometrie is None:
+        return None
+    if r.blok:
+        from ..rules import block_matches
+        if not f.block_name or not any(block_matches(p, f.block_name) for p in _alts(r.blok)):
+            return None
+    elif f.block_name:
+        return None
+    hits = total = 0
+    if r.barva is not None and color_known(r.barva, rs.paleta, rs.barevna_tabulka):
+        total += 1
+        hits += color_matches(r.barva, f, rs.paleta, rs.barevna_tabulka)
+    if r.tloustka is not None and f.geom_type != GeomType.TEXT:
+        exp, unknown = rs.expected_weights(r)
+        if exp and not unknown:
+            total += 1
+            hits += any(abs(w - f.lineweight) <= 0.051 for w in exp)
+    if f.geom_type == GeomType.TEXT:
+        if r.font and f.font:
+            total += 1
+            hits += _norm_font(r.font) in _norm_font(f.font)
+        h = rs.text_size(r.vyska_textu) if r.vyska_textu else None
+        if h:
+            total += 1
+            hits += abs(f.text_height - h) <= max(0.005, 0.02 * h)
+    if r.styl_cary and f.geom_type in (GeomType.LINIE, GeomType.POLYGON):
+        total += 1
+        hits += linetype_matches(r.styl_cary, f.linetype)
+    return hits / total if total else None
+
+
+def _alts(v) -> list[str]:
+    from ..rules import split_alternatives
+    return split_alternatives(str(v))
+
+
+def guess_layer(feats: list[Feature], rs, drawing=None) -> str:
+    """Na kterou vrstvu ze Směrnice prvky z neznámé vrstvy nejspíš patří (podle barvy, tloušťky, písma…)."""
+    sample = feats[:30]
+    best: dict[str, float] = {}
+    for r in rs.pravidla:
+        if not r.hladina or any(ch in r.hladina for ch in "*?"):
+            continue
+        scores = [_rule_score(r, f, rs) for f in sample]
+        scores = [x for x in scores if x is not None]
+        if len(scores) < max(1, len(sample) // 2):
+            continue
+        sc = sum(scores) / len(sample)
+        if sc >= 0.75:
+            best[r.hladina] = max(best.get(r.hladina, 0.0), sc)
+    if not best:
+        return ""
+    top = max(best.values())
+    cands = [h for h, v in best.items() if v >= top - 1e-9]
+    if len(cands) > 1 and drawing is not None:  # přednost má vrstva, která ve výkresu chybí nebo je prázdná
+        empty = [h for h in cands if not any(layer_matches(h, n) and li.count for n, li in drawing.layers.items())]
+        if empty:
+            cands = empty
+    if len(cands) > 3:
+        return ""
+    return " nebo ".join(cands)
+
+
 def _prvku(n: int) -> str:
     return f"{n} prvek" if n == 1 else f"{n} prvky" if 2 <= n <= 4 else f"{n} prvků"
 
@@ -354,7 +429,13 @@ class NepovoleneHladiny(Check):
                     continue
                 reported.add(f.layer)
                 feats = [x for x in ctx.features() if x.layer == f.layer]
-                yield ctx.issue(self, feats, f"Vrstva {f.layer} není ve Směrnici ({_prvku(len(feats))})")
+                msg = f"Vrstva {f.layer} není ve Směrnici: {_kinds(feats)}"
+                guess = guess_layer(feats, ctx.rules, ctx.drawing)
+                if guess:
+                    msg += f" – podle vzhledu patří na vrstvu {guess}"
+                if len(feats) > 1:
+                    msg += f" (týká se všech {_prvku(len(feats))}, kroužek je jen u prvního)"
+                yield ctx.issue(self, feats, msg)
             else:
                 yield ctx.issue(self, f, f"{_what(f)} na vrstvě {f.layer}, která není ve Směrnici")
 

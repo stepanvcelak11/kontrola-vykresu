@@ -38,8 +38,10 @@ _ATTR = {
     "atribut_dle_vrstvy": "Barva, styl nebo tloušťka je nastavená „Dle vrstvy“ (ByLevel), což zadání "
                           "nepovoluje. Vyberte prvek, v Atributech prvku (Element Attributes) nastavte konkrétní "
                           "hodnoty a použijte Změnit atributy prvku (Change Element Attributes).",
-    "nepovolene_hladiny": "Vrstva není ve Směrnici. Prvky přesuňte na správnou vrstvu (Změnit atributy prvku → "
-                          "Vrstva), nebo je smažte, pokud do výkresu nepatří (pomocné kóty, konstrukční čáry).",
+    "nepovolene_hladiny": "Celá vrstva není ve Směrnici. Všechny její prvky najednou: Správce vrstev (Level "
+                          "Manager) → pravým na vrstvu → Vybrat prvky (nebo Výběr podle atributů), pak Změnit "
+                          "atributy prvku → Vrstva = správná vrstva ze Směrnice a klik do výkresu. Pomocné prvky, "
+                          "které do výkresu nepatří, smažte. U bodů z Gromy zkontrolujte vrstvy v nastavení importu.",
     "nekodovane": "Prvek neodpovídá žádnému pravidlu – je na vrstvě, kam takový prvek nepatří. Přesuňte ho na "
                   "vrstvu podle Směrnice nebo změňte jeho typ.",
     "jednotnost_hladiny": "Prvky na jedné vrstvě mají různou symbologii. Sjednoťte je podle Směrnice "

@@ -122,7 +122,7 @@ def test_nepovolene_hladiny_a_nekodovane(make_dxf, pravidla):
         msp.add_line((0, 0), (1, 1), dxfattribs={"layer": "RAM"})  # povoleno bez kódu
         msp.add_point((3, 3), dxfattribs={"layer": "POPIS_BUDOV"})  # povolená hladina, ale bod nemá pravidlo
     d = make_dxf(build)
-    assert [i.message for i in check(d, "nepovolene_hladiny", pravidla)] == ["Vrstva POKUS není ve Směrnici (1 prvek)"]
+    assert [i.message for i in check(d, "nepovolene_hladiny", pravidla)] == ["Vrstva POKUS není ve Směrnici: 1× úsečka"]
     assert [i.message for i in check(d, "nekodovane", pravidla)] == ["Nekódovaný bod na vrstvě POPIS_BUDOV"]
 
 
@@ -168,3 +168,21 @@ def test_kontroly_atributu_bez_pravidel_se_preskoci(make_dxf):
     res = run_checks(d, RuleSet(), Config(), only=["atributy", "nepovolene_hladiny"])
     assert res.issues == []
     assert len(res.notes) == 2 and all("přeskočeno" in n for n in res.notes)
+
+
+def test_neznama_vrstva_napovi_spravnou(make_dxf):
+    """Body importované na vrstvu „58“ místo vrstvy ze Směrnice: hláška řekne, kam patří."""
+    from kontrola.rules import Rule, RuleSet
+    rs = RuleSet(pravidla=[
+        Rule(kod="1.00", nazev="Body", hladina="BODY-POLOHA", geometrie=GeomType.BOD, barva=5),
+        Rule(kod="2.00", nazev="Plot", hladina="PLOTY", geometrie=GeomType.LINIE, barva=1),
+    ], paleta="autocad")
+
+    def build(msp, doc):
+        for k in range(5):
+            msp.add_point((k, k), dxfattribs={"layer": "58", "color": 5})
+        msp.add_line((0, 0), (5, 0), dxfattribs={"layer": "PLOTY", "color": 1})
+    d = make_dxf(build)
+    msgs = [i.message for i in check(d, "nepovolene_hladiny", rs)]
+    assert len(msgs) == 1
+    assert "5× bod" in msgs[0] and "patří na vrstvu BODY-POLOHA" in msgs[0] and "všech 5 prvků" in msgs[0]

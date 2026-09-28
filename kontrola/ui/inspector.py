@@ -25,8 +25,15 @@ def feature_html(f: Feature, drawing: Drawing, rules: RuleSet, issues: list[Issu
     r = rules.resolve(f) if rules.pravidla else None
     rows.append(("Typ", escape(_what(f)) + f" <span style='color:#6B7280'>({f.dxftype})</span>"))
     lay_ok = r.matches_layer(f.layer) if (r and r.hladina) else None
-    rows.append(("Vrstva", escape(f.layer) + _ok(lay_ok) + (f" – má být {escape(r.hladina)}" if lay_ok is False
-                                                          else "")))
+    extra = f" – má být {escape(r.hladina)}" if lay_ok is False else ""
+    if rules.pravidla and not rules.allowed_layer(f.layer):
+        from ..checks.attributes import guess_layer
+        same = [x for x in drawing.features if x.layer == f.layer]
+        guess = guess_layer(same, rules, drawing)
+        lay_ok = False
+        extra = (f" – vrstva není ve Směrnici (je na ní {len(same)} prvků)"
+                 + (f", patří asi na <b>{escape(guess)}</b>" if guess else ""))
+    rows.append(("Vrstva", escape(f.layer) + _ok(lay_ok) + extra))
     col = rules.describe_feature_color(f)
     col_ok = color_matches(r.barva, f, rules.paleta, rules.barevna_tabulka) if (r and r.barva is not None) else None
     rows.append(("Barva", escape(col) + (" (dle vrstvy)" if "barva" in f.bylayer else "") + _ok(col_ok)
