@@ -130,6 +130,8 @@ QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
 
 QLabel#karta_cislo {{ font-size: 20px; font-weight: 700; }}
 QLabel#karta_popis {{ color: {MUTED}; font-size: 11px; }}
+QLabel#navod {{ background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 6px 8px;
+    color: #1E3A8A; }}
 QLabel#banner {{ background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 6px; padding: 5px 8px;
     color: #78350F; }}
 QFrame#karta {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; }}

@@ -9,12 +9,15 @@ from pathlib import Path
 
 from ..checks.base import Issue, Severity
 
-HEADER = ["Číslo", "Typ kontroly", "Závažnost", "Popis", "Hladina", "X", "Y", "Stav", "Poznámka", "Handle"]
+from ..navody import navod
+
+HEADER = ["Číslo", "Typ kontroly", "Závažnost", "Popis", "Hladina", "X", "Y", "Stav", "Poznámka", "Handle",
+          "Jak opravit"]
 
 
 def _row(i: Issue) -> list:
     return [i.number, i.check_name, i.severity.value, i.message, i.layer, round(i.x, 3), round(i.y, 3),
-            i.state, i.note, ",".join(i.handles)]
+            i.state, i.note, ",".join(i.handles), navod(i)]
 
 
 def export_csv(issues: list[Issue], path: str | Path):
@@ -48,7 +51,7 @@ def export_xlsx(issues: list[Issue], path: str | Path, drawing_name: str = ""):
         ws.cell(ws.max_row, 3).fill = PatternFill("solid", fgColor=fills[i.severity])
         for col in (6, 7):
             ws.cell(ws.max_row, col).number_format = "0.000"
-    widths = [8, 26, 11, 60, 18, 14, 14, 11, 30, 14]
+    widths = [8, 26, 11, 60, 18, 14, 14, 11, 30, 14, 90]
     for k, wdt in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(k)].width = wdt
     ws.freeze_panes = "A2"

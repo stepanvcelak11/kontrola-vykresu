@@ -16,6 +16,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from ..navody import navod
 from ..checks.base import Issue, Severity, fmt_num
 from ..resources import resource_path
 
@@ -159,7 +160,8 @@ def export_pdf(issues: list[Issue], path: str | Path, drawing_name: str = "", pr
             if i is None:
                 continue
             cap = Paragraph(f"<b>#{i.number} {_esc(i.check_name)}</b> ({i.severity.value})<br/>{_esc(i.message)}"
-                            f"<br/>Hladina {_esc(i.layer)}, X {_coord(i.x)}, Y {_coord(i.y)}", st["small"])
+                            f"<br/>Hladina {_esc(i.layer)}, X {_coord(i.x)}, Y {_coord(i.y)}"
+                            + (f"<br/><i>Jak opravit:</i> {_esc(navod(i))}" if navod(i) else ""), st["small"])
             cells.append([_image(png, 68 * mm, 68 * mm), cap])
         grid = []
         for k in range(0, len(cells), 2):

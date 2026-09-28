@@ -137,3 +137,27 @@ def test_editor_pravidel_upravy_se_ulozi(window):
     w.project.save()
     from kontrola.rules import RuleSet
     assert RuleSet.load(w.project.root / "pravidla.yaml").pravidla[-1].geometrie == GeomType.LINIE
+
+
+def test_hlidani_souboru_zkontroluje_znovu(window, tmp_path):
+    import shutil
+    w = window
+    src = tmp_path / "rozpracovany.dxf"
+    shutil.copy(UKAZKA, src)
+    w.load_drawing_file(src)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0)
+    w.a_watch.setChecked(True)
+    assert str(src) in w.watcher.files()
+    n_before = len(w.issues)
+    # „MicroStation uloží DXF“: výkres bez jedné úsečky
+    import ezdxf
+    doc = ezdxf.readfile(src)
+    msp = doc.modelspace()
+    for e in list(msp.query("LINE"))[:3]:
+        msp.delete_entity(e)
+    doc.saveas(src)
+    w._file_changed(str(src))
+    import time
+    assert w._wait(lambda: _idle(w) and "Opakovaná" in w.issue_panel.summary.text(), 20)
+    assert n_before > 0

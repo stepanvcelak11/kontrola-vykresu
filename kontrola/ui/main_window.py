@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
 
         self._build_status()
         self._build_actions()
+        self._init_watch()
         self._restore_geometry()
         if project is not None:
             self.set_project(project)
@@ -111,6 +112,10 @@ class MainWindow(QMainWindow):
         sb.addWidget(self.info_label, 1)
         sb.addPermanentWidget(self.progress)
         sb.addPermanentWidget(self.cancel_btn)
+        self.watch_label = QLabel("")
+        self.watch_label.setToolTip("Po uložení výkresu (v MicroStationu Uložit jako DXF) se výkres sám "
+                                    "zkontroluje znovu. Vypnutí: Kontrola → Hlídat změny výkresu.")
+        sb.addPermanentWidget(self.watch_label)
         sb.addPermanentWidget(self.coord_label)
 
     def _act(self, text, slot, shortcut=None, tip=None, checkable=False) -> QAction:
@@ -169,6 +174,9 @@ class MainWindow(QMainWindow):
         self.a_region = self._act("Jen tento výřez", self._toggle_region, None,
                                   "Počítat jen chyby v právě zobrazené části výkresu (přibližte si hotovou část). "
                                   "Opětovným kliknutím se vrátíte k celému výkresu.", checkable=True)
+        self.a_watch = self._act("Hlídat změny výkresu", self._toggle_watch, None,
+                                 "Když výkres znovu uložíte (v MicroStationu Uložit jako DXF), aplikace ho sama "
+                                 "načte a zkontroluje.", checkable=True)
         self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
                                    "Spočítat body ze zápisníku totální stanice a porovnat s vaším seznamem z Gromy")
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
@@ -203,6 +211,7 @@ class MainWindow(QMainWindow):
         m_check.addSeparator()
         m_check.addAction(self.a_vypocet)
         m_check.addSeparator()
+        m_check.addAction(self.a_watch)
         m_check.addAction(self.a_wip)
         m_check.addAction(self.a_region)
         m_check.addSeparator()
@@ -346,6 +355,77 @@ class MainWindow(QMainWindow):
         self.project.store_issues(self.issues)
         out = self.project.export_zip(path)
         self.statusBar().showMessage(f"Projekt uložen do {out}", 10000)
+
+    # ------------------------------------------------------------------ hlídání souboru
+    def _init_watch(self):
+        from PySide6.QtCore import QFileSystemWatcher
+        self.watcher = QFileSystemWatcher(self)
+        self.watcher.fileChanged.connect(self._file_changed)
+        self._watch_timer = QTimer(self)
+        self._watch_timer.setSingleShot(True)
+        self._watch_timer.timeout.connect(self._watch_fire)
+        self._watch_sizes: dict[str, int] = {}
+        self._watch_changed: str | None = None
+        on = self.settings.value("hlidani/zapnuto", True, type=bool)
+        self.a_watch.blockSignals(True)
+        self.a_watch.setChecked(on)
+        self.a_watch.blockSignals(False)
+
+    def _watch_paths(self) -> list[str]:
+        if self.project is None or self.drawing is None:
+            return []
+        src = self.project.drawing_source
+        out = []
+        if src and Path(src).is_file():
+            out.append(str(Path(src)))
+            dgn = Path(src).with_suffix(".dgn")
+            if dgn.is_file():
+                from ..io.dgn import find_oda_converter
+                if find_oda_converter(self.project.config.oda_cesta or None):
+                    out.append(str(dgn))
+        return out
+
+    def _update_watch(self):
+        if not hasattr(self, "watcher"):
+            return
+        old = self.watcher.files()
+        if old:
+            self.watcher.removePaths(old)
+        paths = self._watch_paths() if self.a_watch.isChecked() else []
+        if paths:
+            self.watcher.addPaths(paths)
+        self.watch_label.setText("<span style='color:#16A34A'>●</span> hlídám " + Path(paths[0]).name
+                                 if paths else "")
+
+    def _toggle_watch(self, on: bool):
+        self.settings.setValue("hlidani/zapnuto", bool(on))
+        self._update_watch()
+        if hasattr(self, "watcher"):
+            self.statusBar().showMessage("Hlídání výkresu zapnuto – po uložení DXF se výkres sám zkontroluje."
+                                         if on else "Hlídání výkresu vypnuto.", 6000)
+
+    def _file_changed(self, path: str):
+        # uložení souboru bývá víc zápisů za sebou – počkat, až se velikost přestane měnit
+        self._watch_changed = path
+        self._watch_sizes[path] = Path(path).stat().st_size if Path(path).exists() else -1
+        self._watch_timer.start(1500)
+
+    def _watch_fire(self):
+        path = self._watch_changed
+        if not path:
+            return
+        p = Path(path)
+        size = p.stat().st_size if p.exists() else -1
+        if size <= 0 or size != self._watch_sizes.get(path):
+            self._watch_sizes[path] = size
+            self._watch_timer.start(1500)  # ještě se zapisuje (nebo soubor chvíli neexistuje)
+            return
+        if self.task is not None and self.task.is_running():
+            self._watch_timer.start(1500)
+            return
+        self._watch_changed = None
+        self.statusBar().showMessage(f"{p.name} se změnil – kontroluji znovu…", 5000)
+        self.recheck(p if p.suffix.lower() == ".dgn" else None, silent=True)
 
     def show_vypocet(self):
         from .vypocet_dialog import VypocetDialog
@@ -512,6 +592,7 @@ class MainWindow(QMainWindow):
             self.a_region.setChecked(False)  # jiný výkres – výřez už neplatí
         self.layers.set_drawing(drawing)
         self.set_issues([])
+        self._update_watch()
         n = len(drawing.features)
         self.info_label.setText(f"Načteno {n} prvků, {sum(1 for l in drawing.layers.values() if l.count)} hladin.")
         self._update_title()
@@ -554,10 +635,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(" | ".join(res.notes[:4]), 20000)
         self.last_notes = res.notes
 
-    def recheck(self):
+    def recheck(self, path: Path | None = None, silent: bool = False):
         if self.project is None:
             return
-        path = self.project.drawing_path_for_loading()
+        path = path or self.project.drawing_path_for_loading()
         if path is None:
             self.run_checks()
             return
@@ -566,7 +647,10 @@ class MainWindow(QMainWindow):
         def compare_text(res: CheckResult) -> str:
             cmp = compare(old, res.issues)
             msg = (f"Opakovaná kontrola: {len(res.issues)} problémů (předtím {len(old)}). {cmp.text()}")
-            QMessageBox.information(self, "Zkontrolovat znovu", msg)
+            if silent:
+                self.statusBar().showMessage("Výkres se změnil – " + msg, 15000)
+            else:
+                QMessageBox.information(self, "Zkontrolovat znovu", msg)
             return msg
 
         self.project.refresh_drawing_copy()

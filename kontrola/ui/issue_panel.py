@@ -98,6 +98,9 @@ class IssueModel(QAbstractTableModel):
             return QBrush(QColor(236, 253, 243))
         if role == Qt.ToolTipRole:
             tip = f"{iss.check_name}: {iss.message}"
+            from ..navody import navod
+            if navod(iss):
+                tip += f"\n\nJak opravit: {navod(iss)}"
             if iss.handles:
                 tip += f"\nPrvky (handle): {', '.join(iss.handles[:6])}"
             if iss.note:
@@ -316,6 +319,12 @@ class IssuePanel(QWidget):
         for b in (self.b_prev, self.b_next, self.b_fixed, self.b_ignore, self.b_new):
             nav.addWidget(b)
         tl.addLayout(nav)
+        self.hint = QLabel()
+        self.hint.setObjectName("navod")
+        self.hint.setWordWrap(True)
+        self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.hint.setVisible(False)
+        tl.addWidget(self.hint)
         nrow = QHBoxLayout()
         nrow.addWidget(QLabel("Poznámka:"))
         self.note = QLineEdit()
@@ -478,10 +487,15 @@ class IssuePanel(QWidget):
             iss = self.model.issues[self.proxy.mapToSource(cur).row()]
             self.note.setEnabled(True)
             self.note.setText(iss.note)
+            from ..navody import navod
+            h = navod(iss)
+            self.hint.setText(f"<b>Jak opravit:</b> {h}" if h else "")
+            self.hint.setVisible(bool(h))
             self.issueSelected.emit(iss.number)
         else:
             self.note.setEnabled(False)
             self.note.clear()
+            self.hint.setVisible(False)
 
     def _note_edited(self):
         iss = self.current_issue()
