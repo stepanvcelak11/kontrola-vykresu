@@ -166,6 +166,7 @@ class RulesEditor(QWidget):
             vyska_textu=old.vyska_textu if old else None, sirka_textu=old.sirka_textu if old else None,
             font=old.font if old else None, zarovnani=old.zarovnani if old else None,
             tucne=old.tucne if old else None, kurziva=old.kurziva if old else None,
+            meritko_stylu=old.meritko_stylu if old else None, meritko_bunky=old.meritko_bunky if old else None,
             topologie=old.topologie if old else True,
         )
 

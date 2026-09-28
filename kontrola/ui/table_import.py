@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout
                                QWidget)
 
 from ..importer.table import (FIELDS, ImportResult, TableData, detect_header_row, generate_rules,
-                              guess_code_column, guess_mapping, read_table, text_units_mm)
+                              guess_code_column, guess_mapping, read_table, split_scale_columns,
+                              text_units_mm)
 
 
 def col_name(i: int) -> str:
@@ -174,6 +175,8 @@ class TableImportWizard(QDialog):
         col = guess_code_column(self.data.rows, hi, mapping)
         if col is not None:
             mapping["kod"] = col
+        if hi is not None:
+            split_scale_columns(self.data.rows[hi], mapping)
         self._apply(hi, mapping)
 
     def _apply(self, header_row: int | None, mapping: dict):

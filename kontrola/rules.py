@@ -457,6 +457,8 @@ class Rule:
     sirka_textu: float | None = None
     font: str | None = None
     zarovnani: str | None = None  # např. „vlevo nahoře“
+    meritko_stylu: float | None = None  # měřítko uživatelského stylu čáry (např. 0,5)
+    meritko_bunky: float | None = None  # měřítko buňky (značky)
     tucne: bool | None = None  # řez písma (None = nekontroluje se)
     kurziva: bool | None = None
     topologie: bool = True  # False = prvky se nekontrolují topologicky (vstupy, sdružené značky)
@@ -488,7 +490,8 @@ class Rule:
             d["text"] = self.text.to_dict()
         if self.typy_prvku:
             d["typy_prvku"] = list(self.typy_prvku)
-        for k in ("vyska_textu", "sirka_textu", "font", "zarovnani", "tucne", "kurziva"):
+        for k in ("vyska_textu", "sirka_textu", "font", "zarovnani", "tucne", "kurziva", "meritko_stylu",
+                  "meritko_bunky"):
             v = getattr(self, k)
             if v not in (None, ""):
                 d[k] = v
@@ -522,6 +525,8 @@ class Rule:
             font=(str(d["font"]).strip() if d.get("font") else None),
             zarovnani=(str(d["zarovnani"]).strip() if d.get("zarovnani") else None),
             tucne=parse_bool(d.get("tucne")),
+            meritko_stylu=fnum("meritko_stylu"),
+            meritko_bunky=fnum("meritko_bunky"),
             kurziva=parse_bool(d.get("kurziva")),
             topologie=bool(d.get("topologie", True)),
             hladina=(str(d["hladina"]).strip() if d.get("hladina") else None),

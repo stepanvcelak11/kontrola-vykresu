@@ -245,6 +245,7 @@ class _Loader:
         layer, aci, rgb, lt, lw, bylayer = _entity_style(e, self.ctx, parent)
         raw, xattrs = _xdata(e)
         return dict(layer=layer, color_aci=aci, color_rgb=rgb, linetype=lt, lineweight=lw,
+                    ltscale=float(e.dxf.get("ltscale", 1.0) or 1.0),
                     handle=e.dxf.get("handle", ""), xdata=raw, attributes=xattrs, bylayer=bylayer)
 
     def _is_reference(self, name: str) -> bool:

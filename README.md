@@ -179,12 +179,18 @@ Postup:
    * **Atributová kontrola (jako GISoft „Kontrola a změna symbologie“):**
      * vrstva podle čísla (VR 5 = „Vrstva 5“ / „Level 5“),
      * typ prvku MicroStationu (úsečka, lomená čára, elipsa, oblouk, text, buňka),
-     * barva (číslo MicroStationu) a styl (0, 2, 4, 7 nebo uživatelský 2.123…),
-     * u textů výška, šířka a zarovnání,
+     * barva (číslo MicroStationu), styl (0, 2, 4, 7 nebo uživatelský 2.123…) a **měřítko stylu**
+       (sloupec MĚŘÍTKO, např. 0,5 u plotů), u buněk měřítko buňky,
+     * u textů font, výška, šířka a zarovnání,
      * **zákaz atributu „dle vrstvy“ (ByLevel)**.
-   * **Topologická kontrola (jako MGEO):** duplicity, nedotažení a přetažení, **nerozdělené čáry
-     v uzlu** a volné konce. Volné konce na okraji výkresu a nedělené čáry v T-spojení se podle
-     zadání nehlásí. Úsečky nulové délky na vrstvě bodů (58) jsou body, ne chyba.
+   * **Topologická kontrola (jako MGEO) se stejnými tolerancemi:** začištění **0,010 m**
+     (nedotažení), přetah / křížení **0,020 m**, krátká čára **0,090 m**. Hlásí duplicity,
+     nedotažení a přetažení, **nerozdělené čáry při křížení**, krátké čáry a volné konce. Volné
+     konce na okraji mapy a nerozdělené čáry v T-spojení se podle zadání nehlásí. Úsečky nulové
+     délky na vrstvě bodů (58) jsou body, ne chyba.
+   * Uživatelské styly se značkami (např. zábradlí 5.303) MicroStation do DXF někdy neuloží a čára
+     je v DXF „Continuous“. Taková čára se hlásí jen jako **varování** („ověřte v DGN“). Že je styl
+     nastavený, napoví měřítko stylu (0,5), které v DXF zůstane.
 4. **Soubor → Export → Protokol jako MGEO / GISoft (.log)** vytvoří protokol ve stejné podobě,
    jakou vrací učitel: prvky seskupené podle atributů, chybný atribut označený „(!)“.
 
@@ -200,8 +206,9 @@ MicroStationu se v DXF ukládají v mm: 0 → 0 mm, 2 → 0,30 mm, 3 → 0,40 mm
 
 **Co ukázala kontrola `Vcelak_13_navic.dxf`:** kóty na vrstvě 63 nejsou ve Směrnici, proto se
 hlásí jako nepovolená hladina (jedna chyba s počtem prvků) a do topologie se nepočítají.
-Zábradlí má styl Continuous místo 5.303. Schody jsou kreslené bez přichycení (mezery a přesahy
-desetin milimetru), proto nedotažení a přetažení. Délky pod 1 cm se vypisují v mm.
+Zábradlí má v DXF styl Continuous s měřítkem 0,5, styl 5.303 se tedy nejspíš jen neuložil do DXF
+(varování, ověřte v DGN). Schody jsou kreslené bez přichycení (mezery a přesahy desetin
+milimetru), proto nedotažení a přetažení. Délky pod 1 cm se vypisují v mm.
 
 ## Zadání 2 (účelová mapa Husovice, Atributy ÚM.xlsx)
 
@@ -224,7 +231,7 @@ Ve složce [`podklady/zadani2-husovice/`](podklady/zadani2-husovice/) jsou podkl
   i na vrstvách sítí. Šrafy svahů a vstupy se do topologie nepočítají.
 
 **Co ukázala kontrola `Husovice_Včelák_mapa_Kresba.dxf`** (8 nálezů):
-zábradlí má styl Continuous místo 5.29/5.30, číslo popisné a orientační není tučné
+zábradlí má v DXF styl Continuous (varování, ověřte v DGN), číslo popisné a orientační není tučné
 (tabulka: tučně i kurzíva), 1 průsečík bez uzlu na hranici vozovky, 1 dvojice bodů 6 mm od sebe
 (bod zaměřený dvakrát?) a 4 volné konce čar (varování, zkontrolujte).
 
@@ -257,8 +264,9 @@ nastavit jí závažnost (chyba / varování / info) a parametry. Všechny délk
 
 Obecné nastavení:
 
-* **Tolerance** (výchozí 0,05 m) je vzdálenost, do které se hledají chybějící napojení a body
-  téměř na sobě.
+* **Tolerance** (výchozí 0,010 m = tolerance začištění MGEO) je vzdálenost, do které se hlásí
+  nedotažení a body téměř na sobě. Přetah / křížení (0,020 m) a krátká čára (0,090 m) se
+  nastavují u příslušných kontrol. Projekty z dřívějších verzí se na tyto hodnoty převedou samy.
 * **Přesnost** (výchozí 0,0001 m) je vzdálenost, pod kterou jsou dva body totožné.
 
 ### Topologie (shapely, prostorový index STRtree)
@@ -394,8 +402,9 @@ Okomentovaný příklad je v souboru [`ukazky/konfigurace.yaml`](ukazky/konfigur
 Obsahuje nastavení všech kontrol i pravidla pro ukázkový výkres. Zkrácená ukázka:
 
 ```yaml
+verze_nastaveni: 2
 nastaveni:
-  tolerance: 0.05
+  tolerance: 0.010
 kontroly:
   visici_konce: {zapnuto: true, zavaznost: varování}
 paleta: microstation     # čísla barev: microstation (výchozí) nebo autocad (ACI)
@@ -433,10 +442,11 @@ Tloušťky MicroStationu (wt 0–31) se v DXF ověřit nedají. Uvádějte je v 
 | MGEO | Kontrola výkresu |
 |---|---|
 | Kontrola a oprava čárové kresby: duplicitní linie | Duplicitní prvek |
-| … nedotažené a přetažené linie | Nedotažená / přetažená linie (tolerance, max. přetažení) |
-| … průsečíky linií, linie nerozdělené v uzlu | Průsečík bez uzlu (volitelně „linie musí být v uzlu rozdělené“) |
+| … nedotažené linie (začištění 0,010 m) | Nedotažená / přetažená linie (tolerance 0,010 m) |
+| … přetažené linie (přetah / křížení 0,020 m) | Nedotažená / přetažená linie (max. přetažení 0,020 m) |
+| … průsečíky linií, linie nerozdělené v uzlu | Průsečík bez uzlu (T-spojení se podle zadání nehlásí) |
 | … volné konce | Visící konec linie |
-| … krátké a bodové linie | Krátká linie nebo úsek, Prvek nulové délky |
+| … krátké a bodové linie (0,090 m) | Krátká linie nebo úsek (0,090 m), Prvek nulové délky |
 | … blízké body | Body téměř na sobě |
 | Kontrola a oprava duplicitních prvků | Duplicitní prvek (i body, texty, buňky) |
 | Kontrola a změna symbologie | Hladina, barva nebo styl; Nepovolená hladina; Nekódovaný prvek |

@@ -90,7 +90,7 @@ def test_ukazkova_konfigurace_se_nacte():
     rs = RuleSet.load(UKAZKY / "konfigurace.yaml")
     cfg = Config.load(UKAZKY / "konfigurace.yaml")
     assert len(rs.pravidla) >= 5
-    assert cfg.tolerance == 0.05
+    assert cfg.tolerance == 0.01
     assert cfg.settings("visici_konce").zapnuto
 
 

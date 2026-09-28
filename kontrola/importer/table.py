@@ -40,6 +40,8 @@ FIELDS: list[tuple[str, str]] = [
     ("vyska_textu", "Výška textu"),
     ("sirka_textu", "Šířka textu"),
     ("zarovnani", "Zarovnání textu"),
+    ("meritko_stylu", "Měřítko stylu čáry"),
+    ("meritko_bunky", "Měřítko buňky"),
     ("tucne", "Tučné písmo"),
     ("kurziva", "Kurzíva"),
     ("poznamka", "Poznámka"),
@@ -61,6 +63,8 @@ _KEYWORDS: dict[str, list[str]] = {
     "vyska_textu": ["vyska", "vyska textu", "text height"],
     "sirka_textu": ["sirka", "sirka textu", "text width"],
     "zarovnani": ["zarovnani", "vztazny bod", "justification"],
+    "meritko_stylu": ["meritko stylu", "meritko", "scale"],
+    "meritko_bunky": ["meritko bunky", "cell scale"],
     "tucne": ["tucne", "tucny", "bold"],
     "kurziva": ["kurziva", "italic"],
     "povinne_atributy": ["povinne atributy", "atributy", "povinne", "attributes", "atribut"],
@@ -377,6 +381,8 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
                     povinne_atributy=attrs, povolene_hodnoty=allowed, text=text_rule,
                     typy_prvku=types, vyska_textu=vyska, sirka_textu=sirka, font=font or None,
                     zarovnani=get(r, "zarovnani") or None,
+                    meritko_stylu=_num(get(r, "meritko_stylu")) if get(r, "meritko_stylu") else None,
+                    meritko_bunky=_num(get(r, "meritko_bunky")) if blok and get(r, "meritko_bunky") else None,
                     tucne=parse_bool(get(r, "tucne")) if geom == GeomType.TEXT else None,
                     kurziva=parse_bool(get(r, "kurziva")) if geom == GeomType.TEXT else None,
                     topologie=not re.search(r"\bvstup|šraf", nazev, re.IGNORECASE),
@@ -417,6 +423,20 @@ def guess_code_column(rows: list[list[str]], header_row: int | None, mapping: di
     return None
 
 
+def split_scale_columns(header: list[str], mapping: dict[str, int]) -> None:
+    """Dva sloupce „MĚŘÍTKO“ (Směrnice): za stylem čáry je měřítko stylu, za buňkou měřítko buňky."""
+    cols = [i for i, c in enumerate(header) if norm(c) == "meritko"]
+    if len(cols) < 2:
+        return
+    blok = mapping.get("blok")
+    after_blok = [c for c in cols if blok is not None and c > blok]
+    before_blok = [c for c in cols if blok is None or c < blok]
+    if after_blok and "meritko_bunky" not in mapping:
+        mapping["meritko_bunky"] = after_blok[0]
+    if before_blok:
+        mapping["meritko_stylu"] = before_blok[0]
+
+
 def text_units_mm(rows: list[list[str]], header_row: int | None, mapping: dict[str, int]) -> bool:
     """Jsou výšky textu v tabulce v mm (na papíře)? Např. hlavička „Výška [mm]“."""
     col = mapping.get("vyska_textu")
@@ -433,4 +453,6 @@ def import_table(path: str | Path, sheet: str | None = None) -> tuple[TableData,
     col = guess_code_column(td.rows, hi, mapping)
     if col is not None:
         mapping["kod"] = col
+    if hi is not None:
+        split_scale_columns(td.rows[hi], mapping)
     return td, hi, mapping

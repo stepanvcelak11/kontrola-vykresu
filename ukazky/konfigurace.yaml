@@ -14,8 +14,9 @@
 #  ukazky/ukazkovy_vykres.dxf a tabulce ukazky/tabulka_atributu.xlsx.
 # =============================================================================
 
+verze_nastaveni: 2
 nastaveni:
-  tolerance: 0.05          # hledací tolerance: chybějící napojení, body téměř na sobě
+  tolerance: 0.010         # tolerance začištění jako v MGEO: nedotažení, body téměř na sobě
   presnost: 0.0001         # body bližší než 0,1 mm jsou totožné (přesně napojené)
   okruh_textu: 5.0         # do jaké vzdálenosti se hledá popis k bodu nebo linii
   max_chyb_na_kontrolu: 5000
@@ -41,6 +42,13 @@ kontroly:
   chybejici_napojeni:
     zapnuto: true
     zavaznost: chyba
+    max_pretazeni: 0.020   # tolerance přetahu / křížení jako v MGEO
+    hladiny: ""
+  kratke_linie:
+    zapnuto: true
+    zavaznost: chyba
+    min_delka: 0.090       # krátká čára jako v MGEO
+    min_usek: 0.005
     hladiny: ""
   duplicity:
     zapnuto: true
@@ -54,7 +62,7 @@ kontroly:
   pruseciky_bez_uzlu:
     zapnuto: true
     zavaznost: chyba
-    napojeni_bez_uzlu: true  # hlásit i T-spoj, kde linie končí na jiné linii bez lomového bodu
+    napojeni_bez_uzlu: false # T-spoj bez lomového bodu MGEO za chybu nepovažuje (true = hlásit)
     hladiny: ""
   nulova_delka:
     zapnuto: true

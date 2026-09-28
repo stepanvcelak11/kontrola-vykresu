@@ -11,12 +11,12 @@ from kontrola.repair import RepairOptions, repair_drawing
 def test_oprava_topologie(make_dxf, tmp_path):
     def build(msp, doc):
         msp.add_lwpolyline([(0, 0), (10, 0), (20, 0)])  # hlavní linie
-        msp.add_line((5, 5), (5, 0.03))  # nedotažená o 3 cm
-        msp.add_lwpolyline([(15, 5), (15, -0.2)])  # přetažená o 20 cm
+        msp.add_line((5, 5), (5, 0.008))  # nedotažená o 8 mm
+        msp.add_lwpolyline([(15, 5), (15, -0.015)])  # přetažená o 15 mm
         msp.add_line((0, 10), (10, 10))
         msp.add_line((0, 10), (10, 10))  # duplicita
         msp.add_line((3, 3), (3, 3))  # nulová délka
-        msp.add_lwpolyline([(30, 0), (40, 0), (40, 10), (30, 10), (30, 0.02)])  # téměř uzavřený
+        msp.add_lwpolyline([(30, 0), (40, 0), (40, 10), (30, 10), (30, 0.005)])  # téměř uzavřený
     d = make_dxf(build, name="vstup.dxf")
     assert check(d, "chybejici_napojeni") and check(d, "duplicity") and check(d, "nulova_delka")
     out = tmp_path / "opraveno.dxf"
@@ -41,7 +41,7 @@ def test_oprava_jen_vybrane_a_nikdy_do_originalu(make_dxf, tmp_path):
     def build(msp, doc):
         msp.add_line((0, 0), (10, 0))
         msp.add_line((0, 0), (10, 0))
-        msp.add_line((5, 5), (5, 0.03))
+        msp.add_line((5, 5), (5, 0.008))
     d = make_dxf(build, name="vstup.dxf")
     with pytest.raises(ValueError):
         repair_drawing(d, None, Config(), d.path)

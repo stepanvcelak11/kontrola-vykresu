@@ -70,6 +70,7 @@ class Feature:
     color_rgb: tuple[int, int, int] = (255, 255, 255)
     linetype: str = "CONTINUOUS"
     lineweight: float = 0.0  # mm, 0 = výchozí
+    ltscale: float = 1.0  # měřítko stylu čáry (MicroStation „měřítko stylu“, DXF ltscale)
     handle: str = ""
     closed: bool = False
     block_name: str | None = None

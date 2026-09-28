@@ -42,8 +42,10 @@ def test_napojeni_bez_uzlu_t_spoj(make_dxf):
         msp.add_line((0, 0), (10, 0))
         msp.add_line((4, 0), (4, 6))  # končí na linii, ta v bodě 4,0 nemá vrchol
     d = make_dxf(build)
-    assert [i.message for i in check(d, "pruseciky_bez_uzlu")] == ["Napojení na linii bez uzlu"]
-    assert check(d, "pruseciky_bez_uzlu", napojeni_bez_uzlu=False) == []
+    # MGEO nerozdělené čáry v T-spojení za chybu nepovažuje – hlásí se jen na požádání
+    assert check(d, "pruseciky_bez_uzlu") == []
+    assert [i.message for i in check(d, "pruseciky_bez_uzlu", napojeni_bez_uzlu=True)] == \
+        ["Napojení na linii bez uzlu"]
 
 
 def test_nulova_delka(make_dxf):

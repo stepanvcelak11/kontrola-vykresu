@@ -3,11 +3,10 @@
 # Čísla barev a stylů jsou čísla MicroStationu (tabulka barev color.tbl).
 # Načtení v aplikaci: Zadání → Pravidla → Načíst YAML…
 paleta: microstation
-rozsah: sjtsk
-mapa_tloustek:  # tloušťka MicroStationu → tloušťka čáry v DXF [mm]
+mapa_tloustek:
   0: 0.0
   2: 0.3
-barevna_tabulka:  # color.tbl ze školy (podklady/color.tbl)
+barevna_tabulka:
   0: '#FFFFFF'
   1: '#0000FF'
   2: '#00FF00'
@@ -264,6 +263,7 @@ barevna_tabulka:  # color.tbl ze školy (podklady/color.tbl)
   253: '#1E001E'
   254: '#C0C0C0'
   255: '#000000'
+rozsah: sjtsk
 pravidla:
 - kod: Budovy zděné, betonové
   nazev: Budovy zděné, betonové
@@ -354,6 +354,7 @@ pravidla:
   - 4
   - 15
   - 16
+  meritko_stylu: 0.5
   zdroj: Směrnice-výběr.xls, řádek 11
 - kod: Plot dřevěný
   nazev: Plot dřevěný
@@ -367,6 +368,7 @@ pravidla:
   - 4
   - 15
   - 16
+  meritko_stylu: 0.5
   zdroj: Směrnice-výběr.xls, řádek 12
 - kod: Plot kovový
   nazev: Plot kovový
@@ -380,6 +382,7 @@ pravidla:
   - 4
   - 15
   - 16
+  meritko_stylu: 0.5
   zdroj: Směrnice-výběr.xls, řádek 13
 - kod: Plot zděný, azbestový
   nazev: Plot zděný, azbestový
@@ -393,6 +396,7 @@ pravidla:
   - 4
   - 15
   - 16
+  meritko_stylu: 0.5
   zdroj: Směrnice-výběr.xls, řádek 14
 - kod: Plot živý
   nazev: Plot živý
@@ -406,6 +410,7 @@ pravidla:
   - 4
   - 15
   - 16
+  meritko_stylu: 0.5
   zdroj: Směrnice-výběr.xls, řádek 15
 - kod: Zábradlí
   nazev: Zábradlí
@@ -419,6 +424,7 @@ pravidla:
   - 4
   - 15
   - 16
+  meritko_stylu: 0.5
   zdroj: Směrnice-výběr.xls, řádek 16
 - kod: Vstup na pozemek
   nazev: Vstup na pozemek
@@ -498,6 +504,7 @@ pravidla:
   blok: '3.13'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 27
 - kod: Strom listnatý
   nazev: Strom listnatý
@@ -509,6 +516,7 @@ pravidla:
   blok: 3.13A
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 28
 - kod: Strom jehličnatý
   nazev: Strom jehličnatý
@@ -520,6 +528,7 @@ pravidla:
   blok: 3.13B
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 29
 - kod: Strom ovocný
   nazev: Strom ovocný
@@ -531,6 +540,7 @@ pravidla:
   blok: 3.13C
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 30
 - kod: Studna
   nazev: Studna
@@ -542,6 +552,7 @@ pravidla:
   blok: '8.11'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 33
 - kod: Sloup betonový
   nazev: Sloup betonový
@@ -553,6 +564,7 @@ pravidla:
   blok: 6.01A
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 34
 - kod: Sloup dřevěný
   nazev: Sloup dřevěný
@@ -564,6 +576,7 @@ pravidla:
   blok: 6.01B
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 35
 - kod: Sloup kovový
   nazev: Sloup kovový
@@ -575,6 +588,7 @@ pravidla:
   blok: 6.01C
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 36
 - kod: Šachta kanalizační
   nazev: Šachta kanalizační
@@ -586,6 +600,7 @@ pravidla:
   blok: '6.20'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 37
 - kod: Vpusť
   nazev: Vpusť
@@ -597,6 +612,7 @@ pravidla:
   blok: '6.30'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 38
 - kod: Šoupě vodovodní
   nazev: Šoupě vodovodní
@@ -608,6 +624,7 @@ pravidla:
   blok: 6.14A
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 39
 - kod: Hydrant podzemní
   nazev: Hydrant podzemní
@@ -619,6 +636,7 @@ pravidla:
   blok: '6.13'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 40
 - kod: Hydrant nadzemní
   nazev: Hydrant nadzemní
@@ -630,6 +648,7 @@ pravidla:
   blok: '6.12'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 41
 - kod: Šoupě plynové
   nazev: Šoupě plynové
@@ -641,6 +660,7 @@ pravidla:
   blok: 6.14B
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   poznamka: neplatí pro skutečné provedení a převod stáv. dok.
   zdroj: Směrnice-výběr.xls, řádek 42
 - kod: Orná půda
@@ -653,6 +673,7 @@ pravidla:
   blok: '3.01'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 45
 - kod: Chmelnice
   nazev: Chmelnice
@@ -664,6 +685,7 @@ pravidla:
   blok: '3.02'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 46
 - kod: Vinice
   nazev: Vinice
@@ -675,6 +697,7 @@ pravidla:
   blok: '3.03'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 47
 - kod: Zahrada
   nazev: Zahrada
@@ -686,6 +709,7 @@ pravidla:
   blok: '3.04'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 48
 - kod: Sad ovocný
   nazev: Sad ovocný
@@ -697,6 +721,7 @@ pravidla:
   blok: '3.05'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 49
 - kod: Louka
   nazev: Louka
@@ -708,6 +733,7 @@ pravidla:
   blok: '3.06'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 50
 - kod: Pastvina
   nazev: Pastvina
@@ -719,6 +745,7 @@ pravidla:
   blok: '3.07'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 51
 - kod: Les nerozlišený
   nazev: Les nerozlišený
@@ -730,6 +757,7 @@ pravidla:
   blok: '3.08'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 52
 - kod: Les jehličnatý
   nazev: Les jehličnatý
@@ -741,6 +769,7 @@ pravidla:
   blok: '3.09'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 53
 - kod: Les listnatý
   nazev: Les listnatý
@@ -752,6 +781,7 @@ pravidla:
   blok: '3.10'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 54
 - kod: Křoviny
   nazev: Křoviny
@@ -763,6 +793,7 @@ pravidla:
   blok: '3.11'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 55
 - kod: Kosodřevina
   nazev: Kosodřevina
@@ -774,6 +805,7 @@ pravidla:
   blok: '3.12'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 56
 - kod: Park
   nazev: Park
@@ -785,6 +817,7 @@ pravidla:
   blok: '3.14'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 57
 - kod: Neplodná půda
   nazev: Neplodná půda
@@ -796,6 +829,7 @@ pravidla:
   blok: '3.16'
   typy_prvku:
   - 2
+  meritko_bunky: 1.0
   zdroj: Směrnice-výběr.xls, řádek 58
 - kod: Popis povrchů
   nazev: Popis povrchů
@@ -854,8 +888,8 @@ pravidla:
   geometrie: bod
   hladina: '58'
   barva: 0
-  styl_cary: '0'
-  tloustka: 2
+  styl_cary: CONTINUOUS
+  tloustka: 2.0
   typy_prvku:
   - 3
   poznamka: bod = úsečka nulové délky („umístit aktivní bod“)
@@ -865,7 +899,7 @@ pravidla:
   geometrie: text
   hladina: '59'
   barva: 86
-  tloustka: 0
+  tloustka: 0.0
   typy_prvku:
   - 17
   vyska_textu: 0.75
@@ -878,7 +912,7 @@ pravidla:
   geometrie: text
   hladina: '60'
   barva: 0
-  tloustka: 0
+  tloustka: 0.0
   typy_prvku:
   - 17
   vyska_textu: 0.75

@@ -228,8 +228,9 @@ class ChybejiciNapojeni(Check):
              "a pokračuje nejvýše o „max. přetažení“). Stejné chyby hledá MGEO při kontrole čárové kresby.")
     vychozi_zavaznost = Severity.CHYBA
     parametry = [
-        Param("max_pretazeni", "Hledat přetažení do [m]", "float", 0.5,
-              "Delší přesah za jinou linií se bere jako záměrný (a konec se hlásí jako visící)."),
+        Param("max_pretazeni", "Přetah / křížení do [m]", "float", 0.020,
+              "Jako tolerance přetahu v MGEO (0,020 m). Delší přesah za jinou linií je křížení bez uzlu "
+              "a volný konec."),
         LAYERS_PARAM,
     ]
 
@@ -395,7 +396,7 @@ class PrusecikyBezUzlu(Check):
              "není lomový bod (uzel) na obou liniích.")
     vychozi_zavaznost = Severity.CHYBA
     parametry = [
-        Param("napojeni_bez_uzlu", "Hlásit i napojení (T-spoj) bez uzlu", "bool", True,
+        Param("napojeni_bez_uzlu", "Hlásit i napojení (T-spoj) bez uzlu", "bool", False,
               "Konec linie leží na jiné linii, ta ale v tom místě nemá lomový bod."),
         Param("vyzadovat_rozdeleni", "Linie musí být v uzlu (křížení) rozdělené", "bool", True,
               "Jako topologická kontrola MGEO („nerozdělená čára v uzlovém bodě“): kříží-li se dvě linie "
@@ -528,9 +529,10 @@ class KratkeLinie(Check):
     skupina = "Topologie"
     popis = ("Linie kratší než zadaná délka (často zbytek po editaci) a úsek mezi dvěma lomovými body "
              "kratší než zadaná délka (téměř totožné vrcholy). Odpovídá „krátkým liniím“ v MGEO.")
-    vychozi_zavaznost = Severity.VAROVANI
+    vychozi_zavaznost = Severity.CHYBA
     parametry = [
-        Param("min_delka", "Min. délka linie [m]", "float", 0.05),
+        Param("min_delka", "Min. délka linie [m]", "float", 0.090,
+              "Jako tolerance krátké čáry v MGEO (0,090 m)."),
         Param("min_usek", "Min. délka úseku [m]", "float", 0.005,
               "0 = úseky nekontrolovat. Oblouky nahrazené lomenou čarou se nekontrolují."),
         LAYERS_PARAM,

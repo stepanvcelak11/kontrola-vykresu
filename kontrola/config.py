@@ -11,6 +11,17 @@ import yaml
 from .checks.base import REGISTRY, Severity
 
 
+CONFIG_VERSION = 2
+DEFAULT_TOLERANCE = 0.010
+# výchozí hodnoty verze 1, které se v uložených projektech nahradí hodnotami podle MGEO
+_MIGRATE = {
+    "chybejici_napojeni": {"max_pretazeni": 0.5},
+    "kratke_linie": {"min_delka": 0.05},
+    "pruseciky_bez_uzlu": {"napojeni_bez_uzlu": True},
+    "symbologie": {"kontrolovat_font": False},
+}
+
+
 @dataclass
 class CheckSettings:
     zapnuto: bool = True
@@ -20,7 +31,7 @@ class CheckSettings:
 
 @dataclass
 class Config:
-    tolerance: float = 0.05  # m – hledací tolerance (napojení, body blízko sebe, mezery)
+    tolerance: float = 0.010  # m – tolerance začištění jako v MGEO (nedotažení, body blízko sebe)
     presnost: float = 0.0001  # m – pod touto vzdáleností jsou body totožné
     okruh_textu: float = 5.0  # m – do jaké vzdálenosti hledat text k bodu/linii
     max_chyb_na_kontrolu: int = 5000
@@ -49,6 +60,7 @@ class Config:
     # ------------------------------------------------------------ YAML
     def to_dict(self) -> dict:
         return {
+            "verze_nastaveni": CONFIG_VERSION,
             "nastaveni": {
                 "tolerance": self.tolerance,
                 "presnost": self.presnost,
@@ -68,7 +80,7 @@ class Config:
         d = d or {}
         n = d.get("nastaveni") or {}
         cfg = cls(
-            tolerance=float(n.get("tolerance", 0.05)),
+            tolerance=float(n.get("tolerance", DEFAULT_TOLERANCE)),
             presnost=float(n.get("presnost", 0.0001)),
             okruh_textu=float(n.get("okruh_textu", 5.0)),
             max_chyb_na_kontrolu=int(n.get("max_chyb_na_kontrolu", 5000)),
@@ -76,10 +88,21 @@ class Config:
             oda_cesta=str(n.get("oda_cesta", "") or ""),
             kontroly={},
         )
+        old = int(d.get("verze_nastaveni", 1) or 1) < CONFIG_VERSION and ("nastaveni" in d or "kontroly" in d)
+        if old:
+            # starší projekty: tolerance podle MGEO (učitelova kontrola) místo původních výchozích hodnot
+            if abs(cfg.tolerance - 0.05) < 1e-9:
+                cfg.tolerance = DEFAULT_TOLERANCE
         for cid, v in (d.get("kontroly") or {}).items():
             if not isinstance(v, dict):
                 v = {"zapnuto": bool(v)}
             v = dict(v)
+            if old:
+                for k, oldval in _MIGRATE.get(cid, {}).items():
+                    if k in v and v[k] == oldval:
+                        v.pop(k)
+                if cid == "kratke_linie" and v.get("zavaznost") == "varování":
+                    v.pop("zavaznost")
             cs = CheckSettings(
                 zapnuto=bool(v.pop("zapnuto", True)),
                 zavaznost=Severity.parse(v.pop("zavaznost", "chyba")),

@@ -9,6 +9,7 @@ atribut je označen „(!)“. Za atributovou částí následuje přehled topol
 from __future__ import annotations
 
 import datetime as dt
+import re
 from collections import Counter, OrderedDict
 from pathlib import Path
 
@@ -31,8 +32,8 @@ def _wrong_fields(msg: str, check_id: str) -> set[str]:
         out.add("typ")
     for key, fld in (("barva", "barva"), ("styl", "styl"), ("tloušťka", "tloušťka"), ("výška textu", "výška"),
                      ("šířka textu", "šířka"), ("zarovnání", "zarovnání"), ("font", "font"),
-                     ("písmo", "font")):
-        if key in m:
+                     ("písmo", "font"), ("měřítko stylu", "měřítko stylu"), ("měřítko buňky", "buňka")):
+        if re.search(r"(?<![\w])" + re.escape(key) + r"(?![\w])", m):
             out.add(fld)
     return out
 
@@ -47,6 +48,8 @@ def _attrs(f: Feature, rules: RuleSet) -> "OrderedDict[str, str]":
     a["barva"] = rules.describe_feature_color(f)
     a["styl"] = f.linetype or "CONTINUOUS"
     a["tloušťka"] = fmt_num(f.lineweight, 2)
+    if f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.linetype != "CONTINUOUS":
+        a["měřítko stylu"] = fmt_num(f.ltscale, 3)
     if f.geom_type == GeomType.TEXT:
         a["font"] = f.font or "–"
         a["výška"] = fmt_num(f.text_height, 2)
@@ -110,8 +113,11 @@ def export_mgeo_log(drawing: Drawing, rules: RuleSet, issues: list[Issue], path:
         first = (f"{n:<6} Název vrstvy: {a['vrstva']}, {_fmt('Číslo vrstvy', 'číslo', a, wrong | ({'číslo'} if 'vrstva' in wrong else set()))}, "
                  f"{_fmt('Typ prvku', 'typ', a, wrong)}")
         L.append(first)
-        L.append("       " + ", ".join([_fmt("Barva", "barva", a, wrong), _fmt("Styl", "styl", a, wrong),
-                                        _fmt("Tloušťka", "tloušťka", a, wrong)]))
+        parts = [_fmt("Barva", "barva", a, wrong), _fmt("Styl", "styl", a, wrong)]
+        if "měřítko stylu" in a:
+            parts.append(_fmt("Měřítko stylu", "měřítko stylu", a, wrong))
+        parts.append(_fmt("Tloušťka", "tloušťka", a, wrong))
+        L.append("       " + ", ".join(parts))
         if "font" in a:
             L.append("       " + ", ".join([_fmt("Font", "font", a, wrong), _fmt("Výška", "výška", a, wrong),
                                             _fmt("Šířka", "šířka", a, wrong)]))

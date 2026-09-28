@@ -46,13 +46,13 @@ def test_visici_konec(make_dxf):
 def test_chybejici_napojeni_v_toleranci(make_dxf):
     def build(msp, doc):
         msp.add_line((0, 0), (10, 0))
-        msp.add_line((5, 0.03), (5, 10))  # nedotaženo o 3 cm
+        msp.add_line((5, 0.008), (5, 10))  # nedotaženo o 8 mm (tolerance MGEO 0,010 m)
         msp.add_line((8, 0), (8, -10))  # přesně napojeno
     d = make_dxf(build)
     issues = check(d, "chybejici_napojeni")
     assert len(issues) == 1
-    assert issues[0].message == "Nedotažená linie, chybí 0,03 m"
-    assert (round(issues[0].x, 2), round(issues[0].y, 2)) == (5.0, 0.03)
+    assert issues[0].message == "Nedotažená linie, chybí 8 mm"
+    assert (round(issues[0].x, 2), round(issues[0].y, 2)) == (5.0, 0.01)
 
 
 def test_napojeni_mimo_toleranci_neni_chybejici(make_dxf):

@@ -71,8 +71,8 @@ class Symbologie(Check):
         Param("kontrolovat_styl", "Kontrolovat styl čáry", "bool", True),
         Param("kontrolovat_tloustku", "Kontrolovat tloušťku", "bool", True),
         Param("kontrolovat_text", "Kontrolovat výšku, šířku a zarovnání textu", "bool", True),
-        Param("kontrolovat_font", "Kontrolovat font textu", "bool", False,
-              "Název fontu v DXF nemusí odpovídat názvu v MicroStationu – zapněte, až ověříte."),
+        Param("kontrolovat_font", "Kontrolovat font textu", "bool", True,
+              "Porovná název fontu z pravidla s fontem textového stylu v DXF (např. CS WORKING → cs_Working.shx)."),
     ]
 
     def run(self, ctx: CheckContext):
@@ -80,7 +80,7 @@ class Symbologie(Check):
         do_style = bool(ctx.param("kontrolovat_styl", True))
         do_weight = bool(ctx.param("kontrolovat_tloustku", True))
         do_text = bool(ctx.param("kontrolovat_text", True))
-        do_font = bool(ctx.param("kontrolovat_font", False))
+        do_font = bool(ctx.param("kontrolovat_font", True))
         rs = ctx.rules
         pal, table = rs.paleta, rs.barevna_tabulka
         wmap = rs.mapa_tloustek
@@ -101,9 +101,27 @@ class Symbologie(Check):
                     unknown_colors.add(r.barva)
                 elif not color_matches(r.barva, f, pal, table):
                     diffs.append(f"barva {rs.describe_feature_color(f)} (má být {r.barva})")
-            if (do_style and r.styl_cary and f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
-                    and not linetype_matches(r.styl_cary, f.linetype)):
-                diffs.append(f"styl {f.linetype} (má být {r.styl_cary})")
+            linear = f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
+            unexported = False
+            if do_style and r.styl_cary and linear and not linetype_matches(r.styl_cary, f.linetype):
+                if _custom_style_not_exported(r.styl_cary, f, ctx.drawing.linetypes):
+                    unexported = True
+                else:
+                    diffs.append(f"styl {f.linetype} (má být {r.styl_cary})")
+            if do_style and r.meritko_stylu and linear and (unexported or f.linetype != "CONTINUOUS") \
+                    and abs(f.ltscale - r.meritko_stylu) > 1e-4:
+                diffs.append(f"měřítko stylu {fmt_num(f.ltscale, 3)} (má být {fmt_num(r.meritko_stylu, 3)})")
+            if r.meritko_bunky and f.dxftype == "INSERT" and \
+                    abs(abs(f.scale[0]) - r.meritko_bunky) > 1e-4 * max(1.0, r.meritko_bunky):
+                diffs.append(f"měřítko buňky {fmt_num(abs(f.scale[0]), 3)} (má být {fmt_num(r.meritko_bunky, 3)})")
+            if unexported and not diffs:
+                iss = ctx.issue(self, f, f"{r.nazev or r.kod}: styl v DXF je Continuous – uživatelský styl "
+                                         f"{r.styl_cary} MicroStation do DXF neuložil, ověřte ho v DGN"
+                                         + (f" (měřítko stylu {fmt_num(f.ltscale, 3)} odpovídá)"
+                                            if r.meritko_stylu and abs(f.ltscale - r.meritko_stylu) <= 1e-4 else ""))
+                iss.severity = Severity.VAROVANI
+                yield iss
+                continue
             if do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT:
                 # tloušťka MicroStationu (wt 0–31) se v DXF ověří přes převodní tabulku na mm
                 expected, unknown = rs.expected_weights(r)
@@ -126,6 +144,22 @@ class Symbologie(Check):
         if ms_weights:
             ctx.notes.append("tloušťky MicroStationu (wt " + ", ".join(map(str, sorted(ms_weights)))
                              + ") se ověřují jen s převodní tabulkou tlouštěk (mapa_tloustek v pravidlech).")
+
+
+def _custom_style_not_exported(expected: str, f: Feature, linetypes: set[str]) -> bool:
+    """Prvek má v DXF Continuous, pravidlo chce uživatelský styl (např. 5.303), který v DXF vůbec není.
+
+    MicroStation některé uživatelské styly (se značkami) do DXF nepřevede a uloží čáru jako
+    Continuous – z DXF pak nejde poznat, jestli je styl ve výkresu správně."""
+    if (f.linetype or "CONTINUOUS").upper() != "CONTINUOUS":
+        return False
+    from ..rules import split_alternatives
+    alts = split_alternatives(expected)
+    custom = [a for a in alts if re.match(r"^\d+\.\d+", a)]
+    if not custom or any(a.strip() in ("0", "CONTINUOUS") for a in alts):
+        return False
+    known = {lt.upper() for lt in (linetypes or set())}
+    return not any(c.upper() in known for c in custom)
 
 
 def _norm_font(s: str) -> str:
