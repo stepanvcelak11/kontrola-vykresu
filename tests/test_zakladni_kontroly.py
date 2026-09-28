@@ -51,7 +51,7 @@ def test_chybejici_napojeni_v_toleranci(make_dxf):
     d = make_dxf(build)
     issues = check(d, "chybejici_napojeni")
     assert len(issues) == 1
-    assert issues[0].message == "Chybějící napojení, vzdálenost 0,03 m"
+    assert issues[0].message == "Nedotažená linie, chybí 0,03 m"
     assert (round(issues[0].x, 2), round(issues[0].y, 2)) == (5.0, 0.03)
 
 

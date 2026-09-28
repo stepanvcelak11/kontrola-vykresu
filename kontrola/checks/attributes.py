@@ -175,29 +175,51 @@ class Texty(Check):
     id = "texty"
     nazev = "Popis (text) prvku"
     skupina = "Atributy"
-    popis = ("U prvků, jejichž pravidlo vyžaduje popis, hledá text: u polygonu uvnitř, jinak v okruhu "
-             "hledání textu. Hlásí také popisy, které neleží v žádném polygonu, ke kterému patří.")
+    popis = ("U prvků, jejichž pravidlo vyžaduje popis, hledá text (na hladině popisu i bodový prvek – "
+             "definiční bod): u polygonu uvnitř, jinak v okruhu hledání textu. Hlásí také popisy mimo "
+             "polygon, ke kterému patří, a plochy s více popisy (jako pravidlo „jeden definiční bod "
+             "v ploše“).")
     vychozi_zavaznost = Severity.VAROVANI
     potrebuje_pravidla = True
-    parametry = [Param("hlasit_text_mimo", "Hlásit text mimo polygon", "bool", True)]
+    parametry = [
+        Param("hlasit_text_mimo", "Hlásit text mimo polygon", "bool", True),
+        Param("jeden_popis", "V ploše smí být jen jeden popis", "bool", True,
+              "Plocha s více popisy / definičními body na hladině popisu je chyba."),
+    ]
+
+    @staticmethod
+    def _label(t: Feature) -> str:
+        if t.geom_type == GeomType.TEXT:
+            return f"Text „{(t.text or '')[:30]}“"
+        return f"Definiční bod ({t.block_name or t.dxftype})"
 
     def run(self, ctx: CheckContext):
         rules_with_text = [r for r in ctx.rules.pravidla if r.text is not None]
         if not rules_with_text:
             return
+        one = bool(ctx.param("jeden_popis", True))
         feats = ctx.features()
         owners: dict[str, list[Feature]] = {}  # hladina textu -> polygony, ke kterým texty patří
+        text_layers = {r.text.hladina.upper() for r in rules_with_text if r.text.hladina}
         for i, f in enumerate(feats):
             if i % 2000 == 0:
                 ctx.progress(0.7 * i / max(1, len(feats)))
             if f.geom_type == GeomType.TEXT:
                 continue
+            if f.geom_type == GeomType.BOD and f.layer.upper() in text_layers:
+                continue  # definiční bod sám je popisem
             r = ctx.rule_for(f)
             if r is None or r.text is None:
                 continue
             area = ctx.area_geometry(f, r)
             if area is not None and r.text.hladina and r.text.uvnitr:
                 owners.setdefault(r.text.hladina.upper(), []).append(area)
+                if one:
+                    inside = ctx.texts_inside(area, r.text.hladina)
+                    if len(inside) > 1:
+                        names = ", ".join(f"„{(t.text or t.block_name or '•')[:12]}“" for t in inside[:4])
+                        yield ctx.issue(self, f, f"{r.nazev or r.kod}: více popisů v ploše ({len(inside)}: "
+                                                 f"{names})")
             if not r.text.povinny:
                 continue
             if ctx.text_for(f, r) is None:
@@ -217,7 +239,7 @@ class Texty(Check):
             inside = set(int(x) for x in ti)
             for k, t in enumerate(texts):
                 if k not in inside:
-                    yield ctx.issue(self, t, f"Text „{(t.text or '')[:30]}“ leží mimo polygon, ke kterému patří")
+                    yield ctx.issue(self, t, f"{self._label(t)} leží mimo polygon, ke kterému patří")
 
 
 @register

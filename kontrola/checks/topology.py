@@ -131,6 +131,56 @@ def _endpoint_analysis(ctx: CheckContext) -> _EndpointAnalysis:
     return ctx._cache[key]
 
 
+def _max_overshoot(ctx: CheckContext) -> float:
+    try:
+        v = ctx.config.settings("chybejici_napojeni").parametry.get("max_pretazeni", 0.5)
+        return max(float(v or 0.0), ctx.tolerance)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return max(0.5, ctx.tolerance)
+
+
+def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[float, tuple[float, float], int]]:
+    """Přetažené konce linií (MGEO: „přetažení“).
+
+    Konec linie, který přesahuje přes jinou linii o méně než ``max_pretazeni``: poslední úsek
+    linie jinou linii protne a konec za ní „visí“. Vrací {index konce: (délka přesahu, průsečík,
+    index druhé linie)}.
+    """
+    key = f"overshoots|{id(an)}|{_max_overshoot(ctx)}"
+    if key in ctx._cache:
+        return ctx._cache[key]
+    from shapely.ops import substring
+    out: dict[int, tuple[float, tuple[float, float], int]] = {}
+    max_len = _max_overshoot(ctx)
+    if an.tree is not None and len(an.points):
+        for k in range(len(an.points)):
+            if an.nearest[k] <= ctx.precision or an.self_touch[k]:
+                continue
+            f = an.feats[an.owner[k]]
+            line = f.geometry
+            L = line.length
+            if L <= ctx.precision:
+                continue
+            seg_len = min(max_len, L * 0.999)
+            part = substring(line, L - seg_len, L) if an.is_end[k] else substring(line, 0, seg_len)
+            end_pt = an.pgeoms[k]
+            best = None
+            for gi in an.tree.query(part, predicate="intersects"):
+                if gi == an.owner[k]:
+                    continue
+                for p in _points_of(_safe_intersection(part, an.geoms[gi])):
+                    along = part.project(Point(p))
+                    dist = (part.length - along) if an.is_end[k] else along
+                    if dist <= ctx.precision:
+                        continue
+                    if best is None or dist < best[0]:
+                        best = (dist, p, int(gi))
+            if best is not None and end_pt.distance(Point(best[1])) > ctx.precision:
+                out[k] = best
+    ctx._cache[key] = out
+    return out
+
+
 @register
 class VisiciKonce(Check):
     id = "visici_konce"
@@ -143,10 +193,14 @@ class VisiciKonce(Check):
 
     def run(self, ctx: CheckContext):
         an = _endpoint_analysis(ctx)
-        ctx.progress(0.5)
+        ctx.progress(0.3)
+        over = _overshoots(ctx, an)
+        ctx.progress(0.7)
         for k in range(len(an.points)):
             if np.isfinite(an.nearest[k]) or an.self_touch[k] or an.own_gap[k] <= ctx.tolerance:
                 continue  # napojeno, nebo jde o téměř uzavřený polygon (řeší jiná kontrola)
+            if k in over:
+                continue  # přetažená linie – hlásí kontrola nedotažení/přetažení
             f = an.feats[an.owner[k]]
             if _expects_polygon(ctx, f):
                 continue  # řeší kontrola nezavřených polygonů
@@ -157,24 +211,38 @@ class VisiciKonce(Check):
 @register
 class ChybejiciNapojeni(Check):
     id = "chybejici_napojeni"
-    nazev = "Chybějící napojení"
+    nazev = "Nedotažená / přetažená linie"
     skupina = "Topologie"
-    popis = ("Konec linie je od jiné linie blíž než tolerance, ale není na ni napojen "
-             "(nedotažení nebo přetažení).")
+    popis = ("Konec linie není přesně napojen na jinou linii: buď k ní nedosahuje (nedotažení – konec "
+             "je blíž než tolerance), nebo ji přesahuje (přetažení – linie jinou linii protne "
+             "a pokračuje nejvýše o „max. přetažení“). Stejné chyby hledá MGEO při kontrole čárové kresby.")
     vychozi_zavaznost = Severity.CHYBA
-    parametry = [LAYERS_PARAM]
+    parametry = [
+        Param("max_pretazeni", "Hledat přetažení do [m]", "float", 0.5,
+              "Delší přesah za jinou linií se bere jako záměrný (a konec se hlásí jako visící)."),
+        LAYERS_PARAM,
+    ]
 
     def run(self, ctx: CheckContext):
         an = _endpoint_analysis(ctx)
-        ctx.progress(0.5)
+        ctx.progress(0.3)
+        over = _overshoots(ctx, an)
+        ctx.progress(0.7)
         for k in range(len(an.points)):
-            d = an.nearest[k]
-            if not np.isfinite(d) or d <= ctx.precision or an.self_touch[k]:
+            if an.self_touch[k]:
                 continue
             f = an.feats[an.owner[k]]
-            other = an.feats[an.nearest_idx[k]]
             x, y = an.points[k]
-            yield ctx.issue(self, [f, other], f"Chybějící napojení, vzdálenost {fmt_m(d)}", at=(x, y),
+            if k in over:
+                dist, p, gi = over[k]
+                yield ctx.issue(self, [f, an.feats[gi]], f"Přetažená linie o {fmt_m(dist)}", at=(x, y),
+                                geometry=f.geometry)
+                continue
+            d = an.nearest[k]
+            if not np.isfinite(d) or d <= ctx.precision:
+                continue
+            other = an.feats[an.nearest_idx[k]]
+            yield ctx.issue(self, [f, other], f"Nedotažená linie, chybí {fmt_m(d)}", at=(x, y),
                             geometry=f.geometry)
 
 
@@ -319,11 +387,15 @@ class PrusecikyBezUzlu(Check):
     parametry = [
         Param("napojeni_bez_uzlu", "Hlásit i napojení (T-spoj) bez uzlu", "bool", True,
               "Konec linie leží na jiné linii, ta ale v tom místě nemá lomový bod."),
+        Param("vyzadovat_rozdeleni", "Linie musí být v uzlu rozdělené", "bool", False,
+              "Přísnější režim (jako topologické začištění v MGEO): nestačí společný lomový bod, "
+              "obě linie musí v průsečíku končit."),
         LAYERS_PARAM,
     ]
 
     def run(self, ctx: CheckContext):
         report_t = bool(ctx.param("napojeni_bez_uzlu", True))
+        split = bool(ctx.param("vyzadovat_rozdeleni", False))
         feats = ctx.linear()
         if len(feats) < 2:
             return
@@ -335,6 +407,9 @@ class PrusecikyBezUzlu(Check):
         a, b = a[mask], b[mask]
         eps = max(ctx.precision, 1e-6)
         seen: set[tuple[float, float]] = set()
+        # průsečík u přetažené linie hlásí kontrola nedotažení/přetažení – nehlásit dvakrát
+        for _, p, _ in _overshoots(ctx, _endpoint_analysis(ctx)).values():
+            seen.add((round(p[0], 3), round(p[1], 3)))
 
         def has_vertex(k: int, p) -> bool:
             v = verts[k]
@@ -371,9 +446,15 @@ class PrusecikyBezUzlu(Check):
         for i, j, inter in zip(a, b, inters):
             for p in _points_of(inter):
                 vi, vj = has_vertex(i, p), has_vertex(j, p)
-                if vi and vj:
-                    continue
                 key = (round(p[0], 3), round(p[1], 3))
+                if vi and vj:
+                    # MGEO-styl: linie mají být v uzlu rozdělené (končit v něm), ne jen mít lomový bod
+                    if split and key not in seen and feats[i].geom_type == GeomType.LINIE \
+                            and feats[j].geom_type == GeomType.LINIE and not (is_end(i, p) and is_end(j, p)):
+                        seen.add(key)
+                        yield ctx.issue(self, [feats[i], feats[j]], "Linie nejsou v uzlu rozdělené", at=p,
+                                        geometry=Point(p).buffer(0.01))
+                    continue
                 if key in seen:
                     continue
                 if is_end(i, p) or is_end(j, p):
@@ -413,6 +494,46 @@ class NulovaDelka(Check):
                 yield ctx.issue(self, f, "Kružnice s nulovým poloměrem")
             elif f.dxftype == "INSERT" and (abs(f.scale[0]) <= 1e-12 or abs(f.scale[1]) <= 1e-12):
                 yield ctx.issue(self, f, f"Buňka {f.block_name} s nulovým měřítkem")
+
+
+@register
+class KratkeLinie(Check):
+    id = "kratke_linie"
+    nazev = "Krátká linie nebo úsek"
+    skupina = "Topologie"
+    popis = ("Linie kratší než zadaná délka (často zbytek po editaci) a úsek mezi dvěma lomovými body "
+             "kratší než zadaná délka (téměř totožné vrcholy). Odpovídá „krátkým liniím“ v MGEO.")
+    vychozi_zavaznost = Severity.VAROVANI
+    parametry = [
+        Param("min_delka", "Min. délka linie [m]", "float", 0.05),
+        Param("min_usek", "Min. délka úseku [m]", "float", 0.005,
+              "0 = úseky nekontrolovat. Oblouky nahrazené lomenou čarou se nekontrolují."),
+        LAYERS_PARAM,
+    ]
+
+    def run(self, ctx: CheckContext):
+        min_len = float(ctx.param("min_delka", 0.05))
+        min_seg = float(ctx.param("min_usek", 0.005))
+        feats = ctx.linear()
+        for n, f in enumerate(feats):
+            if n % 5000 == 0:
+                ctx.progress(n / max(1, len(feats)))
+            length = f.geometry.length
+            if length <= ctx.precision:
+                continue  # nulová délka – hlásí jiná kontrola
+            if f.geom_type == GeomType.LINIE and length < min_len:
+                yield ctx.issue(self, f, f"Krátká linie, délka {fmt_m(length)}")
+                continue
+            if min_seg <= 0 or len(f.vertices) < 2:
+                continue
+            v = np.asarray(f.vertices, dtype=float)
+            if f.closed and len(v) > 2:
+                v = np.vstack([v, v[:1]])
+            seg = np.hypot(np.diff(v[:, 0]), np.diff(v[:, 1]))
+            bad = np.nonzero((seg > ctx.precision) & (seg < min_seg))[0]
+            for k in bad[:3]:
+                mid = ((v[k, 0] + v[k + 1, 0]) / 2, (v[k, 1] + v[k + 1, 1]) / 2)
+                yield ctx.issue(self, f, f"Krátký úsek linie, délka {fmt_m(float(seg[k]))}", at=mid)
 
 
 def _polygons_by_layer(ctx: CheckContext, same_layer: bool) -> dict[str, list[tuple[Feature, object]]]:

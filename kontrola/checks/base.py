@@ -255,12 +255,23 @@ class CheckContext:
         return out
 
     def texts(self, layer: str | None = None) -> list[Feature]:
+        """Popisy: texty, a na zadané hladině i bodové prvky (definiční body ploch, buňky)."""
         key = f"texts|{layer or ''}"
         if key not in self._cache:
             import fnmatch
-            self._cache[key] = [f for f in self.features() if f.geom_type == GeomType.TEXT
-                                and (not layer or fnmatch.fnmatchcase(f.layer.upper(), layer.upper()))]
+            if layer:
+                self._cache[key] = [f for f in self.features()
+                                    if f.geom_type in (GeomType.TEXT, GeomType.BOD)
+                                    and fnmatch.fnmatchcase(f.layer.upper(), layer.upper())]
+            else:
+                self._cache[key] = [f for f in self.features() if f.geom_type == GeomType.TEXT]
         return self._cache[key]
+
+    def texts_inside(self, area: BaseGeometry, layer: str | None) -> list[Feature]:
+        texts, tree = self.text_tree(layer)
+        if tree is None:
+            return []
+        return [texts[int(i)] for i in tree.query(area, predicate="contains")]
 
     def text_tree(self, layer: str | None = None):
         key = f"texttree|{layer or ''}"

@@ -142,6 +142,11 @@ def vytvor_vykres(path: Path, s_chybami: bool = True):
         # plot nedotažený k budově o 3 cm a o 4 cm
         msp.add_lwpolyline([P(110, 45), P(110, 20), P(90.03, 20)], dxfattribs=pl)
         msp.add_lwpolyline([P(10, 25.04), P(10, 45)], dxfattribs=pl)
+        # plot přetažený přes hranici parcely o 20 cm a krátký zbytek linie (3 cm)
+        msp.add_lwpolyline([P(45, 35), P(60.2, 35)], dxfattribs=pl)
+        msp.add_lwpolyline([P(20, 42), P(20.03, 42)], dxfattribs=pl)
+        # druhý popis v budově č.p. 12
+        msp.add_text("č.p. 12a", height=1.2, dxfattribs={"layer": "POPIS_BUDOV"}).set_placement(P(15, 12))
         # plot na nepovolené hladině
         msp.add_line(P(0, 47), P(20, 47), dxfattribs={"layer": "POKUS"})
         # budova nakreslená jako otevřená linie na hladině plotů – nekódovaný typ
