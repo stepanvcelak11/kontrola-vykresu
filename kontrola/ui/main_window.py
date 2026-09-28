@@ -68,6 +68,7 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.split, "Výkres a chyby")
         self.tabs.addTab(self.zadani, "Zadání")
+        self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
 
         self.layers = LayersPanel()
@@ -145,6 +146,7 @@ class MainWindow(QMainWindow):
         self.a_labels = self._act("Popisky chyb", self.view.set_labels_visible, "Ctrl+L",
                                   "Zobrazit/skrýt popisky u kroužků chyb", checkable=True)
         self.a_labels.setChecked(True)
+        self.a_labels.setIconText("Popisky")
         self.a_prev = self._act("◀ Předchozí chyba", lambda: self.issue_panel.step(-1), None,
                                 "Předchozí chyba (F7)")
         self.a_next = self._act("Další chyba ▶", lambda: self.issue_panel.step(1), None, "Další chyba (F8)")
@@ -229,7 +231,6 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self.a_check)
         tb.addAction(self.a_recheck)
-        tb.addAction(self.a_repair)
         tb.addAction(self.a_settings)
         tb.addSeparator()
         tb.addAction(self.a_wip)
@@ -237,10 +238,8 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self.a_fit)
         tb.addAction(self.a_labels)
-        tb.addAction(self.a_prev)
-        tb.addAction(self.a_next)
-        tb.addSeparator()
         tb.addAction(self.a_sketch)
+        tb.addSeparator()
         tb.addAction(self.a_exp_pdf)
         self.addToolBar(tb)
         self.toolbar = tb
@@ -343,6 +342,18 @@ class MainWindow(QMainWindow):
         self.project.store_issues(self.issues)
         out = self.project.export_zip(path)
         self.statusBar().showMessage(f"Projekt uložen do {out}", 10000)
+
+    def _tab_changed(self, index: int):
+        """Panel hladin patří k výkresu – na záložce Zadání jen zabírá místo."""
+        if not hasattr(self, "layers_dock"):
+            return
+        on_drawing = self.tabs.widget(index) is self.split
+        if on_drawing:
+            if getattr(self, "_layers_were_visible", False):
+                self.layers_dock.show()
+        else:
+            self._layers_were_visible = self.layers_dock.isVisible()
+            self.layers_dock.hide()
 
     def _toggle_wip(self, on: bool):
         if self.project is None or self._syncing_wip:

@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, 
 from ..checks.base import ISSUE_STATES, Issue, Severity, fmt_num
 from .drawing_view import SEVERITY_COLORS
 
-COLUMNS = ["Č.", "Závažnost", "Stav", "Typ kontroly", "Popis", "Hladina", "X", "Y"]
-C_SEV, C_STATE, C_DESC = 1, 2, 4
+COLUMNS = ["Č.", "Závažnost", "Stav", "Popis", "Typ kontroly", "Hladina", "X", "Y"]
+C_SEV, C_STATE, C_DESC, C_TYPE = 1, 2, 3, 4
 STATE_LABEL = {"nová": "k opravě", "opraveno": "✓ opraveno", "ignorovat": "✕ ignorováno"}
 STATE_COLOR = {"opraveno": QColor(22, 150, 70), "ignorovat": QColor(120, 120, 130)}
 
@@ -73,11 +73,11 @@ class IssueModel(QAbstractTableModel):
         c = index.column()
         done = iss.state != "nová"
         if role == Qt.DisplayRole:
-            return [str(iss.number), iss.severity.value, STATE_LABEL.get(iss.state, iss.state), iss.check_name,
-                    iss.message, iss.layer, fmt_coord(iss.x), fmt_coord(iss.y)][c]
+            return [str(iss.number), iss.severity.value, STATE_LABEL.get(iss.state, iss.state), iss.message,
+                    iss.check_name, iss.layer, fmt_coord(iss.x), fmt_coord(iss.y)][c]
         if role == Qt.UserRole:  # řazení
             return [iss.number, iss.severity.rank, ISSUE_STATES.index(iss.state) if iss.state in ISSUE_STATES else 0,
-                    iss.check_name, iss.message, iss.layer, iss.x, iss.y][c]
+                    iss.message, iss.check_name, iss.layer, iss.x, iss.y][c]
         if role == Qt.ForegroundRole:
             if c == C_STATE and done:
                 return QBrush(STATE_COLOR.get(iss.state, QColor(120, 120, 130)))
@@ -91,7 +91,7 @@ class IssueModel(QAbstractTableModel):
             f = QFont()
             if c == C_STATE:
                 f.setBold(True)
-            elif c in (C_DESC, 3):
+            elif c in (C_DESC, C_TYPE):
                 f.setStrikeOut(True)
             return f
         if role == Qt.BackgroundRole and iss.state == "opraveno":
@@ -285,7 +285,7 @@ class IssuePanel(QWidget):
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(False)
-        for c, w in enumerate((46, 96, 128, 160, 300, 130, 110, 110)):
+        for c, w in enumerate((46, 100, 118, 380, 170, 150, 110, 110)):
             self.table.setColumnWidth(c, w)
         self.table.selectionModel().currentRowChanged.connect(self._current_changed)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)

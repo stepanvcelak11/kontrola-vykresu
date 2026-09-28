@@ -18,6 +18,7 @@ from ..importer import template as tpl
 from ..importer.table import read_table
 from ..io.dxf_loader import load_drawing
 from ..project import KINDS, Attachment, Project
+from .theme import fit_headers
 from ..rules import RuleSet
 from .image_viewer import IMAGE_EXT, ImageBrowser, load_pixmap
 from .rules_editor import RulesEditor
@@ -381,6 +382,7 @@ class ProposalDialog(QDialog):
             for c, v in enumerate(vals, start=1):
                 self.table.setItem(i, c, QTableWidgetItem(v))
         self.table.resizeColumnsToContents()
+        fit_headers(self.table)
         self.table.verticalHeader().setVisible(False)
         lay.addWidget(self.table, 1)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -441,6 +443,9 @@ class TemplatePage(QWidget):
         self.layers.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.layers.verticalHeader().setVisible(False)
         self.layers.horizontalHeader().setStretchLastSection(True)
+        self.layers.setAlternatingRowColors(True)
+        for c, wd in enumerate((200, 70, 150, 230, 110, 150)):
+            self.layers.setColumnWidth(c, wd)
         from PySide6.QtWidgets import QStackedWidget
         from .image_viewer import ImageView
         self.stack = QStackedWidget()
@@ -453,6 +458,9 @@ class TemplatePage(QWidget):
         self.diff.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.diff.verticalHeader().setVisible(False)
         self.diff.horizontalHeader().setStretchLastSection(True)
+        self.diff.setAlternatingRowColors(True)
+        for c, wd in enumerate((120, 200, 160, 190)):
+            self.diff.setColumnWidth(c, wd)
         split.addWidget(self.diff)
         lay.addWidget(split, 1)
 
@@ -541,6 +549,7 @@ class TemplatePage(QWidget):
             for c, v in enumerate(vals):
                 self.layers.setItem(r, c, QTableWidgetItem(v))
         self.layers.resizeColumnsToContents()
+        fit_headers(self.layers)
 
     def make_rules(self):
         info = self.info
@@ -589,6 +598,7 @@ class TemplatePage(QWidget):
             for lab in extra:
                 self._diff_row(["Popis", lab, "–", "ano", "Popis navíc (ve vzoru není)"])
             self.diff.resizeColumnsToContents()
+            fit_headers(self.diff)
             self.status.setText(f"Popisy: chybí {len(missing)}, navíc {len(extra)} "
                                 f"(ze {len(self.pdf_labels)} ve vzoru)")
             return
@@ -606,6 +616,7 @@ class TemplatePage(QWidget):
             for c, v in enumerate([x.kategorie, x.polozka, x.vzor, x.vykres, x.popis]):
                 self.diff.setItem(r, c, QTableWidgetItem(v))
         self.diff.resizeColumnsToContents()
+        fit_headers(self.diff)
         if not diffs:
             QMessageBox.information(self, "Porovnání", "Hladiny, barvy, styly i buňky odpovídají vzoru.")
         else:
@@ -692,6 +703,9 @@ class AttachmentsPage(QWidget):
                 it.setData(Qt.UserRole, a.rel)
                 it.setData(Qt.UserRole + 1, a.kind)
                 self.table.setItem(r, c, it)
+        for c in (0, 2, 3):
+            self.table.resizeColumnToContents(c)
+            self.table.setColumnWidth(c, self.table.columnWidth(c) + 16)
         self._preview()
 
     def _current(self):

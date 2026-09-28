@@ -86,6 +86,8 @@ QPushButton {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 6
 QPushButton:hover {{ background: #F9FAFB; border-color: #9CA3AF; }}
 QPushButton:pressed {{ background: #E5E7EB; }}
 QPushButton:disabled {{ color: #9CA3AF; background: #F3F4F6; }}
+QDialog QPushButton:default {{ background: {ACCENT}; color: white; border-color: {ACCENT}; font-weight: 600; }}
+QDialog QPushButton:default:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[primarni="true"] {{ background: {ACCENT}; color: white; border-color: {ACCENT}; font-weight: 600; }}
 QPushButton[primarni="true"]:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[uspech="true"] {{ background: #16A34A; color: white; border-color: #16A34A; font-weight: 600; }}
@@ -135,6 +137,70 @@ QLabel#souhrn {{ color: #374151; }}
 """
 
 
+def _arrow_files() -> dict[str, str]:
+    """Šipky pro rozbalovací seznamy a číselná pole (stylesheet potřebuje soubory obrázků)."""
+    import tempfile
+    from pathlib import Path
+
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QPen, QPolygonF
+    d = Path(tempfile.gettempdir()) / "kontrola_vykresu_ui"
+    d.mkdir(exist_ok=True)
+    out = {}
+    for name, pts in (("dolu", [(2, 5), (8, 11), (14, 5)]), ("nahoru", [(2, 11), (8, 5), (14, 11)])):
+        for state, col in (("", "#4B5563"), ("_off", "#C0C4CC")):
+            f = d / f"sipka_{name}{state}.png"
+            if not f.exists():
+                pm = QPixmap(32, 32)
+                pm.fill(Qt.transparent)
+                p = QPainter(pm)
+                p.setRenderHint(QPainter.Antialiasing)
+                p.setPen(QPen(QColor(col), 3.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                p.drawPolyline(QPolygonF([QPointF(x * 2, y * 2) for x, y in pts]))
+                p.end()
+                pm.save(str(f))
+            out[name + state] = f.as_posix()
+    return out
+
+
+def _arrow_css(a: dict[str, str]) -> str:
+    return f"""
+QComboBox {{ padding-right: 22px; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 20px;
+    border: none; }}
+QComboBox::down-arrow {{ image: url("{a['dolu']}"); width: 10px; height: 10px; }}
+QComboBox::down-arrow:disabled {{ image: url("{a['dolu_off']}"); }}
+QComboBox QAbstractItemView {{ border: 1px solid {BORDER}; background: {PANEL}; selection-background-color: {ACCENT_SOFT};
+    selection-color: {TEXT}; outline: 0; }}
+QSpinBox, QDoubleSpinBox {{ padding-right: 18px; }}
+QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right;
+    width: 18px; border: none; border-left: 1px solid #E5E7EB; border-top-right-radius: 6px; }}
+QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right;
+    width: 18px; border: none; border-left: 1px solid #E5E7EB; border-bottom-right-radius: 6px; }}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover, QSpinBox::down-button:hover,
+QDoubleSpinBox::down-button:hover {{ background: #F3F4F6; }}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{a['nahoru']}"); width: 8px; height: 8px; }}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{a['dolu']}"); width: 8px; height: 8px; }}
+QCheckBox::indicator, QGroupBox::indicator {{ width: 15px; height: 15px; }}
+"""
+
+
+def fit_headers(table, extra: int = 30) -> None:
+    """Sloupce tabulky aspoň tak široké, aby se vešel nadpis (neořezávat „Tloušťka“ na „oušťka“)."""
+    hh = table.horizontalHeader()
+    fm = hh.fontMetrics()
+    f = hh.font()
+    f.setBold(True)
+    from PySide6.QtGui import QFontMetrics
+    fm = QFontMetrics(f)
+    model = table.model()
+    for c in range(model.columnCount()):
+        text = str(model.headerData(c, Qt.Horizontal) or "")
+        need = fm.horizontalAdvance(text) + extra
+        if table.columnWidth(c) < need:
+            table.setColumnWidth(c, need)
+
+
 def apply_theme(app) -> None:
     """Nastaví styl Fusion se světlou paletou a vlastním stylesheetem."""
     app.setStyle("Fusion")
@@ -160,4 +226,8 @@ def apply_theme(app) -> None:
             f = QFont("Segoe UI")
         f.setPointSizeF(9.75)
     app.setFont(f)
-    app.setStyleSheet(STYLESHEET)
+    try:
+        css = STYLESHEET + _arrow_css(_arrow_files())
+    except OSError:  # bez zápisu do dočasné složky zůstanou výchozí šipky
+        css = STYLESHEET
+    app.setStyleSheet(css)

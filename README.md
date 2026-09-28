@@ -122,11 +122,23 @@ Otevřete ukázkový výkres a stiskněte F5.
 * Filtr typů chyb: odškrtnutím se skryjí kroužky i řádky. Dvojklik nebo tlačítko
   **Jen tento typ** zobrazí jen jeden typ. Dál jde filtrovat podle závažnosti a hladiny.
 * Kliknutí na kroužek vybere řádek v tabulce. Tabulka se řadí kliknutím na záhlaví sloupce.
-* Tlačítka **Opraveno** a **Ignorovat** uloží stav chyby do projektu. Pod tabulkou jde ke
-  každé chybě napsat poznámku.
+* Tlačítka **✓ Opraveno** (Ctrl+Enter) a **✕ Ignorovat** (Ctrl+Delete) uloží stav chyby do
+  projektu a přejdou na další nevyřešenou chybu. Vyřešený řádek je přeškrtnutý, kroužek ve
+  výkresu dostane zelenou fajfku nebo šedý křížek. Karta nahoře ukazuje, kolik chyb zbývá.
+  Pod tabulkou jde ke každé chybě napsat poznámku.
 * Pole **Hledat** filtruje chyby podle textu (popis, hladina, číslo chyby).
 * Chyba označená jako opravená, která se při opakované kontrole znovu objeví, se vrátí do stavu
   „nová“. Ignorované chyby zůstanou ignorované.
+
+### Rozpracovaný výkres a kontrola jen části výkresu
+
+* **Rozpracovaný výkres** (tlačítko v horní liště, menu Kontrola): výkres ještě není hotový,
+  takže se nehlásí volné konce čar, neuzavřené plochy, mezery mezi plochami a chybějící popisy.
+  Všechno, co už je nakreslené, se kontroluje dál (vrstvy, barvy, styly, texty, nedotažení,
+  přetažení, duplicity, křížení, krátké čáry). Nastavení se pamatuje v projektu. **Před
+  odevzdáním režim vypněte.**
+* **Jen tento výřez**: přibližte si hotovou část výkresu a klikněte. Seznam, kroužky i počty
+  chyb se omezí na zobrazenou oblast. Dalším kliknutím se vrátíte k celému výkresu.
 
 ### Krok 4: záložka Zadání, import tabulky atributů
 
@@ -384,6 +396,13 @@ Postup:
 4. **Vytvořit pravidla ze vzoru** nabídne návrh pravidel z vašeho vlastního výkresu. Projděte ho
    podle PDF nebo náčrtu (hladiny, barvy) a potvrďte. Kontroly pak hlídají, že se pravidel
    držíte v celém výkresu.
+
+### Zadání a další dokumenty
+
+Na záložce **Podklady → Přidat… → Zadání a dokumenty** (nebo přetažením souboru .doc, .docx do
+okna) si k projektu uložíte zadání od učitele, pokyny a další dokumenty. Otevřou se dvojklikem
+v programu, který je ve Windows má přiřazený. Aplikace z nich nic nečte, pravidla vznikají
+z tabulky atributů.
 
 ### Vzorový výkres
 

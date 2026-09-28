@@ -11,8 +11,8 @@ from ..model import GeomType
 from ..rules import (Rule, RuleSet, TextRule, norm_style, parse_allowed_values, parse_color,
                      parse_weight, split_list)
 
-COLS = ["Kód", "Název", "Typ geometrie", "Hladina", "Barva", "Styl čáry", "Tloušťka [mm]", "Buňka",
-        "Povinné atributy", "Povolené hodnoty", "Popis na hladině", "Popis povinný", "Obrázek",
+COLS = ["Kód", "Název", "Geometrie", "Hladina", "Barva", "Styl čáry", "Tloušťka", "Buňka",
+        "Povinné atributy", "Povolené hodnoty", "Popis (hladina)", "Popis povinný", "Obrázek",
         "Poznámka", "Zdroj"]
 C_KOD, C_NAZEV, C_GEOM, C_HL, C_BARVA, C_STYL, C_TL, C_BLOK, C_ATTR, C_VALS, C_THL, C_TPOV, C_IMG, C_POZN, C_ZDROJ = range(15)
 
@@ -59,9 +59,13 @@ class RulesEditor(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table.setSortingEnabled(False)
-        widths = [60, 150, 90, 110, 60, 90, 80, 80, 130, 220, 120, 80, 120, 150, 170]
+        widths = [70, 220, 100, 190, 70, 110, 90, 110, 140, 220, 130, 110, 120, 170, 200]
         for c, w in enumerate(widths):
             self.table.setColumnWidth(c, w)
+        from .theme import fit_headers
+        fit_headers(self.table)
+        self.table.verticalHeader().setDefaultSectionSize(30)
+        self.table.setAlternatingRowColors(True)
         self.table.itemChanged.connect(self._sync)
         lay.addWidget(self.table, 1)
         hint = QLabel("Změny se ukládají do projektu automaticky. Barva: číslo barvy MicroStationu (nebo ACI "
