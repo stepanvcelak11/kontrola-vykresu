@@ -22,6 +22,15 @@ def _dot(x, y, label=""):
 
 
 _SVG = {
+    "vrchol": f'<polyline points="20,95 90,30 170,80 240,40" {_L}/><polyline points="90,30 110,70 170,80" {_N}/>'
+              f'{_dot(110, 70, "nová poloha vrcholu")}',
+    "zaobleni": f'<polyline points="30,20 30,70" {_L}/><polyline points="80,100 230,100" {_L}/>'
+                f'<path d="M30 70 Q30 100 80 100" {_N}/><text x="60" y="65" {_T}>poloměr</text>',
+    "deleni": f'<line x1="20" y1="60" x2="240" y2="60" {_L}/>{_dot(20, 60)}{_dot(75, 60)}{_dot(130, 60)}'
+              f'{_dot(185, 60)}{_dot(240, 60)}<text x="95" y="90" {_T}>4 stejné díly</text>',
+    "kruznice": f'<circle cx="130" cy="62" r="45" {_N}/>{_dot(85, 62, "1")}{_dot(130, 17, "2")}{_dot(175, 62, "3")}',
+    "retez": f'<polyline points="20,90 80,40 150,70" {_N}/><polyline points="150,70 230,30" {_N}/>'
+             f'<text x="60" y="110" {_T}>dvě čáry → jeden řetězec</text>',
     "rovnobezka": f'<line x1="20" y1="85" x2="240" y2="55" {_L}/><line x1="20" y1="45" x2="240" y2="15" {_N}/>'
                   f'<line x1="130" y1="70" x2="125" y2="31" {_D}/><text x="135" y="55" {_T}>vzdálenost</text>',
     "kolmice_z_bodu": f'<line x1="20" y1="95" x2="240" y2="95" {_L}/>{_dot(150, 25, "bod")}'
@@ -112,6 +121,77 @@ TIPS: list[tuple[str, str, str, str, str | None]] = [
      "barvu… a Execute.</li>"
      "<li>Nebo <b>Správce vrstev</b> (Level Manager) → pravým tlačítkem na vrstvu → vybrat prvky.</li>"
      "<li>Vybrané prvky pak jedním krokem přesunete: Změnit atributy → Vrstva.</li></ul>", None),
+    ("Konstrukce", "Rozdělit úsečku na stejné díly", "deleni body mezi divide construct points between",
+     "<ol><li>Nástroj <b>Vytvořit body mezi</b> (Construct Points Between) – zadejte počet bodů.</li>"
+     "<li>Klikněte na začátek a konec (s přichycením) – body se rozmístí rovnoměrně.</li></ol>"
+     "<p>Pro body na prvku: <b>Vytvořit body podél prvku</b> (Construct Points Along Element).</p>", "deleni"),
+    ("Konstrukce", "Kružnice / oblouk třemi body", "kruznice oblouk arc circle tri body",
+     "<p>Nástroj <b>Umístit kružnici</b> (Place Circle) nebo <b>Umístit oblouk</b> (Place Arc) s metodou "
+     "<b>Hrana</b> (Edge) – klikněte tři body na obvodu (s přichycením na body měření).</p>", "kruznice"),
+    ("Konstrukce", "Bod v průsečíku dvou čar", "prusecik bod intersection construct",
+     "<ol><li>Nástroj <b>Vytvořit bod v průsečíku</b> (Construct Point at Intersection).</li>"
+     "<li>Klikněte na obě čáry – bod vznikne přesně v průsečíku (i v jejich prodloužení).</li></ol>", None),
+    ("Konstrukce", "Úsečka o dané délce a směru", "delka smer uhel dl accudraw",
+     "<ul><li>S AccuDraw: první bod, pak napište délku, <b>Enter</b> zamkne, mezerníkem přepnete na úhel.</li>"
+     "<li>Bez AccuDraw: key-in <code>DL=12.5,90</code> (délka, úhel ve stupních od osy X).</li></ul>", None),
+    ("Úpravy", "Posunout vrchol / vložit či smazat vrchol", "vrchol modify vertex insert delete",
+     "<ul><li><b>Upravit prvek</b> (Modify Element): klikněte blízko vrcholu a přesuňte ho (s přichycením).</li>"
+     "<li><b>Vložit vrchol</b> (Insert Vertex) / <b>Smazat vrchol</b> (Delete Vertex) – klik na místo "
+     "na čáře.</li></ul><p>Tip: přebytečný vrchol těsně u jiného dělá „krátkou čáru“ – smažte ho.</p>",
+     "vrchol"),
+    ("Úpravy", "Spojit čáry do jedné (řetězec)", "spojit retez complex chain join",
+     "<p><b>Vytvořit složený řetězec</b> (Create Complex Chain): klikejte navazující čáry – vznikne jeden "
+     "prvek. Obráceně: <b>Rozložit</b> (Drop Element) rozdělí řetězec / tvar zpět na čáry.</p>", "retez"),
+    ("Úpravy", "Zaoblení a zkosení rohu", "zaobleni fillet zkoseni chamfer roh",
+     "<p><b>Zaoblit prvky</b> (Construct Circular Fillet) – zadejte poloměr a klikněte obě čáry; "
+     "<b>Zkosit</b> (Construct Chamfer) – zadejte vzdálenosti.</p>", "zaobleni"),
+    ("Úpravy", "Kopírovat / posunout o přesnou vzdálenost", "kopie posun move copy dx",
+     "<ol><li><b>Kopírovat</b> (Copy) nebo <b>Posunout</b> (Move), klik na prvek, bod odkud.</li>"
+     "<li>Kam: key-in <code>DX=dx,dy</code> nebo délka v AccuDraw.</li></ol>", None),
+    ("Úpravy", "Vrátit krok zpět", "zpet undo ctrl z redo",
+     "<p><b>Ctrl+Z</b> = zpět, <b>Ctrl+Y</b> = znovu. Pozor: po <b>Komprimovat výkres</b> se historie "
+     "kroků smaže.</p>", None),
+    ("Text a buňky", "Umístit a upravit text", "text popis umistit upravit edit",
+     "<ul><li><b>Umístit text</b> (Place Text) – v nastavení zvolte písmo, výšku, šířku a zarovnání podle "
+     "Směrnice, pak napište text a klikněte do výkresu.</li>"
+     "<li><b>Upravit text</b> (Edit Text) – klik na text.</li>"
+     "<li>Výška/šířka se zadává v jednotkách výkresu (m); ve Směrnici bývá v mm na papíře – přepočtěte "
+     "měřítkem (1,5 mm při 1:500 = 0,75 m).</li></ul>", None),
+    ("Text a buňky", "Popis natočený podél čáry", "text natoceni rotace podel",
+     "<p>V nástroji Umístit text zvolte metodu <b>Nad prvkem / Podél prvku</b> (Above/Along Element) a "
+     "klikněte na čáru, nebo text po umístění natočte nástrojem <b>Otočit</b> (Rotate) s AccuDraw "
+     "(<b>RE</b> = podle prvku).</p>", None),
+    ("Text a buňky", "Vložit značku (buňku)", "bunka cell znacka knihovna",
+     "<ol><li><b>Prvek → Buňky</b> (Element → Cells) – připojte knihovnu buněk ze zadání (např. .cel).</li>"
+     "<li>Vyberte buňku, tlačítko <b>Umístit</b> (Placement), nastavte měřítko a natočení podle "
+     "Směrnice.</li><li>Nástroj <b>Umístit aktivní buňku</b> (Place Active Cell) – klik do výkresu.</li></ol>",
+     None),
+    ("Text a buňky", "Šrafa (svah, plocha)", "srafa hatch pattern svah",
+     "<p><b>Šrafovat plochu</b> (Hatch Area) nebo <b>Vzorkovat</b> (Pattern Area): zvolte rozestup a úhel, "
+     "metodu <b>Prvek</b> nebo <b>Zaplavit</b> (Flood) a klikněte dovnitř uzavřené plochy.</p>", None),
+    ("Zobrazení", "Vypnout / zapnout vrstvy", "vrstvy zobrazeni level display vypnout",
+     "<p><b>Nastavení → Zobrazení vrstev</b> (Level Display, Ctrl+E): klikem vrstvu vypnete/zapnete. "
+     "Hodí se k hledání prvků na špatné vrstvě – vypněte vše kromě jedné.</p>", None),
+    ("Zobrazení", "Najít místo chyby z této aplikace", "najit misto chyba window center",
+     "<p>U chyby klikněte na <b>Najít v MicroStationu</b> – do schránky se uloží příkaz. V MicroStationu "
+     "otevřete Key-in, vložte (Ctrl+V) a Enter – pohled se vycentruje na chybu.</p>", None),
+    ("Zobrazení", "Přiblížit na celý výkres / okno", "zoom fit prizpusobit okno",
+     "<p><b>Přizpůsobit pohled</b> (Fit View) – celý výkres; <b>Okno oblasti</b> (Window Area) – "
+     "přiblížení výřezu; kolečko myši přibližuje ke kurzoru.</p>", None),
+    ("Podklady", "Připojit referenci / rastr (náčrt, ortofoto)", "reference raster pripojit ortofoto",
+     "<p><b>Soubor → Reference</b> (References) → Připojit – jiný výkres jako podklad. "
+     "<b>Soubor → Správce rastrů</b> (Raster Manager) – obrázek (náčrt, ortofoto) umístíte dvěma body. "
+     "Před odevzdáním reference odpojte, pokud je zadání nechce.</p>", None),
+    ("Podklady", "Import bodů z Gromy do výkresu", "groma import body seznam",
+     "<p>V Gromě: <b>Export do MicroStationu</b> / import seznamu souřadnic přes nadstavbu – zkontrolujte, "
+     "na jaké vrstvy se body, čísla a výšky ukládají (musí sedět se Směrnicí / Wordem se zadáním).</p>", None),
+    ("Odevzdání", "Komprimovat výkres a uložit", "komprimovat compress ulozit odevzdat",
+     "<ol><li><b>Soubor → Komprimovat → Výkres</b> (Compress Design) – odstraní smazané prvky.</li>"
+     "<li><b>Soubor → Uložit</b>, pak uložte i DXF pro kontrolu v této aplikaci.</li>"
+     "<li>Název souboru podle zadání (např. Prijmeni_cz_ax_tx.dgn).</li></ol>", None),
+    ("Odevzdání", "Tisk do PDF", "tisk pdf print plot",
+     "<p><b>Soubor → Tisk</b> (Print): tiskárna <b>PDF</b>, oblast <b>Ohrada</b> (Fence) nebo pohled, "
+     "měřítko podle zadání (např. 1:500), pero/tabulka tlouštěk podle školy.</p>", None),
     ("Kontrola", "Změřit vzdálenost / plochu", "merit vzdalenost plocha measure",
      "<p><b>Měřit vzdálenost</b> (Measure Distance) – mezi body, podél prvku nebo kolmo na prvek. "
      "<b>Měřit plochu</b> (Measure Area) – klik dovnitř plochy nebo na tvar.</p>", None),
@@ -150,7 +230,7 @@ def _norm(s: str) -> str:
 class TipsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Rychlé tipy – MicroStation")
+        self.setWindowTitle(f"Rychlé tipy – MicroStation ({len(TIPS)})")
         self.resize(940, 600)
         lay = QVBoxLayout(self)
         self.search = QLineEdit()
@@ -177,7 +257,10 @@ class TipsDialog(QDialog):
         q = _norm(text.strip())
         self.list.clear()
         last = None
-        for i, (cat, name, keys, _html, _img) in enumerate(TIPS):
+        order: dict[str, int] = {}
+        for t in TIPS:
+            order.setdefault(t[0], len(order))
+        for i, (cat, name, keys, _html, _img) in sorted(enumerate(TIPS), key=lambda t: (order[t[1][0]], t[0])):
             if q and q not in _norm(f"{cat} {name} {keys}"):
                 continue
             if cat != last:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton,
+from PySide6.QtWidgets import (QTableWidgetItem, QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QPushButton,
                                QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 
@@ -149,15 +149,32 @@ class HomePage(QScrollArea):
         rec.setObjectName("karta")
         rl = QVBoxLayout(rec)
         rl.setContentsMargins(16, 14, 16, 14)
-        lab = QLabel("Naposledy otevřené výkresy")
+        lab = QLabel("Moje práce")
         lab.setObjectName("krok_nadpis")
         rl.addWidget(lab)
+        from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QTabWidget
+        self.work_tabs = QTabWidget()
+        self.projects = QTableWidget(0, 5)
+        self.projects.setHorizontalHeaderLabels(["Projekt", "Výkres", "Naposledy", "Poslední kontrola", "Odevzdáno"])
+        self.projects.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.projects.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.projects.verticalHeader().setVisible(False)
+        self.projects.setShowGrid(False)
+        self.projects.setAlternatingRowColors(True)
+        hh = self.projects.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.Stretch)
+        hh.setSectionResizeMode(1, QHeaderView.Stretch)
+        for c, w_ in ((2, 120), (3, 150), (4, 90)):
+            self.projects.setColumnWidth(c, w_)
+        self.projects.cellDoubleClicked.connect(self._open_project_row)
+        self.projects.setMinimumHeight(170)
+        self.work_tabs.addTab(self.projects, "Rozpracované projekty")
         self.recent = QListWidget()
-        self.recent.setMinimumHeight(150)
         self.recent.itemActivated.connect(lambda it: self.openRecent.emit(it.data(Qt.UserRole)))
         self.recent.itemDoubleClicked.connect(lambda it: self.openRecent.emit(it.data(Qt.UserRole)))
-        rl.addWidget(self.recent, 1)
-        hint = QLabel("Dvojklik otevře výkres. Výkres (DXF) můžete také přetáhnout kamkoli do okna.")
+        self.work_tabs.addTab(self.recent, "Naposledy otevřené výkresy")
+        rl.addWidget(self.work_tabs, 1)
+        hint = QLabel("Dvojklik otevře projekt i s výkresem a výsledky poslední kontroly.")
         hint.setObjectName("karta_popis")
         hint.setWordWrap(True)
         rl.addWidget(hint)
@@ -190,6 +207,64 @@ class HomePage(QScrollArea):
         self.score_detail.setWordWrap(True)
         lay.addWidget(self.score_detail)
         lay.addStretch(1)
+
+    def _open_project_row(self, row, _col=0):
+        it = self.projects.item(row, 0)
+        if it is not None and it.data(Qt.UserRole):
+            root = it.data(Qt.UserRole)
+            cur = getattr(self.win, "project", None)
+            if cur is None or str(cur.root) != root:
+                self.win.open_project(root)
+
+    def _fill_projects(self):
+        import datetime as dt
+
+        import yaml
+
+        from ..project import default_projects_dir
+        roots: set[Path] = set()
+        cur = getattr(self.win, "project", None)
+        dirs = {default_projects_dir()}
+        if cur is not None:
+            dirs.add(Path(cur.root).parent)
+        for d in dirs:
+            if d.is_dir():
+                for sub in d.iterdir():
+                    if (sub / "projekt.yaml").is_file():
+                        roots.add(sub.resolve())
+        rows = []
+        for r in roots:
+            try:
+                meta = yaml.safe_load((r / "projekt.yaml").read_text(encoding="utf-8")) or {}
+            except Exception:  # noqa: BLE001
+                continue
+            hist = meta.get("historie") or []
+            last = hist[-1] if hist else None
+            rows.append((meta.get("ulozeno", ""), r, meta, last))
+        rows.sort(key=lambda t: str(t[0]), reverse=True)
+        self.projects.setRowCount(len(rows))
+        for i, (saved, r, meta, last) in enumerate(rows):
+            try:
+                when = dt.datetime.fromisoformat(str(saved)).strftime("%d.%m. %H:%M") if saved else "–"
+            except ValueError:
+                when = str(saved)
+            src = meta.get("vykres_zdroj") or meta.get("vykres") or ""
+            kon = (f"{last.get('chyby', 0)} chyb, {last.get('varovani', 0)} var." if last else "–")
+            vals = [meta.get("nazev") or r.name, Path(src).name if src else "–", when, kon,
+                    f"{len(meta.get('odevzdani') or [])}×"]
+            for c, v in enumerate(vals):
+                it = QTableWidgetItem(v)
+                if c == 0:
+                    it.setData(Qt.UserRole, str(r))
+                    it.setToolTip(str(r))
+                    if cur is not None and Path(cur.root).resolve() == r:
+                        f = it.font()
+                        f.setBold(True)
+                        it.setFont(f)
+                        it.setText(v + "  (otevřený)")
+                if c == 3 and last and last.get("chyby", 0) == 0:
+                    it.setForeground(QColor("#16A34A"))
+                self.projects.setItem(i, c, it)
 
     def refresh(self):
         win = self.win
@@ -234,6 +309,7 @@ class HomePage(QScrollArea):
         self.c_ode.status.setText(f"Odevzdáno {od} z {MAX_ODEVZDANI}.<br>Před odevzdáním spusťte úplnou "
                                   "kontrolu s tolerancemi učitele.")
         self.c_ode.set_state(True if od else None)
+        self._fill_projects()
         self.recent.clear()
         items = win.settings.value("cesty/posledni_vykresy", []) or []
         if isinstance(items, str):

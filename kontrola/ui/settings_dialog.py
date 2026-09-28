@@ -24,6 +24,14 @@ def _dspin(value: float, decimals=4, maximum=1e9, minimum=0.0, step=0.01) -> QDo
     return w
 
 
+def _lab(text: str) -> QLabel:
+    """Popisky polí stejně široké ve všech skupinách – pole jsou pod sebou zarovnaná."""
+    lab = QLabel(text)
+    lab.setMinimumWidth(300)
+    lab.setWordWrap(True)
+    return lab
+
+
 class SettingsDialog(QDialog):
     def __init__(self, config: Config, rules: RuleSet, parent=None):
         super().__init__(parent)
@@ -119,6 +127,8 @@ class SettingsDialog(QDialog):
             gb.setCheckable(True)
             gb.setChecked(cs.zapnuto)
             gl = QFormLayout(gb)
+            gl.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            gl.setHorizontalSpacing(14)
             desc = QLabel(check.popis)
             desc.setWordWrap(True)
             desc.setStyleSheet("color: palette(mid);")
@@ -127,7 +137,7 @@ class SettingsDialog(QDialog):
             for s in Severity:
                 sev.addItem(s.value, s)
             sev.setCurrentIndex(list(Severity).index(cs.zavaznost))
-            gl.addRow("Závažnost:", sev)
+            gl.addRow(_lab("Závažnost:"), sev)
             eds = {"_box": gb, "_sev": sev}
             for p in check.parametry:
                 val = cs.parametry.get(p.name, p.default)
@@ -144,7 +154,7 @@ class SettingsDialog(QDialog):
                     ed = QLineEdit(", ".join(val) if isinstance(val, list) else str(val or ""))
                 if p.help:
                     ed.setToolTip(p.help)
-                gl.addRow(p.label + ":", ed)
+                gl.addRow(_lab(p.label + ":"), ed)
                 eds[p.name] = (p, ed)
             groups[check.skupina].addWidget(gb)
             self._editors[cid] = eds

@@ -245,6 +245,22 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.a_mslook)
         m_view.addAction(self.a_dark)
         m_view.addAction(self.a_labels)
+        from PySide6.QtGui import QActionGroup
+        m_size = m_view.addMenu("Velikost kroužků chyb")
+        grp = QActionGroup(self)
+        cur = self.settings.value("zobrazeni/krouzky", "stredni")
+        for key, label, r in (("male", "Malé", 9.0), ("stredni", "Střední", 13.0), ("velke", "Velké", 18.0)):
+            a = QAction(label, self, checkable=True)
+            a.setChecked(key == cur)
+            a.triggered.connect(lambda _c=False, k=key, rr=r: self.set_marker_size(k, rr))
+            grp.addAction(a)
+            m_size.addAction(a)
+            if key == cur:
+                self.set_marker_size(key, r, save=False)
+        self.a_hide_info = self._act("Skrýt informace (modré kroužky)", self._toggle_info, None,
+                                     "Nezobrazovat nálezy typu info – např. volné konce na okraji kresby",
+                                     checkable=True)
+        m_view.addAction(self.a_hide_info)
         m_view.addAction(self.a_sketch)
         m_view.addAction(self.layers_dock.toggleViewAction())
         m_view.addAction(self.inspector_dock.toggleViewAction())
@@ -1061,6 +1077,19 @@ class MainWindow(QMainWindow):
                                 "Chcete otevřít stránku pro nahlášení chyby na GitHubu? (Soubor chyby.log "
                                 "tam můžete přiložit.)") == QMessageBox.Yes:
             QDesktopServices.openUrl(QUrl(ISSUES_URL))
+
+    def set_marker_size(self, key: str, radius: float, save: bool = True):
+        from .drawing_view import IssueMarker
+        IssueMarker.RADIUS = radius
+        self.view.refresh_markers()
+        self.view.request_declutter()
+        self.view.viewport().update()
+        if save:
+            self.settings.setValue("zobrazeni/krouzky", key)
+
+    def _toggle_info(self, hide: bool):
+        from ..checks.base import Severity as _S
+        self.issue_panel.sev_boxes[_S.INFO].setChecked(not hide)
 
     def show_tips(self):
         from .tips import TipsDialog

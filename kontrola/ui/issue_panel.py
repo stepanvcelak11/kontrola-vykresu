@@ -436,7 +436,7 @@ class IssuePanel(QWidget):
     def _default_summary(self, issues: list[Issue]) -> str:
         if not issues:
             return "Zatím žádné nálezy. Otevřete výkres a stiskněte Zkontrolovat (F5)."
-        return "Kliknutím na řádek se výkres přiblíží na chybu. Kliknutím na kartu nahoře vyfiltrujete závažnost."
+        return "Klik na řádek přiblíží chybu, klik na kartu vyfiltruje závažnost."
 
     def set_score(self, sk):
         """Skóre připravenosti k odevzdání vedle karet (None = zatím nekontrolováno)."""

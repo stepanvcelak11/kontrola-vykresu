@@ -134,9 +134,10 @@ QTabBar::tab {{ background: transparent; padding: 8px 18px; margin-right: 2px; b
 QTabBar::tab:selected {{ color: {ACCENT}; border-bottom-color: {ACCENT}; }}
 QTabBar::tab:hover:!selected {{ color: {TEXT}; }}
 
-QGroupBox {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; margin-top: 14px;
-    padding: 10px 8px 8px 8px; font-weight: 600; }}
-QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color: {MUTED}; }}
+QGroupBox {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; margin-top: 24px;
+    padding: 12px 10px 10px 10px; font-weight: 600; }}
+QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 6px; top: 2px;
+    padding: 0 4px; color: {TEXT}; }}
 
 QTableView, QTreeView, QListWidget, QListView {{ background: {PANEL}; border: 1px solid {BORDER};
     border-radius: 6px; alternate-background-color: #F9FAFB; gridline-color: #EEF0F3;
