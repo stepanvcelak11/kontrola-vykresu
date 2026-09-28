@@ -47,7 +47,7 @@ class RepairOptions:
         "uzavrit_polygony": "Uzavřít téměř uzavřené polygony (mezera do tolerance)",
         "nedotazeni": "Dotáhnout nedotažené linie",
         "pretazeni": "Zkrátit přetažené linie",
-        "vlozit_uzly": "Vložit uzel do linie v místě napojení",
+        "vlozit_uzly": "Vložit uzly do křížení (a do T-napojení, jen když je hlásíte v nastavení)",
         "symbologie": "Sjednotit vrstvu, barvu a styl podle pravidel",
     }
 
@@ -129,6 +129,24 @@ class _Doc:
             return True
         return False
 
+    def filter_short(self, handle: str, points, min_seg: float):
+        """Body, jejichž vložení by vytvořilo úsek kratší než ``min_seg`` (učitel by hlásil krátkou čáru)."""
+        e = self.entity(handle)
+        if e is None or min_seg <= 0:
+            return list(points), []
+        if e.dxftype() == "LINE":
+            verts = [tuple(e.dxf.start)[:2], tuple(e.dxf.end)[:2]]
+        elif e.dxftype() == "LWPOLYLINE":
+            verts = [p[:2] for p in e.get_points("xy")]
+        else:
+            return list(points), []
+        verts = [(v[0] * self.f, v[1] * self.f) for v in verts]
+        ok, bad = [], []
+        for p in sorted(set(map(tuple, points))):
+            near = min((math.dist(p, v) for v in verts + ok), default=math.inf)
+            (bad if near < min_seg else ok).append(p)
+        return ok, bad
+
     def split_line(self, handle: str, points: list[tuple[float, float]]) -> int:
         """Rozdělí úsečku (LINE) v zadaných bodech na více úseček se stejnými vlastnostmi."""
         e = self.entity(handle)
@@ -194,6 +212,43 @@ class _Doc:
         return n_added
 
 
+def _param(check_id: str, name: str, default, config: Config):
+    from .checks.base import REGISTRY
+    v = config.settings(check_id).parametry.get(name)
+    if v is None:
+        cls = REGISTRY.get(check_id)
+        v = next((p.default for p in getattr(cls, "parametry", []) if p.name == name), default)
+    return v
+
+
+def _explode_references(drawing: Drawing, out_path: Path) -> Drawing:
+    """Rozbalí referenční výkresy (bloky s celou kresbou) do modelového prostoru a výkres znovu načte."""
+    import tempfile
+
+    from .io.dxf_loader import load_drawing, read_dxf
+    try:
+        doc = ezdxf.readfile(drawing.path)
+    except Exception:
+        from ezdxf import recover
+        doc, _ = recover.readfile(drawing.path)
+    msp = doc.modelspace()
+    for ins in [e for e in msp if e.dxftype() == "INSERT"]:
+        block = doc.blocks.get(ins.dxf.name)
+        if block is None:
+            continue
+        ents = list(block)
+        layers = {be.dxf.get("layer", "0") for be in ents} - {"0"}
+        if block.block.dxf.get("flags", 0) & (4 | 8) or (len(ents) >= 30 and len(layers) >= 3):
+            try:
+                ins.explode()
+            except Exception:  # noqa: BLE001
+                continue
+    tmp = Path(tempfile.mkdtemp(prefix="kontrola_oprava_")) / (Path(drawing.path).stem + "_rozbaleno.dxf")
+    doc.saveas(tmp)
+    d = read_dxf(tmp) if tmp.suffix.lower() == ".dxf" else load_drawing(tmp)
+    return d
+
+
 def repair_drawing(drawing: Drawing, rules: RuleSet | None, config: Config, out_path: str | Path,
                    options: RepairOptions | None = None) -> RepairReport:
     from .checks.topology import _endpoint_analysis, _overshoots
@@ -205,6 +260,12 @@ def repair_drawing(drawing: Drawing, rules: RuleSet | None, config: Config, out_
     if out_path.resolve() == Path(drawing.path).resolve():
         raise ValueError("Opravený výkres se musí uložit do nového souboru.")
     rep = RepairReport(path=str(out_path))
+    if any(not f.handle for f in drawing.features if f.geom_type in (GeomType.LINIE, GeomType.POLYGON)):
+        # kresba je v referenčním výkresu (bloku) – pro úpravy se reference rozbalí do výkresu
+        drawing = _explode_references(drawing, out_path)
+        rep.details.append("Referenční výkres byl v opraveném souboru rozbalen přímo do výkresu.")
+    min_seg = _param("kratke_linie", "min_delka", 0.09, config)
+    t_nodes = bool(_param("pruseciky_bez_uzlu", "napojeni_bez_uzlu", False, config))
     D = _Doc(drawing)
     tol, eps = config.tolerance, max(config.presnost, 1e-6)
     by_id = drawing.by_id()
@@ -264,7 +325,7 @@ def repair_drawing(drawing: Drawing, rules: RuleSet | None, config: Config, out_
                 moved.add(key)
                 rep.counts[label] += 1
                 rep.details.append(f"{label}: {fname(f)} → {new[0]:.3f}, {new[1]:.3f}")
-                if opts.vlozit_uzly:
+                if opts.vlozit_uzly and t_nodes:
                     # uzel do všech linií, které místem procházejí (např. sdílená hranice dvou parcel)
                     for gi in an.tree.query(Point(new), predicate="dwithin", distance=eps * 10):
                         other = an.feats[int(gi)]
@@ -294,6 +355,13 @@ def repair_drawing(drawing: Drawing, rules: RuleSet | None, config: Config, out_
     if inserts:
         for h, pts in inserts.items():
             ent = D.entity(h)
+            ok_pts, short = D.filter_short(h, pts, min_seg)
+            for p in short:
+                rep.skipped.append(f"Uzel v bodě {p[0]:.3f}, {p[1]:.3f} by vytvořil úsek kratší než "
+                                   f"{min_seg:.2f} m – opravte ručně (posuňte lomový bod)")
+            pts = ok_pts
+            if not pts:
+                continue
             if ent is not None and ent.dxftype() == "LINE":
                 n = D.split_line(h, pts)
                 if n:

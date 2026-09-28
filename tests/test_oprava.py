@@ -26,7 +26,7 @@ def test_oprava_topologie(make_dxf, tmp_path):
     assert rep.counts["Smazané duplicity"] == 1
     assert rep.counts["Smazané linie nulové délky"] == 1
     assert rep.counts["Uzavřené polygony"] == 1
-    assert rep.counts["Vložené uzly"] == 2
+    assert "Vložené uzly" not in rep.counts  # T-napojení učitel (MGEO) nevyžaduje rozdělit
 
     d2 = read_dxf(out)
     assert check(d2, "chybejici_napojeni") == []
@@ -35,6 +35,23 @@ def test_oprava_topologie(make_dxf, tmp_path):
     assert check(d2, "pruseciky_bez_uzlu") == []  # uzly vloženy do hlavní linie
     assert check(d2, "nezavrene_polygony") == []
     assert sum(1 for f in d2.features if f.closed) == 1
+    assert check(d2, "kratke_linie") == []
+    # když je v nastavení zapnuté hlášení T-napojení, oprava uzly vloží
+    cfg = Config()
+    cfg.settings("pruseciky_bez_uzlu").parametry["napojeni_bez_uzlu"] = True
+    rep = repair_drawing(d, None, cfg, tmp_path / "opraveno2.dxf")
+    assert rep.counts["Vložené uzly"] == 2
+
+
+def test_oprava_nevytvori_kratky_usek(make_dxf, tmp_path):
+    """Křížení 5 cm od lomového bodu: rozdělení by vytvořilo krátkou čáru – nechá se k ruční opravě."""
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (10, 0), (10, 10)])
+        msp.add_line((9.95, -5), (9.95, 5))
+    d = make_dxf(build, name="vstup.dxf")
+    rep = repair_drawing(d, None, Config(), tmp_path / "o.dxf")
+    assert any("kratší" in s for s in rep.skipped)
+    assert check(read_dxf(tmp_path / "o.dxf"), "kratke_linie") == []
 
 
 def test_oprava_jen_vybrane_a_nikdy_do_originalu(make_dxf, tmp_path):
