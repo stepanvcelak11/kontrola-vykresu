@@ -155,30 +155,47 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
     out: dict[int, tuple[float, tuple[float, float], int]] = {}
     max_len = _max_overshoot(ctx)
     if an.tree is not None and len(an.points):
+        lengths = shapely.length(an.geoms)
+        ks, parts = [], []
         for k in range(len(an.points)):
             if an.nearest[k] <= ctx.precision or an.self_touch[k]:
                 continue
             f = an.feats[an.owner[k]]
-            line = f.geometry
-            L = line.length
+            L = float(lengths[an.owner[k]])
             if L <= ctx.precision:
                 continue
             seg_len = min(max_len, L * 0.999)
-            part = substring(line, L - seg_len, L) if an.is_end[k] else substring(line, 0, seg_len)
-            end_pt = an.pgeoms[k]
-            best = None
-            for gi in an.tree.query(part, predicate="intersects"):
-                if gi == an.owner[k]:
-                    continue
-                for p in _points_of(_safe_intersection(part, an.geoms[gi])):
+            coords = f.vertices if len(f.vertices) >= 2 else list(f.geometry.coords)
+            e0, e1 = (coords[-1], coords[-2]) if an.is_end[k] else (coords[0], coords[1])
+            last = math.dist(e0[:2], e1[:2])
+            if last >= seg_len > 0:  # koncový úsek je rovný – stačí jeho kus (bez drahého substring)
+                t = seg_len / last
+                a = (e0[0] + (e1[0] - e0[0]) * t, e0[1] + (e1[1] - e0[1]) * t)
+                part = LineString([a, e0[:2]]) if an.is_end[k] else LineString([e0[:2], a])
+            else:
+                line = f.geometry
+                part = substring(line, L - seg_len, L) if an.is_end[k] else substring(line, 0, seg_len)
+            ks.append(k)
+            parts.append(part)
+        if parts:
+            # jeden hromadný dotaz do prostorového indexu místo tisíců jednotlivých
+            pi, gi = an.tree.query(np.array(parts, dtype=object), predicate="intersects")
+            keep = gi != an.owner[np.asarray(ks)[pi]]
+            best_by: dict[int, tuple] = {}
+            for a_, g_ in zip(pi[keep], gi[keep]):
+                k = ks[int(a_)]
+                part = parts[int(a_)]
+                for p in _points_of(_safe_intersection(part, an.geoms[g_])):
                     along = part.project(Point(p))
                     dist = (part.length - along) if an.is_end[k] else along
                     if dist <= ctx.precision:
                         continue
-                    if best is None or dist < best[0]:
-                        best = (dist, p, int(gi))
-            if best is not None and end_pt.distance(Point(best[1])) > ctx.precision:
-                out[k] = best
+                    cur = best_by.get(k)
+                    if cur is None or dist < cur[0]:
+                        best_by[k] = (dist, p, int(g_))
+            for k, best in best_by.items():
+                if an.pgeoms[k].distance(Point(best[1])) > ctx.precision:
+                    out[k] = best
     ctx._cache[key] = out
     return out
 
@@ -246,10 +263,13 @@ class VisiciKonce(Check):
         edge = float(ctx.param("okraj", 1.0))
         hull = None
         reach = 0.0
+        hull_d = None
         if edge > 0 and len(an.geoms):
-            hull = shapely.union_all(an.geoms).convex_hull.boundary
+            hull = shapely.multipoints(shapely.get_coordinates(an.geoms)).convex_hull.boundary
             b = shapely.total_bounds(an.geoms)
             reach = math.hypot(b[2] - b[0], b[3] - b[1])
+            if len(an.points):
+                hull_d = shapely.distance(hull, an.pgeoms)
         for k in range(len(an.points)):
             if np.isfinite(an.nearest[k]) or an.self_touch[k] or an.own_gap[k] <= ctx.tolerance:
                 continue  # napojeno, nebo jde o téměř uzavřený polygon (řeší jiná kontrola)
@@ -259,8 +279,7 @@ class VisiciKonce(Check):
             if _expects_polygon(ctx, f):
                 continue  # řeší kontrola nezavřených polygonů
             x, y = an.points[k]
-            if hull is not None and (hull.distance(an.pgeoms[k]) <= edge
-                                     or _leads_out(an, k, reach, ctx.precision)):
+            if hull is not None and (hull_d[k] <= edge or _leads_out(an, k, reach, ctx.precision)):
                 # konec na okraji kresby: MGEO ho nepočítá, ale ukázat ho (aby bylo jasné, proč jinde ano)
                 iss = ctx.issue(self, f, "Volný konec na okraji kresby (učitelova kontrola ho nepočítá)",
                                 at=(x, y))
