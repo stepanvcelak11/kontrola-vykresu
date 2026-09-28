@@ -113,6 +113,78 @@ class Symbologie(Check):
 
 
 @register
+class JednotnostHladiny(Check):
+    id = "jednotnost_hladiny"
+    nazev = "Nejednotná symbologie hladiny"
+    skupina = "Atributy"
+    popis = ("Funguje i bez tabulky od učitele: na každé hladině zjistí převažující barvu, styl a tloušťku "
+             "čáry a nahlásí prvky, které se od většiny liší (např. omylem přebarvená linie nebo prvek "
+             "nakreslený jiným stylem). Texty a buňky se porovnávají jen barvou.")
+    vychozi_zavaznost = Severity.VAROVANI
+    parametry = [
+        Param("min_prvku", "Jen hladiny s aspoň N prvky", "int", 5),
+        Param("min_podil", "Převažující hodnota musí mít podíl aspoň [%]", "float", 70.0),
+        Param("jen_bez_pravidla", "Jen prvky bez pravidla", "bool", True,
+              "Prvky s pravidlem kontroluje přesněji kontrola „Hladina, barva nebo styl“."),
+    ]
+
+    def run(self, ctx: CheckContext):
+        from collections import Counter, defaultdict
+        min_n = int(ctx.param("min_prvku", 5))
+        share = float(ctx.param("min_podil", 70.0)) / 100.0
+        only_free = bool(ctx.param("jen_bez_pravidla", True)) and bool(ctx.rules.pravidla)
+        by_layer: dict[str, list[Feature]] = defaultdict(list)
+        for f in ctx.features():
+            by_layer[f.layer].append(f)
+        for li, (layer, feats) in enumerate(by_layer.items()):
+            ctx.progress(li / max(1, len(by_layer)))
+            if len(feats) < min_n:
+                continue
+            lin = [f for f in feats if f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.dxftype != "HATCH"]
+            props = {
+                "barva": ([f for f in feats if f.dxftype != "HATCH"], lambda f: tuple(f.color_rgb)),
+                "styl": (lin, lambda f: (f.linetype or "CONTINUOUS").upper()),
+                "tloušťka": (lin, lambda f: round(f.lineweight, 2)),
+            }
+            dominant = {}
+            for name, (items, key) in props.items():
+                if len(items) < min_n:
+                    continue
+                c = Counter(key(f) for f in items)
+                val, cnt = c.most_common(1)[0]
+                if cnt / len(items) >= share and cnt < len(items):
+                    dominant[name] = (val, key, {id(f) for f in items})
+            if not dominant:
+                continue
+            for f in feats:
+                if only_free and ctx.rule_for(f) is not None:
+                    continue
+                diffs = []
+                for name, (val, key, members) in dominant.items():
+                    if id(f) in members and key(f) != val:
+                        diffs.append(_describe_prop(name, key(f), val, ctx, f))
+                if diffs:
+                    yield ctx.issue(self, f, f"Na hladině {layer} se liší: " + ", ".join(diffs))
+
+
+def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
+    if name == "barva":
+        rs = ctx.rules
+
+        def col(rgb):
+            from ..rules import nearest_ms_index
+            if rs.paleta == "microstation":
+                idx = nearest_ms_index(rgb, rs.barevna_tabulka)
+                if idx is not None:
+                    return str(idx)
+            return "#%02X%02X%02X" % rgb
+        return f"barva {col(got)} (většina {col(expected)})"
+    if name == "tloušťka":
+        return f"tloušťka {fmt_num(got, 2)} mm (většina {fmt_num(expected, 2)} mm)"
+    return f"styl {got} (většina {expected})"
+
+
+@register
 class NepovoleneHladiny(Check):
     id = "nepovolene_hladiny"
     nazev = "Nepovolená hladina"

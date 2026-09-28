@@ -284,6 +284,26 @@ napsat poznámku a v editoru pravidel lze k pravidlu připojit obrázek. Obráze
 i jako **podklad pod výkresem** s posunem, měřítkem, natočením a průhledností. Do kontrol
 nevstupuje.
 
+### Když máte od učitele jen PDF nebo náčrt (JPG)
+
+Bez tabulky atributů a bez vzoru v DXF aplikace pořád zkontroluje:
+
+* **všechnu topologii** (nezavřené polygony, napojení, průsečíky, duplicity…), ta pravidla nepotřebuje,
+* **jednotnost hladin**: kontrola *Nejednotná symbologie hladiny* najde prvky, které mají jinou barvu,
+  styl nebo tloušťku než většina prvků na stejné hladině.
+
+Postup:
+
+1. **Zadání → Vzorový výkres**: přetáhněte PDF nebo JPG od učitele.
+2. **Vložit pod výkres…**: klikněte na bod v obrázku a na stejný bod ve výkresu, potom na druhý
+   bod. Vzor se průhledně zobrazí pod výkresem ve správném měřítku a natočení. Vyberte výrazné
+   body co nejdál od sebe, třeba rohy rámu nebo lomové body hranic.
+3. U **PDF** (uloženého z MicroStationu, ne naskenovaného) použijte **Porovnat s kontrolovaným
+   výkresem**. Vypíšou se čísla parcel, bodů a č.p., která ve vašem výkresu chybějí nebo přebývají.
+4. **Vytvořit pravidla ze vzoru** nabídne návrh pravidel z vašeho vlastního výkresu. Projděte ho
+   podle PDF nebo náčrtu (hladiny, barvy) a potvrďte. Kontroly pak hlídají, že se pravidel
+   držíte v celém výkresu.
+
 ### Vzorový výkres
 
 Ze vzoru se načtou používané hladiny, barvy, styly čar, tloušťky a buňky.

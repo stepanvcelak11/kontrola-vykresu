@@ -12,6 +12,7 @@ datas = [
     ("ukazky/tabulka_atributu.csv", "ukazky"),
     ("ukazky/konfigurace.yaml", "ukazky"),
     ("ukazky/nacrt.png", "ukazky"),
+    ("ukazky/vzor_ucitele.pdf", "ukazky"),
 ]
 datas += collect_data_files("ezdxf")
 datas += collect_data_files("pypdfium2")

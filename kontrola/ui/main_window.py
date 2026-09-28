@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
         self.zadani.projectModified.connect(self._project_modified)
         self.zadani.backgroundChanged.connect(self._apply_background)
         self.zadani.showSketchBeside.connect(self.show_sketch_beside)
+        self.zadani.georefRequested.connect(self.start_georef)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.split, "Výkres a chyby")
@@ -534,6 +535,36 @@ class MainWindow(QMainWindow):
         self.sketch_dock.raise_()
         if was_hidden and not self.sketch_dock.isFloating():
             self.resizeDocks([self.sketch_dock], [max(320, self.width() // 4)], Qt.Horizontal)
+
+    def start_georef(self, rel: str):
+        """Umístění podkladu (náčrt, PDF vzor) pod výkres podle 2 bodů."""
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete kontrolovaný výkres.")
+            return
+        path = self.project.root / rel
+        pm = load_pixmap(path)
+        if pm.isNull():
+            QMessageBox.warning(self, APP_NAME, f"Obrázek {path.name} nelze načíst.")
+            return
+        from .georef_dialog import GeorefDialog
+        if getattr(self, "_georef", None) is not None:
+            self._georef.close()
+        old = self.project.meta.get("podklad") or {}
+        dlg = GeorefDialog(pm, self.view, float(old.get("pruhlednost", 0.5)), self)
+
+        def done(params: dict):
+            bg = {"zapnuto": True, "obrazek": rel, **params}
+            self.project.meta["podklad"] = bg
+            self.project.save()
+            self._apply_background(bg)
+            self.zadani.images_page.refresh()
+            self.statusBar().showMessage(f"Podklad umístěn: měřítko {params['meritko']:.4f} m/px, "
+                                         f"natočení {params['rotace']:.2f}°", 10000)
+
+        dlg.finished_params.connect(done)
+        self.tabs.setCurrentWidget(self.split)
+        dlg.show()
+        self._georef = dlg
 
     def _apply_background(self, bg: dict):
         if not bg or not bg.get("zapnuto") or not bg.get("obrazek") or self.project is None:

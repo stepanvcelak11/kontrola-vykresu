@@ -268,6 +268,14 @@ class DrawingView(QGraphicsView):
     cursorMoved = Signal(float, float)
     markerClicked = Signal(int)  # číslo chyby
     fileDropped = Signal(str)
+    pointPicked = Signal(float, float)  # klik v režimu výběru bodu (souřadnice výkresu)
+
+    def set_pick_mode(self, on: bool):
+        self._pick_mode = on
+        if on:
+            self.viewport().setCursor(Qt.CrossCursor)
+        else:
+            self.viewport().unsetCursor()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -566,7 +574,15 @@ class DrawingView(QGraphicsView):
             self._press_pos = None
             self._last_pos = None
             self._panning = False
-            self.viewport().unsetCursor()
+            if getattr(self, "_pick_mode", False):
+                self.viewport().setCursor(Qt.CrossCursor)
+            else:
+                self.viewport().unsetCursor()
+            if not was_pan and event.button() == Qt.LeftButton and getattr(self, "_pick_mode", False):
+                x, y = self.from_scene(self.mapToScene(event.position().toPoint()))
+                self.pointPicked.emit(x, y)
+                event.accept()
+                return
             if not was_pan and event.button() == Qt.LeftButton:
                 for item in self.items(event.position().toPoint()):
                     if isinstance(item, IssueMarker) and item.isVisible():

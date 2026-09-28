@@ -146,6 +146,20 @@ def test_typ_geometrie(make_dxf, pravidla):
     assert [i.message for i in check(d, "typ_geometrie", pravidla)] == ["Budova: bod místo polygon"]
 
 
+def test_jednotnost_hladiny_bez_pravidel(make_dxf):
+    def build(msp, doc):
+        for i in range(8):
+            msp.add_line((0, i), (10, i), dxfattribs={"layer": "PLOTY", "color": 5, "linetype": "DASHED"})
+        msp.add_line((0, 20), (10, 20), dxfattribs={"layer": "PLOTY", "color": 1, "linetype": "DASHED"})
+        msp.add_line((0, 21), (10, 21), dxfattribs={"layer": "PLOTY", "color": 5})
+        for i in range(3):  # malá hladina se nekontroluje
+            msp.add_line((0, 30 + i), (10, 30 + i), dxfattribs={"layer": "MALA", "color": i + 1})
+    d = make_dxf(build)
+    msgs = sorted(i.message for i in check(d, "jednotnost_hladiny"))
+    assert msgs == ["Na hladině PLOTY se liší: barva 3 (většina 1)",
+                    "Na hladině PLOTY se liší: styl CONTINUOUS (většina DASHED)"]
+
+
 def test_kontroly_atributu_bez_pravidel_se_preskoci(make_dxf):
     from kontrola.config import Config
     from kontrola.runner import run_checks

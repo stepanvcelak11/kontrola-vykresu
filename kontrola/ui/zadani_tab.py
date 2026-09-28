@@ -226,6 +226,12 @@ class ImagesPage(QWidget):
         fl.addRow("Měřítko:", self.bg_scale)
         fl.addRow("Natočení:", self.bg_rot)
         fl.addRow("Průhlednost:", self.bg_op)
+        b_2p = QPushButton("Umístit podle 2 bodů…")
+        b_2p.setToolTip("Klikněte na dva body v obrázku a stejné body ve výkresu – posun, měřítko "
+                        "a natočení se dopočítají.")
+        b_2p.clicked.connect(lambda: self.bg_img.currentData() and self.tab.georefRequested.emit(
+            self.bg_img.currentData()))
+        fl.addRow(b_2p)
         b_fit = QPushButton("Roztáhnout na rozsah výkresu")
         b_fit.clicked.connect(self._fit_to_drawing)
         fl.addRow(b_fit)
@@ -248,6 +254,9 @@ class ImagesPage(QWidget):
         self.bg_img.clear()
         for rel in self.browser.images():
             self.bg_img.addItem(Path(rel).name, rel)
+        vzor = p.meta.get("vzor") if p else None
+        if vzor and Path(vzor).suffix.lower() in IMAGE_EXT and (p.root / vzor).is_file():
+            self.bg_img.addItem(f"Vzor: {Path(vzor).name}", vzor)
         bg = (p.meta.get("podklad") or {}) if p else {}
         self.bg_on.setChecked(bool(bg.get("zapnuto")))
         self.bg_img.setCurrentIndex(max(0, self.bg_img.findData(bg.get("obrazek"))))
@@ -368,13 +377,16 @@ class TemplatePage(QWidget):
         super().__init__()
         self.tab = tab
         self.info: tpl.TemplateInfo | None = None
+        self.pdf_labels: set[str] | None = None
         self._loaded_rel: str | None = None
         lay = QVBoxLayout(self)
-        intro = QLabel("<b>Vzorový výkres</b> (DXF, případně DGN) – z něj se načtou používané hladiny, barvy, "
-                       "styly a buňky. Lze z něj navrhnout pravidla a porovnat s ním kontrolovaný výkres.")
+        intro = QLabel("<b>Vzor od učitele</b>: <b>DXF/DGN</b> – načtou se hladiny, barvy, styly a buňky, lze z něj "
+                       "vytvořit pravidla a porovnat výkres. <b>PDF</b> – porovnají se popisy (čísla parcel, bodů, "
+                       "č.p.) a vzor lze vložit pod výkres. <b>JPG/PNG</b> (náčrt, sken) – slouží jako podklad "
+                       "pod výkresem k vizuálnímu porovnání.")
         intro.setWordWrap(True)
         lay.addWidget(intro)
-        drop = DropArea("Přetáhněte sem vzorový výkres (.dxf / .dgn)")
+        drop = DropArea("Přetáhněte sem vzor (.dxf / .dgn / .pdf / .jpg / .png)")
         drop.setMinimumHeight(50)
         drop.filesDropped.connect(lambda fs: self.set_template(fs[0]))
         lay.addWidget(drop)
@@ -385,7 +397,10 @@ class TemplatePage(QWidget):
         b_rules.clicked.connect(self.make_rules)
         b_cmp = QPushButton("Porovnat s kontrolovaným výkresem")
         b_cmp.clicked.connect(self.compare)
-        for b in (b_load, b_rules, b_cmp):
+        self.b_bg = QPushButton("Vložit pod výkres…")
+        self.b_bg.setToolTip("Zobrazí vzor (PDF/obrázek) průhledně pod výkresem; umístí se podle 2 bodů.")
+        self.b_bg.clicked.connect(lambda: self._loaded_rel and self.tab.georefRequested.emit(self._loaded_rel))
+        for b in (b_load, b_rules, b_cmp, self.b_bg):
             row.addWidget(b)
         row.addStretch(1)
         self.status = QLabel()
@@ -398,7 +413,13 @@ class TemplatePage(QWidget):
         self.layers.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.layers.verticalHeader().setVisible(False)
         self.layers.horizontalHeader().setStretchLastSection(True)
-        split.addWidget(self.layers)
+        from PySide6.QtWidgets import QStackedWidget
+        from .image_viewer import ImageView
+        self.stack = QStackedWidget()
+        self.preview = ImageView()
+        self.stack.addWidget(self.layers)
+        self.stack.addWidget(self.preview)
+        split.addWidget(self.stack)
         self.diff = QTableWidget(0, 5)
         self.diff.setHorizontalHeaderLabels(["Kategorie", "Položka", "Vzor", "Kontrolovaný výkres", "Rozdíl"])
         self.diff.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -414,19 +435,24 @@ class TemplatePage(QWidget):
             self._load(rel)
         elif not rel:
             self.info = None
+            self.pdf_labels = None
             self._loaded_rel = None
             self.layers.setRowCount(0)
             self.diff.setRowCount(0)
+            self.stack.setCurrentWidget(self.layers)
+            self.b_bg.setEnabled(False)
             self.status.setText("Vzor není načten.")
 
     def _pick(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Vzorový výkres", "", "Výkresy (*.dxf *.dgn *.dwg)")
+        f, _ = QFileDialog.getOpenFileName(self, "Vzor od učitele", "",
+                                           "Vzory (*.dxf *.dgn *.dwg *.pdf *.jpg *.jpeg *.png *.tif *.tiff);;Vše (*)")
         if f:
             self.set_template(f)
 
     def set_template(self, path: str):
-        if Path(path).suffix.lower() not in DRAWING_EXT:
-            QMessageBox.warning(self, "Vzor", "Vzorový výkres musí být DXF (nebo DGN).")
+        suf = Path(path).suffix.lower()
+        if suf not in DRAWING_EXT and suf not in IMAGE_EXT:
+            QMessageBox.warning(self, "Vzor", "Vzor musí být výkres (DXF/DGN), PDF nebo obrázek (JPG/PNG).")
             return
         p = self.tab.project
         old = p.meta.get("vzor")
@@ -440,8 +466,33 @@ class TemplatePage(QWidget):
 
     def _load(self, rel: str):
         p = self.tab.project
+        path = p.root / rel
+        self.diff.setRowCount(0)
+        if path.suffix.lower() in IMAGE_EXT:
+            self.info = None
+            self._loaded_rel = rel
+            self.preview.set_pixmap(load_pixmap(path))
+            self.stack.setCurrentWidget(self.preview)
+            self.b_bg.setEnabled(True)
+            self.pdf_labels = None
+            if path.suffix.lower() == ".pdf":
+                try:
+                    from ..importer.pdf_vzor import pdf_labels
+                    self.pdf_labels = pdf_labels(path)
+                except Exception:
+                    self.pdf_labels = set()
+                if self.pdf_labels:
+                    self.status.setText(f"PDF vzor: {Path(rel).name} – {len(self.pdf_labels)} popisů k porovnání")
+                else:
+                    self.status.setText(f"PDF vzor: {Path(rel).name} – bez textu (sken), jen podklad")
+            else:
+                self.status.setText(f"Obrázek: {Path(rel).name} – podklad pro vizuální porovnání")
+            return
+        self.stack.setCurrentWidget(self.layers)
+        self.b_bg.setEnabled(False)
+        self.pdf_labels = None
         try:
-            d = load_drawing(p.root / rel, None, p.config.oda_cesta or None)
+            d = load_drawing(path, None, p.config.oda_cesta or None)
         except Exception as exc:
             QMessageBox.warning(self, "Vzor", f"Vzorový výkres nelze načíst:\n{exc}")
             return
@@ -464,10 +515,22 @@ class TemplatePage(QWidget):
         self.layers.resizeColumnsToContents()
 
     def make_rules(self):
-        if self.info is None:
-            QMessageBox.information(self, "Vzor", "Nejdřív načtěte vzorový výkres.")
-            return
-        proposals = tpl.propose_rules(self.info, self.tab.project.rules)
+        info = self.info
+        if info is None:
+            d = self.tab.get_drawing()
+            if d is None:
+                QMessageBox.information(self, "Vzor", "Nejdřív načtěte vzorový výkres (DXF), nebo otevřete "
+                                                      "kontrolovaný výkres.")
+                return
+            if QMessageBox.question(
+                    self, "Vzor",
+                    "Pravidla se dají vytvořit jen ze vzoru ve formátu DXF/DGN (PDF ani obrázek neobsahují "
+                    "hladiny).\n\nVytvořit návrh pravidel z vašeho kontrolovaného výkresu? Pravidla pak "
+                    "projděte a opravte podle PDF/náčrtu – další kontroly už budou hlídat, že se jich "
+                    "držíte v celém výkresu.") != QMessageBox.Yes:
+                return
+            info = tpl.analyze(d)
+        proposals = tpl.propose_rules(info, self.tab.project.rules)
         if not proposals:
             QMessageBox.information(self, "Vzor", "Všechny hladiny a buňky vzoru už mají pravidlo.")
             return
@@ -480,10 +543,30 @@ class TemplatePage(QWidget):
             QMessageBox.information(self, "Vzor", f"Přidáno {added} pravidel ze vzoru.")
 
     def compare(self):
-        if self.info is None:
-            QMessageBox.information(self, "Vzor", "Nejdřív načtěte vzorový výkres.")
-            return
         d = self.tab.get_drawing()
+        if self._loaded_rel and self.info is None:
+            if not self.pdf_labels:
+                QMessageBox.information(self, "Porovnání", "Obrázek (náčrt, sken) nelze porovnat automaticky. "
+                                        "Vložte ho pod výkres tlačítkem „Vložit pod výkres…“ a porovnejte "
+                                        "vizuálně.")
+                return
+            if d is None:
+                QMessageBox.information(self, "Vzor", "Není otevřený kontrolovaný výkres.")
+                return
+            from ..importer.pdf_vzor import compare_labels
+            missing, extra = compare_labels(self.pdf_labels, d)
+            self.diff.setRowCount(0)
+            for lab in missing:
+                self._diff_row(["Popis", lab, "ano", "–", "Popis ze vzoru ve výkresu chybí"])
+            for lab in extra:
+                self._diff_row(["Popis", lab, "–", "ano", "Popis navíc (ve vzoru není)"])
+            self.diff.resizeColumnsToContents()
+            self.status.setText(f"Popisy: chybí {len(missing)}, navíc {len(extra)} "
+                                f"(ze {len(self.pdf_labels)} ve vzoru)")
+            return
+        if self.info is None:
+            QMessageBox.information(self, "Vzor", "Nejdřív načtěte vzor.")
+            return
         if d is None:
             QMessageBox.information(self, "Vzor", "Není otevřený kontrolovaný výkres.")
             return
@@ -499,6 +582,12 @@ class TemplatePage(QWidget):
             QMessageBox.information(self, "Porovnání", "Hladiny, barvy, styly i buňky odpovídají vzoru.")
         else:
             self.status.setText(f"Porovnání: {len(diffs)} rozdílů")
+
+    def _diff_row(self, vals: list[str]):
+        r = self.diff.rowCount()
+        self.diff.insertRow(r)
+        for c, v in enumerate(vals):
+            self.diff.setItem(r, c, QTableWidgetItem(v))
 
 
 # =====================================================================================
@@ -676,6 +765,7 @@ class ZadaniTab(QWidget):
     backgroundChanged = Signal(dict)
     showSketchBeside = Signal()
     noteChangedSignal = Signal(str, str)
+    georefRequested = Signal(str)  # rel. cesta obrázku / PDF, který se má umístit pod výkres
 
     def __init__(self, get_drawing, parent=None):
         super().__init__(parent)

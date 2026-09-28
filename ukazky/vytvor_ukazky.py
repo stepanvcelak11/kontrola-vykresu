@@ -225,9 +225,63 @@ def vytvor_nacrt():
     img.save(HERE / "nacrt.png")
 
 
+def vytvor_pdf_vzor(dxf_path: Path, pdf_path: Path, meritko: float = 500.0):
+    """Vzor od učitele jako PDF (vektorová kresba s popisy), měřítko 1:500 na A4."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return
+    doc = ezdxf.readfile(dxf_path)
+    msp = doc.modelspace()
+    c = canvas.Canvas(str(pdf_path), pagesize=A4)
+    ox, oy = 25 * mm, 60 * mm
+    k = 1000 * mm / meritko  # 1 m ve výkresu = k bodů na papíře
+
+    def t(x, y):
+        return ox + (x - X0) * k, oy + (y - Y0 + 22) * k
+
+    colors = {1: (1, 0, 0), 3: (0, 0.6, 0), 5: (0, 0, 1), 6: (0.7, 0, 0.7), 8: (0.3, 0.3, 0.3), 9: (0.6, 0.6, 0.6)}
+    for e in msp:
+        layer = doc.layers.get(e.dxf.layer)
+        aci = e.dxf.get("color", 256)
+        aci = layer.color if aci == 256 and layer else aci
+        c.setStrokeColorRGB(*colors.get(aci, (0, 0, 0)))
+        c.setFillColorRGB(*colors.get(aci, (0, 0, 0)))
+        c.setLineWidth(0.6)
+        if e.dxftype() == "LINE":
+            c.line(*t(e.dxf.start.x, e.dxf.start.y), *t(e.dxf.end.x, e.dxf.end.y))
+        elif e.dxftype() == "LWPOLYLINE":
+            pts = [t(*p[:2]) for p in e.get_points("xy")]
+            if e.closed:
+                pts.append(pts[0])
+            for a, b in zip(pts[:-1], pts[1:]):
+                c.line(*a, *b)
+        elif e.dxftype() == "TEXT":
+            c.setFont("Helvetica", 7)
+            pl = e.get_placement()[1]
+            x, y = t(pl.x, pl.y)
+            c.drawString(x, y, e.dxf.text.replace("č", "c"))
+        elif e.dxftype() == "INSERT":
+            x, y = t(e.dxf.insert.x, e.dxf.insert.y)
+            c.circle(x, y, 1.2, stroke=1, fill=0)
+            for a in e.attribs:
+                if a.dxf.tag == "CISLO" and a.dxf.text:
+                    c.setFont("Helvetica", 5)
+                    c.drawString(x + 2, y + 1, a.dxf.text)
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(25 * mm, 280 * mm, "Vzor - cviceni z mapovani (ukazka)")
+    c.setFont("Helvetica", 9)
+    c.drawString(25 * mm, 273 * mm, f"Meritko 1:{int(meritko)}")
+    c.save()
+
+
 if __name__ == "__main__":
     vytvor_vykres(HERE / "ukazkovy_vykres.dxf", s_chybami=True)
     vytvor_vykres(HERE / "vzorovy_vykres.dxf", s_chybami=False)
+    vytvor_pdf_vzor(HERE / "vzorovy_vykres.dxf", HERE / "vzor_ucitele.pdf")
     vytvor_tabulku()
     vytvor_nacrt()
     print("Ukázková data vytvořena ve složce", HERE)
