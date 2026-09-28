@@ -29,6 +29,8 @@ _ICONS = {
     "dalsi": '<path d="M9 5l7 7-7 7"/>',
     "nacrt": '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/>'
              '<path d="M21 16l-5-5-9 9"/>',
+    "rozpracovany": '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/><path d="M14 20h6" stroke-dasharray="2 2"/>',
+    "vyrez": '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/>',
     "pdf": '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>'
            '<path d="M8 13h8M8 17h5"/>',
 }
@@ -126,6 +128,8 @@ QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
 
 QLabel#karta_cislo {{ font-size: 20px; font-weight: 700; }}
 QLabel#karta_popis {{ color: {MUTED}; font-size: 11px; }}
+QLabel#banner {{ background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 6px; padding: 5px 8px;
+    color: #78350F; }}
 QFrame#karta {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; }}
 QLabel#souhrn {{ color: #374151; }}
 """

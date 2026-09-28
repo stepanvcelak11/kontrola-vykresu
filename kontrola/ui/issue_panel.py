@@ -125,6 +125,7 @@ class IssueFilter(QSortFilterProxyModel):
         self.hidden_types: set[str] = set()
         self.severities: set[Severity] = set(Severity)
         self.layer: str | None = None
+        self.region: tuple[float, float, float, float] | None = None  # jen chyby v tomto výřezu
         self.hide_done = False
         self.text = ""
         self.setSortRole(Qt.UserRole)
@@ -140,6 +141,10 @@ class IssueFilter(QSortFilterProxyModel):
             return False
         if self.layer and iss.layer != self.layer:
             return False
+        if self.region is not None:
+            x0, y0, x1, y1 = self.region
+            if not (x0 <= iss.x <= x1 and y0 <= iss.y <= y1):
+                return False
         if self.hide_done and iss.state != "nová":
             return False
         if self.text:
@@ -147,6 +152,10 @@ class IssueFilter(QSortFilterProxyModel):
             if self.text not in hay.lower():
                 return False
         return True
+
+    def accepts_region(self, iss: Issue) -> bool:
+        x0, y0, x1, y1 = self.region
+        return x0 <= iss.x <= x1 and y0 <= iss.y <= y1
 
     def refresh(self):
         self.invalidateFilter()
@@ -199,6 +208,11 @@ class IssuePanel(QWidget):
             self.card_caps[key] = cap
             cards.addWidget(fr, 1)
         lay.addLayout(cards)
+        self.banner = QLabel()
+        self.banner.setObjectName("banner")
+        self.banner.setWordWrap(True)
+        self.banner.setVisible(False)
+        lay.addWidget(self.banner)
         self.summary = QLabel("Zatím neproběhla žádná kontrola. Otevřete výkres a stiskněte Zkontrolovat (F5).")
         self.summary.setObjectName("souhrn")
         self.summary.setWordWrap(True)
@@ -352,8 +366,19 @@ class IssuePanel(QWidget):
             return "Zatím žádné nálezy. Otevřete výkres a stiskněte Zkontrolovat (F5)."
         return "Kliknutím na řádek se výkres přiblíží na chybu. Kliknutím na kartu nahoře vyfiltrujete závažnost."
 
+    def set_banner(self, text: str):
+        self.banner.setText(text)
+        self.banner.setVisible(bool(text))
+
+    def set_region(self, region):
+        """Omezí seznam, kroužky i počty na výřez výkresu (None = celý výkres)."""
+        self.proxy.region = region
+        self._filters_changed()
+        self._update_cards()
+
     def _update_cards(self):
-        issues = self.model.issues
+        issues = [i for i in self.model.issues
+                  if self.proxy.region is None or self.proxy.accepts_region(i)]
         open_ = [i for i in issues if i.state == "nová"]
         c = Counter(i.severity for i in open_)
         self.cards[None].setText(str(len(open_)))

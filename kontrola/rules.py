@@ -463,6 +463,10 @@ class Rule:
     kurziva: bool | None = None
     topologie: bool = True  # False = prvky se nekontrolují topologicky (vstupy, sdružené značky)
 
+    def __post_init__(self):
+        if self.geometrie is not None and not isinstance(self.geometrie, GeomType):
+            self.geometrie = GeomType.parse(self.geometrie)
+
     @property
     def label(self) -> str:
         return f"{self.kod} {self.nazev}".strip()

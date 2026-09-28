@@ -23,7 +23,7 @@ from .image_viewer import IMAGE_EXT, ImageBrowser, load_pixmap
 from .rules_editor import RulesEditor
 from .table_import import ImportSummaryDialog, TableImportWizard
 
-TABLE_EXT = {".xlsx", ".xlsm", ".csv", ".txt", ".tsv", ".pdf"}
+TABLE_EXT = {".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".tsv", ".pdf"}
 DRAWING_EXT = {".dxf", ".dgn", ".dwg"}
 
 
@@ -71,12 +71,12 @@ class TablePage(QWidget):
         super().__init__()
         self.tab = tab
         lay = QVBoxLayout(self)
-        intro = QLabel("<b>Tabulka atributů od učitele</b> (.xlsx, .csv nebo PDF). Po importu se v průvodci "
+        intro = QLabel("<b>Tabulka atributů od učitele</b> (.xlsx, .xls, .csv nebo PDF). Po importu se v průvodci "
                        "přiřadí sloupce (kód, název, hladina, barva, styl čáry, typ geometrie, povinné atributy, "
                        "povolené hodnoty) a z tabulky se vygenerují pravidla kontrol.")
         intro.setWordWrap(True)
         lay.addWidget(intro)
-        drop = DropArea("Přetáhněte sem tabulku (.xlsx, .csv, .pdf)")
+        drop = DropArea("Přetáhněte sem tabulku (.xlsx, .xls, .csv, .pdf)")
         drop.filesDropped.connect(lambda fs: [self.import_file(f) for f in fs])
         lay.addWidget(drop)
         row = QHBoxLayout()
@@ -119,7 +119,7 @@ class TablePage(QWidget):
     def _pick(self):
         start = QSettings("KontrolaVykresu", "KontrolaVykresu").value("cesty/podklady", str(Path.home()))
         files, _ = QFileDialog.getOpenFileNames(self, "Tabulka atributů", start,
-                                                "Tabulky (*.xlsx *.xlsm *.csv *.txt *.pdf);;Vše (*)")
+                                                "Tabulky (*.xlsx *.xls *.xlsm *.csv *.txt *.pdf);;Vše (*)")
         for f in files:
             QSettings("KontrolaVykresu", "KontrolaVykresu").setValue("cesty/podklady", str(Path(f).parent))
             self.import_file(f)
@@ -740,8 +740,15 @@ class AttachmentsPage(QWidget):
             self.tab.table_page._pick()
         elif kind == "obrazky":
             self.tab.images_page._pick()
-        else:
+        elif kind == "vzor":
             self.tab.template_page._pick()
+        else:
+            files, _ = QFileDialog.getOpenFileNames(self, "Zadání a dokumenty", "",
+                                                    "Dokumenty (*.doc *.docx *.pdf *.odt *.txt *.xls *.xlsx);;Vše (*)")
+            for f in files:
+                self.tab.project.add_attachment(kind, f)
+            if files:
+                self.tab.project_changed()
         self.refresh()
 
     def _replace(self):
@@ -873,7 +880,7 @@ class ZadaniTab(QWidget):
             if suf in DRAWING_EXT:
                 self.tabs.setCurrentWidget(self.template_page)
                 self.template_page.set_template(f)
-            elif suf in (".xlsx", ".xlsm", ".csv", ".txt", ".tsv"):
+            elif suf in (".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".tsv"):
                 self.tabs.setCurrentWidget(self.table_page)
                 self.table_page.import_file(f)
             elif suf == ".pdf":
@@ -890,6 +897,18 @@ class ZadaniTab(QWidget):
                         imgs.append(f)
             elif suf in IMAGE_EXT:
                 imgs.append(f)
+            elif suf in (".yaml", ".yml"):
+                self.tabs.setCurrentWidget(self.rules_editor)
+                self.rules_editor.load_yaml(f)
+            elif suf in (".doc", ".docx", ".odt", ".rtf", ".txt", ".zip", ".zap"):
+                self.project.add_attachment("dokumenty", f)
+                self.project_changed()
+                self.tabs.setCurrentWidget(self.attachments_page)
+            else:
+                QMessageBox.information(self, "Zadání", f"{Path(f).name}: tento typ souboru aplikace neumí použít.\n\n"
+                                        "Výkres: DXF (nebo DGN s převodem). Tabulka atributů: xlsx, xls, csv, PDF. "
+                                        "Pravidla: YAML. Náčrty a vzory: JPG, PNG, PDF. Zadání: DOC, DOCX, PDF (Podklady → "
+                                        "Přidat… → Zadání a dokumenty).")
         if imgs:
             self.tabs.setCurrentWidget(self.images_page)
             self.images_page.add_files(imgs)

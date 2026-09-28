@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self.drawing: Drawing | None = None
         self.task: BackgroundTask | None = None
         self.issues: list[Issue] = []
+        self._syncing_wip = False
         self.resize(1400, 880)
         self.setAcceptDrops(True)
 
@@ -159,6 +160,13 @@ class MainWindow(QMainWindow):
         self.a_exp_pdf = self._act("Protokol do PDF…", lambda: self.export("pdf"))
         self.a_exp_dxf = self._act("DXF s hladinou KONTROLA_CHYBY…", lambda: self.export("dxf"))
         self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
+        self.a_wip = self._act("Rozpracovaný výkres", self._toggle_wip, None,
+                               "Výkres ještě není hotový: nehlásit volné konce, neuzavřené plochy, mezery mezi "
+                               "plochami a chybějící popisy. Nakreslené prvky se kontrolují dál. Před odevzdáním "
+                               "vypněte.", checkable=True)
+        self.a_region = self._act("Jen tento výřez", self._toggle_region, None,
+                                  "Počítat jen chyby v právě zobrazené části výkresu (přibližte si hotovou část). "
+                                  "Opětovným kliknutím se vrátíte k celému výkresu.", checkable=True)
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
                                   "Zobrazit náčrt a fotky v panelu vedle výkresu (panel lze odpojit)")
 
@@ -189,6 +197,9 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_recheck)
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
+        m_check.addAction(self.a_wip)
+        m_check.addAction(self.a_region)
+        m_check.addSeparator()
         m_check.addAction(self.a_settings)
         m_help = self.menuBar().addMenu("&Nápověda")
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
@@ -198,7 +209,8 @@ class MainWindow(QMainWindow):
         for a, name in ((self.a_open, "otevrit"), (self.a_check, "zkontrolovat"), (self.a_recheck, "znovu"),
                         (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
                         (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
-                        (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf")):
+                        (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf"), (self.a_wip, "rozpracovany"),
+                        (self.a_region, "vyrez")):
             a.setIcon(icon(name))
         self.a_prev.setText("Předchozí")
         self.a_next.setText("Další")
@@ -219,6 +231,9 @@ class MainWindow(QMainWindow):
         tb.addAction(self.a_recheck)
         tb.addAction(self.a_repair)
         tb.addAction(self.a_settings)
+        tb.addSeparator()
+        tb.addAction(self.a_wip)
+        tb.addAction(self.a_region)
         tb.addSeparator()
         tb.addAction(self.a_fit)
         tb.addAction(self.a_labels)
@@ -329,8 +344,45 @@ class MainWindow(QMainWindow):
         out = self.project.export_zip(path)
         self.statusBar().showMessage(f"Projekt uložen do {out}", 10000)
 
+    def _toggle_wip(self, on: bool):
+        if self.project is None or self._syncing_wip:
+            return
+        self.project.config.rozpracovany = bool(on)
+        self.project.save()
+        self._update_banner()
+        self.statusBar().showMessage(
+            "Rozpracovaný výkres: nehlásí se volné konce, neuzavřené plochy, mezery a chybějící popisy."
+            if on else "Kontroluje se celý výkres jako před odevzdáním.", 8000)
+        if self.drawing is not None and self.issues:
+            self.run_checks()
+
+    def _update_banner(self):
+        parts = []
+        if self.project is not None and self.project.config.rozpracovany:
+            parts.append("<b>Rozpracovaný výkres</b> – nehlásí se volné konce, neuzavřené plochy, mezery "
+                         "a chybějící popisy.")
+        if self.a_region.isChecked():
+            parts.append("<b>Jen výřez</b> – počítají se jen chyby v zobrazené části výkresu.")
+        self.issue_panel.set_banner(" ".join(parts))
+
+    def _toggle_region(self, on: bool):
+        if on and self.drawing is None:
+            self.a_region.setChecked(False)
+            return
+        region = self.view.visible_world_rect() if on else None
+        self.issue_panel.set_region(region)
+        self._update_banner()
+        self.statusBar().showMessage("Počítají se jen chyby v zobrazeném výřezu." if on
+                                     else "Počítají se chyby v celém výkresu.", 6000)
+
     def set_project(self, project: Project):
         self.project = project
+        self._syncing_wip = True
+        self.a_wip.setChecked(bool(project.config.rozpracovany))
+        self._syncing_wip = False
+        if self.a_region.isChecked():
+            self.a_region.setChecked(False)
+        self._update_banner()
         self.settings.setValue("projekt/posledni", str(project.root))
         self._update_title()
         self.set_issues([])
@@ -437,6 +489,8 @@ class MainWindow(QMainWindow):
         if keep_view:
             self.view.setTransform(tr)
             self.view.centerOn(center)
+        elif self.a_region.isChecked():
+            self.a_region.setChecked(False)  # jiný výkres – výřez už neplatí
         self.layers.set_drawing(drawing)
         self.set_issues([])
         n = len(drawing.features)
@@ -545,6 +599,7 @@ class MainWindow(QMainWindow):
             self.project.config = dlg.result_config()
             dlg.apply_rules_settings(self.project.rules)
             self.project.save()
+            self._update_banner()
 
     def _rules_changed(self):
         self.statusBar().showMessage(f"Pravidla: {len(self.project.rules.pravidla)}. Pro jejich použití "

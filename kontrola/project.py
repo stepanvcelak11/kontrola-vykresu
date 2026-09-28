@@ -10,6 +10,7 @@ Struktura složky projektu::
     podklady/tabulky/     tabulky atributů od učitele (xlsx, csv, pdf)
     podklady/obrazky/     náčrty a fotky (jpg, png, pdf)
     podklady/vzor/        vzorový výkres
+    podklady/dokumenty/   zadání od učitele a další dokumenty (doc, docx, pdf…)
 
 Celý projekt jde uložit do jednoho souboru ``*.kontrola`` (ZIP). Vše zůstává
 na počítači uživatele, nic se nikam neodesílá.
@@ -37,6 +38,7 @@ KINDS = {
     "tabulky": "Tabulky atributů",
     "obrazky": "Náčrty a fotky",
     "vzor": "Vzorový výkres",
+    "dokumenty": "Zadání a dokumenty",
 }
 PROJECT_EXT = ".kontrola"
 

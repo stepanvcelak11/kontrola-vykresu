@@ -28,8 +28,13 @@ def run_checks(drawing: Drawing, rules: RuleSet | None, config: Config,
                only: list[str] | None = None) -> CheckResult:
     config.ensure_defaults()
     rules = rules or RuleSet()
+    from .config import WIP_SKIP_CHECKS, WIP_SKIP_MESSAGES
     enabled = [cid for cid in REGISTRY if config.settings(cid).zapnuto and (only is None or cid in only)]
     result = CheckResult()
+    if config.rozpracovany:
+        enabled = [cid for cid in enabled if cid not in WIP_SKIP_CHECKS]
+        result.notes.append("Rozpracovaný výkres: nehlásí se volné konce, neuzavřené plochy, mezery mezi "
+                            "plochami a chybějící popisy. Před odevzdáním režim vypněte.")
     shared_cache: dict = {}
     n = max(1, len(enabled))
     for i, cid in enumerate(enabled):
@@ -50,7 +55,10 @@ def run_checks(drawing: Drawing, rules: RuleSet | None, config: Config,
         t0 = time.perf_counter()
         count = 0
         try:
+            skip_msgs = WIP_SKIP_MESSAGES.get(cid, ()) if config.rozpracovany else ()
             for iss in check.run(ctx):
+                if skip_msgs and any(m in iss.message for m in skip_msgs):
+                    continue
                 if count >= config.max_chyb_na_kontrolu:
                     result.notes.append(f"{check.nazev}: zobrazeno jen prvních "
                                         f"{config.max_chyb_na_kontrolu} chyb.")

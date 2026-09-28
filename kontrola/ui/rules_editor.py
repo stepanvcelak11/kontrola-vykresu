@@ -154,7 +154,7 @@ class RulesEditor(QWidget):
                                  uvnitr=old.text.uvnitr if old and old.text else True)
         return Rule(
             kod=kod, nazev=self._text(row, C_NAZEV),
-            geometrie=self.table.cellWidget(row, C_GEOM).currentData(),
+            geometrie=GeomType.parse(self.table.cellWidget(row, C_GEOM).currentData()),  # QComboBox vrací text
             hladina=self._text(row, C_HL) or None, barva=parse_color(self._text(row, C_BARVA)),
             styl_cary=norm_style(self._text(row, C_STYL)), tloustka=tl_v,
             blok=self._text(row, C_BLOK) or None, povinne_atributy=attrs,
@@ -218,8 +218,9 @@ class RulesEditor(QWidget):
         self.set_rules(self.rules)
         self.rulesChanged.emit()
 
-    def load_yaml(self):
-        p, _ = QFileDialog.getOpenFileName(self, "Načíst pravidla", "", "YAML (*.yaml *.yml)")
+    def load_yaml(self, p: str | None = None):
+        if not p:
+            p, _ = QFileDialog.getOpenFileName(self, "Načíst pravidla", "", "YAML (*.yaml *.yml)")
         if not p:
             return
         try:

@@ -91,3 +91,49 @@ def test_opraveno_a_ignorovat(window):
     # stav se uloží do projektu a přežije novou kontrolu
     states = w.project.issue_states()
     assert first.key in states and states[first.key]["stav"] == "opraveno"
+
+
+def test_nastaveni_kontrol_se_ulozi(window, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+    from kontrola.checks.base import Severity
+    monkeypatch.setattr(QDialog, "exec", lambda self: (self.accept(), 1)[1])
+    w = window
+    w.a_settings.trigger()
+    cs = w.project.config.settings("visici_konce")
+    assert isinstance(cs.zavaznost, Severity)
+    w.project.save()  # dřív tady padalo: zavaznost byla text z QComboBoxu
+    assert (w.project.root / "nastaveni.yaml").exists()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_rozpracovany_a_vyrez(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0)
+    n_full = len(w.issues)
+    w.a_wip.trigger()
+    assert w.project.config.rozpracovany and w.issue_panel.banner.isVisible() is not None
+    assert w._wait(lambda: _idle(w))
+    assert len(w.issues) <= n_full
+    w.view.scale(8, 8)  # přiblížit – výřez je menší než výkres
+    w.a_region.trigger()
+    shown = w.issue_panel.proxy.rowCount()
+    assert shown <= len(w.issues)
+    w.a_region.trigger()
+    assert w.issue_panel.proxy.rowCount() == len(w.issues)
+
+
+def test_editor_pravidel_upravy_se_ulozi(window):
+    w = window
+    ed = w.zadani.rules_editor
+    ed.add_rule()
+    geom = ed.table.cellWidget(ed.table.rowCount() - 1, 2)
+    geom.setCurrentIndex(2)  # linie – QComboBox vrací text, pravidlo musí dostat GeomType
+    ed.table.item(ed.table.rowCount() - 1, 4).setText("3")
+    from kontrola.model import GeomType
+    r = w.project.rules.pravidla[-1]
+    assert r.geometrie == GeomType.LINIE and r.barva == 3
+    w.project.save()
+    from kontrola.rules import RuleSet
+    assert RuleSet.load(w.project.root / "pravidla.yaml").pravidla[-1].geometrie == GeomType.LINIE

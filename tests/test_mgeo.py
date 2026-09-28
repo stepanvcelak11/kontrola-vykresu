@@ -116,3 +116,24 @@ def test_uzivatelsky_styl_neulozeny_do_dxf_je_varovani(make_dxf):
         "layer": "9", "linetype": "Continuous", "ltscale": 0.5}))
     (iss,) = check(d, "symbologie", rs)
     assert iss.severity == Severity.VAROVANI and "neuložil" in iss.message and "odpovídá" in iss.message
+
+
+def test_rozpracovany_vykres(make_dxf):
+    from kontrola.config import Config
+    from kontrola.runner import run_checks
+
+    def build(msp, doc):
+        msp.add_lwpolyline([(-10, -10), (40, -10), (40, 30), (-10, 30)], close=True)  # rám mapy
+        msp.add_line((0, 0), (10, 0))
+        msp.add_line((10, 0), (10, 7))  # kresba ještě nepokračuje – volné konce uvnitř mapy
+        msp.add_line((20, 0), (20, 0.08))  # krátká čára – chyba i v rozpracovaném výkresu
+    d = make_dxf(build)
+    full = run_checks(d, RuleSet(), Config())
+    wip_cfg = Config()
+    wip_cfg.rozpracovany = True
+    wip = run_checks(d, RuleSet(), wip_cfg)
+    ids = lambda r: {i.check_id for i in r.issues}  # noqa: E731
+    assert "visici_konce" in ids(full) and "visici_konce" not in ids(wip)
+    assert "kratke_linie" in ids(wip)
+    assert any("Rozpracovaný" in n for n in wip.notes)
+    assert Config.from_dict(wip_cfg.to_dict()).rozpracovany is True

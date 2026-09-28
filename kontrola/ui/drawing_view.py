@@ -315,6 +315,13 @@ class DrawingView(QGraphicsView):
     def to_scene(self, x: float, y: float) -> QPointF:
         return QPointF(x - self.origin[0], -(y - self.origin[1]))
 
+    def visible_world_rect(self) -> tuple[float, float, float, float]:
+        """Právě zobrazená část výkresu (xmin, ymin, xmax, ymax) v souřadnicích výkresu."""
+        r = self.mapToScene(self.viewport().rect()).boundingRect()
+        x0, y1 = self.from_scene(r.topLeft())
+        x1, y0 = self.from_scene(r.bottomRight())
+        return min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
+
     def from_scene(self, p: QPointF) -> tuple[float, float]:
         return p.x() + self.origin[0], -p.y() + self.origin[1]
 

@@ -262,7 +262,7 @@ class SettingsDialog(QDialog):
         for cid, eds in self._editors.items():
             cs = cfg.settings(cid)
             cs.zapnuto = eds["_box"].isChecked()
-            cs.zavaznost = eds["_sev"].currentData()
+            cs.zavaznost = Severity.parse(eds["_sev"].currentData())  # QComboBox vrací text, ne Severity
             for name, val in eds.items():
                 if name.startswith("_"):
                     continue

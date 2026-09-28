@@ -12,6 +12,9 @@ from .checks.base import REGISTRY, Severity
 
 
 CONFIG_VERSION = 2
+# Rozpracovaný výkres: kontroly a hlášení, která vznikají jen tím, že kresba ještě není hotová
+WIP_SKIP_CHECKS = ("visici_konce", "nezavrene_polygony", "mezery_polygonu")
+WIP_SKIP_MESSAGES = {"texty": (": chybí popis",)}
 DEFAULT_TOLERANCE = 0.010
 # výchozí hodnoty verze 1, které se v uložených projektech nahradí hodnotami podle MGEO
 _MIGRATE = {
@@ -28,6 +31,15 @@ class CheckSettings:
     zavaznost: Severity = Severity.CHYBA
     parametry: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        if not isinstance(self.zavaznost, Severity):
+            self.zavaznost = Severity.parse(self.zavaznost)
+
+    def __setattr__(self, name, value):
+        if name == "zavaznost" and not isinstance(value, Severity):
+            value = Severity.parse(value)
+        super().__setattr__(name, value)
+
 
 @dataclass
 class Config:
@@ -37,6 +49,7 @@ class Config:
     max_chyb_na_kontrolu: int = 5000
     ignorovane_hladiny: list[str] = field(default_factory=lambda: ["KONTROLA_CHYBY", "DEFPOINTS"])
     oda_cesta: str = ""
+    rozpracovany: bool = False  # rozpracovaný výkres: nehlásit, co vzniká jen nedokončenou kresbou
     kontroly: dict[str, CheckSettings] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -68,6 +81,7 @@ class Config:
                 "max_chyb_na_kontrolu": self.max_chyb_na_kontrolu,
                 "ignorovane_hladiny": list(self.ignorovane_hladiny),
                 "oda_cesta": self.oda_cesta,
+                "rozpracovany": self.rozpracovany,
             },
             "kontroly": {
                 cid: {"zapnuto": cs.zapnuto, "zavaznost": cs.zavaznost.value, **cs.parametry}
@@ -86,6 +100,7 @@ class Config:
             max_chyb_na_kontrolu=int(n.get("max_chyb_na_kontrolu", 5000)),
             ignorovane_hladiny=list(n.get("ignorovane_hladiny", ["KONTROLA_CHYBY", "DEFPOINTS"]) or []),
             oda_cesta=str(n.get("oda_cesta", "") or ""),
+            rozpracovany=bool(n.get("rozpracovany", False)),
             kontroly={},
         )
         old = int(d.get("verze_nastaveni", 1) or 1) < CONFIG_VERSION and ("nastaveni" in d or "kontroly" in d)
