@@ -5,13 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtCore import QPointF, QRectF
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget,
-                               QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
+                               QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
 from ..checks.seznam import read_point_list
-from ..vypocet import compare, compute, read_zap, text_report
+from ..vypocet import compare, compute, diagnose, read_zap, text_report
 from .theme import fit_headers
 
 
@@ -103,10 +104,23 @@ class VypocetDialog(QDialog):
         for c, w in enumerate((150, 110, 80, 80, 80, 220)):
             self.table.setColumnWidth(c, w)
         fit_headers(self.table)
-        lay.addWidget(self.table, 3)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.table, "Porovnání bodů")
+        self.diag = QTextBrowser()
+        self.tabs.addTab(self.diag, "Diagnóza – proč se liší")
+        self.kt = QTableWidget(0, 5)
+        self.kt.setHorizontalHeaderLabels(["Kontrola", "Stanovisko", "Bod", "Hodnota", "Vysvětlení"])
+        self.kt.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.kt.verticalHeader().setVisible(False)
+        self.kt.horizontalHeader().setStretchLastSection(True)
+        for c, w in enumerate((150, 110, 150, 150)):
+            self.kt.setColumnWidth(c, w)
+        self.tabs.addTab(self.kt, "Kontrola měření")
+        self.plot = DeviationPlot()
+        self.tabs.addTab(self.plot, "Mapa odchylek")
         self.log = QTextBrowser()
-        self.log.setMaximumHeight(150)
-        lay.addWidget(self.log, 1)
+        self.tabs.addTab(self.log, "Postup výpočtu")
+        lay.addWidget(self.tabs, 4)
         close = QPushButton("Zavřít")
         close.clicked.connect(self.accept)
         crow = QHBoxLayout()
@@ -163,7 +177,10 @@ class VypocetDialog(QDialog):
         res = compute(stations, known, k)
         bad, rows = compare(res, student, self.tol_xy.value(), self.tol_z.value(), known=known)
         self.result = res
-        self.report = text_report(res, rows, bad)
+        diag = diagnose(res, rows, self.tol_xy.value(), self.tol_z.value())
+        self.report = text_report(res, rows, bad, diag)
+        self._fill_checks(res, diag)
+        self.plot.set_data(res, rows, self.tol_xy.value())
         if self.project is not None:
             self.project.meta["vypocet"] = {"zapisnik": zap, "dane": "; ".join(dane), "seznam": seznam,
                                             "koeficient": k, "tol_xy": self.tol_xy.value(),
@@ -176,12 +193,40 @@ class VypocetDialog(QDialog):
             self.summary.setText("<span style='color:#B91C1C'><b>Nic se nespočítalo</b> – viz zprávy dole.</span>")
         elif bad:
             self.summary.setText(f"<span style='color:#B91C1C'><b>{len(bad)} rozdílů</b></span> z {n} porovnaných "
-                                 "bodů. Zkontrolujte výpočet v Gromě (dané body, výšky, koeficient).")
+                                 "bodů. Záložka <b>Diagnóza</b> ukáže pravděpodobnou příčinu.")
+            if diag:
+                self.tabs.setCurrentWidget(self.diag)
         else:
             self.summary.setText(f"<span style='color:#15803D'><b>✓ Výpočet souhlasí</b></span> – {n} bodů, "
                                  "všechny rozdíly v povolené toleranci.")
         self.b_save.setEnabled(True)
         self.b_coords.setEnabled(bool(res.body))
+
+    def _fill_checks(self, res, diag):
+        red, green = QColor(185, 28, 28), QColor(21, 128, 61)
+        self.kt.setRowCount(0)
+        for k in res.kontroly:
+            i = self.kt.rowCount()
+            self.kt.insertRow(i)
+            for c, v in enumerate([("✓ " if k.ok else "✗ ") + k.druh, k.stanovisko, k.bod, k.hodnota,
+                                   k.vysvetleni]):
+                it = QTableWidgetItem(v)
+                if c == 0:
+                    it.setForeground(QBrush(green if k.ok else red))
+                self.kt.setItem(i, c, it)
+        nbad = sum(1 for k in res.kontroly if not k.ok)
+        self.tabs.setTabText(2, f"Kontrola měření ({nbad} ✗)" if nbad else "Kontrola měření ✓")
+        if diag:
+            html = "<h3>Pravděpodobné příčiny rozdílů</h3><ul>" + "".join(f"<li style='margin-bottom:6px'>{d}</li>"
+                                                                           for d in diag) + "</ul>"
+        else:
+            html = ("<p style='color:#15803D'><b>Žádná společná příčina rozdílů.</b></p>" if not res.body else
+                    "<p>Rozdíly nemají typický vzor (nebo žádné nejsou).</p>")
+        html += ("<hr><p style='color:#6B7280'>Diagnóza porovnává vaše body s výpočtem po stanoviscích: pootočení "
+                 "kolem stanoviska = jiný orientační posun, rozdíl úměrný délce = měřítkový koeficient, stejný "
+                 "posun všech bodů = souřadnice stanoviska, stejný rozdíl výšek = výška stanoviska / přístroje, "
+                 "souřadnice jiného bodu = prohozená čísla.</p>")
+        self.diag.setHtml(html)
 
     def _fill(self, rows):
         self.table.setRowCount(0)
@@ -226,3 +271,65 @@ class VypocetDialog(QDialog):
         lines = [f"{b.bod:<18}{b.y:>13.3f}{b.x:>14.3f}{'' if b.z is None else f'{b.z:>10.3f}'}"
                  for b in self.result.body if not b.kontrolni]
         Path(p).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class DeviationPlot(QWidget):
+    """Mapa odchylek: body a stanoviska v poloze, šipky = rozdíl vašeho bodu od výpočtu (zvětšeno)."""
+
+    def __init__(self):
+        super().__init__()
+        self.setMinimumHeight(260)
+        self.res, self.rows, self.tol = None, [], 0.01
+
+    def set_data(self, res, rows, tol):
+        self.res, self.rows, self.tol = res, [r for r in rows if r.vypocet is not None], tol
+        self.update()
+
+    def paintEvent(self, e):  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor("#FFFFFF"))
+        if not self.res or not self.rows:
+            p.setPen(QColor("#6B7280"))
+            p.drawText(self.rect(), Qt.AlignCenter, "Nejdřív spusťte výpočet.")
+            return
+        pts = [(r.vypocet.y, r.vypocet.x) for r in self.rows] + \
+              [(s.y, s.x) for s in self.res.stanoviska.values()]
+        ys, xs = [a for a, _ in pts], [b for _, b in pts]
+        y0, y1, x0, x1 = min(ys), max(ys), min(xs), max(xs)
+        span = max(y1 - y0, x1 - x0, 1.0)
+        m = 40
+        sc = min((self.width() - 2 * m) / span, (self.height() - 2 * m) / span)
+
+        def to(y, x):  # S-JTSK: Y roste na západ (vlevo), X na jih (dolů)
+            return QPointF(self.width() - m - (y - y0) * sc - (self.width() - 2 * m - (y1 - y0) * sc) / 2,
+                           m + (x - x0) * sc + (self.height() - 2 * m - (x1 - x0) * sc) / 2)
+        dmax = max((r.dxy or 0) for r in self.rows) or self.tol
+        k = (0.08 * span) / max(dmax, self.tol)  # největší odchylka = 8 % obrázku
+        f = QFont(self.font())
+        f.setPointSizeF(7.5)
+        p.setFont(f)
+        for r in self.rows:
+            c = to(r.vypocet.y, r.vypocet.x)
+            ok = r.poznamka == "v pořádku"
+            col = QColor("#16A34A") if ok else QColor("#DC2626")
+            p.setPen(Qt.NoPen)
+            p.setBrush(col)
+            p.drawEllipse(c, 3, 3)
+            if r.dy is not None and (r.dxy or 0) > 1e-4:
+                t = to(r.vypocet.y + r.dy * k, r.vypocet.x + r.dx * k)
+                p.setPen(QPen(col, 1.4))
+                p.drawLine(c, t)
+            if not ok:
+                p.setPen(QColor("#374151"))
+                p.drawText(c + QPointF(5, -4), r.bod[-6:])
+        for s in self.res.stanoviska.values():
+            c = to(s.y, s.x)
+            p.setPen(QPen(QColor("#1D4ED8"), 2))
+            p.setBrush(QColor("#DBEAFE"))
+            p.drawPolygon(QPolygonF([c + QPointF(0, -8), c + QPointF(7, 5), c + QPointF(-7, 5)]))
+            p.drawText(c + QPointF(9, 4), s.bod)
+        p.setPen(QColor("#6B7280"))
+        p.drawText(QRectF(8, self.height() - 22, self.width() - 16, 18), Qt.AlignLeft,
+                   f"▲ stanovisko   ● bod (zelený = v toleranci, červený = rozdíl)   šipky = rozdíl vašeho bodu "
+                   f"zvětšený {k:.0f}×")

@@ -38,6 +38,9 @@ class Obs:
     hz: float  # gony
     z: float  # gony
     n: int = 1  # počet měření (poloh)
+    d_hz: float | None = None  # rozdíl Hz mezi polohami (I − II ± 200) [g] – kolimační chyba ×2
+    index_z: float | None = None  # indexová chyba zenitového úhlu (z_I + z_II − 400) / 2 [g]
+    d_sd: float | None = None  # rozdíl šikmých délek mezi polohami [m]
 
 
 @dataclass
@@ -59,11 +62,24 @@ class Point:
 
 
 @dataclass
+class Kontrola:
+    """Jedna kontrola kvality měření (dvě polohy, orientace, kontrolní délka, druhé určení bodu)."""
+    druh: str
+    stanovisko: str
+    bod: str
+    hodnota: str
+    ok: bool
+    vysvetleni: str = ""
+
+
+@dataclass
 class Result:
     body: list[Point]
     stanoviska: dict[str, Point]
     koeficient: float
     zpravy: list[str]
+    kontroly: list[Kontrola] = field(default_factory=list)
+    posuny: dict[str, float] = field(default_factory=dict)  # orientační posun na stanovisku [g]
 
 
 def _merge_faces(obs: list[Obs]) -> list[Obs]:
@@ -76,6 +92,10 @@ def _merge_faces(obs: list[Obs]) -> list[Obs]:
             if z2 > 200:  # II. poloha
                 hz2, z2 = (o.hz - 200.0) % 400.0, 400.0 - o.z
             d = (hz2 - prev.hz + 200.0) % 400.0 - 200.0
+            if prev.n == 1:
+                prev.d_hz = d
+                prev.index_z = (o.z + prev._z_raw - 400.0) / 2.0 if o.z > 200 >= prev._z_raw else None
+                prev.d_sd = o.sd - prev.sd
             n = prev.n
             prev.hz = (prev.hz + d / (n + 1)) % 400.0
             prev.z = (prev.z * n + z2) / (n + 1)
@@ -85,7 +105,9 @@ def _merge_faces(obs: list[Obs]) -> list[Obs]:
             hz, z = o.hz, o.z
             if z > 200:
                 hz, z = (o.hz - 200.0) % 400.0, 400.0 - o.z
-            out.append(Obs(o.bod, o.sd, o.vc, hz, z))
+            nw = Obs(o.bod, o.sd, o.vc, hz, z)
+            nw._z_raw = o.z
+            out.append(nw)
     return out
 
 
@@ -218,6 +240,8 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
 
     body: list[Point] = []
     seen: set[str] = set()
+    kontroly: list[Kontrola] = []
+    posuny: dict[str, float] = {}
     for st in stations:
         sp = st_pts.get(st.bod)
         if sp is None:
@@ -238,6 +262,14 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             posun = (smer - o.hz) % 400.0
             w = math.hypot(dy, dx)
             rows.append((o.bod, posun, w))
+            if o.sd > 0.5:  # délka na orientaci ověří, že jde opravdu o daný bod
+                dm = _dh(o, st.vp, m)[0]
+                dd = dm - w
+                lim = max(0.03, 0.0002 * w)
+                kontroly.append(Kontrola("Délka na orientaci", st.bod, o.bod, f"{dd * 1000:+.0f} mm", abs(dd) <= lim,
+                                         f"měřená vodorovná délka {dm:.3f} m, ze souřadnic {w:.3f} m"
+                                         + ("" if abs(dd) <= lim else " – zkontrolujte číslo a souřadnice "
+                                            "orientačního bodu (jiný bod? překlep v souřadnicích?)")))
         if not rows:
             msgs.append(f"Stanovisko {st.bod}: žádná orientace s danými souřadnicemi – nelze počítat.")
             continue
@@ -246,6 +278,27 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             num += w * ((p_ - ref + 200.0) % 400.0 - 200.0)
             den += w
         posun = (ref + num / den) % 400.0
+        posuny[st.bod] = posun
+        for b, p_, w in rows:
+            v = ((p_ - posun + 200) % 400) - 200
+            lin = abs(v) * GON * w
+            kontroly.append(Kontrola("Oprava orientace", st.bod, b, f"{v * 10000:+.0f} cc ({lin * 1000:.0f} mm)",
+                                     lin <= 0.03, "oprava směru na orientaci vůči průměrnému posunu; "
+                                     "velká oprava = chybná orientace nebo souřadnice orientačního bodu"))
+        for o in st.orient + st.detail:
+            if o.d_hz is not None and abs(o.d_hz) > 0.01:
+                kontroly.append(Kontrola("Dvě polohy – Hz", st.bod, o.bod, f"{o.d_hz * 10000:+.0f} cc", False,
+                                         "rozdíl směru v I. a II. poloze je velký (> 100 cc) – špatně zacílený "
+                                         "bod nebo chyba v zápisníku"))
+            if o.d_sd is not None and abs(o.d_sd) > 0.01:
+                kontroly.append(Kontrola("Dvě polohy – délka", st.bod, o.bod, f"{o.d_sd * 1000:+.0f} mm", False,
+                                         "délky v I. a II. poloze se liší o víc než 1 cm"))
+        idx = [o.index_z for o in st.orient + st.detail if o.index_z is not None]
+        if idx:
+            mi = sum(idx) / len(idx)
+            kontroly.append(Kontrola("Indexová chyba z", st.bod, "", f"{mi * 10000:+.0f} cc", abs(mi) < 0.01,
+                                     f"průměr z {len(idx)} měření ve dvou polohách; zprůměrováním poloh se "
+                                     "vyloučí"))
         msgs.append(f"Stanovisko {st.bod}: orientační posun {posun:.4f} g ("
                     + ", ".join(f"{b} v={(((p_ - posun + 200) % 400) - 200):+.4f} g" for b, p_, _ in rows) + ")")
         for o in st.detail:
@@ -258,7 +311,21 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             ctrl = any(key & frozenset(short_numbers(s)) for s in seen)
             body.append(Point(o.bod, y, x, z, st.bod, ctrl))
             seen.add(o.bod)
-    return Result(body, st_pts, m, msgs)
+    # druhé (kontrolní) určení bodu z jiného stanoviska
+    first: dict[frozenset, Point] = {}
+    for b in body:
+        key = frozenset(short_numbers(b.bod))
+        prev = next((p for k, p in first.items() if k & key), None)
+        if prev is None or not b.kontrolni:
+            first.setdefault(key, b)
+            continue
+        dxy = math.hypot(b.y - prev.y, b.x - prev.x)
+        dz = (b.z - prev.z) if (b.z is not None and prev.z is not None) else None
+        kontroly.append(Kontrola("Kontrolní určení", f"{prev.stanovisko} / {b.stanovisko}", b.bod,
+                                 f"{dxy * 1000:.0f} mm" + (f", výška {dz * 1000:+.0f} mm" if dz is not None else ""),
+                                 dxy <= 0.05 and (dz is None or abs(dz) <= 0.05),
+                                 "rozdíl dvou nezávislých určení téhož bodu z různých stanovisek"))
+    return Result(body, st_pts, m, msgs, kontroly, posuny)
 
 
 @dataclass
@@ -311,9 +378,17 @@ def compare(res: Result, student: list[ListPoint], tol_xy: float = 0.01, tol_z: 
     return bad, rows
 
 
-def text_report(res: Result, rows: list[Rozdil], bad: list[Rozdil]) -> str:
+def text_report(res: Result, rows: list[Rozdil], bad: list[Rozdil], diag: list[str] | None = None) -> str:
     out = ["KONTROLA VÝPOČTU SOUŘADNIC (polární metoda)", "=" * 44, ""]
     out += res.zpravy + [""]
+    if res.kontroly:
+        out.append("Kontrola měření:")
+        for k in res.kontroly:
+            out.append(f"  {'OK ' if k.ok else '!! '} {k.druh:<20} {k.stanovisko:<12} {k.bod:<18} {k.hodnota}")
+        out.append("")
+    if diag:
+        out.append("Pravděpodobné příčiny rozdílů:")
+        out += [f"  • {d}" for d in diag] + [""]
     out.append(f"Vypočteno bodů: {sum(1 for b in res.body if not b.kontrolni)}, porovnáno: "
                f"{sum(1 for r in rows if r.student is not None and r.vypocet is not None)}, rozdílů: {len(bad)}")
     out.append("")
@@ -322,3 +397,87 @@ def text_report(res: Result, rows: list[Rozdil], bad: list[Rozdil]) -> str:
         f = lambda v: f"{v:+.3f}" if v is not None else "–"  # noqa: E731
         out.append(f"{r.bod:<18}{r.stanovisko:<8}{f(r.dy):>9}{f(r.dx):>9}{f(r.dz):>9}  {r.poznamka}")
     return "\n".join(out)
+
+
+def _mean_std(v: list[float]) -> tuple[float, float]:
+    if not v:
+        return 0.0, 0.0
+    m = sum(v) / len(v)
+    return m, (sum((x - m) ** 2 for x in v) / len(v)) ** 0.5
+
+
+def diagnose(res: Result, rows: list[Rozdil], tol_xy: float = 0.01, tol_z: float = 0.01) -> list[str]:
+    """Proč se seznam studenta liší: hledá typické chyby výpočtu podle vzoru rozdílů na stanovisku.
+
+    * body jsou pootočené kolem stanoviska → jiný orientační posun,
+    * rozdíl roste s délkou → jiný (nebo žádný) měřítkový koeficient,
+    * všechny body posunuté stejně → jiné souřadnice stanoviska,
+    * všechny výšky posunuté stejně → jiná výška stanoviska / výška přístroje,
+    * dva body „prohozené“ → přehozená čísla bodů.
+    """
+    out: list[str] = []
+    by_st: dict[str, list[Rozdil]] = {}
+    for r in rows:
+        if r.vypocet is not None and r.student is not None:
+            by_st.setdefault(r.stanovisko, []).append(r)
+    for st, rs in by_st.items():
+        sp = res.stanoviska.get(st)
+        if sp is None or len(rs) < 3:
+            continue
+        bad = [r for r in rs if (r.dxy or 0) > tol_xy or (r.dz is not None and abs(r.dz) > tol_z)]
+        if not bad:
+            continue
+        rot, ratio, dys, dxs, dzs = [], [], [], [], []
+        for r in rs:
+            cy, cx = r.vypocet.y - sp.y, r.vypocet.x - sp.x
+            sy, sx = abs(r.student.a) - sp.y, abs(r.student.b) - sp.x
+            dc, ds = math.hypot(cy, cx), math.hypot(sy, sx)
+            if dc > 1.0 and ds > 1.0:
+                a = (math.atan2(sy, sx) - math.atan2(cy, cx)) / GON
+                rot.append((a + 200) % 400 - 200)
+                ratio.append(ds / dc - 1.0)
+            dys.append(r.dy)
+            dxs.append(r.dx)
+            if r.dz is not None:
+                dzs.append(r.dz)
+        n_bad = len([r for r in bad if (r.dxy or 0) > tol_xy])
+        if n_bad >= max(2, len(rs) // 2):
+            mr, sr = _mean_std(rot)
+            mk, sk = _mean_std(ratio)
+            my, sy_ = _mean_std(dys)
+            mx, sx_ = _mean_std(dxs)
+            if abs(mr) > 0.002 and sr < max(0.0015, abs(mr) * 0.25):
+                out.append(f"Stanovisko {st}: vaše body jsou pootočené o {mr * 10000:+.0f} cc kolem stanoviska – "
+                           "jiný orientační posun. Zkontrolujte orientace (číslo a souřadnice orientačních bodů, "
+                           "vážený průměr posunu, vynechanou II. polohu).")
+            elif abs(mk) > 30e-6 and sk < max(10e-6, abs(mk) * 0.3):
+                exp = res.koeficient - 1.0
+                if abs(mk + exp) < max(15e-6, abs(exp) * 0.3):
+                    out.append(f"Stanovisko {st}: vaše délky jsou delší/kratší o {mk * 1e6:+.0f} ppm – vypadá to, "
+                               f"že jste nepoužili měřítkový koeficient ({res.koeficient:.6f}).")
+                else:
+                    out.append(f"Stanovisko {st}: rozdíl roste s délkou ({mk * 1e6:+.0f} ppm = {mk * 1e5:+.0f} mm "
+                               "na 100 m) – jiný měřítkový koeficient nebo redukce délek.")
+            elif math.hypot(mx, my) > tol_xy and max(sy_, sx_) < max(0.005, math.hypot(mx, my) * 0.3):
+                out.append(f"Stanovisko {st}: všechny body jsou posunuté stejně (dY {my:+.3f}, dX {mx:+.3f} m) – "
+                           "jiné souřadnice stanoviska.")
+        if len(dzs) >= 3:
+            mz, sz = _mean_std(dzs)
+            if abs(mz) > tol_z and sz < max(0.005, abs(mz) * 0.3):
+                out.append(f"Stanovisko {st}: všechny výšky se liší o {mz:+.3f} m – jiná výška stanoviska nebo "
+                           "výška přístroje (zapomenutá / dvakrát započtená?).")
+    # prohozená čísla bodů
+    calc = [r for r in rows if r.vypocet is not None]
+    for r in rows:
+        if r.student is None or r.vypocet is None or (r.dxy or 0) <= 0.1:
+            continue
+        sa, sb = abs(r.student.a), abs(r.student.b)
+        other = next((c for c in calc if c is not r and math.hypot(c.vypocet.y - sa, c.vypocet.x - sb) <= tol_xy * 2),
+                     None)
+        if other is not None:
+            out.append(f"Bod {r.bod}: vaše souřadnice patří vypočtenému bodu {other.bod} – prohozená / překlepnutá "
+                       "čísla bodů?")
+    if not out and any((r.dxy or 0) > tol_xy for r in rows if r.vypocet is not None and r.student is not None):
+        out.append("Rozdíly nemají společnou příčinu – jde o jednotlivé body (překlep v zápisníku nebo v čísle bodu, "
+                   "špatně opsaná výška cíle). Porovnejte je v tabulce jednotlivě.")
+    return out
