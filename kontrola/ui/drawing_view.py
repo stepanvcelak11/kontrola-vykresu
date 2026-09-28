@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -54,6 +55,42 @@ def dash_pattern(linetype: str) -> list[float] | None:
     if lt.startswith(("DGN", "STYLE", "LS")) and digits in _MS_STYLES:
         return _MS_STYLES[digits]
     return [5, 3]
+
+
+CUSTOM_STYLE = re.compile(r"^\d+\.\d+[A-Z]?$")
+
+
+def is_custom_style(linetype: str) -> bool:
+    """Uživatelský styl MicroStationu (2.103, 5.303…) – čára se značkami, v DXF bez čárkování."""
+    return bool(CUSTOM_STYLE.match((linetype or "").upper()))
+
+
+def weight_px(mm: float) -> float:
+    """Tloušťka čáry v pixelech podobně jako v MicroStationu (tloušťka 0 = 1 px, 2 = 3 px, 4 = 5 px)."""
+    if mm <= 0.001:
+        return 1.0
+    return 1.0 + max(1, round(mm / 0.14))
+
+
+def add_style_marks(path: QPainterPath, pts: list[QPointF], scale: float):
+    """Značky uživatelského stylu: krátké kolmé čárky na jedné straně čáry (plot, zeď…)."""
+    step = 1.2 * max(scale, 0.05)
+    tick = 0.35 * max(scale, 0.05)
+    carry = step / 2
+    for a, b in zip(pts, pts[1:]):
+        dx, dy = b.x() - a.x(), b.y() - a.y()
+        L = math.hypot(dx, dy)
+        if L <= 1e-9:
+            continue
+        ux, uy = dx / L, dy / L
+        nx, ny = uy, -ux  # levá strana ve směru kreslení (osa Y scény je otočená)
+        s = carry
+        while s < L:
+            px, py = a.x() + ux * s, a.y() + uy * s
+            path.moveTo(px, py)
+            path.lineTo(px + nx * tick, py + ny * tick)
+            s += step
+        carry = s - L
 
 
 def display_color(rgb: tuple[int, int, int], light_bg: bool) -> QColor:
@@ -253,8 +290,16 @@ def prepare_drawing(drawing: Drawing) -> PreparedDrawing:
             path = fills.setdefault(f.layer, {}).setdefault((f.color_rgb, f.fill), QPainterPath())
             pb.add_geometry(path, f.geometry)
             continue
-        key = (f.color_rgb, round(f.lineweight, 2), dash_pattern(f.linetype) and f.linetype.upper())
+        custom = is_custom_style(f.linetype)
+        key = (f.color_rgb, round(f.lineweight, 2),
+               None if custom else (dash_pattern(f.linetype) and f.linetype.upper()))
         path = groups.setdefault(f.layer, {}).setdefault(key, QPainterPath())
+        if custom and f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.geometry is not None:
+            g = f.geometry.exterior if f.geom_type == GeomType.POLYGON else f.geometry
+            if g.geom_type in ("LineString", "LinearRing"):
+                pts = [pb.to_scene(c[0], c[1]) for c in g.coords]
+                marks = groups[f.layer].setdefault(key + ("#znacky",), QPainterPath())
+                add_style_marks(marks, pts, f.ltscale or 1.0)
         if f.dxftype == "INSERT":
             pb.add_insert(path, f, drawing, cross, block_cache)
             for (t, x, y, h, rot) in f.display_texts:
@@ -309,6 +354,7 @@ class DrawingView(QGraphicsView):
         self._last_pos = None
         self._panning = False
         self._highlight: QGraphicsPathItem | None = None
+        self.ms_look = True  # styly a tloušťky čar jako v MicroStationu
         self.set_light_background(False)
 
     # ---------------------------------------------------------------- souřadnice
@@ -326,6 +372,10 @@ class DrawingView(QGraphicsView):
         return p.x() + self.origin[0], -p.y() + self.origin[1]
 
     # ---------------------------------------------------------------- vzhled
+    def set_ms_look(self, on: bool):
+        self.ms_look = bool(on)
+        self.set_light_background(self.light_bg)  # překreslí výkres a zachová pohled
+
     def set_light_background(self, light: bool):
         self.light_bg = light
         self.setBackgroundBrush(QBrush(QColor(250, 250, 250) if light else QColor(18, 18, 24)))
@@ -423,14 +473,18 @@ class DrawingView(QGraphicsView):
                 it.setBrush(QBrush(fc))
                 it.setZValue(-1)
         for layer, d in groups.items():
-            for (rgb, lw, lt), path in d.items():
+            for key, path in d.items():
+                rgb, lw, lt = key[:3]
                 it = QGraphicsPathItem(path, self.layer_items[layer])
                 pen = QPen(display_color(rgb, self.light_bg))
                 pen.setCosmetic(True)
-                pen.setWidthF(max(1.0, lw * 3.5))
-                pat = dash_pattern(lt or "")
+                ms = self.ms_look
+                pen.setWidthF(weight_px(lw) if ms and len(key) == 3 else 1.0)
+                pat = dash_pattern(lt or "") if ms else None
                 if pat:
                     pen.setDashPattern(pat)
+                if len(key) > 3 and not ms:
+                    it.setVisible(False)  # značky uživatelských stylů jen v režimu „jako MicroStation“
                 pen.setCapStyle(Qt.FlatCap)
                 pen.setJoinStyle(Qt.RoundJoin)
                 it.setPen(pen)

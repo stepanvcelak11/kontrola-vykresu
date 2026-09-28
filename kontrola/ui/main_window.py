@@ -140,6 +140,9 @@ class MainWindow(QMainWindow):
         self.a_fit = self._act("Přiblížit vše", self.view.fit_all, "Home", "Zobrazit celý výkres")
         self.a_light = self._act("Světlé pozadí", self.view.set_light_background, None,
                                  "Přepnout černé/bílé pozadí výkresu", checkable=True)
+        self.a_mslook = self._act("Styly a tloušťky čar jako v MicroStationu", self.view.set_ms_look, None,
+                                  "Čárkování, tloušťky a značky uživatelských stylů (ploty…). Vypnuto = tenké "
+                                  "plné čáry.", checkable=True)
         self.a_quit = self._act("Konec", self.close, "Ctrl+Q")
         self.a_check = self._act("Zkontrolovat", self.run_checks, "F5", "Spustit zapnuté kontroly")
         self.a_recheck = self._act("Zkontrolovat znovu", self.recheck, "Ctrl+F5",
@@ -206,6 +209,7 @@ class MainWindow(QMainWindow):
         m_view = self.menuBar().addMenu("&Zobrazení")
         m_view.addAction(self.a_fit)
         m_view.addAction(self.a_light)
+        m_view.addAction(self.a_mslook)
         m_view.addAction(self.a_labels)
         m_view.addAction(self.a_sketch)
         m_view.addAction(self.layers_dock.toggleViewAction())
@@ -282,6 +286,7 @@ class MainWindow(QMainWindow):
             self.restoreState(s)
         light = self.settings.value("zobrazeni/svetle_pozadi", False, type=bool)
         self.a_light.setChecked(light)
+        self.a_mslook.setChecked(self.settings.value("zobrazeni/jako_microstation", True, type=bool))
 
     def closeEvent(self, event):  # noqa: N802
         if self.task is not None and self.task.is_running():
@@ -289,6 +294,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("okno/geometrie", self.saveGeometry())
         self.settings.setValue("okno/stav", self.saveState())
         self.settings.setValue("zobrazeni/svetle_pozadi", self.a_light.isChecked())
+        self.settings.setValue("zobrazeni/jako_microstation", self.a_mslook.isChecked())
         if self.project is not None:
             try:
                 self.project.save()
