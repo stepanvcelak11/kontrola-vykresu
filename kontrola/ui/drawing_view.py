@@ -906,6 +906,10 @@ class DrawingView(QGraphicsView):
     # ---------------------------------------------------------------- snímky
     def render_overview(self, issues, size: int = 900) -> QPixmap:
         """Celý výkres s kroužky (bez popisků) – přehledka do protokolu."""
+        return self.render_overview_positions(issues, size)[0]
+
+    def render_overview_positions(self, issues, size: int = 900, markers: bool = True):
+        """Přehledka výkresu a poloha každé chyby v obrázku v pixelech: (obrázek, {číslo: (x, y)})."""
         from PySide6.QtGui import QImage
         rect = self._content_rect if not self._content_rect.isEmpty() else self.scene().itemsBoundingRect()
         rect = rect.adjusted(-rect.width() * 0.03, -rect.height() * 0.03, rect.width() * 0.03, rect.height() * 0.03)
@@ -922,23 +926,24 @@ class DrawingView(QGraphicsView):
             m.setVisible(False)
         self.scene().render(painter, QRectF(0, 0, w, h), rect, Qt.KeepAspectRatio)
         # kroužky kreslíme sami, aby měly pevnou velikost v obrázku
-        sx = w / rect.width()
-        sy = h / rect.height()
-        s = min(sx, sy)
+        s = min(w / rect.width(), h / rect.height()) if rect.width() and rect.height() else 1.0
         ox = (w - rect.width() * s) / 2
         oy = (h - rect.height() * s) / 2
+        pos = {}
         for iss in issues:
             p = self.to_scene(iss.x, iss.y)
             x = ox + (p.x() - rect.x()) * s
             y = oy + (p.y() - rect.y()) * s
-            painter.setPen(QPen(SEVERITY_COLORS.get(iss.severity, QColor(128, 128, 128)), 2))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(QPointF(x, y), 8, 8)
+            pos[iss.number] = (x, y)
+            if markers:
+                painter.setPen(QPen(SEVERITY_COLORS.get(iss.severity, QColor(128, 128, 128)), 2))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(QPointF(x, y), 8, 8)
         painter.end()
         for m in hidden:
             m.setVisible(True)
         IssueMarker.show_labels = labels
-        return QPixmap.fromImage(img)
+        return QPixmap.fromImage(img), pos
 
     def set_print_mode(self, on: bool):
         """Dočasně přestaví barvy výkresu pro tisk na bílé pozadí (a zpět)."""

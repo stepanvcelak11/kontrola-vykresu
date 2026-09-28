@@ -194,6 +194,8 @@ class MainWindow(QMainWindow):
         self.a_exp_todo = self._act("Seznam k opravě na tisk (PDF)…", lambda: self.export("todo"), "Ctrl+P",
                                     "Chyby k opravě seskupené podle typu, s políčkem k odškrtnutí, návodem "
                                     "a výřezem – vytisknout a mít vedle MicroStationu")
+        self.a_exp_html = self._act("Interaktivní protokol (HTML)…", lambda: self.export("html"), None,
+                                    "Jeden soubor pro prohlížeč: přehledka s kroužky, filtr, návody a výřezy")
         self.a_exp_dxf = self._act("DXF s vrstvou KONTROLA_CHYBY…", lambda: self.export("dxf"))
         self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
         self.a_wip = self._act("Rozpracovaný výkres", self._toggle_wip, None,
@@ -209,6 +211,8 @@ class MainWindow(QMainWindow):
         self.a_ready = self._act("Připraveno k odevzdání?", self.ready_check, None,
                                  "Úplná kontrola jako před odevzdáním (s tolerancemi učitele), semafor, co zbývá "
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
+        self.a_batch = self._act("Zkontrolovat více výkresů najednou…", self.batch_check, None,
+                                 "Vyberte několik DXF (třeba celou složku) – souhrnná tabulka chyb a skóre")
         self.a_compare = self._act("Porovnat verze výkresu…", self.compare_versions, "Ctrl+D",
                                    "Co se změnilo od předchozí načtené verze (nebo proti jinému DXF): "
                                    "přidané, odebrané a upravené prvky barevně ve výkresu")
@@ -230,7 +234,8 @@ class MainWindow(QMainWindow):
         m_file.addAction(self.a_save_project_as)
         m_file.addSeparator()
         m_exp = m_file.addMenu("Export")
-        for a in (self.a_exp_csv, self.a_exp_xlsx, self.a_exp_pdf, self.a_exp_todo, self.a_exp_dxf, self.a_exp_log):
+        for a in (self.a_exp_html, self.a_exp_pdf, self.a_exp_todo, self.a_exp_csv, self.a_exp_xlsx, self.a_exp_dxf,
+                  self.a_exp_log):
             m_exp.addAction(a)
         m_file.addSeparator()
         m_file.addAction(self.a_quit)
@@ -250,6 +255,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
+        m_check.addAction(self.a_batch)
         m_check.addAction(self.a_compare)
         m_check.addAction(self.a_vypocet)
         m_check.addAction(self.a_teacher)
@@ -943,6 +949,15 @@ class MainWindow(QMainWindow):
                                        float(bg.get("meritko", 0.1)), float(bg.get("rotace", 0)),
                                        float(bg.get("pruhlednost", 0.5)))
 
+    def batch_check(self):
+        start = self.settings.value("cesty/vykres", str(Path.home()))
+        files, _ = QFileDialog.getOpenFileNames(self, "Výkresy ke kontrole", start,
+                                                "Výkresy (*.dxf *.vfk);;Všechny soubory (*)")
+        if not files:
+            return
+        from .batch_dialog import BatchDialog
+        BatchDialog(self, files).exec()
+
     def compare_versions(self):
         if self.drawing is None:
             QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
@@ -1084,6 +1099,7 @@ class MainWindow(QMainWindow):
             "xlsx": ("Uložit seznam chyb", f"{base}_chyby.xlsx", "Excel (*.xlsx)"),
             "pdf": ("Uložit protokol", f"{base}_protokol.pdf", "PDF (*.pdf)"),
             "todo": ("Uložit seznam k opravě", f"{base}_k_oprave.pdf", "PDF (*.pdf)"),
+            "html": ("Uložit interaktivní protokol", f"{base}_protokol.html", "HTML (*.html)"),
             "dxf": ("Uložit DXF s chybami", f"{base}_kontrola.dxf", "DXF (*.dxf)"),
             "log": ("Uložit protokol (.log)", f"{base}.log", "Protokol (*.log *.txt)"),
         }[kind]
@@ -1112,6 +1128,8 @@ class MainWindow(QMainWindow):
                 dxf_export.export_dxf(self.drawing, issues, path)
             elif kind == "pdf":
                 self._export_pdf(issues, path)
+            elif kind == "html":
+                self._export_html(issues, path)
             elif kind == "todo":
                 from ..export.pdf_report import export_checklist
                 todo = [i for i in issues if i.state == "nová" and i.severity != Severity.INFO]
@@ -1156,6 +1174,21 @@ class MainWindow(QMainWindow):
         finally:
             self.view.set_print_mode(False)
         return images
+
+    def _export_html(self, issues: list[Issue], path: str):
+        from ..export.html_report import export_html
+        overview, pos, size = None, {}, None
+        if self.drawing is not None:
+            self.view.set_print_mode(True)
+            try:
+                pm, pos = self.view.render_overview_positions(issues, 1100, markers=False)
+                overview, size = self._png(pm), (pm.width(), pm.height())
+            finally:
+                self.view.set_print_mode(False)
+        images = self._issue_images(issues, 80, 300)
+        name = Path(self.drawing.source_path or self.drawing.path).name if self.drawing else ""
+        export_html(issues, path, name, self.project.name if self.project else "", overview, pos, size, images,
+                    bool(self.project and self.project.rules.pravidla))
 
     def _export_pdf(self, issues: list[Issue], path: str):
         from ..export.pdf_report import export_pdf

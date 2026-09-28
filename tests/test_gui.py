@@ -371,3 +371,30 @@ def test_uvod_a_skore(window):
     for i in w.issues:
         i.state = "opraveno"
     assert compute_score(w.issues).hodnota == 100
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_html_protokol(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    out = tmp_path / "protokol.html"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.No))
+    w.a_exp_html.trigger()
+    html = out.read_text(encoding="utf-8")
+    assert "data:image/png;base64," in html and '"px": [' in html and "Jak opravit" in html
+    assert html.count('"n": ') == len(w.issues)
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_hromadna_kontrola(window, tmp_path):
+    from kontrola.ui.batch_dialog import check_files
+    bad = tmp_path / "rozbity.dxf"
+    bad.write_text("tohle není DXF")
+    rows = check_files([str(UKAZKA), str(bad)], window.project.rules, window.project.config,
+                       lambda *a: None, lambda: False)
+    assert rows[0]["chyby"] > 0 and rows[0]["skore"] is not None
+    assert rows[1]["chyba"] and rows[1]["skore"] is None
