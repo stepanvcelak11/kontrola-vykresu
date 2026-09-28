@@ -203,3 +203,39 @@ def test_inspektor_prvku(window):
     assert "Vrstva" in html and "Barva" in html
     w._on_feature_clicked(-1)
     assert "není žádný prvek" in w.inspector.view.toPlainText()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_rychle_filtry_a_vysvetleni(window, monkeypatch):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    p = w.issue_panel
+    from kontrola.checks.base import Severity
+    from kontrola.ui.issue_panel import check_group
+    p.quick["Topologie"].click()
+    vis = [i for i in w.issues if i.number in p.visible_numbers()]
+    assert vis and all(check_group(i.check_id) == "Topologie" for i in vis)
+    p.quick["chyby"].click()
+    assert all(i.severity != Severity.INFO for i in w.issues if i.number in p.visible_numbers())
+    p.quick[None].click()
+    assert len(p.visible_numbers()) == len(w.issues)
+    # „Co to znamená?“ otevře vysvětlení vybraného typu chyby s obrázkem
+    from kontrola.ui import help_topics
+    shown = []
+    monkeypatch.setattr(help_topics.HelpDialog, "exec", lambda self: shown.append(
+        (self.list.currentItem().data(0x0100), self.view.toPlainText())))
+    p.select_issue(w.issues[0].number)
+    p.b_help.click()
+    assert shown and shown[0][0] == w.issues[0].check_id and "Oprava" in shown[0][1]
+    assert help_topics.illustration("chybejici_napojeni") is not None
+
+
+def test_pruvodce(window, monkeypatch):
+    from kontrola.ui.guide_dialog import STEPS, GuideDialog
+    g = GuideDialog(window)
+    for _ in STEPS:
+        g.b_next.click()
+    assert g.result() == 1
+    assert window.settings.value("pruvodce/skryt", False, type=bool)

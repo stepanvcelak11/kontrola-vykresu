@@ -240,6 +240,9 @@ class MainWindow(QMainWindow):
         m_check.addSeparator()
         m_check.addAction(self.a_settings)
         m_help = self.menuBar().addMenu("&Nápověda")
+        m_help.addAction(self._act("Průvodce…", self.show_guide, None, "Krok za krokem od zadání k odevzdání"))
+        m_help.addAction(self._act("Co znamenají chyby (s obrázky)…", self.show_help, "F1",
+                                   "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
         m_help.addAction(self._act("O aplikaci", self._about))
 
@@ -861,6 +864,14 @@ class MainWindow(QMainWindow):
         self.view.set_background_image(load_pixmap(path), float(bg.get("x", 0)), float(bg.get("y", 0)),
                                        float(bg.get("meritko", 0.1)), float(bg.get("rotace", 0)),
                                        float(bg.get("pruhlednost", 0.5)))
+
+    def show_guide(self):
+        from .guide_dialog import GuideDialog
+        GuideDialog(self).exec()
+
+    def show_help(self):
+        iss = self.issue_panel.current_issue()
+        self.issue_panel.explain(iss.check_id if iss else "_zavaznost")
 
     def _dgn_help(self):
         QMessageBox.information(self, "Převod DGN na DXF", DGN_NAVOD)

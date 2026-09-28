@@ -93,6 +93,8 @@ QPushButton[primarni="true"] {{ background: {ACCENT}; color: white; border-color
 QPushButton[primarni="true"]:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[uspech="true"] {{ background: #16A34A; color: white; border-color: #16A34A; font-weight: 600; }}
 QPushButton[uspech="true"]:hover {{ background: #15803D; }}
+QPushButton#rychly_filtr {{ padding: 3px 10px; border-radius: 12px; }}
+QPushButton#rychly_filtr:checked {{ background: {ACCENT_SOFT}; color: {ACCENT_HOVER}; border-color: {ACCENT}; font-weight: 600; }}
 
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit, QTextBrowser {{
     background: {PANEL}; border: 1px solid {BORDER}; border-radius: 6px; padding: 4px 6px;

@@ -122,6 +122,18 @@ class IssueModel(QAbstractTableModel):
         self.dataChanged.emit(self.index(row, 0), self.index(row, len(COLUMNS) - 1))
 
 
+def check_group(check_id: str) -> str:
+    from ..checks.base import REGISTRY
+    cls = REGISTRY.get(check_id)
+    return getattr(cls, "skupina", "") if cls else ""
+
+
+QUICK_FILTERS = ((None, "Vše", "Zobrazit všechny nálezy"),
+                 ("chyby", "K opravě", "Jen chyby a varování (bez informací)"),
+                 ("Topologie", "Topologie", "Jen topologické chyby – napojení, křížení, duplicity (kontrola MGEO)"),
+                 ("Atributy", "Atributy", "Jen atributy – vrstva, barva, styl, písmo (kontrola GISoft)"))
+
+
 class IssueFilter(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -131,6 +143,7 @@ class IssueFilter(QSortFilterProxyModel):
         self.region: tuple[float, float, float, float] | None = None  # jen chyby v tomto výřezu
         self.hide_done = False
         self.text = ""
+        self.group: str | None = None  # rychlý filtr: None | "chyby" | skupina kontroly („Topologie“, …)
         self.setSortRole(Qt.UserRole)
 
     def filterAcceptsRow(self, row, parent):  # noqa: N802
@@ -141,6 +154,11 @@ class IssueFilter(QSortFilterProxyModel):
         if iss.check_name in self.hidden_types:
             return False
         if iss.severity not in self.severities:
+            return False
+        if self.group == "chyby":
+            if iss.severity == Severity.INFO:
+                return False
+        elif self.group and check_group(iss.check_id) != self.group:
             return False
         if self.layer and iss.layer != self.layer:
             return False
@@ -224,6 +242,24 @@ class IssuePanel(QWidget):
         self.summary.setObjectName("souhrn")
         self.summary.setWordWrap(True)
         lay.addWidget(self.summary)
+        qrow = QHBoxLayout()
+        qrow.setSpacing(4)
+        self.quick: dict[object, QPushButton] = {}
+        for key, label, tip in QUICK_FILTERS:
+            b = QPushButton(label)
+            b.setCheckable(True)
+            b.setChecked(key is None)
+            b.setObjectName("rychly_filtr")
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _c=False, k=key: self.set_quick(k))
+            self.quick[key] = b
+            qrow.addWidget(b)
+        qrow.addStretch(1)
+        self.b_help = QPushButton("? Co to znamená")
+        self.b_help.setToolTip("Vysvětlení vybraného typu chyby s obrázkem (a dalších pojmů)")
+        self.b_help.clicked.connect(self.explain)
+        qrow.addWidget(self.b_help)
+        lay.addLayout(qrow)
 
         split = QSplitter(Qt.Vertical)
         lay.addWidget(split, 1)
@@ -362,11 +398,14 @@ class IssuePanel(QWidget):
         self.types.clear()
         counts = Counter(i.check_name for i in issues)
         sev_of: dict[str, Severity] = {}
+        cid_of: dict[str, str] = {}
         for i in issues:
             sev_of.setdefault(i.check_name, i.severity)
+            cid_of.setdefault(i.check_name, i.check_id)
         for name in sorted(counts, key=lambda n: (sev_of[n].rank, n)):
             it = QListWidgetItem(f"{name} ({counts[name]})")
             it.setData(Qt.UserRole, name)
+            it.setData(Qt.UserRole + 1, cid_of.get(name, ""))
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Unchecked if name in prev_hidden else Qt.Checked)
             it.setForeground(QBrush(SEVERITY_COLORS.get(sev_of[name])))
@@ -475,15 +514,35 @@ class IssuePanel(QWidget):
         self.layer_combo.setCurrentIndex(0)
         self.hide_done.setChecked(False)
         self.search.clear()
+        for k, b in self.quick.items():
+            b.setChecked(k is None)
+        self.proxy.group = None
         self._updating = False
         self.proxy.hidden_types.clear()
         self._filters_changed()
+
+    def set_quick(self, key):
+        """Rychlý filtr nad seznamem: vše / k opravě / topologie / atributy."""
+        for k, b in self.quick.items():
+            b.setChecked(k == key)
+        self.proxy.group = key
+        self._filters_changed()
+
+    def explain(self, check_id: str | None = None):
+        if not check_id:
+            iss = self.current_issue()
+            it = self.types.currentItem()
+            check_id = iss.check_id if iss else (it.data(Qt.UserRole + 1) if it else None)
+        from .help_topics import HelpDialog
+        dlg = HelpDialog(self, check_id)
+        dlg.exec()
 
     def _types_menu(self, pos):
         it = self.types.itemAt(pos)
         m = QMenu(self)
         if it is not None:
             m.addAction("Jen tento typ", lambda: self.only_type(it.data(Qt.UserRole)))
+            m.addAction("Co to znamená?", lambda: self.explain(it.data(Qt.UserRole + 1)))
         m.addAction("Zobrazit vše", self.show_all)
         m.exec(self.types.mapToGlobal(pos))
 
@@ -621,6 +680,7 @@ class IssuePanel(QWidget):
         m.addSeparator()
         m.addAction("Jen tento typ", self._only_current)
         m.addAction("Zobrazit vše", self.show_all)
+        m.addAction("Co to znamená?", self.explain)
         m.exec(self.table.viewport().mapToGlobal(pos))
 
 

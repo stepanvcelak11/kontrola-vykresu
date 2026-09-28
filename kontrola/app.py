@@ -34,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
             pass
     win = MainWindow()
     win.show()
+    if not win.settings.value("pruvodce/skryt", False, type=bool):
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(400, win.show_guide)
     for a in argv[1:]:
         if not a.startswith("-"):
             win.open_path(a)
