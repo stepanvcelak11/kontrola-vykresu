@@ -121,7 +121,11 @@ Otevřete ukázkový výkres a stiskněte F5.
 * Filtr typů chyb: odškrtnutím se skryjí kroužky i řádky. Dvojklik nebo tlačítko
   **Jen tento typ** zobrazí jen jeden typ. Dál jde filtrovat podle závažnosti a hladiny.
 * Kliknutí na kroužek vybere řádek v tabulce. Tabulka se řadí kliknutím na záhlaví sloupce.
-* Tlačítka **Opraveno** a **Ignorovat** uloží stav chyby do projektu.
+* Tlačítka **Opraveno** a **Ignorovat** uloží stav chyby do projektu. Pod tabulkou jde ke
+  každé chybě napsat poznámku.
+* Pole **Hledat** filtruje chyby podle textu (popis, hladina, číslo chyby).
+* Chyba označená jako opravená, která se při opakované kontrole znovu objeví, se vrátí do stavu
+  „nová“. Ignorované chyby zůstanou ignorované.
 
 ### Krok 4: záložka Zadání, import tabulky atributů
 
