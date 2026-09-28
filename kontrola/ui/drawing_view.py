@@ -1,0 +1,583 @@
+"""Zobrazení výkresu v QGraphicsView.
+
+* Prvky se kreslí seskupeně po hladinách (jedna cesta na kombinaci barvy,
+  tloušťky a stylu čáry), takže i výkresy se statisíci prvků jsou plynulé.
+* Souřadnice se posouvají k počátku výkresu (S-JTSK má velká čísla) a osa Y
+  se otáčí, aby sever byl nahoře.
+* Chyby se zobrazují jako kroužky s pevnou velikostí na obrazovce
+  (:class:`IssueMarker`), nezávisle na přiblížení.
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Iterable
+
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QPainter, QPainterPath,
+                           QPainterPathStroker, QPen, QPixmap, QTransform)
+from PySide6.QtWidgets import (QGraphicsItem, QGraphicsPathItem, QGraphicsPixmapItem,
+                               QGraphicsScene, QGraphicsSimpleTextItem, QGraphicsView)
+
+from ..checks.base import Issue, Severity
+from ..model import Drawing, Feature, GeomType
+
+SEVERITY_COLORS = {
+    Severity.CHYBA: QColor(220, 30, 30),
+    Severity.VAROVANI: QColor(245, 140, 0),
+    Severity.INFO: QColor(30, 110, 230),
+}
+
+# vzory čárkování (v pixelech / šířkách pera) podle názvu stylu čáry
+_DASHES = [
+    ("DASHDOTDOT", [8, 3, 1, 3, 1, 3]), ("DIVIDE", [8, 3, 1, 3, 1, 3]),
+    ("DASHDOT", [8, 3, 1, 3]), ("CENTER", [12, 3, 3, 3]), ("PHANTOM", [12, 3, 3, 3, 3, 3]),
+    ("BORDER", [8, 3, 8, 3, 1, 3]),
+    ("DASHED", [6, 4]), ("HIDDEN", [3, 3]), ("DOT", [1, 3]), ("DASH", [6, 4]),
+]
+# MicroStation standardní styly 0–7 (po exportu často jako názvy "0"–"7")
+_MS_STYLES = {"1": [1, 3], "2": [4, 4], "3": [10, 4], "4": [8, 3, 1, 3], "5": [3, 3],
+              "6": [8, 3, 1, 3, 1, 3], "7": [12, 3, 3, 3]}
+
+
+def dash_pattern(linetype: str) -> list[float] | None:
+    lt = (linetype or "").upper()
+    if lt in ("", "CONTINUOUS", "BYLAYER", "BYBLOCK", "0", "SOLID"):
+        return None
+    digits = "".join(ch for ch in lt if ch.isdigit())
+    if lt in _MS_STYLES:
+        return _MS_STYLES[lt]
+    for key, pat in _DASHES:
+        if key in lt:
+            return pat
+    if lt.startswith(("DGN", "STYLE", "LS")) and digits in _MS_STYLES:
+        return _MS_STYLES[digits]
+    return [5, 3]
+
+
+def display_color(rgb: tuple[int, int, int], light_bg: bool) -> QColor:
+    r, g, b = rgb
+    if light_bg and min(r, g, b) > 215:
+        return QColor(0, 0, 0)
+    if not light_bg and max(r, g, b) < 50:
+        return QColor(255, 255, 255)
+    return QColor(r, g, b)
+
+
+class LayerItem(QGraphicsItem):
+    """Neviditelný kontejner prvků jedné hladiny (vypnutí hladiny = setVisible)."""
+
+    def __init__(self, name: str):
+        super().__init__()
+        self.name = name
+        self.setFlag(QGraphicsItem.ItemHasNoContents, True)
+
+    def boundingRect(self) -> QRectF:  # noqa: N802
+        return QRectF()
+
+    def paint(self, painter, option, widget=None):  # pragma: no cover - nic nekreslí
+        pass
+
+
+class IssueMarker(QGraphicsItem):
+    """Kroužek chyby s popiskem. Velikost je pevná v pixelech obrazovky."""
+
+    RADIUS = 13.0
+    show_labels = True
+
+    def __init__(self, issue: Issue):
+        super().__init__()
+        self.issue = issue
+        self.highlighted = False
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
+        self.setAcceptHoverEvents(True)
+        self.setZValue(10_000)
+        self.setToolTip(f"#{issue.number} {issue.check_name}\n{issue.message}")
+        self._font = QFont()
+        self._font.setPointSizeF(8.5)
+        self._label = issue.label()
+        fm = QFontMetricsF(self._font)
+        self._label_w = fm.horizontalAdvance(self._label) + 10
+        self._label_h = fm.height() + 4
+
+    def color(self) -> QColor:
+        c = QColor(SEVERITY_COLORS.get(self.issue.severity, QColor(128, 128, 128)))
+        if self.issue.state != "nová":
+            c.setAlpha(110)
+        return c
+
+    def boundingRect(self) -> QRectF:  # noqa: N802
+        r = self.RADIUS + 8
+        rect = QRectF(-r, -r, 2 * r, 2 * r)
+        if IssueMarker.show_labels:
+            rect = rect.united(QRectF(self.RADIUS + 2, -self.RADIUS - self._label_h,
+                                      self._label_w + 4, self._label_h + 4))
+        return rect
+
+    def shape(self) -> QPainterPath:
+        p = QPainterPath()
+        r = self.RADIUS + 4
+        p.addEllipse(QPointF(0, 0), r, r)
+        return p
+
+    def set_highlighted(self, on: bool):
+        if on != self.highlighted:
+            self.highlighted = on
+            self.setZValue(10_001 if on else 10_000)
+            self.update()
+
+    def paint(self, painter: QPainter, option, widget=None):
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        c = self.color()
+        r = self.RADIUS
+        if self.highlighted:
+            halo = QColor(255, 255, 0, 200)
+            painter.setPen(QPen(halo, 7))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(QPointF(0, 0), r + 3, r + 3)
+        pen = QPen(c, 3 if self.highlighted else 2.2)
+        painter.setPen(pen)
+        fill = QColor(c)
+        fill.setAlpha(35)
+        painter.setBrush(fill)
+        painter.drawEllipse(QPointF(0, 0), r, r)
+        painter.setPen(QPen(c, 1.5))
+        painter.drawLine(QPointF(-3, 0), QPointF(3, 0))
+        painter.drawLine(QPointF(0, -3), QPointF(0, 3))
+        if IssueMarker.show_labels:
+            rect = QRectF(r + 4, -r - self._label_h + 2, self._label_w, self._label_h)
+            bg = QColor(255, 255, 255, 225)
+            painter.setPen(QPen(c, 1))
+            painter.setBrush(bg)
+            painter.drawRoundedRect(rect, 3, 3)
+            painter.setFont(self._font)
+            painter.setPen(QColor(20, 20, 20))
+            painter.drawText(rect, Qt.AlignCenter, self._label)
+
+
+class DrawingView(QGraphicsView):
+    """Zobrazení výkresu s kroužky chyb."""
+
+    cursorMoved = Signal(float, float)
+    markerClicked = Signal(int)  # číslo chyby
+    fileDropped = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setScene(QGraphicsScene(self))
+        self.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
+        self.setViewportUpdateMode(QGraphicsView.SmartViewportUpdate)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setMouseTracking(True)
+        self.setAcceptDrops(True)
+        self.origin = (0.0, 0.0)
+        self.light_bg = False
+        self.drawing: Drawing | None = None
+        self.layer_items: dict[str, LayerItem] = {}
+        self.markers: dict[int, IssueMarker] = {}
+        self.background: QGraphicsPixmapItem | None = None
+        self._content_rect = QRectF()
+        self._press_pos = None
+        self._last_pos = None
+        self._panning = False
+        self._highlight: QGraphicsPathItem | None = None
+        self.set_light_background(False)
+
+    # ---------------------------------------------------------------- souřadnice
+    def to_scene(self, x: float, y: float) -> QPointF:
+        return QPointF(x - self.origin[0], -(y - self.origin[1]))
+
+    def from_scene(self, p: QPointF) -> tuple[float, float]:
+        return p.x() + self.origin[0], -p.y() + self.origin[1]
+
+    # ---------------------------------------------------------------- vzhled
+    def set_light_background(self, light: bool):
+        self.light_bg = light
+        self.setBackgroundBrush(QBrush(QColor(250, 250, 250) if light else QColor(18, 18, 24)))
+        if self.drawing is not None:
+            vis = {n: it.isVisible() for n, it in self.layer_items.items()}
+            center = self.mapToScene(self.viewport().rect().center())
+            tr = self.transform()
+            self._build(self.drawing)
+            for n, v in vis.items():
+                self.set_layer_visible(n, v)
+            self.setTransform(tr)
+            self.centerOn(center)
+
+    # ---------------------------------------------------------------- výkres
+    def clear_drawing(self):
+        sc = self.scene()
+        for m in list(self.markers.values()):
+            sc.removeItem(m)
+        self.markers.clear()
+        for it in list(self.layer_items.values()):
+            sc.removeItem(it)
+        self.layer_items.clear()
+        if self._highlight is not None:
+            sc.removeItem(self._highlight)
+            self._highlight = None
+        self.drawing = None
+
+    def set_drawing(self, drawing: Drawing):
+        self.clear_drawing()
+        b = drawing.bounds() or (0, 0, 100, 100)
+        self.origin = (b[0], b[1])
+        self._build(drawing)
+        self.fit_all()
+
+    def _build(self, drawing: Drawing):
+        sc = self.scene()
+        for it in list(self.layer_items.values()):
+            sc.removeItem(it)
+        self.layer_items.clear()
+        self.drawing = drawing
+        b = drawing.bounds() or (0, 0, 100, 100)
+        diag = max(1.0, math.hypot(b[2] - b[0], b[3] - b[1]))
+        cross = max(0.1, min(0.5, diag / 800))
+        groups: dict[str, dict[tuple, QPainterPath]] = {}
+        fills: dict[str, dict[tuple, QPainterPath]] = {}
+        texts: list[Feature] = []
+        for f in drawing.features:
+            if f.geom_type == GeomType.TEXT:
+                texts.append(f)
+                continue
+            key = (f.color_rgb, round(f.lineweight, 2), dash_pattern(f.linetype) and f.linetype.upper())
+            if f.dxftype == "HATCH":
+                path = fills.setdefault(f.layer, {}).setdefault((f.color_rgb, f.fill), QPainterPath())
+                self._add_geometry(path, f.geometry)
+                continue
+            path = groups.setdefault(f.layer, {}).setdefault(key, QPainterPath())
+            if f.dxftype == "INSERT":
+                self._add_insert(path, f, drawing, cross)
+                for (t, x, y, h, rot) in f.display_texts:
+                    texts.append(Feature(fid=-1, dxftype="ATTRIB", geom_type=GeomType.TEXT, geometry=None,
+                                         layer=f.layer, color_rgb=f.color_rgb, text=t, text_height=h,
+                                         rotation=rot, vertices=[(x, y)]))
+            elif f.dxftype == "CIRCLE":
+                c = self.to_scene(*f.vertices[0])
+                path.addEllipse(c, f.radius, f.radius)
+            elif f.dxftype == "POINT":
+                c = self.to_scene(*f.vertices[0])
+                path.moveTo(c.x() - cross, c.y()); path.lineTo(c.x() + cross, c.y())
+                path.moveTo(c.x(), c.y() - cross); path.lineTo(c.x(), c.y() + cross)
+            else:
+                self._add_geometry(path, f.geometry)
+        all_layers = set(groups) | set(fills) | {t.layer for t in texts} | set(drawing.layers)
+        for name in sorted(all_layers):
+            li = LayerItem(name)
+            sc.addItem(li)
+            self.layer_items[name] = li
+        for layer, d in fills.items():
+            for (rgb, solid), path in d.items():
+                it = QGraphicsPathItem(path, self.layer_items[layer])
+                col = display_color(rgb, self.light_bg)
+                pen = QPen(col, 1)
+                pen.setCosmetic(True)
+                it.setPen(pen)
+                fc = QColor(col)
+                fc.setAlpha(150 if solid else 45)
+                it.setBrush(QBrush(fc))
+                it.setZValue(-1)
+        for layer, d in groups.items():
+            for (rgb, lw, lt), path in d.items():
+                it = QGraphicsPathItem(path, self.layer_items[layer])
+                pen = QPen(display_color(rgb, self.light_bg))
+                pen.setCosmetic(True)
+                pen.setWidthF(max(1.0, lw * 3.5))
+                pat = dash_pattern(lt or "")
+                if pat:
+                    pen.setDashPattern(pat)
+                pen.setCapStyle(Qt.FlatCap)
+                pen.setJoinStyle(Qt.RoundJoin)
+                it.setPen(pen)
+        for t in texts:
+            self._add_text(t)
+        rect = QRectF()
+        for li in self.layer_items.values():
+            rect = rect.united(li.childrenBoundingRect())
+        self._content_rect = rect
+        m = max(rect.width(), rect.height(), 10.0) * 2
+        self.scene().setSceneRect(rect.adjusted(-m, -m, m, m))
+
+    def _add_geometry(self, path: QPainterPath, geom):
+        if geom is None or geom.is_empty:
+            return
+        gt = geom.geom_type
+        if gt == "LineString":
+            self._add_coords(path, geom.coords, False)
+        elif gt == "Polygon":
+            self._add_coords(path, geom.exterior.coords, True)
+            for i in geom.interiors:
+                self._add_coords(path, i.coords, True)
+        elif hasattr(geom, "geoms"):
+            for g in geom.geoms:
+                self._add_geometry(path, g)
+
+    def _add_coords(self, path: QPainterPath, coords: Iterable, closed: bool):
+        first = True
+        for x, y, *_ in coords:
+            p = self.to_scene(x, y)
+            if first:
+                path.moveTo(p)
+                first = False
+            else:
+                path.lineTo(p)
+        if closed:
+            path.closeSubpath()
+
+    def _add_insert(self, path: QPainterPath, f: Feature, drawing: Drawing, cross: float):
+        bg = drawing.blocks.get(f.block_name or "")
+        c = self.to_scene(*f.vertices[0])
+        if bg is None or (not bg.paths and not bg.points):
+            path.moveTo(c.x() - cross, c.y() - cross); path.lineTo(c.x() + cross, c.y() + cross)
+            path.moveTo(c.x() - cross, c.y() + cross); path.lineTo(c.x() + cross, c.y() - cross)
+            return
+        t = QTransform()
+        t.translate(c.x(), c.y())
+        t.rotate(-f.rotation)
+        t.scale(f.scale[0], -f.scale[1])
+        t.translate(-bg.base_point[0], -bg.base_point[1])
+        for pts, closed in zip(bg.paths, bg.closed):
+            sub = QPainterPath()
+            sub.moveTo(*pts[0])
+            for x, y in pts[1:]:
+                sub.lineTo(x, y)
+            if closed:
+                sub.closeSubpath()
+            path.addPath(t.map(sub))
+        for x, y in bg.points:
+            p = t.map(QPointF(x, y))
+            path.moveTo(p.x() - cross / 3, p.y()); path.lineTo(p.x() + cross / 3, p.y())
+
+    def _add_text(self, f: Feature):
+        if not f.text:
+            return
+        parent = self.layer_items.get(f.layer)
+        item = QGraphicsSimpleTextItem(f.text.replace("\n", " ")[:200], parent)
+        font = QFont("Arial")
+        font.setPixelSize(100)
+        item.setFont(font)
+        item.setBrush(QBrush(display_color(f.color_rgb, self.light_bg)))
+        fm = QFontMetricsF(font)
+        cap = fm.capHeight() or fm.ascent() * 0.7
+        s = (f.text_height or 1.0) / cap
+        w = fm.horizontalAdvance(item.text())
+        ax = {0: 0.0, 1: w / 2, 2: w}.get(f.halign, 0.0)
+        ay = {0: fm.ascent(), 1: fm.ascent() + fm.descent(), 2: fm.ascent() - cap / 2,
+              3: fm.ascent() - cap}.get(f.valign, fm.ascent())
+        p = self.to_scene(*f.vertices[0])
+        t = QTransform()
+        t.translate(p.x(), p.y())
+        t.rotate(-f.rotation)
+        t.scale(s, s)
+        t.translate(-ax, -ay)
+        item.setTransform(t)
+
+    # ---------------------------------------------------------------- hladiny
+    def set_layer_visible(self, name: str, visible: bool):
+        it = self.layer_items.get(name)
+        if it is not None:
+            it.setVisible(visible)
+
+    # ---------------------------------------------------------------- podklad
+    def set_background_image(self, pixmap: QPixmap | None, x: float = 0.0, y: float = 0.0,
+                             meters_per_px: float = 0.1, rotation: float = 0.0, opacity: float = 0.5):
+        """Obrázek pod výkresem: (x, y) = levý dolní roh v souřadnicích výkresu."""
+        if self.background is not None:
+            self.scene().removeItem(self.background)
+            self.background = None
+        if pixmap is None or pixmap.isNull():
+            return
+        item = QGraphicsPixmapItem(pixmap)
+        item.setTransformationMode(Qt.SmoothTransformation)
+        p = self.to_scene(x, y)
+        t = QTransform()
+        t.translate(p.x(), p.y())
+        t.rotate(-rotation)
+        t.scale(meters_per_px, meters_per_px)
+        t.translate(0, -pixmap.height())
+        item.setTransform(t)
+        item.setOpacity(opacity)
+        item.setZValue(-100_000)
+        self.scene().addItem(item)
+        self.background = item
+
+    # ---------------------------------------------------------------- chyby
+    def set_issues(self, issues: list[Issue]):
+        sc = self.scene()
+        for m in self.markers.values():
+            sc.removeItem(m)
+        self.markers.clear()
+        for iss in issues:
+            m = IssueMarker(iss)
+            m.setPos(self.to_scene(iss.x, iss.y))
+            sc.addItem(m)
+            self.markers[iss.number] = m
+
+    def set_visible_issues(self, numbers: set[int]):
+        for n, m in self.markers.items():
+            m.setVisible(n in numbers)
+
+    def refresh_markers(self):
+        for m in self.markers.values():
+            m.prepareGeometryChange()
+            m.update()
+
+    def set_labels_visible(self, on: bool):
+        IssueMarker.show_labels = on
+        self.refresh_markers()
+        self.viewport().update()
+
+    def highlight_issue(self, number: int | None, zoom: bool = True):
+        sc = self.scene()
+        if self._highlight is not None:
+            sc.removeItem(self._highlight)
+            self._highlight = None
+        for n, m in self.markers.items():
+            m.set_highlighted(n == number)
+        if number is None or number not in self.markers:
+            return
+        m = self.markers[number]
+        iss = m.issue
+        if iss.geometry is not None and not iss.geometry.is_empty:
+            path = QPainterPath()
+            self._add_geometry(path, iss.geometry)
+            if not path.isEmpty():
+                item = QGraphicsPathItem(path)
+                pen = QPen(QColor(255, 230, 0, 230), 4)
+                pen.setCosmetic(True)
+                item.setPen(pen)
+                item.setZValue(9_000)
+                sc.addItem(item)
+                self._highlight = item
+        if zoom:
+            self.zoom_to_issue(iss)
+
+    def zoom_to_issue(self, iss: Issue, span: float | None = None):
+        c = self.to_scene(iss.x, iss.y)
+        if span is None:
+            span = 10.0
+            if iss.geometry is not None and not iss.geometry.is_empty:
+                b = iss.geometry.bounds
+                span = max(span, (b[2] - b[0]) * 1.4, (b[3] - b[1]) * 1.4)
+            span = min(span, 200.0)
+        rect = QRectF(c.x() - span / 2, c.y() - span / 2, span, span)
+        self.fitInView(rect, Qt.KeepAspectRatio)
+
+    # ---------------------------------------------------------------- navigace
+    def fit_all(self):
+        rect = self._content_rect
+        if rect.isNull() or rect.isEmpty():
+            rect = self.scene().itemsBoundingRect()
+        if rect.width() <= 0 and rect.height() <= 0:
+            return
+        self.fitInView(rect.adjusted(-rect.width() * 0.03, -rect.height() * 0.03,
+                                     rect.width() * 0.03, rect.height() * 0.03), Qt.KeepAspectRatio)
+
+    def current_scale(self) -> float:
+        return self.transform().m11()
+
+    def wheelEvent(self, event):  # noqa: N802
+        delta = event.angleDelta().y()
+        if delta == 0:
+            delta = event.pixelDelta().y()
+        if delta == 0:
+            return
+        factor = math.pow(1.0015, delta)
+        s = self.current_scale() * factor
+        if 1e-5 < s < 1e5:
+            self.scale(factor, factor)
+
+    def mousePressEvent(self, event):  # noqa: N802
+        if event.button() in (Qt.LeftButton, Qt.MiddleButton):
+            self._press_pos = event.position()
+            self._last_pos = event.position()
+            self._panning = False
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):  # noqa: N802
+        sp = self.mapToScene(event.position().toPoint())
+        x, y = self.from_scene(sp)
+        self.cursorMoved.emit(x, y)
+        if self._last_pos is not None:
+            d = event.position() - self._last_pos
+            if not self._panning and (event.position() - self._press_pos).manhattanLength() > 4:
+                self._panning = True
+                self.viewport().setCursor(Qt.ClosedHandCursor)
+            if self._panning:
+                self._last_pos = event.position()
+                self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - int(d.x()))
+                self.verticalScrollBar().setValue(self.verticalScrollBar().value() - int(d.y()))
+                # posun i mimo rozsah posuvníků
+                if self.horizontalScrollBar().maximum() == 0 and self.verticalScrollBar().maximum() == 0:
+                    self.translate(d.x() / self.current_scale(), d.y() / self.current_scale())
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802
+        if self._press_pos is not None:
+            was_pan = self._panning
+            self._press_pos = None
+            self._last_pos = None
+            self._panning = False
+            self.viewport().unsetCursor()
+            if not was_pan and event.button() == Qt.LeftButton:
+                for item in self.items(event.position().toPoint()):
+                    if isinstance(item, IssueMarker) and item.isVisible():
+                        self.markerClicked.emit(item.issue.number)
+                        break
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):  # noqa: N802
+        if event.button() == Qt.MiddleButton:
+            self.fit_all()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    # ---------------------------------------------------------------- drag & drop
+    def dragEnterEvent(self, event):  # noqa: N802
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):  # noqa: N802
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):  # noqa: N802
+        for url in event.mimeData().urls():
+            if url.isLocalFile():
+                self.fileDropped.emit(url.toLocalFile())
+                break
+        event.acceptProposedAction()
+
+    # ---------------------------------------------------------------- snímky
+    def render_region(self, x: float, y: float, span: float, size: int = 480) -> QPixmap:
+        """Vykreslí okolí bodu (pro protokol PDF)."""
+        from PySide6.QtGui import QImage
+        img = QImage(size, size, QImage.Format_ARGB32)
+        img.fill(self.backgroundBrush().color())
+        c = self.to_scene(x, y)
+        src = QRectF(c.x() - span / 2, c.y() - span / 2, span, span)
+        painter = QPainter(img)
+        painter.setRenderHint(QPainter.Antialiasing)
+        hidden = []
+        for m in self.markers.values():
+            if m.isVisible():
+                m.setVisible(False)
+                hidden.append(m)
+        self.scene().render(painter, QRectF(0, 0, size, size), src, Qt.KeepAspectRatio)
+        for m in hidden:
+            m.setVisible(True)
+        # kroužek do středu snímku
+        painter.setPen(QPen(QColor(220, 30, 30), 3))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QPointF(size / 2, size / 2), 22, 22)
+        painter.end()
+        return QPixmap.fromImage(img)

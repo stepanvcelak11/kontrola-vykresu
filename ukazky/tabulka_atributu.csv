@@ -1,0 +1,12 @@
+﻿Kód;Název prvku;Hladina (level);Barva;Styl čáry;Typ geometrie;Povinné atributy;Povolené hodnoty;Buňka;Popis na hladině
+101;Budova;BUDOVY;1 (červená);plná;plocha;;;;POPIS_BUDOV
+102;Parcela;PARCELY;3 (zelená);plná;plocha;;;;PARCELNI_CISLA
+201;Okraj silnice;KOMUNIKACE;8;plná;linie;;;;
+202;Okraj chodníku;KOMUNIKACE;9;čárkovaná;linie;;;;
+301;Plot;PLOTY;5 (modrá);DASHDOT;linie;;;;
+401;Podrobný bod;BODY;7;;bod;CISLO, KOD;;BOD;
+402;Strom listnatý;VEGETACE;3;;bod;DRUH;lípa, dub, javor, bříza, buk;STROM_L;
+403;Šachta;SITE;6;;bod;;;SACHTA;
+501;Popis budovy (č. p.);POPIS_BUDOV;7;;text;;;;
+502;Parcelní číslo;PARCELNI_CISLA;3;;text;;;;
+???;Lavička;MOBILIAR;;;;;;;
