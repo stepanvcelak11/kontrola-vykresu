@@ -236,6 +236,8 @@ class _Loader:
             self.ctx.layer(f.layer).count += 1
         self.drawing.layers = self.ctx.layers
         self.drawing.linetypes = {lt.dxf.name.upper() for lt in self.doc.linetypes}
+        self.drawing.linetype_popis = {lt.dxf.name.upper(): (lt.dxf.get("description", "") or "").strip()
+                                       for lt in self.doc.linetypes}
         if self.progress:
             self.progress(100, "Hotovo")
         return self.drawing

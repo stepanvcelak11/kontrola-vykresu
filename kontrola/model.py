@@ -139,6 +139,7 @@ class Drawing:
     layers: dict[str, LayerInfo] = field(default_factory=dict)
     blocks: dict[str, BlockGeometry] = field(default_factory=dict)
     linetypes: set[str] = field(default_factory=set)
+    linetype_popis: dict[str, str] = field(default_factory=dict)  # popis stylu čáry z DXF („Ohradní zeď…“)
     unit_factor: float = 1.0  # převod jednotek výkresu na metry
     warnings: list[str] = field(default_factory=list)
     source_path: str | None = None  # původní soubor (např. DGN), pokud se převáděl

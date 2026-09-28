@@ -40,8 +40,10 @@ def feature_html(f: Feature, drawing: Drawing, rules: RuleSet, issues: list[Issu
                  + (f" – má být {escape(str(r.barva))}" if col_ok is False else "")))
     if f.geom_type in (GeomType.LINIE, GeomType.POLYGON):
         st_ok = linetype_matches(r.styl_cary, f.linetype) if (r and r.styl_cary) else None
-        rows.append(("Styl", escape(f.linetype) + _ok(st_ok) + (f" – má být {escape(r.styl_cary)}" if st_ok is False
-                                                              else "")))
+        popis = drawing.linetype_popis.get((f.linetype or "").upper(), "")
+        rows.append(("Styl", escape(f.linetype) + (f" <span style='color:#6B7280'>({escape(popis)})</span>"
+                                                   if popis else "")
+                     + _ok(st_ok) + (f" – má být {escape(r.styl_cary)}" if st_ok is False else "")))
         if f.ltscale != 1.0 or (r and r.meritko_stylu):
             ok = abs(f.ltscale - r.meritko_stylu) < 1e-4 if (r and r.meritko_stylu) else None
             rows.append(("Měřítko stylu", fmt_num(f.ltscale, 3) + _ok(ok)))

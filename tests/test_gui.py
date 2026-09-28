@@ -336,3 +336,9 @@ def test_word_se_zadanim_prida_vrstvy(window):
     assert "jsou v pravidlech" in page.rules_state.text()
     page._remove()  # odebrání dokumentu odebere i jeho pravidla
     assert not {r.hladina for r in w.project.rules.pravidla} & {"58", "59", "60"}
+
+
+def test_styl_zdi_kresli_oblouky():
+    from kontrola.ui.drawing_view import style_mark_kind
+    assert style_mark_kind("2.163", "Ohradni zed, vlastnictvi z jedne strany") == "oblouky"
+    assert style_mark_kind("2.103", "Dreveny plot, vlastnictvi z jedne strany") == "carky"

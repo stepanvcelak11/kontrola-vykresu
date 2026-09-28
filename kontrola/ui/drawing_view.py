@@ -72,10 +72,20 @@ def weight_px(mm: float) -> float:
     return 1.0 + max(1, round(mm / 0.14))
 
 
-def add_style_marks(path: QPainterPath, pts: list[QPointF], scale: float):
-    """Značky uživatelského stylu: krátké kolmé čárky na jedné straně čáry (plot, zeď…)."""
+def style_mark_kind(linetype: str, popis: str = "") -> str:
+    """Jakou značku styl kreslí: „oblouky“ (ohradní zeď 2.16x) nebo „carky“ (ploty a ostatní)."""
+    import unicodedata
+    t = unicodedata.normalize("NFKD", f"{linetype} {popis}".lower()).encode("ascii", "ignore").decode()
+    if re.search(r"\bzed\b|\bzdi\b|zdeny", t) or (linetype or "").upper().startswith("2.16"):
+        return "oblouky"
+    return "carky"
+
+
+def add_style_marks(path: QPainterPath, pts: list[QPointF], scale: float, kind: str = "carky"):
+    """Značky uživatelského stylu na jedné straně čáry: krátké kolmé čárky (plot) nebo obloučky (zeď)."""
     step = 1.2 * max(scale, 0.05)
     tick = 0.35 * max(scale, 0.05)
+    rad = 0.3 * max(scale, 0.05)
     carry = step / 2
     for a, b in zip(pts, pts[1:]):
         dx, dy = b.x() - a.x(), b.y() - a.y()
@@ -87,8 +97,15 @@ def add_style_marks(path: QPainterPath, pts: list[QPointF], scale: float):
         s = carry
         while s < L:
             px, py = a.x() + ux * s, a.y() + uy * s
-            path.moveTo(px, py)
-            path.lineTo(px + nx * tick, py + ny * tick)
+            if kind == "oblouky":  # půlkruh vybočený na stranu vlastníka, konce leží na čáře
+                for k in range(13):
+                    t = math.pi * k / 12
+                    qx = px - ux * rad * math.cos(t) + nx * rad * math.sin(t)
+                    qy = py - uy * rad * math.cos(t) + ny * rad * math.sin(t)
+                    (path.moveTo if k == 0 else path.lineTo)(qx, qy)
+            else:
+                path.moveTo(px, py)
+                path.lineTo(px + nx * tick, py + ny * tick)
             s += step
         carry = s - L
 
@@ -311,7 +328,8 @@ def prepare_drawing(drawing: Drawing) -> PreparedDrawing:
             if g.geom_type in ("LineString", "LinearRing"):
                 pts = [pb.to_scene(c[0], c[1]) for c in g.coords]
                 marks = groups[f.layer].setdefault(key + ("#znacky",), QPainterPath())
-                add_style_marks(marks, pts, f.ltscale or 1.0)
+                kind = style_mark_kind(f.linetype, drawing.linetype_popis.get(f.linetype.upper(), ""))
+                add_style_marks(marks, pts, f.ltscale or 1.0, kind)
         if f.dxftype == "INSERT":
             pb.add_insert(path, f, drawing, cross, block_cache)
             for (t, x, y, h, rot) in f.display_texts:
