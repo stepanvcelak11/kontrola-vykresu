@@ -368,7 +368,10 @@ class MainWindow(QMainWindow):
                 self._remember_recent(path)
             if add_to_project and self.project is not None:
                 try:
-                    self.project.set_drawing(path)
+                    # u DGN si projekt pamatuje DXF, ze kterého se skutečně četlo (vedle DGN / převod)
+                    real = Path(drawing.path)
+                    keep = real if (real.suffix.lower() == ".dxf" and real.parent == path.parent) else path
+                    self.project.set_drawing(keep)
                     self.project.save()
                 except OSError as exc:
                     QMessageBox.warning(self, APP_NAME, f"Výkres se nepodařilo zkopírovat do projektu: {exc}")

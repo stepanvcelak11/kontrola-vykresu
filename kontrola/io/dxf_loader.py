@@ -418,6 +418,17 @@ def load_drawing(path: str | Path, progress: ProgressFn | None = None,
         return read_dxf(p, progress)
     if suffix in (".dgn", ".dwg"):
         from .dgn import convert_to_dxf
+        # DXF se stejným názvem vedle DGN (uložený z MicroStationu / dávkovým převodem)
+        sibling = next((s for s in (p.with_suffix(".dxf"), p.with_suffix(".DXF")) if s.is_file()), None)
+        if sibling is not None:
+            d = read_dxf(sibling, progress)
+            d.source_path = str(sibling)
+            if sibling.stat().st_mtime + 1 < p.stat().st_mtime:
+                d.warnings.insert(0, f"{sibling.name} je starší než {p.name} – uložte výkres z MicroStationu "
+                                     f"znovu jako DXF, jinak kontrolujete starou verzi.")
+            else:
+                d.warnings.insert(0, f"Použit {sibling.name} uložený vedle {p.name}.")
+            return d
         if progress:
             progress(0, "Převádím výkres na DXF (ODA File Converter)…")
         dxf = convert_to_dxf(p, oda_path)

@@ -164,14 +164,21 @@ python -m pytest -q tests\test_topologie.py tests\test_atributy.py
 
 ## Převod DGN na DXF
 
-Aplikace čte hlavně **DXF**. Soubor DGN jde otevřít dvěma způsoby:
+Formát DGN z MicroStationu V8 (V8i, CONNECT) nejde číst žádnou volně dostupnou knihovnou.
+Výkres proto uložte z MicroStationu jako **DXF**:
 
-1. **Uložení z MicroStationu (doporučeno):** *Soubor → Uložit jako…*, typ
-   *AutoCAD Drawing Interchange (\*.dxf)*, jednotky v metrech.
-2. **Automatický převod:** nainstalujte bezplatný
-   [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter). Aplikace ho
-   najde v `C:\Program Files\ODA\…`, případně cestu zadáte v Nastavení kontrol. Pokud převod
-   selže, aplikace zobrazí český návod. Ne každá verze ODA File Converteru čte DGN.
+* **Jeden výkres:** *Soubor → Uložit jako…*, typ *AutoCAD Drawing Interchange (\*.dxf)*,
+  v *Možnostech* jednotky v metrech.
+* **Všechny výkresy najednou:** *Utilities → Batch Converter* (Dávkový převod). Přetáhněte
+  do něj soubory `.dgn`, jako výstupní formát zvolte DXF a spusťte *Process*.
+
+**Ukládejte DXF vedle DGN se stejným názvem.** Když pak do aplikace přetáhnete `vykres.dgn`,
+aplikace sama použije `vykres.dxf`. Pokud je DXF starší než DGN, upozorní vás, že kontrolujete
+starou verzi. Po opravě v MicroStationu stačí DXF uložit znovu a stisknout
+**Zkontrolovat znovu**.
+
+Automatický převod přes ODA File Converter se zkusí, jen pokud je nainstalovaný (cestu jde
+zadat v Nastavení kontrol). Běžná verze ale DGN převádět nemusí.
 
 Návod je i v menu **Nápověda → Jak převést DGN na DXF**.
 

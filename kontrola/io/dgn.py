@@ -15,20 +15,38 @@ import tempfile
 from pathlib import Path
 
 DGN_NAVOD = (
-    "Soubor DGN nelze otevřít přímo.\n\n"
-    "Možnost 1 – uložení z MicroStationu (doporučeno):\n"
+    "Soubor DGN nelze otevřít přímo – uložte ho z MicroStationu jako DXF.\n\n"
+    "Jeden výkres:\n"
     "  1. Otevřete výkres v MicroStationu.\n"
     "  2. Soubor → Uložit jako… (File → Save As…).\n"
-    "  3. Jako typ souboru zvolte „AutoCAD Drawing Interchange (*.dxf)“.\n"
-    "  4. V možnostech exportu ponechte jednotky v metrech a verzi DXF 2013 nebo novější.\n"
-    "  5. Uložený DXF otevřete v této aplikaci.\n\n"
-    "Možnost 2 – automatický převod:\n"
-    "  Nainstalujte bezplatný ODA File Converter "
-    "(https://www.opendesign.com/guestfiles/oda_file_converter) a v Nastavení "
-    "kontrol vyplňte cestu k ODAFileConverter.exe, pokud se nenajde sám.\n"
-    "  Pozor: ne každá verze ODA File Converteru umí číst DGN – pokud převod "
-    "selže, použijte možnost 1."
+    "  3. Typ souboru: „AutoCAD Drawing Interchange (*.dxf)“.\n"
+    "  4. Tlačítko Možnosti (Options): jednotky „Master Units“ (metry), verze DXF 2013 nebo novější.\n"
+    "  5. Uložený DXF přetáhněte do této aplikace.\n\n"
+    "Všechny výkresy najednou (dávkový převod):\n"
+    "  1. V MicroStationu: Utilities → Batch Converter (Nástroje → Dávkový převod).\n"
+    "  2. Přetáhněte do seznamu všechny soubory .dgn (nebo Add Files / Add Folder).\n"
+    "  3. Výstupní formát (Output Format): DXF, zvolte výstupní složku.\n"
+    "  4. Nastavení DXF (Options) jako výše, případně je uložte pro příště.\n"
+    "  5. Process → vzniknou soubory .dxf se stejnými názvy.\n\n"
+    "Tip: DXF ukládejte vedle DGN. Po opravě v MicroStationu stačí DXF uložit znovu a v aplikaci "
+    "stisknout „Zkontrolovat znovu“.\n\n"
+    "Automatický převod: pokud máte nainstalovaný program, který umí DGN převést na DXF příkazem "
+    "(např. ODA File Converter ve verzi s podporou DGN), nastavte cestu v Nastavení kontrol."
 )
+
+
+def dgn_version(path: str | Path) -> str | None:
+    """Pozná verzi souboru DGN podle hlavičky: „V8“ (MicroStation V8/V8i/CONNECT) nebo „V7“."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(8)
+    except OSError:
+        return None
+    if head[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":  # OLE – DGN V8
+        return "V8"
+    if len(head) >= 4 and head[2:4] == b"\xfe\x02" and head[0] & 0x3F in (8, 9):  # typ 9 = hlavička V7
+        return "V7"
+    return None
 
 
 class ConversionError(Exception):
@@ -60,7 +78,10 @@ def convert_to_dxf(source: str | Path, oda_path: str | None = None, out_dir: str
     source = Path(source)
     exe = find_oda_converter(oda_path)
     if exe is None:
-        raise ConversionError("ODA File Converter nebyl nalezen.\n\n" + DGN_NAVOD)
+        ver = dgn_version(source) if source.suffix.lower() == ".dgn" else None
+        kind = {"V8": "MicroStation V8 / V8i / CONNECT", "V7": "MicroStation V7 (starší formát)"}.get(ver, "")
+        head = f"Soubor {source.name}" + (f" je ve formátu {kind}." if kind else ".")
+        raise ConversionError(head + "\n\n" + DGN_NAVOD)
     out = Path(out_dir) if out_dir else Path(tempfile.mkdtemp(prefix="kontrola_dxf_"))
     out.mkdir(parents=True, exist_ok=True)
     work_in = Path(tempfile.mkdtemp(prefix="kontrola_in_"))
