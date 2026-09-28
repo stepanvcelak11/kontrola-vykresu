@@ -323,7 +323,8 @@ class DrawingView(QGraphicsView):
     cursorMoved = Signal(float, float)
     markerClicked = Signal(int)  # číslo chyby
     fileDropped = Signal(str)
-    pointPicked = Signal(float, float)  # klik v režimu výběru bodu (souřadnice výkresu)
+    pointPicked = Signal(float, float)
+    featureClicked = Signal(int)  # klik na prvek výkresu (fid), -1 = do prázdna  # klik v režimu výběru bodu (souřadnice výkresu)
 
     def set_pick_mode(self, on: bool):
         self._pick_mode = on
@@ -617,6 +618,52 @@ class DrawingView(QGraphicsView):
         if zoom:
             self.zoom_to_issue(iss)
 
+    def feature_at(self, x: float, y: float, tol: float) -> int:
+        """Nejbližší viditelný prvek k bodu (v toleranci), jinak -1."""
+        import numpy as np
+        import shapely
+        from shapely.geometry import Point
+        if getattr(self, "_pick_of", None) is not self.drawing:
+            feats = [f for f in self.drawing.features if f.geometry is not None and not f.geometry.is_empty]
+            self._pick_feats = feats
+            self._pick_tree = shapely.STRtree(np.array([f.geometry for f in feats], dtype=object)) if feats else None
+            self._pick_of = self.drawing
+        if self._pick_tree is None:
+            return -1
+        p = Point(x, y)
+        best, best_d = -1, None
+        for i in self._pick_tree.query(p, predicate="dwithin", distance=max(tol, 1e-6) * 3):
+            f = self._pick_feats[int(i)]
+            li = self.layer_items.get(f.layer)
+            if li is not None and not li.isVisible():
+                continue
+            d = f.geometry.distance(p)
+            if f.geom_type == GeomType.TEXT:
+                d = max(0.0, d - max(f.text_height, 0.1) * 0.8)  # text je větší než jeho bod
+            if d <= tol and (best_d is None or d < best_d):
+                best, best_d = f.fid, d
+        return best
+
+    def highlight_feature(self, fid: int):
+        sc = self.scene()
+        if self._highlight is not None:
+            sc.removeItem(self._highlight)
+            self._highlight = None
+        for m in self.markers.values():
+            m.set_highlighted(False)
+        f = self.drawing.by_id().get(fid) if (self.drawing is not None and fid >= 0) else None
+        if f is None:
+            return
+        path = QPainterPath()
+        self._add_feature_outline(path, f)
+        item = QGraphicsPathItem(path)
+        pen = QPen(QColor(0, 200, 255, 230), 4)
+        pen.setCosmetic(True)
+        item.setPen(pen)
+        item.setZValue(9_000)
+        sc.addItem(item)
+        self._highlight = item
+
     def _add_feature_outline(self, path: QPainterPath, f: Feature):
         """Obrys prvku pro zvýraznění: čára/plocha přímo, text jako obdélník, bod jako kroužek."""
         from shapely.geometry import Polygon
@@ -718,10 +765,15 @@ class DrawingView(QGraphicsView):
                 event.accept()
                 return
             if not was_pan and event.button() == Qt.LeftButton:
+                hit = False
                 for item in self.items(event.position().toPoint()):
                     if isinstance(item, IssueMarker) and item.isVisible():
                         self.markerClicked.emit(item.issue.number)
+                        hit = True
                         break
+                if not hit and self.drawing is not None:
+                    x, y = self.from_scene(self.mapToScene(event.position().toPoint()))
+                    self.featureClicked.emit(self.feature_at(x, y, 7.0 / max(self.current_scale(), 1e-9)))
             event.accept()
             return
         super().mouseReleaseEvent(event)

@@ -79,6 +79,16 @@ class MainWindow(QMainWindow):
         self.layers_dock.setWidget(self.layers)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.layers_dock)
 
+        from .inspector import InspectorPanel
+        self.inspector = InspectorPanel()
+        self.inspector_dock = QDockWidget("Prvek", self)
+        self.inspector_dock.setObjectName("prvek")
+        self.inspector_dock.setWidget(self.inspector)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.inspector_dock)
+        self.tabifyDockWidget(self.layers_dock, self.inspector_dock)
+        self.layers_dock.raise_()
+        self.view.featureClicked.connect(self._on_feature_clicked)
+
         self.sketch = ImageBrowser(compact=True)
         self.sketch.noteChanged.connect(self._sketch_note_changed)
         self.zadani.noteChangedSignal.connect(self.sketch.sync_note)
@@ -213,6 +223,7 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.a_labels)
         m_view.addAction(self.a_sketch)
         m_view.addAction(self.layers_dock.toggleViewAction())
+        m_view.addAction(self.inspector_dock.toggleViewAction())
         m_view.addAction(self.sketch_dock.toggleViewAction())
         m_check = self.menuBar().addMenu("&Kontrola")
         m_check.addAction(self.a_check)
@@ -509,12 +520,16 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "layers_dock"):
             return
         on_drawing = self.tabs.widget(index) is self.split
+        docks = (self.layers_dock, getattr(self, "inspector_dock", None))
         if on_drawing:
-            if getattr(self, "_layers_were_visible", False):
-                self.layers_dock.show()
+            for d in docks:
+                if d is not None and getattr(d, "_was_visible", False):
+                    d.show()
         else:
-            self._layers_were_visible = self.layers_dock.isVisible()
-            self.layers_dock.hide()
+            for d in docks:
+                if d is not None:
+                    d._was_visible = d.isVisible()
+                    d.hide()
 
     def _toggle_wip(self, on: bool):
         if self.project is None or self._syncing_wip:
@@ -977,7 +992,26 @@ class MainWindow(QMainWindow):
         return text
 
     def _on_issue_selected(self, number: int):
-        self.view.highlight_issue(number, zoom=True)
+        self.view.highlight_issue(number, zoom=not getattr(self, "_no_zoom", False))
+
+    def _on_feature_clicked(self, fid: int):
+        if self.drawing is None or getattr(self.view, "_pick_mode", False):
+            return
+        f = self.drawing.by_id().get(fid) if fid >= 0 else None
+        self.view.highlight_feature(fid)
+        from ..rules import RuleSet
+        self.inspector.show_feature(f, self.drawing, self.project.rules if self.project else RuleSet(), self.issues)
+        if f is not None:
+            self.inspector_dock.show()
+            self.inspector_dock.raise_()
+            mine = [i for i in self.issues if fid in i.feature_ids]
+            if mine:
+                self._no_zoom = True
+                try:
+                    self.issue_panel.select_issue(mine[0].number)
+                finally:
+                    self._no_zoom = False
+                self.view.highlight_feature(fid)
 
     def _on_marker_clicked(self, number: int):
         self.issue_panel.select_issue(number)

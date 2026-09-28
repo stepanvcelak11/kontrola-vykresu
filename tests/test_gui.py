@@ -186,3 +186,20 @@ def test_pripraveno_k_odevzdani(window, monkeypatch):
     d.b_rec.click()
     assert len(w.project.meta["odevzdani"]) == 1
     assert len(w.project.meta["historie"]) >= 3
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_inspektor_prvku(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0)
+    f = next(f for f in w.drawing.features if f.geom_type.value == "linie")
+    x, y = f.geometry.interpolate(0.5, normalized=True).coords[0]
+    fid = w.view.feature_at(x, y, 0.05)
+    assert fid >= 0
+    w._on_feature_clicked(fid)
+    html = w.inspector.view.toHtml()
+    assert "Vrstva" in html and "Barva" in html
+    w._on_feature_clicked(-1)
+    assert "není žádný prvek" in w.inspector.view.toPlainText()
