@@ -1,0 +1,7 @@
+; Dané body pro výpočet zápisníku zap_husovice.zap (Y X Z, S-JTSK)
+; 4001 a 4002 z gnss_husovice.txt, ostatní z www.cuzk.cz (převzato z výpočetního protokolu Gromy)
+4001              595990.270  1158224.110  258.620
+4002              595971.880  1158234.750  255.960
+944212300         595985.500  1158160.660  259.030
+610844000000596   595960.100  1158286.060
+JM-071-519        595948.000  1158334.000  256.204

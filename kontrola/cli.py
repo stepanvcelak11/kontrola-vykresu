@@ -33,6 +33,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pravidla", help="YAML s pravidly (může obsahovat i nastavení kontrol)")
     ap.add_argument("--nastaveni", help="YAML s nastavením kontrol")
     ap.add_argument("--tolerance", type=float, help="tolerance v metrech")
+    ap.add_argument("--seznam", help="seznam souřadnic bodů (číslo Y X Z) – porovná body, čísla a výšky")
+    ap.add_argument("--rozpracovany", action="store_true",
+                    help="rozpracovaný výkres: nehlásit volné konce, neuzavřené plochy a chybějící popisy")
     ap.add_argument("--jen", nargs="*", help="spustit jen vybrané kontroly (id)")
     ap.add_argument("--csv", help="uložit seznam chyb do CSV")
     ap.add_argument("--xlsx", help="uložit seznam chyb do Excelu")
@@ -59,6 +62,10 @@ def main(argv: list[str] | None = None) -> int:
         config = Config.load(a.nastaveni)
     if a.tolerance is not None:
         config.tolerance = a.tolerance
+    if a.seznam:
+        config.seznam_souradnic = a.seznam
+    if a.rozpracovany:
+        config.rozpracovany = True
 
     def prog(p, msg=""):
         print(f"\r{p:3d} % {msg[:60]:60}", end="", file=sys.stderr, flush=True)

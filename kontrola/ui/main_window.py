@@ -169,6 +169,8 @@ class MainWindow(QMainWindow):
         self.a_region = self._act("Jen tento výřez", self._toggle_region, None,
                                   "Počítat jen chyby v právě zobrazené části výkresu (přibližte si hotovou část). "
                                   "Opětovným kliknutím se vrátíte k celému výkresu.", checkable=True)
+        self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
+                                   "Spočítat body ze zápisníku totální stanice a porovnat s vaším seznamem z Gromy")
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
                                   "Zobrazit náčrt a fotky v panelu vedle výkresu (panel lze odpojit)")
 
@@ -198,6 +200,8 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_check)
         m_check.addAction(self.a_recheck)
         m_check.addAction(self.a_repair)
+        m_check.addSeparator()
+        m_check.addAction(self.a_vypocet)
         m_check.addSeparator()
         m_check.addAction(self.a_wip)
         m_check.addAction(self.a_region)
@@ -342,6 +346,10 @@ class MainWindow(QMainWindow):
         self.project.store_issues(self.issues)
         out = self.project.export_zip(path)
         self.statusBar().showMessage(f"Projekt uložen do {out}", 10000)
+
+    def show_vypocet(self):
+        from .vypocet_dialog import VypocetDialog
+        VypocetDialog(self.project, self).exec()
 
     def _tab_changed(self, index: int):
         """Panel hladin patří k výkresu – na záložce Zadání jen zabírá místo."""
@@ -522,12 +530,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres (tlačítko Otevřít výkres "
                                                     "nebo přetažením souboru do okna).")
             return
-        if self.task is not None and self.task.is_running():
-            # výkres se ještě načítá / probíhá jiná úloha – kontrola se spustí hned po ní
-            self._queued_check = after if callable(after) else True
-            self.info_label.setText("Kontrola se spustí po dokončení probíhající úlohy…")
-            return
         drawing, rules, config = self.drawing, self.project.rules, self.project.config
+        seznamy = self.project.attachments("seznamy")
+        config.seznam_souradnic = str(seznamy[0].path) if seznamy else ""
 
         def job(progress, cancelled):
             return run_checks(drawing, rules, config, progress, cancelled)

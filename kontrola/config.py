@@ -50,6 +50,7 @@ class Config:
     ignorovane_hladiny: list[str] = field(default_factory=lambda: ["KONTROLA_CHYBY", "DEFPOINTS"])
     oda_cesta: str = ""
     rozpracovany: bool = False  # rozpracovaný výkres: nehlásit, co vzniká jen nedokončenou kresbou
+    seznam_souradnic: str = ""  # cesta k seznamu souřadnic (nastaví projekt / příkazová řádka, neukládá se)
     kontroly: dict[str, CheckSettings] = field(default_factory=dict)
 
     def __post_init__(self):

@@ -28,6 +28,18 @@ TABLE_EXT = {".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".tsv", ".pdf"}
 DRAWING_EXT = {".dxf", ".dgn", ".dwg"}
 
 
+def _is_point_list(path: str) -> bool:
+    """Textový soubor, ve kterém jsou skoro jen řádky „číslo Y X (Z)“ – seznam souřadnic."""
+    try:
+        from ..checks.seznam import read_point_list
+        pts = read_point_list(path)
+        lines = [ln for ln in Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+                 if ln.strip() and not ln.lstrip().startswith(";")]
+    except OSError:
+        return False
+    return len(pts) >= 2 and len(pts) >= 0.8 * len(lines) and all(abs(p.a) > 1000 for p in pts[:5])
+
+
 class DropArea(QFrame):
     filesDropped = Signal(list)
 
@@ -757,8 +769,9 @@ class AttachmentsPage(QWidget):
         elif kind == "vzor":
             self.tab.template_page._pick()
         else:
-            files, _ = QFileDialog.getOpenFileNames(self, "Zadání a dokumenty", "",
-                                                    "Dokumenty (*.doc *.docx *.pdf *.odt *.txt *.xls *.xlsx);;Vše (*)")
+            filt = ("Seznam souřadnic (*.txt *.crd *.csv);;Vše (*)" if kind == "seznamy" else
+                    "Dokumenty (*.doc *.docx *.pdf *.odt *.txt *.xls *.xlsx *.zap);;Vše (*)")
+            files, _ = QFileDialog.getOpenFileNames(self, KINDS[kind], "", filt)
             for f in files:
                 self.tab.project.add_attachment(kind, f)
             if files:
@@ -894,6 +907,12 @@ class ZadaniTab(QWidget):
             if suf in DRAWING_EXT:
                 self.tabs.setCurrentWidget(self.template_page)
                 self.template_page.set_template(f)
+            elif suf in (".txt", ".crd", ".csv") and _is_point_list(f):
+                self.project.add_attachment("seznamy", f)
+                self.project_changed()
+                self.tabs.setCurrentWidget(self.attachments_page)
+                QMessageBox.information(self, "Seznam souřadnic", f"{Path(f).name} je seznam souřadnic – uložen "
+                                        "do Podkladů. Při kontrole se porovnají body, čísla a výšky bodů.")
             elif suf in (".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".tsv"):
                 self.tabs.setCurrentWidget(self.table_page)
                 self.table_page.import_file(f)
