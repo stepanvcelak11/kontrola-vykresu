@@ -49,7 +49,8 @@ class MainWindow(QMainWindow):
         self.issue_panel.issueSelected.connect(self._on_issue_selected)
         self.issue_panel.filterChanged.connect(self.view.set_visible_issues)
         self.issue_panel.stateChanged.connect(self._on_states_changed)
-        self.issue_panel.message.connect(lambda t: self.statusBar().showMessage(t, 6000))
+        self.issue_panel.message.connect(lambda t: self.statusBar().showMessage(t, 8000))
+        self.issue_panel.feature_info = self._feature_info
 
         self.split = QSplitter(Qt.Horizontal)
         self.split.addWidget(self.view)
@@ -73,7 +74,7 @@ class MainWindow(QMainWindow):
 
         self.layers = LayersPanel()
         self.layers.layerToggled.connect(self.view.set_layer_visible)
-        self.layers_dock = QDockWidget("Hladiny", self)
+        self.layers_dock = QDockWidget("Vrstvy", self)
         self.layers_dock.setObjectName("hladiny")
         self.layers_dock.setWidget(self.layers)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.layers_dock)
@@ -165,7 +166,7 @@ class MainWindow(QMainWindow):
         self.a_exp_csv = self._act("Seznam chyb do CSV…", lambda: self.export("csv"))
         self.a_exp_xlsx = self._act("Seznam chyb do Excelu…", lambda: self.export("xlsx"))
         self.a_exp_pdf = self._act("Protokol do PDF…", lambda: self.export("pdf"))
-        self.a_exp_dxf = self._act("DXF s hladinou KONTROLA_CHYBY…", lambda: self.export("dxf"))
+        self.a_exp_dxf = self._act("DXF s vrstvou KONTROLA_CHYBY…", lambda: self.export("dxf"))
         self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
         self.a_wip = self._act("Rozpracovaný výkres", self._toggle_wip, None,
                                "Výkres ještě není hotový: nehlásit volné konce, neuzavřené plochy, mezery mezi "
@@ -498,7 +499,7 @@ class MainWindow(QMainWindow):
         VypocetDialog(self.project, self).exec()
 
     def _tab_changed(self, index: int):
-        """Panel hladin patří k výkresu – na záložce Zadání jen zabírá místo."""
+        """Panel vrstev patří k výkresu – na záložce Zadání jen zabírá místo."""
         if not hasattr(self, "layers_dock"):
             return
         on_drawing = self.tabs.widget(index) is self.split
@@ -661,7 +662,7 @@ class MainWindow(QMainWindow):
         self.set_issues([])
         self._update_watch()
         n = len(drawing.features)
-        self.info_label.setText(f"Načteno {n} prvků, {sum(1 for l in drawing.layers.values() if l.count)} hladin.")
+        self.info_label.setText(f"Načteno {n} prvků, {sum(1 for l in drawing.layers.values() if l.count)} vrstev.")
         self._update_title()
         if drawing.warnings:
             self.statusBar().showMessage(f"Upozornění při načítání: {len(drawing.warnings)} "
@@ -936,6 +937,38 @@ class MainWindow(QMainWindow):
                    rules_count=len(self.project.rules.pravidla), images=images, overview=overview,
                    notes=getattr(self, "last_notes", []), tolerance=self.project.config.tolerance,
                    image_limit=limit)
+
+    def _feature_info(self, iss: Issue) -> str:
+        """Popis prvku, ke kterému chyba patří – aby šel ve výkresu najít."""
+        if self.drawing is None or not iss.feature_ids:
+            return ""
+        if getattr(self, "_by_id_of", None) is not self.drawing:
+            self._by_id, self._by_id_of = self.drawing.by_id(), self.drawing
+        f = self._by_id.get(iss.feature_ids[0])
+        if f is None:
+            return ""
+        from html import escape
+
+        from ..checks.attributes import _what
+        parts = [f"{_what(f)} na vrstvě <b>{escape(f.layer)}</b>"]
+        if f.text:
+            parts.append(f"text „{escape(f.text[:60])}“")
+        if f.block_name:
+            parts.append(f"buňka {escape(f.block_name)}")
+        if self.project is not None:
+            parts.append(f"barva {escape(self.project.rules.describe_feature_color(f))}")
+        if f.geom_type.value in ("linie", "polygon"):
+            parts.append(f"styl {escape(f.linetype)}")
+        if len(iss.feature_ids) > 1:
+            parts.append(f"(a dalších {len(iss.feature_ids) - 1} prvků)")
+        text = ", ".join(parts)
+        li = self.drawing.layers.get(f.layer)
+        if li is not None and (li.off or li.frozen):
+            text += (" – <span style='color:#B45309'><b>vrstva je ve výkresu vypnutá</b>, proto prvek v MicroStationu "
+                     "nevidíte. Zapněte ji ve Správci vrstev (Level Manager / Zobrazení vrstev).</span>")
+        elif f.geom_type.value in ("bod",) and f.dxftype == "POINT":
+            text += " – bod je ve výkresu jen malá tečka, přibližte si ho."
+        return text
 
     def _on_issue_selected(self, number: int):
         self.view.highlight_issue(number, zoom=True)

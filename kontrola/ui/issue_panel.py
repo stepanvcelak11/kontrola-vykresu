@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, 
 from ..checks.base import ISSUE_STATES, Issue, Severity, fmt_num
 from .drawing_view import SEVERITY_COLORS
 
-COLUMNS = ["Č.", "Závažnost", "Stav", "Popis", "Typ kontroly", "Hladina", "X", "Y"]
+COLUMNS = ["Č.", "Závažnost", "Stav", "Popis", "Typ kontroly", "Vrstva", "X", "Y"]
 C_SEV, C_STATE, C_DESC, C_TYPE = 1, 2, 3, 4
 STATE_LABEL = {"nová": "k opravě", "opraveno": "✓ opraveno", "ignorovat": "✕ ignorováno"}
 STATE_COLOR = {"opraveno": QColor(22, 150, 70), "ignorovat": QColor(120, 120, 130)}
@@ -260,7 +260,7 @@ class IssuePanel(QWidget):
         row2.addStretch(1)
         fl.addLayout(row2)
         row3 = QHBoxLayout()
-        row3.addWidget(QLabel("Hladina:"))
+        row3.addWidget(QLabel("Vrstva:"))
         self.layer_combo = QComboBox()
         self.layer_combo.currentIndexChanged.connect(self._filters_changed)
         row3.addWidget(self.layer_combo, 1)
@@ -269,7 +269,7 @@ class IssuePanel(QWidget):
         self.hide_done.toggled.connect(self._filters_changed)
         fl.addWidget(self.hide_done)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Hledat v popisu, hladině, čísle chyby…")
+        self.search.setPlaceholderText("Hledat v popisu, vrstvě, čísle chyby…")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filters_changed)
         fl.addWidget(self.search)
@@ -329,6 +329,20 @@ class IssuePanel(QWidget):
         self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.hint.setVisible(False)
         tl.addWidget(self.hint)
+        frow = QHBoxLayout()
+        self.b_find = QPushButton("Najít v MicroStationu")
+        self.b_find.setToolTip("Zkopíruje příkaz, který v MicroStationu vycentruje pohled na místo chyby. "
+                               "V MicroStationu otevřete okno Key-in (Nástroje → Key-in), vložte (Ctrl+V) a Enter.")
+        self.b_find.clicked.connect(self._copy_keyin)
+        self.b_find.setEnabled(False)
+        frow.addWidget(self.b_find)
+        self.b_copyxy = QPushButton("Kopírovat souřadnice")
+        self.b_copyxy.clicked.connect(self._copy_xy)
+        self.b_copyxy.setEnabled(False)
+        frow.addWidget(self.b_copyxy)
+        frow.addStretch(1)
+        tl.addLayout(frow)
+        self.feature_info = None  # funkce Issue -> text s popisem prvku (nastaví hlavní okno)
         nrow = QHBoxLayout()
         nrow.addWidget(QLabel("Poznámka:"))
         self.note = QLineEdit()
@@ -363,10 +377,10 @@ class IssuePanel(QWidget):
             cb.setText(f"{s.value} ({sev_counts.get(s, 0)})")
         cur = self.layer_combo.currentData()
         self.layer_combo.clear()
-        self.layer_combo.addItem("Všechny hladiny", None)
+        self.layer_combo.addItem("Všechny vrstvy", None)
         lc = Counter(i.layer for i in issues)
         for layer in sorted(lc, key=str.lower):
-            self.layer_combo.addItem(f"{layer or '(bez hladiny)'} ({lc[layer]})", layer)
+            self.layer_combo.addItem(f"{layer or '(bez vrstvy)'} ({lc[layer]})", layer)
         idx = self.layer_combo.findData(cur)
         self.layer_combo.setCurrentIndex(max(0, idx))
         self._updating = False
@@ -394,7 +408,8 @@ class IssuePanel(QWidget):
                   if self.proxy.region is None or self.proxy.accepts_region(i)]
         open_ = [i for i in issues if i.state == "nová"]
         c = Counter(i.severity for i in open_)
-        self.cards[None].setText(str(len(open_)))
+        todo = c.get(Severity.CHYBA, 0) + c.get(Severity.VAROVANI, 0)  # info se neopravuje
+        self.cards[None].setText(str(todo))
         done = len(issues) - len(open_)
         self.card_caps[None].setText(f"k opravě (vyřešeno {done} z {len(issues)})" if done else "k opravě")
         for sev in Severity:
@@ -493,13 +508,40 @@ class IssuePanel(QWidget):
             self.note.setText(iss.note)
             from ..navody import navod
             h = navod(iss)
-            self.hint.setText(f"<b>Jak opravit:</b> {h}" if h else "")
-            self.hint.setVisible(bool(h))
+            info = self.feature_info(iss) if self.feature_info else ""
+            parts = []
+            if info:
+                parts.append(f"<b>Prvek:</b> {info}")
+            if h:
+                parts.append(f"<b>Jak opravit:</b> {h}")
+            self.hint.setText("<br>".join(parts))
+            self.hint.setVisible(bool(parts))
+            self.b_find.setEnabled(True)
+            self.b_copyxy.setEnabled(True)
             self.issueSelected.emit(iss.number)
         else:
             self.note.setEnabled(False)
             self.note.clear()
             self.hint.setVisible(False)
+            self.b_find.setEnabled(False)
+            self.b_copyxy.setEnabled(False)
+
+    def _copy_keyin(self):
+        iss = self.current_issue()
+        if iss is None:
+            return
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(f"WINDOW CENTER;XY={iss.x:.3f},{iss.y:.3f}")
+        self.message.emit("Zkopírováno. V MicroStationu: Nástroje → Key-in, vložte (Ctrl+V), Enter – pohled se "
+                          "vycentruje na místo chyby (pak přibližte kolečkem).")
+
+    def _copy_xy(self):
+        iss = self.current_issue()
+        if iss is None:
+            return
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(f"{iss.x:.3f},{iss.y:.3f}")
+        self.message.emit(f"Souřadnice zkopírovány: {iss.x:.3f}, {iss.y:.3f}")
 
     def _note_edited(self):
         iss = self.current_issue()

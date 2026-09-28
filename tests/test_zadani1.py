@@ -62,7 +62,7 @@ def test_typ_prvku_a_texty(make_dxf):
     assert [i.message for i in check(d, "typ_geometrie", RS)] == \
         ["Budovy: typ prvku Tvar (povoleno: Úsečka, Lomená čára, Elipsa, Oblouk)"]
     msgs = [i.message for i in check(d, "symbologie", RS)]
-    assert msgs == ["Čísla bodů: výška textu 1 (má být 0,75), šířka textu 0,5 (má být 0,75), "
+    assert msgs == ["Text (pravidlo „Čísla bodů“): výška textu 1 (má být 0,75), šířka textu 0,5 (má být 0,75), "
                     "zarovnání vlevo účaří (má být vlevo nahoře)"]
     assert check(d, "nulova_delka", RS) == []  # úsečka nulové délky na vrstvě bodů je záměr
 

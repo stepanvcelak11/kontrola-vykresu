@@ -1,4 +1,4 @@
-"""Seznam hladin se zaškrtávátky (zapnutí/vypnutí hladin ve výkresu)."""
+"""Seznam vrstev se zaškrtávátky (zapnutí/vypnutí vrstev ve výkresu)."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class LayersPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Hledat hladinu…")
+        self.search.setPlaceholderText("Hledat vrstvu…")
         self.search.textChanged.connect(self._filter)
         lay.addWidget(self.search)
         self.list = QListWidget()

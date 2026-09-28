@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jen", nargs="*", help="spustit jen vybrané kontroly (id)")
     ap.add_argument("--csv", help="uložit seznam chyb do CSV")
     ap.add_argument("--xlsx", help="uložit seznam chyb do Excelu")
-    ap.add_argument("--dxf", help="uložit DXF s hladinou KONTROLA_CHYBY")
+    ap.add_argument("--dxf", help="uložit DXF s vrstvou KONTROLA_CHYBY")
     ap.add_argument("--pdf", help="uložit protokol PDF (bez obrázků – ty vytvoří grafická aplikace)")
     ap.add_argument("--log", help="uložit protokol ve formátu MGEO / GISoft (.log)")
     ap.add_argument("--oprav", metavar="VYSTUP.dxf",

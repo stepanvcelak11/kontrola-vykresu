@@ -62,7 +62,7 @@ class SettingsDialog(QDialog):
         fl.addRow("Přesnost (totožnost bodů):", self.prec)
         fl.addRow("Okruh hledání textu k prvku:", self.radius)
         fl.addRow("Max. počet chyb jedné kontroly:", self.max_issues)
-        fl.addRow("Ignorované hladiny:", self.ignored)
+        fl.addRow("Ignorované vrstvy:", self.ignored)
         fl.addRow("ODA File Converter (pro DGN):", row)
 
         box = QGroupBox("Rozsah výkresu (kontrola „Prvek mimo rozsah“)")

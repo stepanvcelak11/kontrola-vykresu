@@ -87,7 +87,8 @@ def test_opraveno_a_ignorovat(window):
     assert second is not first and second.state == "nová"
     p.b_ignore.click()
     assert second.state == "ignorovat"
-    assert p.cards[None].text() == str(len(w.issues) - 2)
+    todo = sum(1 for i in w.issues if i.state == "nová" and i.severity.value != "info")
+    assert p.cards[None].text() == str(todo)
     # stav se uloží do projektu a přežije novou kontrolu
     states = w.project.issue_states()
     assert first.key in states and states[first.key]["stav"] == "opraveno"

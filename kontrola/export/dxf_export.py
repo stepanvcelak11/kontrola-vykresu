@@ -1,4 +1,4 @@
-"""DXF s novou hladinou KONTROLA_CHYBY (kroužky a texty chyb) pro otevření v MicroStationu."""
+"""DXF s novou vrstvou KONTROLA_CHYBY (kroužky a texty chyb) pro otevření v MicroStationu."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ ACI = {Severity.CHYBA: 1, Severity.VAROVANI: 30, Severity.INFO: 5}
 
 def export_dxf(drawing: Drawing, issues: list[Issue], path: str | Path, radius: float | None = None,
                text_height: float | None = None, only_new: bool = False):
-    """Zkopíruje původní výkres a přidá hladinu KONTROLA_CHYBY s kroužky a popisy.
+    """Zkopíruje původní výkres a přidá vrstvu KONTROLA_CHYBY s kroužky a popisy.
 
     Poloměr kroužku a výška textu se odvodí z velikosti výkresu, pokud nejsou zadány.
     Souřadnice se převádějí zpět do jednotek výkresu.

@@ -9,7 +9,7 @@ prohlédne a znovu zkontroluje. Opravují se jen jednoznačné chyby v toleranci
 * nedotažené linie (konec se přitáhne na nejbližší bod / lomový bod druhé linie),
 * přetažené linie (konec se zkrátí na průsečík),
 * do cílové linie se v místě napojení vloží lomový bod (uzel),
-* volitelně: hladina, barva a styl čáry podle pravidla.
+* volitelně: vrstva, barva a styl čáry podle pravidla.
 
 Upravují se entity LINE a LWPOLYLINE, ostatní typy se jen vypíšou jako neopravitelné.
 """
@@ -48,7 +48,7 @@ class RepairOptions:
         "nedotazeni": "Dotáhnout nedotažené linie",
         "pretazeni": "Zkrátit přetažené linie",
         "vlozit_uzly": "Vložit uzel do linie v místě napojení",
-        "symbologie": "Sjednotit hladinu, barvu a styl podle pravidel",
+        "symbologie": "Sjednotit vrstvu, barvu a styl podle pravidel",
     }
 
 

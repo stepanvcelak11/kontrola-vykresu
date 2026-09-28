@@ -11,8 +11,8 @@ from ..model import GeomType
 from ..rules import (Rule, RuleSet, TextRule, norm_style, parse_allowed_values, parse_color,
                      parse_weight, split_list)
 
-COLS = ["Kód", "Název", "Geometrie", "Hladina", "Barva", "Styl čáry", "Tloušťka", "Buňka",
-        "Povinné atributy", "Povolené hodnoty", "Popis (hladina)", "Popis povinný", "Obrázek",
+COLS = ["Kód", "Název", "Geometrie", "Vrstva", "Barva", "Styl čáry", "Tloušťka", "Buňka",
+        "Povinné atributy", "Povolené hodnoty", "Popis (vrstva)", "Popis povinný", "Obrázek",
         "Poznámka", "Zdroj"]
 C_KOD, C_NAZEV, C_GEOM, C_HL, C_BARVA, C_STYL, C_TL, C_BLOK, C_ATTR, C_VALS, C_THL, C_TPOV, C_IMG, C_POZN, C_ZDROJ = range(15)
 
@@ -47,7 +47,7 @@ class RulesEditor(QWidget):
         row.addWidget(self.count)
         lay.addLayout(row)
         row2 = QHBoxLayout()
-        row2.addWidget(QLabel("Hladiny povolené i bez kódu (rám, pomocné…):"))
+        row2.addWidget(QLabel("Vrstvy povolené i bez kódu (rám, pomocné…):"))
         self.extra_layers = QLineEdit()
         self.extra_layers.setPlaceholderText("např. RAM, POPIS_*")
         self.extra_layers.editingFinished.connect(self._sync)
@@ -69,7 +69,7 @@ class RulesEditor(QWidget):
         self.table.itemChanged.connect(self._sync)
         lay.addWidget(self.table, 1)
         hint = QLabel("Změny se ukládají do projektu automaticky. Barva: číslo barvy MicroStationu (nebo ACI "
-                      "podle Nastavení kontrol), název nebo #RRGGBB. Hladina smí obsahovat * (např. POPIS_*). "
+                      "podle Nastavení kontrol), název nebo #RRGGBB. Vrstva smí obsahovat * (např. POPIS_*). "
                       "Povolené hodnoty: DRUH=lípa, dub; MATERIAL=zděná")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: palette(mid);")

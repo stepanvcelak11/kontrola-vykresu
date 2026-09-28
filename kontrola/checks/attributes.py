@@ -60,7 +60,7 @@ class PovinneAtributy(Check):
 @register
 class Symbologie(Check):
     id = "symbologie"
-    nazev = "Hladina, barva nebo styl"
+    nazev = "Symbologie (vrstva, barva, styl, písmo)"
     skupina = "Atributy"
     popis = ("Porovná vrstvu, barvu, styl a tloušťku čáry prvku s pravidlem pro jeho kód (jako „Kontrola "
              "symbologie“ GISoft/MGEO). U textů také výšku, šířku, zarovnání a volitelně font.")
@@ -95,7 +95,7 @@ class Symbologie(Check):
                 continue
             diffs = []
             if r.hladina and not r.matches_layer(f.layer):
-                diffs.append(f"hladina {f.layer} (má být {r.hladina})")
+                diffs.append(f"vrstva {f.layer} (má být {r.hladina})")
             if do_color and r.barva is not None:
                 if not color_known(r.barva, pal, table):
                     unknown_colors.add(r.barva)
@@ -137,7 +137,7 @@ class Symbologie(Check):
                     _norm_font(r.font) not in _norm_font(f.font):
                 diffs.append(f"font {f.font or '–'} (má být {r.font})")
             if diffs:
-                yield ctx.issue(self, f, f"{r.nazev or r.kod}: " + ", ".join(diffs))
+                yield ctx.issue(self, f, f"{_what(f)} (pravidlo „{r.nazev or r.kod}“): " + ", ".join(diffs))
         if unknown_colors:
             ctx.notes.append("barvy MicroStationu " + ", ".join(map(str, sorted(unknown_colors, key=str)))
                              + " nelze ověřit bez barevné tabulky – načtěte color.tbl v Nastavení kontrol → Obecné.")
@@ -245,17 +245,17 @@ class AtributDleVrstvy(Check):
 @register
 class JednotnostHladiny(Check):
     id = "jednotnost_hladiny"
-    nazev = "Nejednotná symbologie hladiny"
+    nazev = "Prvek jiný než ostatní na vrstvě"
     skupina = "Atributy"
-    popis = ("Funguje i bez tabulky od učitele: na každé hladině zjistí převažující barvu, styl a tloušťku "
+    popis = ("Funguje i bez tabulky od učitele: na každé vrstvě zjistí převažující barvu, styl a tloušťku "
              "čáry a nahlásí prvky, které se od většiny liší (např. omylem přebarvená linie nebo prvek "
              "nakreslený jiným stylem). Texty a buňky se porovnávají jen barvou.")
     vychozi_zavaznost = Severity.VAROVANI
     parametry = [
-        Param("min_prvku", "Jen hladiny s aspoň N prvky", "int", 5),
+        Param("min_prvku", "Jen vrstvy s aspoň N prvky", "int", 5),
         Param("min_podil", "Převažující hodnota musí mít podíl aspoň [%]", "float", 70.0),
         Param("jen_bez_pravidla", "Jen prvky bez pravidla", "bool", True,
-              "Prvky s pravidlem kontroluje přesněji kontrola „Hladina, barva nebo styl“."),
+              "Prvky s pravidlem kontroluje přesněji kontrola „Vrstva, barva nebo styl“."),
     ]
 
     def run(self, ctx: CheckContext):
@@ -294,7 +294,7 @@ class JednotnostHladiny(Check):
                     if id(f) in members and key(f) != val:
                         diffs.append(_describe_prop(name, key(f), val, ctx, f))
                 if diffs:
-                    yield ctx.issue(self, f, f"Na hladině {layer} se liší: " + ", ".join(diffs))
+                    yield ctx.issue(self, f, f"{_what(f)} se liší od ostatních na vrstvě {layer}: " + ", ".join(diffs))
 
 
 def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
@@ -308,10 +308,20 @@ def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
                 if idx is not None:
                     return str(idx)
             return "#%02X%02X%02X" % rgb
-        return f"barva {col(got)} (většina {col(expected)})"
+        return f"barva {col(got)} (ostatní mají {col(expected)})"
     if name == "tloušťka":
-        return f"tloušťka {fmt_num(got, 2)} mm (většina {fmt_num(expected, 2)} mm)"
-    return f"styl {got} (většina {expected})"
+        return f"tloušťka {fmt_num(got, 2)} mm (ostatní mají {fmt_num(expected, 2)} mm)"
+    return f"styl {got} (ostatní mají {expected})"
+
+
+def _what(f: Feature) -> str:
+    """Typ prvku slovy jako v MicroStationu (Úsečka, Lomená čára, Text, Buňka…)."""
+    from ..rules import MS_ELEMENT_NAMES, feature_element_type
+    t = feature_element_type(f)
+    name = MS_ELEMENT_NAMES.get(t) if t is not None else None
+    if f.dxftype == "POINT" or f.zero_length:
+        name = "Bod"
+    return name or f.dxftype.capitalize()
 
 
 def _prvku(n: int) -> str:
@@ -321,13 +331,13 @@ def _prvku(n: int) -> str:
 @register
 class NepovoleneHladiny(Check):
     id = "nepovolene_hladiny"
-    nazev = "Nepovolená hladina"
+    nazev = "Vrstva není ve Směrnici"
     skupina = "Atributy"
-    popis = ("Prvek leží na hladině, která není v pravidlech ani v seznamu povolených hladin. "
-             "Hlásí se jedna chyba na hladinu s počtem prvků (lze přepnout na chybu u každého prvku).")
+    popis = ("Prvek leží na vrstvě, která není v pravidlech ani v seznamu povolených vrstev. "
+             "Hlásí se jedna chyba na vrstvu s počtem prvků (lze přepnout na chybu u každého prvku).")
     vychozi_zavaznost = Severity.CHYBA
     potrebuje_pravidla = True
-    parametry = [Param("jedna_na_hladinu", "Jen jedna chyba na hladinu", "bool", True)]
+    parametry = [Param("jedna_na_hladinu", "Jen jedna chyba na vrstvu", "bool", True)]
 
     def run(self, ctx: CheckContext):
         once = bool(ctx.param("jedna_na_hladinu", True))
@@ -344,9 +354,9 @@ class NepovoleneHladiny(Check):
                     continue
                 reported.add(f.layer)
                 feats = [x for x in ctx.features() if x.layer == f.layer]
-                yield ctx.issue(self, feats, f"Nepovolená hladina {f.layer} ({_prvku(len(feats))})")
+                yield ctx.issue(self, feats, f"Vrstva {f.layer} není ve Směrnici ({_prvku(len(feats))})")
             else:
-                yield ctx.issue(self, f, f"Nepovolená hladina {f.layer}")
+                yield ctx.issue(self, f, f"{_what(f)} na vrstvě {f.layer}, která není ve Směrnici")
 
 
 @register
@@ -355,7 +365,7 @@ class Nekodovane(Check):
     nazev = "Nekódovaný prvek"
     skupina = "Atributy"
     popis = ("Prvek, ke kterému nejde přiřadit žádný kód z pravidel (podle atributu KOD, buňky ani "
-             "hladiny). Prvky na hladinách povolených bez kódu a popisy se nehlásí.")
+             "vrstvy). Prvky na vrstvách povolených bez kódu a popisy se nehlásí.")
     vychozi_zavaznost = Severity.VAROVANI
     potrebuje_pravidla = True
 
@@ -373,7 +383,7 @@ class Nekodovane(Check):
             what = {GeomType.BOD: "bod", GeomType.LINIE: "linie", GeomType.POLYGON: "polygon",
                     GeomType.TEXT: "text"}[f.geom_type]
             extra = f" (buňka {f.block_name})" if f.block_name else ""
-            yield ctx.issue(self, f, f"Nekódovaný {what} na hladině {f.layer}{extra}")
+            yield ctx.issue(self, f, f"Nekódovaný {what} na vrstvě {f.layer}{extra}")
 
 
 @register
@@ -381,7 +391,7 @@ class Texty(Check):
     id = "texty"
     nazev = "Popis (text) prvku"
     skupina = "Atributy"
-    popis = ("U prvků, jejichž pravidlo vyžaduje popis, hledá text (na hladině popisu i bodový prvek – "
+    popis = ("U prvků, jejichž pravidlo vyžaduje popis, hledá text (na vrstvě popisu i bodový prvek – "
              "definiční bod): u polygonu uvnitř, jinak v okruhu hledání textu. Hlásí také popisy mimo "
              "polygon, ke kterému patří, a plochy s více popisy (jako pravidlo „jeden definiční bod "
              "v ploše“).")
@@ -390,7 +400,7 @@ class Texty(Check):
     parametry = [
         Param("hlasit_text_mimo", "Hlásit text mimo polygon", "bool", True),
         Param("jeden_popis", "V ploše smí být jen jeden popis", "bool", True,
-              "Plocha s více popisy / definičními body na hladině popisu je chyba."),
+              "Plocha s více popisy / definičními body na vrstvě popisu je chyba."),
     ]
 
     @staticmethod
@@ -430,7 +440,7 @@ class Texty(Check):
                 continue
             if ctx.text_for(f, r) is None:
                 where = "uvnitř polygonu" if area is not None else "u prvku"
-                lay = f" (hladina {r.text.hladina})" if r.text.hladina else ""
+                lay = f" (vrstva {r.text.hladina})" if r.text.hladina else ""
                 yield ctx.issue(self, f, f"{r.nazev or r.kod}: chybí popis {where}{lay}")
         if not ctx.param("hlasit_text_mimo", True):
             return

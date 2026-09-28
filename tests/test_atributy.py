@@ -69,7 +69,8 @@ def test_symbologie(make_dxf, pravidla):
     d = make_dxf(build)
     msgs = sorted(i.message for i in check(d, "symbologie", pravidla))
     # DXF barva 3 (ACI zelená) odpovídá MicroStation barvě 2
-    assert msgs == ["Budova: barva 2 (má být 3)", "Plot: styl CONTINUOUS (má být DASHED)"]
+    assert msgs == ["Tvar (pravidlo „Budova“): barva 2 (má být 3)",
+                    "Úsečka (pravidlo „Plot“): styl CONTINUOUS (má být DASHED)"]
 
 
 def test_symbologie_paleta_autocad(make_dxf):
@@ -79,7 +80,7 @@ def test_symbologie_paleta_autocad(make_dxf):
         msp.add_line((0, 0), (1, 0), dxfattribs={"layer": "B", "color": 1})
         msp.add_line((0, 1), (1, 1), dxfattribs={"layer": "B", "color": 3})
     d = make_dxf(build)
-    assert [i.message for i in check(d, "symbologie", rs)] == ["Budova: barva 3 (má být 1)"]
+    assert [i.message for i in check(d, "symbologie", rs)] == ["Úsečka (pravidlo „Budova“): barva 3 (má být 1)"]
 
 
 def test_symbologie_barevna_tabulka_microstation(make_dxf, tmp_path):
@@ -106,7 +107,7 @@ def test_symbologie_barevna_tabulka_microstation(make_dxf, tmp_path):
     rs.barevna_tabulka = load_ms_color_table(tmp_path / "color.tbl")
     assert rs.barevna_tabulka[100] == (0x80, 0x40, 0x20)
     msgs = [i.message for i in check(d, "symbologie", rs)]
-    assert msgs == ["Plot: barva 2 (má být 100)"]
+    assert msgs == ["Úsečka (pravidlo „Plot“): barva 2 (má být 100)"]
     # textová tabulka a uložení do YAML
     (tmp_path / "barvy.txt").write_text("100 128 64 32\n101;#FF8000\n", encoding="utf-8")
     t = load_ms_color_table(tmp_path / "barvy.txt")
@@ -121,8 +122,8 @@ def test_nepovolene_hladiny_a_nekodovane(make_dxf, pravidla):
         msp.add_line((0, 0), (1, 1), dxfattribs={"layer": "RAM"})  # povoleno bez kódu
         msp.add_point((3, 3), dxfattribs={"layer": "POPIS_BUDOV"})  # povolená hladina, ale bod nemá pravidlo
     d = make_dxf(build)
-    assert [i.message for i in check(d, "nepovolene_hladiny", pravidla)] == ["Nepovolená hladina POKUS (1 prvek)"]
-    assert [i.message for i in check(d, "nekodovane", pravidla)] == ["Nekódovaný bod na hladině POPIS_BUDOV"]
+    assert [i.message for i in check(d, "nepovolene_hladiny", pravidla)] == ["Vrstva POKUS není ve Směrnici (1 prvek)"]
+    assert [i.message for i in check(d, "nekodovane", pravidla)] == ["Nekódovaný bod na vrstvě POPIS_BUDOV"]
 
 
 def test_texty_chybi_a_mimo(make_dxf, pravidla):
@@ -133,7 +134,7 @@ def test_texty_chybi_a_mimo(make_dxf, pravidla):
         msp.add_text("č.p. 2", dxfattribs={"layer": "POPIS_BUDOV", "insert": (50, 5)})  # mimo
     d = make_dxf(build)
     msgs = sorted(i.message for i in check(d, "texty", pravidla))
-    assert msgs == ["Budova: chybí popis uvnitř polygonu (hladina POPIS_BUDOV)",
+    assert msgs == ["Budova: chybí popis uvnitř polygonu (vrstva POPIS_BUDOV)",
                     "Text „č.p. 2“ leží mimo polygon, ke kterému patří"]
 
 
@@ -156,8 +157,8 @@ def test_jednotnost_hladiny_bez_pravidel(make_dxf):
             msp.add_line((0, 30 + i), (10, 30 + i), dxfattribs={"layer": "MALA", "color": i + 1})
     d = make_dxf(build)
     msgs = sorted(i.message for i in check(d, "jednotnost_hladiny"))
-    assert msgs == ["Na hladině PLOTY se liší: barva 3 (většina 1)",
-                    "Na hladině PLOTY se liší: styl CONTINUOUS (většina DASHED)"]
+    assert msgs == ["Úsečka se liší od ostatních na vrstvě PLOTY: barva 3 (ostatní mají 1)",
+                    "Úsečka se liší od ostatních na vrstvě PLOTY: styl CONTINUOUS (ostatní mají DASHED)"]
 
 
 def test_kontroly_atributu_bez_pravidel_se_preskoci(make_dxf):

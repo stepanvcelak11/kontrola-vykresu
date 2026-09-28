@@ -67,9 +67,9 @@ def navod(iss: Issue) -> str:
         return _symbologie(msg)
     if cid == "texty":
         if "chybí popis" in low:
-            m = re.search(r"na hladině (\S+)", msg)
+            m = re.search(r"\(vrstva (\S+)\)|na vrstvě (\S+)", msg)
             return ("Doplňte popis nástrojem Umístit text (Place Text)"
-                    + (f" na vrstvu {m.group(1)}" if m else "") + " se správným stylem textu.")
+                    + (f" na vrstvu {m.group(1) or m.group(2)}" if m else "") + " se správným stylem textu.")
         if "mimo" in low:
             return "Popis leží mimo svou plochu – přesuňte ho dovnitř (Přesunout – Move)."
         if "více popisů" in low or "víc popisů" in low:
@@ -94,7 +94,7 @@ def navod(iss: Issue) -> str:
 def _symbologie(msg: str) -> str:
     low = msg.lower()
     steps = []
-    m = re.search(r"hladina (.+?) \(má být ([^)]+)\)", msg)
+    m = re.search(r"vrstva (.+?) \(má být ([^)]+)\)", msg)
     if m:
         steps.append(f"vrstvu na {m.group(2)}")
     m = re.search(r"barva \S+ \(má být ([^)]+)\)", msg)

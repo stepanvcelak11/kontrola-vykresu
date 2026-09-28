@@ -85,7 +85,7 @@ class TablePage(QWidget):
         self.tab = tab
         lay = QVBoxLayout(self)
         intro = QLabel("<b>Tabulka atributů od učitele</b> (.xlsx, .xls, .csv nebo PDF). Po importu se v průvodci "
-                       "přiřadí sloupce (kód, název, hladina, barva, styl čáry, typ geometrie, povinné atributy, "
+                       "přiřadí sloupce (kód, název, vrstva, barva, styl čáry, typ geometrie, povinné atributy, "
                        "povolené hodnoty) a z tabulky se vygenerují pravidla kontrol.")
         intro.setWordWrap(True)
         lay.addWidget(intro)
@@ -380,7 +380,7 @@ class ProposalDialog(QDialog):
         lay.addWidget(QLabel("Zaškrtněte pravidla, která chcete převzít. Kód a název můžete později upravit "
                              "v editoru pravidel."))
         self.table = QTableWidget(len(rules), 8)
-        self.table.setHorizontalHeaderLabels(["Převzít", "Kód", "Název", "Typ", "Hladina", "Barva",
+        self.table.setHorizontalHeaderLabels(["Převzít", "Kód", "Název", "Typ", "Vrstva", "Barva",
                                               "Styl čáry", "Buňka / atributy"])
         self.rules = rules
         for i, r in enumerate(rules):
@@ -422,7 +422,7 @@ class TemplatePage(QWidget):
         self.pdf_labels: set[str] | None = None
         self._loaded_rel: str | None = None
         lay = QVBoxLayout(self)
-        intro = QLabel("<b>Vzor od učitele</b>: <b>DXF/DGN</b> – načtou se hladiny, barvy, styly a buňky, lze z něj "
+        intro = QLabel("<b>Vzor od učitele</b>: <b>DXF/DGN</b> – načtou se vrstvy, barvy, styly a buňky, lze z něj "
                        "vytvořit pravidla a porovnat výkres. <b>PDF</b> – porovnají se popisy (čísla parcel, bodů, "
                        "č.p.) a vzor lze vložit pod výkres. <b>JPG/PNG</b> (náčrt, sken) – slouží jako podklad "
                        "pod výkresem k vizuálnímu porovnání.")
@@ -450,7 +450,7 @@ class TemplatePage(QWidget):
         lay.addLayout(row)
         split = QSplitter(Qt.Vertical)
         self.layers = QTableWidget(0, 7)
-        self.layers.setHorizontalHeaderLabels(["Hladina", "Prvků", "Barvy", "Styly čar", "Tloušťky",
+        self.layers.setHorizontalHeaderLabels(["Vrstva", "Prvků", "Barvy", "Styly čar", "Tloušťky",
                                                "Typy prvků", "Buňky"])
         self.layers.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.layers.verticalHeader().setVisible(False)
@@ -546,7 +546,7 @@ class TemplatePage(QWidget):
             return
         self.info = tpl.analyze(d)
         self._loaded_rel = rel
-        self.status.setText(f"Vzor: {Path(rel).name} – {len(d.features)} prvků, {len(self.info.layers)} hladin")
+        self.status.setText(f"Vzor: {Path(rel).name} – {len(d.features)} prvků, {len(self.info.layers)} vrstev")
         self.layers.setRowCount(0)
         for name in sorted(self.info.layers, key=str.lower):
             lu = self.info.layers[name]
@@ -574,14 +574,14 @@ class TemplatePage(QWidget):
             if QMessageBox.question(
                     self, "Vzor",
                     "Pravidla se dají vytvořit jen ze vzoru ve formátu DXF/DGN (PDF ani obrázek neobsahují "
-                    "hladiny).\n\nVytvořit návrh pravidel z vašeho kontrolovaného výkresu? Pravidla pak "
+                    "vrstvy).\n\nVytvořit návrh pravidel z vašeho kontrolovaného výkresu? Pravidla pak "
                     "projděte a opravte podle PDF/náčrtu – další kontroly už budou hlídat, že se jich "
                     "držíte v celém výkresu.") != QMessageBox.Yes:
                 return
             info = tpl.analyze(d)
         proposals = tpl.propose_rules(info, self.tab.project.rules)
         if not proposals:
-            QMessageBox.information(self, "Vzor", "Všechny hladiny a buňky vzoru už mají pravidlo.")
+            QMessageBox.information(self, "Vzor", "Všechny vrstvy a buňky vzoru už mají pravidlo.")
             return
         dlg = ProposalDialog(proposals, self)
         if dlg.exec():
@@ -630,7 +630,7 @@ class TemplatePage(QWidget):
         self.diff.resizeColumnsToContents()
         fit_headers(self.diff)
         if not diffs:
-            QMessageBox.information(self, "Porovnání", "Hladiny, barvy, styly i buňky odpovídají vzoru.")
+            QMessageBox.information(self, "Porovnání", "Vrstvy, barvy, styly i buňky odpovídají vzoru.")
         else:
             self.status.setText(f"Porovnání: {len(diffs)} rozdílů")
 

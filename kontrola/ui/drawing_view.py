@@ -1,6 +1,6 @@
 """Zobrazení výkresu v QGraphicsView.
 
-* Prvky se kreslí seskupeně po hladinách (jedna cesta na kombinaci barvy,
+* Prvky se kreslí seskupeně po vrstvách (jedna cesta na kombinaci barvy,
   tloušťky a stylu čáry), takže i výkresy se statisíci prvků jsou plynulé.
 * Souřadnice se posouvají k počátku výkresu (S-JTSK má velká čísla) a osa Y
   se otáčí, aby sever byl nahoře.
@@ -66,7 +66,7 @@ def display_color(rgb: tuple[int, int, int], light_bg: bool) -> QColor:
 
 
 class LayerItem(QGraphicsItem):
-    """Neviditelný kontejner prvků jedné hladiny (vypnutí hladiny = setVisible)."""
+    """Neviditelný kontejner prvků jedné vrstvy (vypnutí vrstvy = setVisible)."""
 
     def __init__(self, name: str):
         super().__init__()
@@ -235,7 +235,7 @@ class PreparedDrawing:
 
 
 def prepare_drawing(drawing: Drawing) -> PreparedDrawing:
-    """Sestaví cesty pro kreslení seskupené podle hladiny a stylu. Bezpečné ve vlákně na pozadí."""
+    """Sestaví cesty pro kreslení seskupené podle vrstvy a stylu. Bezpečné ve vlákně na pozadí."""
     b = drawing.bounds() or (0, 0, 100, 100)
     origin = (b[0], b[1])
     pb = PathBuilder(origin)
@@ -539,19 +539,51 @@ class DrawingView(QGraphicsView):
             return
         m = self.markers[number]
         iss = m.issue
-        if iss.geometry is not None and not iss.geometry.is_empty:
-            path = QPainterPath()
+        path = QPainterPath()
+        if iss.geometry is not None and not iss.geometry.is_empty and iss.geometry.geom_type not in ("Point",
+                                                                                                  "MultiPoint"):
             self._add_geometry(path, iss.geometry)
-            if not path.isEmpty():
-                item = QGraphicsPathItem(path)
-                pen = QPen(QColor(255, 230, 0, 230), 4)
-                pen.setCosmetic(True)
-                item.setPen(pen)
-                item.setZValue(9_000)
-                sc.addItem(item)
-                self._highlight = item
+        elif self.drawing is not None and iss.feature_ids:
+            by_id = getattr(self, "_by_id", None)
+            if by_id is None or getattr(self, "_by_id_of", None) is not self.drawing:
+                self._by_id, self._by_id_of = self.drawing.by_id(), self.drawing
+                by_id = self._by_id
+            for fid in iss.feature_ids[:200]:
+                f = by_id.get(fid)
+                if f is not None:
+                    self._add_feature_outline(path, f)
+        if not path.isEmpty():
+            item = QGraphicsPathItem(path)
+            pen = QPen(QColor(255, 230, 0, 230), 4)
+            pen.setCosmetic(True)
+            item.setPen(pen)
+            item.setZValue(9_000)
+            sc.addItem(item)
+            self._highlight = item
         if zoom:
             self.zoom_to_issue(iss)
+
+    def _add_feature_outline(self, path: QPainterPath, f: Feature):
+        """Obrys prvku pro zvýraznění: čára/plocha přímo, text jako obdélník, bod jako kroužek."""
+        from shapely.geometry import Polygon
+        if f.geom_type == GeomType.TEXT and f.geometry.geom_type == "Point":
+            h = max(f.text_height, 0.05)
+            w = max(1, len(f.text or "")) * h * 0.75 * (f.width_factor or 1.0)
+            x0 = {0: 0.0, 1: -w / 2, 2: -w}.get(f.halign, 0.0)
+            y0 = {0: 0.0, 1: 0.0, 2: -h / 2, 3: -h}.get(f.valign, 0.0)
+            a = math.radians(f.rotation or 0.0)
+            ca, sa = math.cos(a), math.sin(a)
+            px, py = f.geometry.x, f.geometry.y
+            corners = [(x0 - h * 0.2, y0 - h * 0.2), (x0 + w + h * 0.2, y0 - h * 0.2),
+                       (x0 + w + h * 0.2, y0 + h * 1.2), (x0 - h * 0.2, y0 + h * 1.2)]
+            poly = Polygon([(px + cx * ca - cy * sa, py + cx * sa + cy * ca) for cx, cy in corners])
+            self._add_geometry(path, poly)
+        elif f.geom_type == GeomType.BOD:
+            c = self.to_scene(f.geometry.x, f.geometry.y)
+            r = max(0.3, f.radius * 1.3 if f.radius else 0.3)
+            path.addEllipse(c, r, r)
+        else:
+            self._add_geometry(path, f.geometry)
 
     def zoom_to_issue(self, iss: Issue, span: float | None = None):
         c = self.to_scene(iss.x, iss.y)

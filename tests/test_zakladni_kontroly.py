@@ -91,5 +91,10 @@ def test_visici_konce_na_okraji_vykresu_se_nehlasi(make_dxf):
         msp.add_line((50, 100), (50, 60))  # plot od okraje dovnitř – konec uvnitř visí
         msp.add_line((100.5, 50), (80, 50))  # konec 0,5 m od okraje
     d = make_dxf(build)
-    pts = sorted((round(i.x), round(i.y)) for i in check(d, "visici_konce"))
+    from kontrola.checks.base import Severity
+    issues = check(d, "visici_konce")
+    pts = sorted((round(i.x), round(i.y)) for i in issues if i.severity != Severity.INFO)
     assert pts == [(50, 60), (80, 50)]
+    # konec u okraje se ukáže jen jako info s vysvětlením, aby bylo jasné, proč se nepočítá
+    edge = [i for i in issues if i.severity == Severity.INFO]
+    assert [(round(i.x, 1), round(i.y)) for i in edge] == [(100.5, 50)] and "okraji" in edge[0].message

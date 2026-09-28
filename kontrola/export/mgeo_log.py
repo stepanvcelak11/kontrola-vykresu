@@ -26,7 +26,7 @@ _VNAME = {0: "účaří", 1: "dole", 2: "uprostřed", 3: "nahoře"}
 def _wrong_fields(msg: str, check_id: str) -> set[str]:
     m = msg.lower()
     out = set()
-    if check_id in ("nepovolene_hladiny", "nekodovane") or "hladina " in m or "hladině" in m:
+    if check_id in ("nepovolene_hladiny", "nekodovane") or re.search(r"\bvrstva \S+ \(má být", m):
         out.add("vrstva")
     if check_id == "typ_geometrie":
         out.add("typ")

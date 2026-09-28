@@ -128,7 +128,7 @@ def export_pdf(issues: list[Issue], path: str | Path, drawing_name: str = "", pr
     # --- seznam chyb
     story.append(PageBreak())
     story.append(Paragraph("Seznam problémů", st["h2"]))
-    rows = [["Č.", "Typ", "Záv.", "Popis", "Hladina", "X", "Y", "Stav"]]
+    rows = [["Č.", "Typ", "Záv.", "Popis", "Vrstva", "X", "Y", "Stav"]]
     for i in issues:
         rows.append([str(i.number), Paragraph(_esc(i.check_name), st["cell"]), i.severity.value,
                      Paragraph(_esc(i.message), st["cell"]), Paragraph(_esc(i.layer), st["cell"]),
@@ -160,7 +160,7 @@ def export_pdf(issues: list[Issue], path: str | Path, drawing_name: str = "", pr
             if i is None:
                 continue
             cap = Paragraph(f"<b>#{i.number} {_esc(i.check_name)}</b> ({i.severity.value})<br/>{_esc(i.message)}"
-                            f"<br/>Hladina {_esc(i.layer)}, X {_coord(i.x)}, Y {_coord(i.y)}"
+                            f"<br/>Vrstva {_esc(i.layer)}, X {_coord(i.x)}, Y {_coord(i.y)}"
                             + (f"<br/><i>Jak opravit:</i> {_esc(navod(i))}" if navod(i) else ""), st["small"])
             cells.append([_image(png, 68 * mm, 68 * mm), cap])
         grid = []

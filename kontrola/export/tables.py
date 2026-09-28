@@ -11,7 +11,7 @@ from ..checks.base import Issue, Severity
 
 from ..navody import navod
 
-HEADER = ["Číslo", "Typ kontroly", "Závažnost", "Popis", "Hladina", "X", "Y", "Stav", "Poznámka", "Handle",
+HEADER = ["Číslo", "Typ kontroly", "Závažnost", "Popis", "Vrstva", "X", "Y", "Stav", "Poznámka", "Handle",
           "Jak opravit"]
 
 

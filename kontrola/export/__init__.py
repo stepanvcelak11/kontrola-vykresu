@@ -1,1 +1,1 @@
-"""Výstupy: seznam chyb (CSV, Excel), protokol PDF, DXF s hladinou KONTROLA_CHYBY."""
+"""Výstupy: seznam chyb (CSV, Excel), protokol PDF, DXF s vrstvou KONTROLA_CHYBY."""

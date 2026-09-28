@@ -230,6 +230,7 @@ class CheckContext:
         key = "linear|" + ",".join(self.layer_filter() or [])
         if key not in self._cache:
             out = []
+            extra: list[Feature] = []
             allowed: dict[str, bool] = {}
             for f in self.features(self.layer_filter()):
                 if not f.is_linear or f.geometry.is_empty:
@@ -242,10 +243,18 @@ class CheckContext:
                         continue  # nepovolená hladina (kóty, pomocné čáry…) – hlásí ji kontrola atributů
                 r = self.rule_for(f) if self.rules.pravidla else None
                 if r is not None and not r.topologie:
-                    continue  # vstupy, sdružené značky – výjimka z topologie
+                    extra.append(f)
+                    continue  # vstupy, šrafy – samy se nekontrolují, ale jiné čáry se na ně napojují
                 out.append(f)
             self._cache[key] = out
+            self._cache["linear_extra|" + key] = extra
         return self._cache[key]
+
+    def linear_targets(self) -> list[Feature]:
+        """Linie vyjmuté z topologie (vstupy, šrafy): nehlásí se u nich chyby, ale napojení na ně platí."""
+        key = "linear|" + ",".join(self.layer_filter() or [])
+        self.linear()
+        return self._cache.get("linear_extra|" + key, [])
 
     def boundary(self, f: Feature) -> BaseGeometry:
         if f.geom_type == GeomType.POLYGON:

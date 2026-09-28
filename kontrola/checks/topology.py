@@ -15,8 +15,8 @@ from shapely.validation import make_valid
 from ..model import Feature, GeomType
 from .base import Check, CheckContext, Param, Severity, fmt_m, fmt_num, register
 
-LAYERS_PARAM = Param("hladiny", "Jen hladiny (čárkou, * = zástupný znak)", "layers", "",
-                     "Prázdné = všechny hladiny.")
+LAYERS_PARAM = Param("hladiny", "Jen vrstvy (čárkou, * = zástupný znak)", "layers", "",
+                     "Prázdné = všechny vrstvy.")
 
 
 def _expects_polygon(ctx: CheckContext, f: Feature) -> bool | None:
@@ -70,15 +70,17 @@ class NezavrenePolygony(Check):
 class _EndpointAnalysis:
     """Sdílený výpočet konců linií a jejich nejbližších sousedů."""
 
-    def __init__(self, ctx: CheckContext, feats: list[Feature]):
+    def __init__(self, ctx: CheckContext, feats: list[Feature], targets: list[Feature] | None = None):
+        n_checked = len(feats)
+        feats = list(feats) + list(targets or [])
         self.feats = feats
         geoms = np.array([ctx.boundary(f) for f in feats], dtype=object)
         self.geoms = geoms
         self.tree = shapely.STRtree(geoms) if len(geoms) else None
         pts, owner, is_end, own_gap = [], [], [], []
         for i, f in enumerate(feats):
-            if f.geom_type != GeomType.LINIE:
-                continue
+            if f.geom_type != GeomType.LINIE or i >= n_checked:
+                continue  # konce se hledají jen u kontrolovaných linií
             coords = f.geometry.coords
             if len(coords) < 2:
                 continue
@@ -127,7 +129,7 @@ def _without_end_segments(feats, owner, is_end):
 def _endpoint_analysis(ctx: CheckContext) -> _EndpointAnalysis:
     key = "endpoints|" + ",".join(ctx.layer_filter() or []) + f"|{ctx.tolerance}"
     if key not in ctx._cache:
-        ctx._cache[key] = _EndpointAnalysis(ctx, ctx.linear())
+        ctx._cache[key] = _EndpointAnalysis(ctx, ctx.linear(), ctx.linear_targets())
     return ctx._cache[key]
 
 
@@ -209,13 +211,18 @@ class VisiciKonce(Check):
                 continue  # napojeno, nebo jde o téměř uzavřený polygon (řeší jiná kontrola)
             if k in over:
                 continue  # přetažená linie – hlásí kontrola nedotažení/přetažení
-            if hull is not None and hull.distance(an.pgeoms[k]) <= edge:
-                continue  # konec na okraji výkresu
             f = an.feats[an.owner[k]]
             if _expects_polygon(ctx, f):
                 continue  # řeší kontrola nezavřených polygonů
             x, y = an.points[k]
-            yield ctx.issue(self, f, "Visící konec linie", at=(x, y))
+            if hull is not None and hull.distance(an.pgeoms[k]) <= edge:
+                # konec na okraji kresby: MGEO ho nepočítá, ale ukázat ho (aby bylo jasné, proč jinde ano)
+                iss = ctx.issue(self, f, "Volný konec na okraji kresby (učitelova kontrola ho nepočítá)",
+                                at=(x, y))
+                iss.severity = Severity.INFO
+                yield iss
+                continue
+            yield ctx.issue(self, f, "Volný konec linie uvnitř kresby", at=(x, y))
 
 
 @register
@@ -265,9 +272,9 @@ class Duplicity(Check):
     popis = "Dva prvky se stejnou geometrií (i s opačným směrem kreslení) nebo dva body na stejném místě."
     vychozi_zavaznost = Severity.CHYBA
     parametry = [
-        Param("stejna_hladina", "Jen prvky na stejné hladině", "bool", True,
+        Param("stejna_hladina", "Jen prvky na stejné vrstvě", "bool", True,
               "Hranice budovy a parcely se mohou legitimně krýt – proto se výchozí porovnávají jen "
-              "prvky na stejné hladině."),
+              "prvky na stejné vrstvě."),
         LAYERS_PARAM,
     ]
 
@@ -580,12 +587,12 @@ class PrekryvyPolygonu(Check):
     id = "prekryvy_polygonu"
     nazev = "Překryv polygonů"
     skupina = "Topologie"
-    popis = "Dva polygony (výchozí na stejné hladině) se částečně nebo úplně překrývají."
+    popis = "Dva polygony (výchozí na stejné vrstvě) se částečně nebo úplně překrývají."
     vychozi_zavaznost = Severity.CHYBA
     parametry = [
         Param("min_plocha", "Hlásit od plochy [m²]", "float", 0.001),
-        Param("stejna_hladina", "Jen polygony na stejné hladině", "bool", True,
-              "Budova uvnitř parcely se nehlásí, protože leží na jiné hladině."),
+        Param("stejna_hladina", "Jen polygony na stejné vrstvě", "bool", True,
+              "Budova uvnitř parcely se nehlásí, protože leží na jiné vrstvě."),
         LAYERS_PARAM,
     ]
 
@@ -619,7 +626,7 @@ class MezeryPolygonu(Check):
     id = "mezery_polygonu"
     nazev = "Mezera mezi polygony"
     skupina = "Topologie"
-    popis = ("Úzká mezera (štěrbina) mezi sousedními polygony na stejné hladině nebo malá díra, "
+    popis = ("Úzká mezera (štěrbina) mezi sousedními polygony na stejné vrstvě nebo malá díra, "
              "kterou polygony neuzavírají – typicky nepřesně navazující parcely.")
     vychozi_zavaznost = Severity.VAROVANI
     parametry = [
@@ -714,7 +721,7 @@ class BodyBlizko(Check):
              "obvykle omylem dvakrát zaměřený nebo posunutý bod.")
     vychozi_zavaznost = Severity.VAROVANI
     parametry = [
-        Param("stejna_hladina", "Jen body na stejné hladině", "bool", False),
+        Param("stejna_hladina", "Jen body na stejné vrstvě", "bool", False),
         LAYERS_PARAM,
     ]
 

@@ -252,7 +252,7 @@ class _Loader:
         """Je blok připojený referenční výkres (MicroStation reference, xref), ne buňka/značka?
 
         Reference se při exportu z MicroStationu uloží jako blok s celou kresbou na mnoha
-        hladinách – takový blok se rozbalí na samostatné prvky, aby šly zkontrolovat."""
+        vrstvách – takový blok se rozbalí na samostatné prvky, aby šly zkontrolovat."""
         cache = self.__dict__.setdefault("_ref_cache", {})
         if name not in cache:
             block = self.doc.blocks.get(name)

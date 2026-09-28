@@ -105,7 +105,8 @@ def test_meritko_stylu_a_bunky(make_dxf):
         msp.add_blockref("3.13_1", (9, 9), dxfattribs={"layer": "3", "xscale": 2, "yscale": 2})
     d = make_dxf(build)
     msgs = sorted(i.message for i in check(d, "symbologie", rs))
-    assert msgs == ["plot: měřítko stylu 1 (má být 0,5)", "strom: měřítko buňky 2 (má být 1)"]
+    assert msgs == ["Buňka (pravidlo „strom“): měřítko buňky 2 (má být 1)",
+                    "Úsečka (pravidlo „plot“): měřítko stylu 1 (má být 0,5)"]
 
 
 def test_uzivatelsky_styl_neulozeny_do_dxf_je_varovani(make_dxf):

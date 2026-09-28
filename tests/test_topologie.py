@@ -116,3 +116,19 @@ def test_body_blizko(make_dxf):
     d = make_dxf(build)
     issues = check(d, "body_blizko")
     assert [i.message for i in issues] == ["Body téměř na sobě, vzdálenost 4 mm"]
+
+
+def test_budova_napojena_na_vstup_nema_volny_konec(make_dxf):
+    """Vstupy se topologicky nekontrolují, ale budova, která na vstup navazuje, nesmí „viset“."""
+    from kontrola.model import GeomType
+    from kontrola.rules import Rule, RuleSet
+    rs = RuleSet(pravidla=[Rule(kod="budova", hladina="BUDOVY", geometrie=GeomType.LINIE),
+                           Rule(kod="vstup", hladina="VSTUPY", geometrie=GeomType.LINIE, topologie=False)])
+
+    def build(msp, doc):
+        msp.add_lwpolyline([(-50, -50), (60, -50), (60, 60), (-50, 60)], close=True, dxfattribs={"layer": "BUDOVY"})
+        msp.add_lwpolyline([(4, 0), (0, 0), (0, 10), (10, 10), (10, 0), (6, 0)], dxfattribs={"layer": "BUDOVY"})
+        msp.add_line((4, 0), (6, 0), dxfattribs={"layer": "VSTUPY"})  # vchod mezi dvěma konci budovy
+    d = make_dxf(build)
+    assert [i for i in check(d, "visici_konce", rs) if i.severity.value != "info"] == []
+    assert check(d, "chybejici_napojeni", rs) == []
