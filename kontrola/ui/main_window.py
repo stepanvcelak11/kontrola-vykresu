@@ -177,6 +177,9 @@ class MainWindow(QMainWindow):
         self.a_watch = self._act("Hlídat změny výkresu", self._toggle_watch, None,
                                  "Když výkres znovu uložíte (v MicroStationu Uložit jako DXF), aplikace ho sama "
                                  "načte a zkontroluje.", checkable=True)
+        self.a_ready = self._act("Připraveno k odevzdání?", self.ready_check, None,
+                                 "Úplná kontrola jako před odevzdáním (s tolerancemi učitele), semafor, co zbývá "
+                                 "opravit, počítadlo odevzdání a průběh chyb v čase")
         self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
                                    "Spočítat body ze zápisníku totální stanice a porovnat s vaším seznamem z Gromy")
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
@@ -207,6 +210,7 @@ class MainWindow(QMainWindow):
         m_check = self.menuBar().addMenu("&Kontrola")
         m_check.addAction(self.a_check)
         m_check.addAction(self.a_recheck)
+        m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_vypocet)
@@ -225,7 +229,7 @@ class MainWindow(QMainWindow):
                         (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
                         (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
                         (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf"), (self.a_wip, "rozpracovany"),
-                        (self.a_region, "vyrez")):
+                        (self.a_region, "vyrez"), (self.a_ready, "odevzdat")):
             a.setIcon(icon(name))
         self.a_prev.setText("Předchozí")
         self.a_next.setText("Další")
@@ -244,6 +248,7 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self.a_check)
         tb.addAction(self.a_recheck)
+        tb.addAction(self.a_ready)
         tb.addAction(self.a_settings)
         tb.addSeparator()
         tb.addAction(self.a_wip)
@@ -427,6 +432,37 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{p.name} se změnil – kontroluji znovu…", 5000)
         self.recheck(p if p.suffix.lower() == ".dgn" else None, silent=True)
 
+    def ready_check(self):
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
+            return
+        if self.task is not None and self.task.is_running():
+            return
+        import copy
+
+        from .ready_dialog import ReadyDialog, checklist_for, record_history
+        cfg = copy.deepcopy(self.project.config)
+        cfg.rozpracovany = False
+        seznamy = self.project.attachments("seznamy")
+        cfg.seznam_souradnic = str(seznamy[0].path) if seznamy else ""
+        drawing, rules = self.drawing, self.project.rules
+        states = self.project.issue_states()
+
+        def job(progress, cancelled):
+            return run_checks(drawing, rules, cfg, progress, cancelled)
+
+        def done(res: CheckResult):
+            if res.cancelled:
+                return
+            carry_states(states, res.issues, recheck=False)
+            record_history(self.project, res.issues, "před odevzdáním")
+            self.project.save()
+            self.issue_panel.history.set_data(self.project.meta.get("historie", []))
+            ReadyDialog(self.project, res.issues, checklist_for(self.project, drawing, self.project.config),
+                        self).exec()
+
+        self._run_task(job, done, "Kontrola před odevzdáním…")
+
     def show_vypocet(self):
         from .vypocet_dialog import VypocetDialog
         VypocetDialog(self.project, self).exec()
@@ -482,6 +518,7 @@ class MainWindow(QMainWindow):
         if self.a_region.isChecked():
             self.a_region.setChecked(False)
         self._update_banner()
+        self.issue_panel.history.set_data(project.meta.get("historie", []))
         self.settings.setValue("projekt/posledni", str(project.root))
         self._update_title()
         self.set_issues([])
@@ -625,6 +662,9 @@ class MainWindow(QMainWindow):
             self.info_label.setText("Kontrola byla zrušena.")
             return
         carry_states(self.project.issue_states(), res.issues, recheck=callable(after))
+        from .ready_dialog import record_history
+        record_history(self.project, res.issues)
+        self.issue_panel.history.set_data(self.project.meta.get("historie", []))
         summary = None
         if callable(after):
             summary = after(res)

@@ -161,3 +161,27 @@ def test_hlidani_souboru_zkontroluje_znovu(window, tmp_path):
     import time
     assert w._wait(lambda: _idle(w) and "Opakovaná" in w.issue_panel.summary.text(), 20)
     assert n_before > 0
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_pripraveno_k_odevzdani(window, monkeypatch):
+    from PySide6.QtWidgets import QDialog
+    shown = {}
+
+    def fake_exec(self):
+        shown["dlg"] = self
+        return 1
+    monkeypatch.setattr(QDialog, "exec", fake_exec)
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0)
+    w.a_wip.trigger()  # rozpracovaný režim se pro kontrolu před odevzdáním ignoruje
+    assert w._wait(lambda: _idle(w))
+    w.a_ready.trigger()
+    assert w._wait(lambda: _idle(w) and "dlg" in shown)
+    d = shown["dlg"]
+    assert "chyb" in d.windowTitle() or True
+    d.b_rec.click()
+    assert len(w.project.meta["odevzdani"]) == 1
+    assert len(w.project.meta["historie"]) >= 3

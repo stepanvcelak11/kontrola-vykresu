@@ -211,6 +211,10 @@ class IssuePanel(QWidget):
             self.card_caps[key] = cap
             cards.addWidget(fr, 1)
         lay.addLayout(cards)
+        from .ready_dialog import HistoryChart
+        self.history = HistoryChart(compact=True)
+        self.history.setFixedHeight(40)
+        lay.addWidget(self.history)
         self.banner = QLabel()
         self.banner.setObjectName("banner")
         self.banner.setWordWrap(True)
