@@ -47,3 +47,26 @@ def test_docx_text_tabulka_a_pozadavky(tmp_path):
     assert ("Měřítko", "1:500") in reqs and ("Písmo", "Arial Narrow") in reqs
     (r,) = layer_rules(d)
     assert r.hladina == "12" and r.geometrie == GeomType.LINIE and r.barva == 3 and r.tloustka == 1
+
+
+GEOGRAF = Path(__file__).resolve().parents[1] / "geograf V1.dxf"
+
+
+@pytest.mark.skipif(not (GEOGRAF.exists() and DOC.exists()), reason="výkres uživatele chybí")
+def test_vykres_geograf_s_wordem():
+    """Výkres zadání 1: body na vrstvách 58/59 jsou podle Wordu správně, volné konce nejsou chyba."""
+    from kontrola.checks.base import Severity
+    from kontrola.config import Config
+    from kontrola.io.dxf_loader import load_drawing
+    from kontrola.rules import RuleSet
+    from kontrola.runner import run_checks
+    y = DOC.parent / "pravidla_zadani1.yaml"
+    rs = RuleSet.load(y)
+    rs.pravidla = [r for r in rs.pravidla if r.hladina not in ("58", "59", "60")]  # jen Excel Směrnice
+    d = load_drawing(GEOGRAF)
+    before = run_checks(d, rs, Config.load(y)).issues
+    assert {i.layer for i in before if i.check_id == "nepovolene_hladiny"} == {"Vrstva 58", "Vrstva 59"}
+    rs.pravidla += layer_rules(read_document(DOC), rs.meritko)
+    after = run_checks(d, rs, Config.load(y)).issues
+    assert not [i for i in after if i.check_id == "nepovolene_hladiny"]
+    assert not [i for i in after if i.check_id == "visici_konce" and i.severity == Severity.CHYBA]

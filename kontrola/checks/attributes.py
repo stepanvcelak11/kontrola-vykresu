@@ -9,7 +9,7 @@ import numpy as np
 import shapely
 
 from ..model import Feature, GeomType
-from ..rules import color_known, color_matches, font_style, layer_matches, linetype_matches
+from ..rules import color_known, color_matches, font_style, layer_matches, layer_number, linetype_matches
 from .base import Check, CheckContext, Param, Severity, fmt_num, register
 
 
@@ -100,7 +100,12 @@ class Symbologie(Check):
                 if not color_known(r.barva, pal, table):
                     unknown_colors.add(r.barva)
                 elif not color_matches(r.barva, f, pal, table):
-                    diffs.append(f"barva {rs.describe_feature_color(f)} (má být {r.barva})")
+                    got = rs.describe_feature_color(f)
+                    if got.startswith("ACI ") and pal == "microstation":
+                        # v DXF je barva, která z tabulky color.tbl vzniknout nemohla
+                        got = (f"{got} = RGB {','.join(map(str, f.color_rgb))} – taková barva v tabulce color.tbl "
+                               "není (jiná tabulka barev nebo barva RGB?)")
+                    diffs.append(f"barva {got} (má být {r.barva})")
             linear = f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
             unexported = False
             if do_style and r.styl_cary and linear and not linetype_matches(r.styl_cary, f.linetype):
@@ -128,7 +133,7 @@ class Symbologie(Check):
                 ms_weights.update(unknown)
                 if expected and not unknown and all(abs(w - f.lineweight) > 0.051 for w in expected):
                     diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být "
-                                 f"{' nebo '.join(fmt_num(w, 2) for w in expected)} mm, wt {r.tloustka})"
+                                 f"{' nebo '.join(fmt_num(w, 2) for w in expected)} mm, wt {fmt_num(float(r.tloustka), 0) if str(r.tloustka).replace('.', '', 1).isdigit() else r.tloustka})"
                                  if pal == "microstation" and wmap else
                                  f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {r.tloustka})")
             if f.geom_type == GeomType.TEXT and do_text:
@@ -434,6 +439,8 @@ class NepovoleneHladiny(Check):
                 guess = guess_layer(feats, ctx.rules, ctx.drawing)
                 if guess:
                     msg += f" – podle vzhledu patří na vrstvu {guess}"
+                elif layer_number(f.layer) is not None:  # číslované vrstvy bývají popsané ve Wordu (zadání 1)
+                    msg += " – je-li popsaná ve Wordu se zadáním, nahrajte ho do Zadání → Pokyny ze zadání"
                 if len(feats) > 1:
                     msg += f" (týká se všech {_prvku(len(feats))}, kroužek je jen u prvního)"
                 yield ctx.issue(self, feats, msg)

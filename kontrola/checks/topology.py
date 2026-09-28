@@ -269,7 +269,7 @@ class VisiciKonce(Check):
                 continue
             msg = "Volný konec linie uvnitř kresby"
             near = _nearest_other(an, k)
-            if near is not None and near <= 2.0:
+            if near is not None and near <= 0.5:
                 msg += f" – nejbližší čára je {fmt_m(near)} daleko (nedotaženo?)"
             yield ctx.issue(self, f, msg, at=(x, y))
 

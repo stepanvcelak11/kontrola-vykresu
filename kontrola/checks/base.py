@@ -24,6 +24,7 @@ a modul naimportujete v ``kontrola/checks/__init__.py``.
 from __future__ import annotations
 
 import hashlib
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -99,6 +100,13 @@ class Issue:
     note: str = ""
 
     def label(self) -> str:
+        """Krátký popisek ke kroužku ve výkresu (celé znění je v seznamu a v tooltipu)."""
+        m = re.match(r"^.+? \(pravidlo „([^“]+)“\): (.*)$", self.message)
+        if m:
+            keys = [k for k in ("vrstva", "barva", "styl", "měřítko stylu", "tloušťka", "výška textu", "šířka textu",
+                                "písmo", "font", "zarovnání", "měřítko buňky")
+                    if re.search(r"(^|, )" + re.escape(k) + r"\b", m.group(2))]
+            return f"{m.group(1)}: {', '.join(keys)}" if keys else f"{m.group(1)}: {m.group(2)}"
         return self.message
 
     @property
