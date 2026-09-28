@@ -32,7 +32,7 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=["kontrola.checks.topology", "kontrola.checks.attributes", "pdfplumber", "pypdfium2",
-                   "openpyxl", "xlrd", "PySide6.QtSvg", "reportlab.graphics.barcode"],
+                   "openpyxl", "xlrd", "olefile", "PySide6.QtSvg", "reportlab.graphics.barcode"],
     excludes=excludes,
     noarchive=False,
 )
