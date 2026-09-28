@@ -55,12 +55,12 @@ _SVG = {
         + f'<text x="72" y="35" {_T} text-anchor="middle">&lt; 9 cm</text>',
         f'<line x1="10" y1="59" x2="110" y2="59" {_OK}/>'),
     "nulova_delka": _pair(
-        f'<circle cx="60" cy="58" r="3" fill="#374151"/>' + _mark(60, 58)
+        '<circle cx="60" cy="58" r="3" fill="#374151"/>' + _mark(60, 58)
         + f'<text x="60" y="30" {_T} text-anchor="middle">čára délky 0</text>',
         f'<text x="60" y="62" {_T} text-anchor="middle">smazat</text>'),
     "body_blizko": _pair(
-        f'<circle cx="57" cy="58" r="4" fill="#374151"/><circle cx="64" cy="61" r="4" fill="#374151"/>' + _mark(60, 60, 14),
-        f'<circle cx="60" cy="60" r="4" fill="#16A34A"/>'),
+        '<circle cx="57" cy="58" r="4" fill="#374151"/><circle cx="64" cy="61" r="4" fill="#374151"/>' + _mark(60, 60, 14),
+        '<circle cx="60" cy="60" r="4" fill="#16A34A"/>'),
     "prekryvy_polygonu": _pair(
         f'<rect x="15" y="25" width="55" height="60" {_L}/><rect x="55" y="25" width="55" height="60" {_L}/>'
         f'<rect x="55" y="25" width="15" height="60" fill="#FCA5A5" opacity="0.6"/>',
@@ -75,8 +75,8 @@ _SVG = {
         f'<rect x="10" y="20" width="80" height="70" stroke="#9CA3AF" stroke-dasharray="5 4" fill="none"/>'
         f'<line x1="20" y1="70" x2="70" y2="40" {_OK}/>'),
     "symbologie": _pair(
-        f'<line x1="10" y1="40" x2="110" y2="40" stroke="#2563EB" stroke-width="3"/>'
-        f'<line x1="10" y1="75" x2="110" y2="75" stroke="#DC2626" stroke-width="6"/>' + _mark(60, 75, 12)
+        '<line x1="10" y1="40" x2="110" y2="40" stroke="#2563EB" stroke-width="3"/>'
+        '<line x1="10" y1="75" x2="110" y2="75" stroke="#DC2626" stroke-width="6"/>' + _mark(60, 75, 12)
         + f'<text x="60" y="100" {_T} text-anchor="middle">jiná barva/tloušťka</text>',
         f'<line x1="10" y1="40" x2="110" y2="40" stroke="#2563EB" stroke-width="3"/>'
         f'<line x1="10" y1="75" x2="110" y2="75" stroke="#2563EB" stroke-width="3"/>'

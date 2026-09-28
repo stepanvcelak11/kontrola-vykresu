@@ -9,7 +9,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar)
 
-from .. import APP_NAME, __version__
+from .. import APP_NAME
 from ..checks.base import Issue, Severity
 from ..io.dgn import DGN_NAVOD
 from ..io.dxf_loader import load_drawing
