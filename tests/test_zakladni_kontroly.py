@@ -98,3 +98,20 @@ def test_visici_konce_na_okraji_vykresu_se_nehlasi(make_dxf):
     # konec u okraje se ukáže jen jako info s vysvětlením, aby bylo jasné, proč se nepočítá
     edge = [i for i in issues if i.severity == Severity.INFO]
     assert [(round(i.x, 1), round(i.y)) for i in edge] == [(100.5, 50)] and "okraji" in edge[0].message
+
+
+def test_konec_vedouci_ven_z_roztrepene_kresby_je_okraj(make_dxf):
+    """Kresba ve tvaru L: konec v „zálivu“, za kterým už nic není, je okraj (info), ne chyba."""
+    from kontrola.checks.base import Severity
+
+    def build(msp, doc):
+        msp.add_line((0, 0), (100, 0))
+        msp.add_line((0, 0), (0, 100))
+        msp.add_line((0, 50), (60, 50))  # vede do prázdna → okraj zaměřeného území
+        msp.add_line((30, 30), (30, 49.7))  # končí 0,3 m před čárou → opravdu nedotažená
+    d = make_dxf(build)
+    issues = check(d, "visici_konce", okraj=1.0)
+    by_pt = {(round(i.x), round(i.y)): i for i in issues}
+    assert by_pt[(60, 50)].severity == Severity.INFO
+    inner = by_pt[(30, 50)]
+    assert inner.severity != Severity.INFO and "0,3 m daleko" in inner.message

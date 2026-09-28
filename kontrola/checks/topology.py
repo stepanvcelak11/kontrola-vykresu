@@ -183,6 +183,47 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
     return out
 
 
+def _nearest_other(an: _EndpointAnalysis, k: int) -> float | None:
+    """Vzdálenost konce k nejbližší jiné čáře (pro srozumitelnější hlášku)."""
+    if an.tree is None:
+        return None
+    idx = [i for i in an.tree.query(an.pgeoms[k], predicate="dwithin", distance=5.0) if i != an.owner[k]]
+    if not idx:
+        return None
+    return float(np.min(shapely.distance(an.pgeoms[k], an.geoms[idx])))
+
+
+def _leads_out(an: _EndpointAnalysis, k: int, reach: float, precision: float) -> bool:
+    """Vede čára z tohoto konce ven z kresby? (V prodloužení čáry už nic není.)
+
+    Kresba bývá „roztřepená“ (bloky domů, ulice), takže okraj nejde poznat jen podle obalu.
+    Konec, za kterým v prodloužení čáry (±12°) až k hranici výkresu nic neleží, je okraj
+    zaměřeného území – učitelova kontrola ho nepočítá.
+    """
+    coords = list(an.feats[an.owner[k]].geometry.coords)
+    if an.is_end[k] == 0:
+        coords = coords[::-1]
+    end = coords[-1][:2]
+    prev = None
+    for c in reversed(coords[:-1]):
+        if math.dist(c[:2], end) > precision:
+            prev = c[:2]
+            break
+    if prev is None:
+        return False
+    ang = math.atan2(end[1] - prev[1], end[0] - prev[0])
+    start_off = max(precision * 2, 1e-3)
+    for da in (0.0, math.radians(12), -math.radians(12)):
+        a = ang + da
+        dx, dy = math.cos(a), math.sin(a)
+        ray = LineString([(end[0] + dx * start_off, end[1] + dy * start_off),
+                          (end[0] + dx * reach, end[1] + dy * reach)])
+        for gi in an.tree.query(ray, predicate="intersects"):
+            if gi != an.owner[k]:
+                return False
+    return True
+
+
 @register
 class VisiciKonce(Check):
     id = "visici_konce"
@@ -204,8 +245,11 @@ class VisiciKonce(Check):
         ctx.progress(0.7)
         edge = float(ctx.param("okraj", 1.0))
         hull = None
+        reach = 0.0
         if edge > 0 and len(an.geoms):
             hull = shapely.union_all(an.geoms).convex_hull.boundary
+            b = shapely.total_bounds(an.geoms)
+            reach = math.hypot(b[2] - b[0], b[3] - b[1])
         for k in range(len(an.points)):
             if np.isfinite(an.nearest[k]) or an.self_touch[k] or an.own_gap[k] <= ctx.tolerance:
                 continue  # napojeno, nebo jde o téměř uzavřený polygon (řeší jiná kontrola)
@@ -215,14 +259,19 @@ class VisiciKonce(Check):
             if _expects_polygon(ctx, f):
                 continue  # řeší kontrola nezavřených polygonů
             x, y = an.points[k]
-            if hull is not None and hull.distance(an.pgeoms[k]) <= edge:
+            if hull is not None and (hull.distance(an.pgeoms[k]) <= edge
+                                     or _leads_out(an, k, reach, ctx.precision)):
                 # konec na okraji kresby: MGEO ho nepočítá, ale ukázat ho (aby bylo jasné, proč jinde ano)
                 iss = ctx.issue(self, f, "Volný konec na okraji kresby (učitelova kontrola ho nepočítá)",
                                 at=(x, y))
                 iss.severity = Severity.INFO
                 yield iss
                 continue
-            yield ctx.issue(self, f, "Volný konec linie uvnitř kresby", at=(x, y))
+            msg = "Volný konec linie uvnitř kresby"
+            near = _nearest_other(an, k)
+            if near is not None and near <= 2.0:
+                msg += f" – nejbližší čára je {fmt_m(near)} daleko (nedotaženo?)"
+            yield ctx.issue(self, f, msg, at=(x, y))
 
 
 @register
