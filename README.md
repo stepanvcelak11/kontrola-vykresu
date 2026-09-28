@@ -140,6 +140,37 @@ Otevřete ukázkový výkres a stiskněte F5.
 * **Jen tento výřez**: přibližte si hotovou část výkresu a klikněte. Seznam, kroužky i počty
   chyb se omezí na zobrazenou oblast. Dalším kliknutím se vrátíte k celému výkresu.
 
+### Připraveno k odevzdání, hlídání souboru, návody k opravě
+
+* **Připraveno k odevzdání?** (horní lišta): úplná kontrola s tolerancemi učitele (i když máte
+  zapnutý rozpracovaný výkres). Ukáže semafor (červená: chyby, oranžová: jen varování, zelená:
+  hotovo), co zbývá opravit, kontrolní seznam (pravidla, seznam souřadnic, je DXF novější než
+  DGN?), graf počtu chyb v čase a **počítadlo odevzdání** (nejvýš 5 pokusů).
+* **Hlídat změny výkresu** (menu Kontrola, ve výchozím stavu zapnuto): kreslíte v MicroStationu,
+  uložíte DXF a aplikace během pár vteřin sama načte výkres a zkontroluje ho znovu. Nad
+  seznamem chyb ukáže, co přibylo a co zmizelo. Každé uložení DGN (Ctrl+S) to nespustí – je
+  potřeba uložit DXF (u DGN jen s nainstalovaným ODA File Converterem).
+* **Jak opravit:** u vybrané chyby se pod seznamem ukáže postup v MicroStationu (který nástroj,
+  co nastavit). Návody jsou i v PDF protokolu a v Excelu.
+* **Průběh:** malý graf pod kartami ukazuje počet chyb (červeně) a varování (oranžově)
+  u posledních kontrol.
+
+### Seznam souřadnic a kontrola výpočtu ze zápisníku
+
+* **Seznam souřadnic** (výstup z Gromy, `číslo Y X Z`) přetáhněte do okna nebo přidejte na
+  Podklady. Kontrola pak najde body, které ve výkresu chybí nebo jsou posunuté, špatná čísla
+  bodů a špatné výšky u bodů. Osy a znaménka S-JTSK se poznají samy.
+* **Kontrola → Kontrola výpočtu souřadnic (zápisník)…**: zadejte zápisník z totální stanice
+  (formát Gromy `.zap`), dané body (stanoviska, orientace a nivelační bod – např.
+  `gnss_husovice.txt` a body z ČÚZK, viz `podklady/zadani2-husovice/dane_body.txt`) a svůj
+  seznam z Gromy. Aplikace spočítá polární metodu stejně jako Groma (dvě polohy dalekohledu,
+  měřítkový koeficient Křovák + nadmořská výška, orientační posun vážený délkami, výšky od
+  nivelačního bodu, druhé určení bodu jako kontrolní) a ukáže body, které se liší víc než
+  o 1 cm. Na zadání Husovice souhlasí s Gromou do 1 mm.
+* **Kontrola → Porovnat s protokolem učitele…**: načte protokol z GISoftu (`.log`) a porovná ho
+  s nálezy aplikace po skupinách (vrstva + chybné atributy): co učitel našel a aplikace ne,
+  a naopak. Protokol se uloží do Podkladů.
+
 ### Krok 4: záložka Zadání, import tabulky atributů
 
 **Zadání → Tabulka atributů**: přetáhněte `ukazky/tabulka_atributu.xlsx` nebo `.csv`.

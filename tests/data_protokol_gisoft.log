@@ -1,0 +1,39 @@
+Zpracováno programem 'Kontrola a změna symbologie' firmy GISoft (www.gisoft.cz)
+Verze programu: 18.2.22
+
+Podmínky zpracování
+-------------------
+Režim zpracování:               Kontrola symbologie
+Výkres:                         U:\Student_02_a1_t1.dgn
+Měřítko výkresu:                1:500
+Přesnost porovnání:             0.12
+
+Výsledky zpracování
+-------------------
+Ve výkresu bylo nalezeno 6 typů chyb - celkem 187 prvků.
+
+Počet výskytů a atributy chybných prvků
+---------------------------------------
+8      Název vrstvy: Vrstva 7, Číslo vrstvy: 7, Typ prvku: Lomená čára
+       Barva: 93, Styl: 2.103 (Měřítko(!): 1.0), Tloušťka: 0
+       Třída: Primární, Průhlednost: 0, Priorita: 0
+2      Název vrstvy: Vrstva 15, Číslo vrstvy(!): 15, Typ prvku: Úsečka
+       Barva: 0, Styl: 0, Tloušťka: 0
+       Třída: Primární, Průhlednost: 0, Priorita: 0
+86     Název vrstvy: Vrstva 46, Číslo vrstvy(!): 46, Typ prvku: Bodová buňka
+       Barva: 0, Styl: 0, Tloušťka: 0
+4      Název vrstvy: Vrstva 47, Číslo vrstvy: 47, Typ prvku(!): Textový uzel
+       Barva: 97, Styl: 0, Tloušťka: 0
+       Font: cs_Working (1), Výška: 1.0, Šířka: 1.0
+       Zarovnání: Střed uprostřed, Sklon: 0.0, Úhel: 56.98306709
+1      Název vrstvy: Vrstva 58, Číslo vrstvy: 58, Typ prvku(!): Elipsa
+       Barva: 0, Styl: 0, Tloušťka(!): 0
+86     Název vrstvy: Vrstva 59, Číslo vrstvy: 59, Typ prvku: Text
+       Barva: 86, Styl: 0, Tloušťka: 0
+       Font(!): cs_Nimbus Sans C I (159), Výška: 0.75, Šířka(!): 0.5
+       Zarovnání: Vlevo uprostřed, Sklon: 0.0, Úhel: 0.0
+------------------------------------------------------------------------------------------------
+Celkem chyb: 187
+Začátek zpracování:  25.10.2022  10:11:53
+
+Nepoužívejte atribut dle vrstvy !!

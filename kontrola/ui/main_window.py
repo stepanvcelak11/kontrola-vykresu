@@ -180,6 +180,8 @@ class MainWindow(QMainWindow):
         self.a_ready = self._act("Připraveno k odevzdání?", self.ready_check, None,
                                  "Úplná kontrola jako před odevzdáním (s tolerancemi učitele), semafor, co zbývá "
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
+        self.a_teacher = self._act("Porovnat s protokolem učitele…", self.compare_teacher, None,
+                                   "Načíst protokol od učitele (GISoft / MGEO .log) a porovnat s nálezy programu")
         self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
                                    "Spočítat body ze zápisníku totální stanice a porovnat s vaším seznamem z Gromy")
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
@@ -214,6 +216,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_vypocet)
+        m_check.addAction(self.a_teacher)
         m_check.addSeparator()
         m_check.addAction(self.a_watch)
         m_check.addAction(self.a_wip)
@@ -462,6 +465,33 @@ class MainWindow(QMainWindow):
                         self).exec()
 
         self._run_task(job, done, "Kontrola před odevzdáním…")
+
+    def compare_teacher(self):
+        if self.drawing is None or not self.issues:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres a spusťte kontrolu (F5) – "
+                                    "pak ji jde porovnat s protokolem učitele.")
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "Protokol od učitele", "",
+                                              "Protokol (*.log *.txt *.prt);;Vše (*)")
+        if not path:
+            return
+        from ..protokol_ucitele import compare_with_teacher, read_teacher_log
+        from .protokol_dialog import ProtokolDialog
+        try:
+            prot = read_teacher_log(path)
+        except OSError as exc:
+            QMessageBox.warning(self, APP_NAME, f"Protokol nelze načíst: {exc}")
+            return
+        if not prot.skupiny and not prot.topologie:
+            QMessageBox.information(self, APP_NAME, "V souboru nejsou skupiny chyb ve formátu protokolu GISoft "
+                                    "(„počet  Název vrstvy: …“). Pošlete ho prosím autorovi aplikace.")
+            return
+        try:
+            self.project.add_attachment("dokumenty", path)
+        except OSError:
+            pass
+        rows, summary = compare_with_teacher(prot, self.drawing, self.project.rules, self.issues)
+        ProtokolDialog(rows, summary, prot.topologie, self).exec()
 
     def show_vypocet(self):
         from .vypocet_dialog import VypocetDialog

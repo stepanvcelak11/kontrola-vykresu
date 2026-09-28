@@ -64,8 +64,8 @@ def _fmt(label: str, key: str, attrs, wrong: set[str]) -> str:
     return f"{label}{'(!)' if key in wrong else ''}: {attrs[key]}"
 
 
-def export_mgeo_log(drawing: Drawing, rules: RuleSet, issues: list[Issue], path: str | Path,
-                    rules_name: str = "", scale: str = "", tolerance: float | None = None) -> Path:
+def issue_groups(drawing: Drawing, rules: RuleSet, issues: list[Issue]):
+    """Chybné prvky seskupené jako v protokolu GISoft: {(atributy, chybná pole): počet}, vzorky."""
     by_id = drawing.by_id()
     wrong_by_feature: dict[int, set[str]] = {}
     for iss in issues:
@@ -84,6 +84,12 @@ def export_mgeo_log(drawing: Drawing, rules: RuleSet, issues: list[Issue], path:
         key = (tuple(a.items()), frozenset(wrong))
         groups[key] += 1
         samples[key] = (a, wrong)
+    return groups, samples
+
+
+def export_mgeo_log(drawing: Drawing, rules: RuleSet, issues: list[Issue], path: str | Path,
+                    rules_name: str = "", scale: str = "", tolerance: float | None = None) -> Path:
+    groups, samples = issue_groups(drawing, rules, issues)
 
     now = dt.datetime.now().strftime("%d.%m.%Y  %H:%M:%S")
     L = []
