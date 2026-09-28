@@ -287,6 +287,8 @@ class MainWindow(QMainWindow):
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Rychlé tipy – MicroStation (rovnoběžka, kolmice…)", self.show_tips, "Ctrl+T",
                                    "Jak udělat běžné konstrukce a opravy v MicroStationu"))
+        m_help.addAction(self._act("Klávesové zkratky", self.show_shortcuts, None,
+                                   "Přehled klávesových zkratek aplikace"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
         m_help.addAction(self._act("Kokeš, Atlas DMT, AutoCAD a katastr (VFK)",
                                    lambda: QMessageBox.information(self, "Jiné programy", JINE_PROGRAMY_NAVOD)))
@@ -1090,6 +1092,23 @@ class MainWindow(QMainWindow):
     def _toggle_info(self, hide: bool):
         from ..checks.base import Severity as _S
         self.issue_panel.sev_boxes[_S.INFO].setChecked(not hide)
+
+    def show_shortcuts(self):
+        """Přehled zkratek sestavený z akcí okna (vždy odpovídá skutečnosti)."""
+        rows = []
+        for a in self.findChildren(QAction):
+            sc = a.shortcut().toString(QKeySequence.NativeText)
+            if sc and a.text():
+                rows.append((a.text().replace("&", "").rstrip("…"), sc))
+        rows += [("Předchozí / další chyba", "F7 / F8"), ("Opraveno", "Ctrl+Enter"), ("Ignorovat", "Ctrl+Delete"),
+                 ("Přiblížení", "kolečko myši"), ("Posun výkresu", "tažení prostředním / pravým tlačítkem")]
+        seen, html = set(), []
+        for t, sc in sorted(rows, key=lambda r: r[0].lower()):
+            if (t, sc) in seen:
+                continue
+            seen.add((t, sc))
+            html.append(f"<tr><td style='padding:3px 16px 3px 0'>{t}</td><td><b>{sc}</b></td></tr>")
+        QMessageBox.information(self, "Klávesové zkratky", "<table>" + "".join(html) + "</table>")
 
     def show_tips(self):
         from .tips import TipsDialog
