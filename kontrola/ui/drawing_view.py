@@ -422,6 +422,7 @@ class DrawingView(QGraphicsView):
 
     # ---------------------------------------------------------------- výkres
     def clear_drawing(self):
+        self.clear_overlay()
         sc = self.scene()
         for m in list(self.markers.values()):
             sc.removeItem(m)
@@ -663,6 +664,39 @@ class DrawingView(QGraphicsView):
         item.setZValue(9_000)
         sc.addItem(item)
         self._highlight = item
+
+    def set_overlay(self, items: list[tuple[Feature, QColor, bool]]):
+        """Překryvná vrstva (porovnání verzí): prvky obarvené podle druhu změny, čárkovaně = odebrané."""
+        self.clear_overlay()
+        sc = self.scene()
+        groups: dict[tuple[str, bool], QPainterPath] = {}
+        colors: dict[tuple[str, bool], QColor] = {}
+        for f, color, dashed in items:
+            key = (color.name(), dashed)
+            path = groups.setdefault(key, QPainterPath())
+            colors[key] = color
+            self._add_feature_outline(path, f)
+        self._overlay = []
+        for key, path in groups.items():
+            item = QGraphicsPathItem(path)
+            pen = QPen(colors[key], 3.5)
+            pen.setCosmetic(True)
+            if key[1]:
+                pen.setStyle(Qt.DashLine)
+            item.setPen(pen)
+            item.setZValue(8_500)
+            sc.addItem(item)
+            self._overlay.append(item)
+
+    def clear_overlay(self):
+        for it in getattr(self, "_overlay", []):
+            if it.scene() is not None:
+                it.scene().removeItem(it)
+        self._overlay = []
+
+    def zoom_to(self, x: float, y: float, span: float = 15.0):
+        c = self.to_scene(x, y)
+        self.fitInView(QRectF(c.x() - span / 2, c.y() - span / 2, span, span), Qt.KeepAspectRatio)
 
     def _add_feature_outline(self, path: QPainterPath, f: Feature):
         """Obrys prvku pro zvýraznění: čára/plocha přímo, text jako obdélník, bod jako kroužek."""

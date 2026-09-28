@@ -239,3 +239,30 @@ def test_pruvodce(window, monkeypatch):
         g.b_next.click()
     assert g.result() == 1
     assert window.settings.value("pruvodce/skryt", False, type=bool)
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_porovnani_verzi_v_okne(window, tmp_path):
+    import shutil
+
+    import ezdxf
+    w = window
+    p = tmp_path / "vykres.dxf"
+    shutil.copy(UKAZKA, p)
+    w.load_drawing_file(p, add_to_project=False)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    doc = ezdxf.readfile(p)
+    doc.modelspace().add_line((0, 0), (5, 5), dxfattribs={"layer": "NOVA"})
+    doc.saveas(p)
+    first = w.drawing
+    w.load_drawing_file(p, add_to_project=False)
+    assert w._wait(lambda: _idle(w) and w.drawing is not first, 30)
+    assert w.prev_drawing is first
+    w.a_compare.trigger()
+    dlg = w._compare_dlg
+    assert dlg is not None and dlg.table.rowCount() == 1
+    assert "Přidáno" in dlg.table.item(0, 2).text()
+    assert w.view._overlay
+    dlg.table.setCurrentCell(0, 0)
+    dlg.close()
+    assert not w.view._overlay

@@ -33,6 +33,7 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("KontrolaVykresu", "KontrolaVykresu")
         self.project: Project | None = None
         self.drawing: Drawing | None = None
+        self.prev_drawing: Drawing | None = None  # předchozí načtená verze (porovnání verzí)
         self.task: BackgroundTask | None = None
         self.issues: list[Issue] = []
         self._syncing_wip = False
@@ -194,6 +195,9 @@ class MainWindow(QMainWindow):
         self.a_ready = self._act("Připraveno k odevzdání?", self.ready_check, None,
                                  "Úplná kontrola jako před odevzdáním (s tolerancemi učitele), semafor, co zbývá "
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
+        self.a_compare = self._act("Porovnat verze výkresu…", self.compare_versions, "Ctrl+D",
+                                   "Co se změnilo od předchozí načtené verze (nebo proti jinému DXF): "
+                                   "přidané, odebrané a upravené prvky barevně ve výkresu")
         self.a_teacher = self._act("Porovnat s protokolem učitele…", self.compare_teacher, None,
                                    "Načíst protokol od učitele (GISoft / MGEO .log) a porovnat s nálezy programu")
         self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
@@ -231,6 +235,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
+        m_check.addAction(self.a_compare)
         m_check.addAction(self.a_vypocet)
         m_check.addAction(self.a_teacher)
         m_check.addSeparator()
@@ -335,7 +340,7 @@ class MainWindow(QMainWindow):
             return
         if self.project is not None:
             self.project.save()
-        self.drawing = None
+        self.drawing = self.prev_drawing = None
         self.view.clear_drawing()
         self.layers.set_drawing(None)
         self.set_project(Project.new_in_default_location(name.strip()))
@@ -362,7 +367,7 @@ class MainWindow(QMainWindow):
             return
         if self.project is not None:
             self.project.save()
-        self.drawing = None
+        self.drawing = self.prev_drawing = None
         self.view.clear_drawing()
         self.layers.set_drawing(None)
         self.set_project(project)
@@ -674,6 +679,10 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, title, msg)
 
     def set_drawing(self, drawing: Drawing, keep_view: bool = False, prepared=None):
+        if self.drawing is not None and self.drawing is not drawing:
+            self.prev_drawing = self.drawing  # pro „Porovnat verze výkresu“
+        if getattr(self, "_compare_dlg", None) is not None:
+            self._compare_dlg.close()
         self.drawing = drawing
         tr, center = self.view.transform(), self.view.mapToScene(self.view.viewport().rect().center())
         self.view.set_drawing(drawing, prepared)
@@ -864,6 +873,43 @@ class MainWindow(QMainWindow):
         self.view.set_background_image(load_pixmap(path), float(bg.get("x", 0)), float(bg.get("y", 0)),
                                        float(bg.get("meritko", 0.1)), float(bg.get("rotace", 0)),
                                        float(bg.get("pruhlednost", 0.5)))
+
+    def compare_versions(self):
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
+            return
+        prev = getattr(self, "prev_drawing", None)
+        if prev is None:
+            self.compare_with_file()
+            return
+        self._show_compare(prev)
+
+    def compare_with_file(self):
+        start = self.settings.value("cesty/vykres", str(Path.home()))
+        path, _ = QFileDialog.getOpenFileName(self, "Starší verze výkresu k porovnání", start, DRAWING_FILTER)
+        if not path:
+            return
+        if self.task is not None and self.task.is_running():
+            QMessageBox.information(self, APP_NAME, "Počkejte na dokončení probíhající úlohy.")
+            return
+        oda = self.project.config.oda_cesta if self.project else None
+        self._run_task(lambda progress, cancelled: load_drawing(Path(path), lambda p, m="": progress(int(p), m), oda),
+                       self._show_compare, f"Načítám {Path(path).name}…", self._load_failed)
+
+    def _show_compare(self, old: Drawing):
+        from ..porovnani import compare
+        from .compare_dialog import CompareDialog
+        if getattr(self, "_compare_dlg", None) is not None:
+            self._compare_dlg.close()
+        changes = compare(old, self.drawing)
+        name = lambda d: Path(d.source_path or d.path).name  # noqa: E731
+        dlg = CompareDialog(self.view, changes, name(old), name(self.drawing), self)
+        dlg.otherRequested.connect(self.compare_with_file)
+        dlg.finished.connect(lambda *_: setattr(self, "_compare_dlg", None))
+        self._compare_dlg = dlg
+        dlg.show()
+        self.tabs.setCurrentWidget(self.split)
+        self.statusBar().showMessage(f"Porovnání verzí: {len(changes)} změn.", 8000)
 
     def show_guide(self):
         from .guide_dialog import GuideDialog
