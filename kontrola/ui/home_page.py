@@ -164,7 +164,7 @@ class HomePage(QScrollArea):
         hh = self.projects.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.Stretch)
         hh.setSectionResizeMode(1, QHeaderView.Stretch)
-        for c, w_ in ((2, 120), (3, 150), (4, 90)):
+        for c, w_ in ((2, 110), (3, 150), (4, 105)):
             self.projects.setColumnWidth(c, w_)
         self.projects.cellDoubleClicked.connect(self._open_project_row)
         self.projects.setMinimumHeight(170)
@@ -192,6 +192,7 @@ class HomePage(QScrollArea):
         items = [("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
                  ("Rychlé tipy MicroStation", win.show_tips), ("Co znamenají chyby", win.show_help),
                  ("Seznam k opravě (PDF)", lambda: win.export("todo")), ("Protokol od učitele", win.compare_teacher),
+                 ("Hromadná kontrola", win.batch_check), ("Protokol HTML", lambda: win.export("html")),
                  ("Průvodce", win.show_guide), ("Nastavení kontrol", win.edit_settings)]
         for k, (text, slot) in enumerate(items):
             b = QPushButton(text)
@@ -234,10 +235,13 @@ class HomePage(QScrollArea):
                         roots.add(sub.resolve())
         rows = []
         for r in roots:
-            try:
-                meta = yaml.safe_load((r / "projekt.yaml").read_text(encoding="utf-8")) or {}
-            except Exception:  # noqa: BLE001
-                continue
+            if cur is not None and Path(cur.root).resolve() == r:
+                meta = cur.meta  # otevřený projekt – aktuální stav z paměti
+            else:
+                try:
+                    meta = yaml.safe_load((r / "projekt.yaml").read_text(encoding="utf-8")) or {}
+                except Exception:  # noqa: BLE001
+                    continue
             hist = meta.get("historie") or []
             last = hist[-1] if hist else None
             rows.append((meta.get("ulozeno", ""), r, meta, last))
@@ -261,7 +265,8 @@ class HomePage(QScrollArea):
                         f = it.font()
                         f.setBold(True)
                         it.setFont(f)
-                        it.setText(v + "  (otevřený)")
+                        it.setText("● " + v)
+                        it.setToolTip(f"Otevřený projekt – {r}")
                 if c == 3 and last and last.get("chyby", 0) == 0:
                     it.setForeground(QColor("#16A34A"))
                 self.projects.setItem(i, c, it)
