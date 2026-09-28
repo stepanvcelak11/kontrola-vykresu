@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from typing import Iterable
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetricsF, QPainter, QPainterPath,
                            QPen, QPixmap, QPolygonF, QTransform)
 from PySide6.QtWidgets import (QGraphicsItem, QGraphicsPathItem, QGraphicsPixmapItem,
@@ -133,7 +133,9 @@ class IssueMarker(QGraphicsItem):
         self.setToolTip(f"#{issue.number} {issue.check_name}\n{issue.message}")
         self._font = QFont()
         self._font.setPointSizeF(8.5)
-        self._label = issue.label()
+        lab = issue.label()
+        self._label = lab if len(lab) <= 46 else lab[:44].rstrip(" ,:–") + "…"  # celé znění je v tooltipu
+        self.label_on = True  # vypne se, když by se popisek překrýval s jiným (viz DrawingView._declutter)
         fm = QFontMetricsF(self._font)
         self._label_w = fm.horizontalAdvance(self._label) + 10
         self._label_h = fm.height() + 4
@@ -148,7 +150,7 @@ class IssueMarker(QGraphicsItem):
     def boundingRect(self) -> QRectF:  # noqa: N802
         r = self.RADIUS + 8
         rect = QRectF(-r, -r, 2 * r, 2 * r)
-        if IssueMarker.show_labels:
+        if IssueMarker.show_labels and self.label_on:
             rect = rect.united(QRectF(self.RADIUS + 2, -self.RADIUS - self._label_h,
                                       self._label_w + 4, self._label_h + 4))
         return rect
@@ -158,6 +160,16 @@ class IssueMarker(QGraphicsItem):
         r = self.RADIUS + 4
         p.addEllipse(QPointF(0, 0), r, r)
         return p
+
+    def set_label_on(self, on: bool):
+        if on != self.label_on:
+            self.prepareGeometryChange()
+            self.label_on = on
+            self.update()
+
+    def label_rect(self) -> QRectF:
+        r = self.RADIUS
+        return QRectF(r + 4, -r - self._label_h + 2, self._label_w, self._label_h)
 
     def set_highlighted(self, on: bool):
         if on != self.highlighted:
@@ -192,7 +204,7 @@ class IssueMarker(QGraphicsItem):
             painter.setPen(QPen(c, 1.5))
             painter.drawLine(QPointF(-3, 0), QPointF(3, 0))
             painter.drawLine(QPointF(0, -3), QPointF(0, 3))
-        if IssueMarker.show_labels and state == "nová":
+        if IssueMarker.show_labels and self.label_on and state == "nová":
             rect = QRectF(r + 4, -r - self._label_h + 2, self._label_w, self._label_h)
             bg = QColor(255, 255, 255, 225)
             painter.setPen(QPen(c, 1))
@@ -390,9 +402,48 @@ class DrawingView(QGraphicsView):
             self.setTransform(tr)
             self.centerOn(center)
 
+    def _view_state(self):
+        t = self.transform()
+        return (round(t.m11(), 9), round(t.m22(), 9), self.horizontalScrollBar().value(),
+                self.verticalScrollBar().value(), self.viewport().width(), self.viewport().height(),
+                len(self.markers), IssueMarker.show_labels)
+
+    def request_declutter(self):
+        if not hasattr(self, "_declutter_timer"):
+            self._declutter_timer = QTimer(self)
+            self._declutter_timer.setSingleShot(True)
+            self._declutter_timer.setInterval(60)
+            self._declutter_timer.timeout.connect(self._declutter)
+        self._declutter_timer.start()
+
+    def _declutter(self):
+        """Popisky kroužků se nesmí překrývat: přednost mají závažnější chyby, ostatní ukáže přiblížení."""
+        self._last_view = self._view_state()
+        if not IssueMarker.show_labels:
+            return
+        placed: list[QRectF] = []
+        vr = QRectF(self.viewport().rect()).adjusted(-50, -50, 50, 50)
+        items = [m for m in self.markers.values() if m.isVisible()]
+        items.sort(key=lambda m: (m.issue.state != "nová", m.issue.severity.rank, m.issue.number))
+        for m in items:
+            p = self.mapFromScene(m.scenePos())
+            if not vr.contains(QPointF(p)):
+                m.set_label_on(False)
+                continue
+            lr = m.label_rect().translated(p.x(), p.y())
+            circle = QRectF(p.x() - m.RADIUS, p.y() - m.RADIUS, 2 * m.RADIUS, 2 * m.RADIUS)
+            ok = (m.issue.state == "nová" and m.issue.severity != Severity.INFO  # info jen kroužek + tooltip
+                  and not any(lr.intersects(o) for o in placed))
+            m.set_label_on(ok or m.highlighted)
+            placed.append(circle)
+            if ok:
+                placed.append(lr)
+
     def drawForeground(self, painter: QPainter, rect: QRectF):  # noqa: N802
         """Prázdný výkres: nápověda uprostřed okna."""
         super().drawForeground(painter, rect)
+        if self.markers and getattr(self, "_last_view", None) != self._view_state():
+            self.request_declutter()
         if self.drawing is not None:
             return
         painter.save()

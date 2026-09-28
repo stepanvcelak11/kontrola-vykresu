@@ -450,6 +450,21 @@ Postup:
    podle PDF nebo náčrtu (hladiny, barvy) a potvrďte. Kontroly pak hlídají, že se pravidel
    držíte v celém výkresu.
 
+### Pokyny ze zadání (Word)
+
+Zadání od učitele ve Wordu (DOC i DOCX), ODT, RTF nebo PDF přetáhněte do záložky **Zadání** – otevře se
+stránka **Pokyny ze zadání**. Aplikace z dokumentu vytáhne:
+
+* **požadavky** – měřítko, písmo, výšku písma, tolerance, souřadnicový systém a věty s „musí / nesmí“;
+* **popisy vrstev** („Vrstva 58 – podrobné body polohopisu … Barva 0, Tloušťka čáry 2“) a nabídne je
+  přidat do pravidel. Výšky písma se přepočtou z měřítka, pro které platí, na měřítko kresby.
+  Bez toho by se body na vrstvách 58/59/60 v zadání 1 hlásily jako „vrstva není ve Směrnici“,
+  protože v Excelu se Směrnicí nejsou;
+* **tabulky** s vrstvami a barvami, které jde importovat jako tabulku atributů.
+
+Nenalezené vrstvy a počet pokynů ukáže i okno *Připraveno k odevzdání?*. Odebráním dokumentu se
+odeberou i pravidla, která z něj vznikla.
+
 ### Zadání a další dokumenty
 
 Na záložce **Podklady → Přidat… → Zadání a dokumenty** (nebo přetažením souboru .doc, .docx do

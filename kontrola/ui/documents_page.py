@@ -73,7 +73,10 @@ class DocumentsPage(QWidget):
         self.lay_table.setHorizontalHeaderLabels(["Vrstva", "Název", "Prvek", "Barva", "Tloušťka", "Písmo / výška"])
         self.lay_table.verticalHeader().setVisible(False)
         self.lay_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.lay_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        hh = self.lay_table.horizontalHeader()
+        hh.setStretchLastSection(True)
+        for c, wdt in enumerate((70, 300, 80, 70, 80)):
+            self.lay_table.setColumnWidth(c, wdt)
         l2.addWidget(self.lay_table)
         self.rules_state = QLabel()
         self.rules_state.setWordWrap(True)
@@ -141,7 +144,9 @@ class DocumentsPage(QWidget):
         self.rules = layer_rules(self.doc, self.tab.project.rules.meritko)
         self.lay_table.setRowCount(len(self.rules))
         for r, rule in enumerate(self.rules):
-            font = " ".join(x for x in (rule.font or "", f"{rule.vyska_textu:g}" if rule.vyska_textu else "") if x)
+            unit = "mm" if self.tab.project.rules.meritko else "m"
+            font = ", ".join(x for x in (rule.font or "", f"výška {rule.vyska_textu:g} {unit}" if rule.vyska_textu
+                                         else "", rule.zarovnani or "") if x)
             vals = (rule.hladina, rule.nazev, rule.geometrie.label if rule.geometrie else "–",
                     "" if rule.barva is None else str(rule.barva),
                     "" if rule.tloustka is None else f"{rule.tloustka:g}", font)
