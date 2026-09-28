@@ -1,0 +1,384 @@
+"""Panel se seznamem chyb, filtry a tlačítky pro procházení."""
+
+from __future__ import annotations
+
+from collections import Counter
+
+from PySide6.QtCore import (QAbstractTableModel, QItemSelectionModel, QModelIndex, QSortFilterProxyModel,
+                            Qt, Signal)
+from PySide6.QtGui import QBrush, QColor
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
+                               QHeaderView, QLabel, QListWidget, QListWidgetItem, QMenu,
+                               QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget)
+
+from ..checks.base import ISSUE_STATES, Issue, Severity, fmt_num
+from .drawing_view import SEVERITY_COLORS
+
+COLUMNS = ["Č.", "Typ kontroly", "Závažnost", "Popis", "Hladina", "X", "Y", "Stav"]
+
+
+def fmt_coord(v: float) -> str:
+    return f"{v:,.3f}".replace(",", " ").replace(".", ",")
+
+
+class IssueModel(QAbstractTableModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.issues: list[Issue] = []
+
+    def set_issues(self, issues: list[Issue]):
+        self.beginResetModel()
+        self.issues = list(issues)
+        self.endResetModel()
+
+    def rowCount(self, parent=QModelIndex()):  # noqa: N802
+        return 0 if parent.isValid() else len(self.issues)
+
+    def columnCount(self, parent=QModelIndex()):  # noqa: N802
+        return len(COLUMNS)
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):  # noqa: N802
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return COLUMNS[section]
+        return None
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        iss = self.issues[index.row()]
+        c = index.column()
+        if role == Qt.DisplayRole:
+            return [str(iss.number), iss.check_name, iss.severity.value, iss.message, iss.layer,
+                    fmt_coord(iss.x), fmt_coord(iss.y), iss.state][c]
+        if role == Qt.UserRole:  # řazení
+            return [iss.number, iss.check_name, iss.severity.rank, iss.message, iss.layer,
+                    iss.x, iss.y, ISSUE_STATES.index(iss.state) if iss.state in ISSUE_STATES else 0][c]
+        if role == Qt.ForegroundRole:
+            if iss.state != "nová":
+                return QBrush(QColor(140, 140, 140))
+            if c == 2:
+                return QBrush(SEVERITY_COLORS.get(iss.severity))
+        if role == Qt.ToolTipRole:
+            tip = f"{iss.check_name}: {iss.message}"
+            if iss.handles:
+                tip += f"\nPrvky (handle): {', '.join(iss.handles[:6])}"
+            if iss.note:
+                tip += f"\nPoznámka: {iss.note}"
+            return tip
+        if role == Qt.TextAlignmentRole and c in (0, 5, 6):
+            return int(Qt.AlignRight | Qt.AlignVCenter)
+        return None
+
+    def row_of(self, number: int) -> int:
+        for i, iss in enumerate(self.issues):
+            if iss.number == number:
+                return i
+        return -1
+
+    def refresh_row(self, row: int):
+        self.dataChanged.emit(self.index(row, 0), self.index(row, len(COLUMNS) - 1))
+
+
+class IssueFilter(QSortFilterProxyModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.hidden_types: set[str] = set()
+        self.severities: set[Severity] = set(Severity)
+        self.layer: str | None = None
+        self.hide_done = False
+        self.setSortRole(Qt.UserRole)
+
+    def filterAcceptsRow(self, row, parent):  # noqa: N802
+        iss: Issue = self.sourceModel().issues[row]
+        return self.accepts(iss)
+
+    def accepts(self, iss: Issue) -> bool:
+        if iss.check_name in self.hidden_types:
+            return False
+        if iss.severity not in self.severities:
+            return False
+        if self.layer and iss.layer != self.layer:
+            return False
+        if self.hide_done and iss.state != "nová":
+            return False
+        return True
+
+    def refresh(self):
+        self.invalidateFilter()
+
+
+class IssuePanel(QWidget):
+    issueSelected = Signal(int)
+    filterChanged = Signal(object)  # set[int] viditelných čísel chyb
+    stateChanged = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.model = IssueModel(self)
+        self.proxy = IssueFilter(self)
+        self.proxy.setSourceModel(self.model)
+        self._updating = False
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+        self.summary = QLabel("Zatím neproběhla žádná kontrola.")
+        self.summary.setWordWrap(True)
+        lay.addWidget(self.summary)
+
+        split = QSplitter(Qt.Vertical)
+        lay.addWidget(split, 1)
+
+        # ---- filtry
+        fbox = QGroupBox("Filtr")
+        fl = QVBoxLayout(fbox)
+        fl.setContentsMargins(6, 6, 6, 6)
+        self.types = QListWidget()
+        self.types.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.types.customContextMenuRequested.connect(self._types_menu)
+        self.types.itemChanged.connect(self._type_toggled)
+        self.types.itemDoubleClicked.connect(lambda it: self.only_type(it.data(Qt.UserRole)))
+        self.types.setToolTip("Odškrtnutím skryjete kroužky i řádky daného typu. "
+                              "Dvojklik nebo pravé tlačítko = jen tento typ.")
+        fl.addWidget(self.types, 1)
+        row = QHBoxLayout()
+        b_only = QPushButton("Jen tento typ")
+        b_only.clicked.connect(self._only_current)
+        b_all = QPushButton("Zobrazit vše")
+        b_all.clicked.connect(self.show_all)
+        row.addWidget(b_only)
+        row.addWidget(b_all)
+        fl.addLayout(row)
+        row2 = QHBoxLayout()
+        self.sev_boxes: dict[Severity, QCheckBox] = {}
+        for s in Severity:
+            cb = QCheckBox(s.value)
+            cb.setChecked(True)
+            cb.setStyleSheet(f"color: {SEVERITY_COLORS[s].name()}; font-weight: bold;")
+            cb.toggled.connect(self._filters_changed)
+            self.sev_boxes[s] = cb
+            row2.addWidget(cb)
+        row2.addStretch(1)
+        fl.addLayout(row2)
+        row3 = QHBoxLayout()
+        row3.addWidget(QLabel("Hladina:"))
+        self.layer_combo = QComboBox()
+        self.layer_combo.currentIndexChanged.connect(self._filters_changed)
+        row3.addWidget(self.layer_combo, 1)
+        fl.addLayout(row3)
+        self.hide_done = QCheckBox("Skrýt opravené a ignorované")
+        self.hide_done.toggled.connect(self._filters_changed)
+        fl.addWidget(self.hide_done)
+        split.addWidget(fbox)
+
+        # ---- tabulka
+        tw = QWidget()
+        tl = QVBoxLayout(tw)
+        tl.setContentsMargins(0, 0, 0, 0)
+        self.table = QTableView()
+        self.table.setModel(self.proxy)
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(0, Qt.AscendingOrder)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(22)
+        hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.Interactive)
+        hh.setStretchLastSection(False)
+        for c, w in enumerate((42, 150, 72, 260, 110, 110, 110, 72)):
+            self.table.setColumnWidth(c, w)
+        self.table.selectionModel().currentRowChanged.connect(self._current_changed)
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._table_menu)
+        tl.addWidget(self.table, 1)
+
+        nav = QHBoxLayout()
+        self.b_prev = QPushButton("◀ Předchozí")
+        self.b_prev.setShortcut("F7")
+        self.b_prev.setToolTip("Předchozí chyba (F7)")
+        self.b_prev.clicked.connect(lambda: self.step(-1))
+        self.b_next = QPushButton("Další ▶")
+        self.b_next.setShortcut("F8")
+        self.b_next.setToolTip("Další chyba (F8)")
+        self.b_next.clicked.connect(lambda: self.step(1))
+        self.b_fixed = QPushButton("Opraveno")
+        self.b_fixed.clicked.connect(lambda: self.set_state("opraveno"))
+        self.b_ignore = QPushButton("Ignorovat")
+        self.b_ignore.clicked.connect(lambda: self.set_state("ignorovat"))
+        self.b_new = QPushButton("Vrátit")
+        self.b_new.setToolTip("Vrátit stav na „nová“")
+        self.b_new.clicked.connect(lambda: self.set_state("nová"))
+        for b in (self.b_prev, self.b_next, self.b_fixed, self.b_ignore, self.b_new):
+            nav.addWidget(b)
+        tl.addLayout(nav)
+        split.addWidget(tw)
+        split.setSizes([230, 520])
+
+    # ------------------------------------------------------------ data
+    def set_issues(self, issues: list[Issue], summary: str = ""):
+        prev_hidden = set(self.proxy.hidden_types)
+        self.model.set_issues(issues)
+        self._updating = True
+        self.types.clear()
+        counts = Counter(i.check_name for i in issues)
+        sev_of: dict[str, Severity] = {}
+        for i in issues:
+            sev_of.setdefault(i.check_name, i.severity)
+        for name in sorted(counts, key=lambda n: (sev_of[n].rank, n)):
+            it = QListWidgetItem(f"{name} ({counts[name]})")
+            it.setData(Qt.UserRole, name)
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Unchecked if name in prev_hidden else Qt.Checked)
+            it.setForeground(QBrush(SEVERITY_COLORS.get(sev_of[name])))
+            self.types.addItem(it)
+        self.proxy.hidden_types = {n for n in prev_hidden if n in counts}
+        sev_counts = Counter(i.severity for i in issues)
+        for s, cb in self.sev_boxes.items():
+            cb.setText(f"{s.value} ({sev_counts.get(s, 0)})")
+        cur = self.layer_combo.currentData()
+        self.layer_combo.clear()
+        self.layer_combo.addItem("Všechny hladiny", None)
+        lc = Counter(i.layer for i in issues)
+        for layer in sorted(lc, key=str.lower):
+            self.layer_combo.addItem(f"{layer or '(bez hladiny)'} ({lc[layer]})", layer)
+        idx = self.layer_combo.findData(cur)
+        self.layer_combo.setCurrentIndex(max(0, idx))
+        self._updating = False
+        self.summary.setText(summary or self._default_summary(issues))
+        self._filters_changed()
+
+    def _default_summary(self, issues: list[Issue]) -> str:
+        c = Counter(i.severity for i in issues)
+        return (f"Nalezeno {len(issues)} problémů: chyb {c.get(Severity.CHYBA, 0)}, "
+                f"varování {c.get(Severity.VAROVANI, 0)}, info {c.get(Severity.INFO, 0)}.")
+
+    def visible_numbers(self) -> set[int]:
+        return {i.number for i in self.model.issues if self.proxy.accepts(i)}
+
+    # ------------------------------------------------------------ filtry
+    def _type_toggled(self, it: QListWidgetItem):
+        if self._updating:
+            return
+        name = it.data(Qt.UserRole)
+        if it.checkState() == Qt.Checked:
+            self.proxy.hidden_types.discard(name)
+        else:
+            self.proxy.hidden_types.add(name)
+        self._filters_changed()
+
+    def _filters_changed(self, *_):
+        if self._updating:
+            return
+        self.proxy.severities = {s for s, cb in self.sev_boxes.items() if cb.isChecked()}
+        self.proxy.layer = self.layer_combo.currentData()
+        self.proxy.hide_done = self.hide_done.isChecked()
+        self.proxy.refresh()
+        self.filterChanged.emit(self.visible_numbers())
+
+    def only_type(self, name: str):
+        self._updating = True
+        for i in range(self.types.count()):
+            it = self.types.item(i)
+            it.setCheckState(Qt.Checked if it.data(Qt.UserRole) == name else Qt.Unchecked)
+        self._updating = False
+        self.proxy.hidden_types = {self.types.item(i).data(Qt.UserRole) for i in range(self.types.count())
+                                   if self.types.item(i).data(Qt.UserRole) != name}
+        self._filters_changed()
+
+    def _only_current(self):
+        it = self.types.currentItem()
+        if it is None:
+            iss = self.current_issue()
+            if iss is None:
+                return
+            self.only_type(iss.check_name)
+        else:
+            self.only_type(it.data(Qt.UserRole))
+
+    def show_all(self):
+        self._updating = True
+        for i in range(self.types.count()):
+            self.types.item(i).setCheckState(Qt.Checked)
+        for cb in self.sev_boxes.values():
+            cb.setChecked(True)
+        self.layer_combo.setCurrentIndex(0)
+        self.hide_done.setChecked(False)
+        self._updating = False
+        self.proxy.hidden_types.clear()
+        self._filters_changed()
+
+    def _types_menu(self, pos):
+        it = self.types.itemAt(pos)
+        m = QMenu(self)
+        if it is not None:
+            m.addAction("Jen tento typ", lambda: self.only_type(it.data(Qt.UserRole)))
+        m.addAction("Zobrazit vše", self.show_all)
+        m.exec(self.types.mapToGlobal(pos))
+
+    # ------------------------------------------------------------ výběr
+    def current_issue(self) -> Issue | None:
+        idx = self.table.currentIndex()
+        if not idx.isValid():
+            return None
+        return self.model.issues[self.proxy.mapToSource(idx).row()]
+
+    def selected_issues(self) -> list[Issue]:
+        rows = {self.proxy.mapToSource(i).row() for i in self.table.selectionModel().selectedRows()}
+        if not rows:
+            cur = self.current_issue()
+            return [cur] if cur else []
+        return [self.model.issues[r] for r in sorted(rows)]
+
+    def _current_changed(self, cur, prev):
+        if cur.isValid():
+            iss = self.model.issues[self.proxy.mapToSource(cur).row()]
+            self.issueSelected.emit(iss.number)
+
+    def select_issue(self, number: int):
+        row = self.model.row_of(number)
+        if row < 0:
+            return
+        pidx = self.proxy.mapFromSource(self.model.index(row, 0))
+        if not pidx.isValid():
+            return
+        self.table.selectionModel().setCurrentIndex(
+            pidx, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+        self.table.scrollTo(pidx, QAbstractItemView.PositionAtCenter)
+
+    def step(self, delta: int):
+        n = self.proxy.rowCount()
+        if n == 0:
+            return
+        cur = self.table.currentIndex()
+        r = (cur.row() + delta) % n if cur.isValid() else (0 if delta > 0 else n - 1)
+        idx = self.proxy.index(r, 0)
+        self.table.selectionModel().setCurrentIndex(
+            idx, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+        self.table.scrollTo(idx)
+
+    # ------------------------------------------------------------ stav
+    def set_state(self, state: str):
+        changed = False
+        for iss in self.selected_issues():
+            if iss.state != state:
+                iss.state = state
+                self.model.refresh_row(self.model.row_of(iss.number))
+                changed = True
+        if changed:
+            self.stateChanged.emit()
+            if self.proxy.hide_done:
+                self._filters_changed()
+
+    def _table_menu(self, pos):
+        m = QMenu(self)
+        m.addAction("Označit jako opraveno", lambda: self.set_state("opraveno"))
+        m.addAction("Ignorovat", lambda: self.set_state("ignorovat"))
+        m.addAction("Vrátit na „nová“", lambda: self.set_state("nová"))
+        m.addSeparator()
+        m.addAction("Jen tento typ", self._only_current)
+        m.addAction("Zobrazit vše", self.show_all)
+        m.exec(self.table.viewport().mapToGlobal(pos))
+
+
+__all__ = ["IssuePanel", "fmt_coord", "fmt_num"]

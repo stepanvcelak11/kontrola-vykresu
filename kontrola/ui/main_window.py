@@ -7,15 +7,19 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QTabWidget, QToolBar, QWidget)
+                               QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar, QWidget)
 
 from .. import APP_NAME
 from ..io.dgn import ConversionError
 from ..io.dxf_loader import DrawingLoadError, load_drawing
+from ..checks.base import Issue
 from ..model import Drawing
 from ..project import Project
+from ..runner import CheckResult, carry_states, compare, run_checks
 from .drawing_view import DrawingView
+from .issue_panel import IssuePanel
 from .layers_panel import LayersPanel
+from .settings_dialog import SettingsDialog
 from .worker import BackgroundTask
 
 DRAWING_FILTER = "Výkresy (*.dxf *.dgn *.dwg);;DXF (*.dxf);;DGN (*.dgn);;Všechny soubory (*)"
@@ -28,6 +32,7 @@ class MainWindow(QMainWindow):
         self.project: Project | None = None
         self.drawing: Drawing | None = None
         self.task: BackgroundTask | None = None
+        self.issues: list[Issue] = []
         self.resize(1400, 880)
         self.setAcceptDrops(True)
 
@@ -35,8 +40,22 @@ class MainWindow(QMainWindow):
         self.view.cursorMoved.connect(self._on_cursor)
         self.view.fileDropped.connect(self.open_path)
 
+        self.view.markerClicked.connect(self._on_marker_clicked)
+
+        self.issue_panel = IssuePanel()
+        self.issue_panel.issueSelected.connect(self._on_issue_selected)
+        self.issue_panel.filterChanged.connect(self.view.set_visible_issues)
+        self.issue_panel.stateChanged.connect(self._on_states_changed)
+
+        self.split = QSplitter(Qt.Horizontal)
+        self.split.addWidget(self.view)
+        self.split.addWidget(self.issue_panel)
+        self.split.setStretchFactor(0, 3)
+        self.split.setStretchFactor(1, 2)
+        self.split.setSizes([860, 540])
+
         self.tabs = QTabWidget()
-        self.tabs.addTab(self.view, "Výkres")
+        self.tabs.addTab(self.split, "Výkres a chyby")
         self.setCentralWidget(self.tabs)
 
         self.layers = LayersPanel()
@@ -92,6 +111,17 @@ class MainWindow(QMainWindow):
         self.a_light = self._act("Světlé pozadí", self.view.set_light_background, None,
                                  "Přepnout černé/bílé pozadí výkresu", checkable=True)
         self.a_quit = self._act("Konec", self.close, "Ctrl+Q")
+        self.a_check = self._act("Zkontrolovat", self.run_checks, "F5", "Spustit zapnuté kontroly")
+        self.a_recheck = self._act("Zkontrolovat znovu", self.recheck, "Ctrl+F5",
+                                   "Znovu načíst výkres ze souboru, zkontrolovat a porovnat počet chyb")
+        self.a_settings = self._act("Nastavení kontrol…", self.edit_settings, "Ctrl+,",
+                                    "Tolerance, zapnutí/vypnutí kontrol a jejich závažnost")
+        self.a_labels = self._act("Popisky chyb", self.view.set_labels_visible, "Ctrl+L",
+                                  "Zobrazit/skrýt popisky u kroužků chyb", checkable=True)
+        self.a_labels.setChecked(True)
+        self.a_prev = self._act("◀ Předchozí chyba", lambda: self.issue_panel.step(-1), None,
+                                "Předchozí chyba (F7)")
+        self.a_next = self._act("Další chyba ▶", lambda: self.issue_panel.step(1), None, "Další chyba (F8)")
 
         m_file = self.menuBar().addMenu("&Soubor")
         m_file.addAction(self.a_open)
@@ -100,14 +130,27 @@ class MainWindow(QMainWindow):
         m_view = self.menuBar().addMenu("&Zobrazení")
         m_view.addAction(self.a_fit)
         m_view.addAction(self.a_light)
+        m_view.addAction(self.a_labels)
         m_view.addAction(self.layers_dock.toggleViewAction())
+        m_check = self.menuBar().addMenu("&Kontrola")
+        m_check.addAction(self.a_check)
+        m_check.addAction(self.a_recheck)
+        m_check.addSeparator()
+        m_check.addAction(self.a_settings)
 
         tb = QToolBar("Hlavní panel")
         tb.setObjectName("hlavni_panel")
         tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
         tb.addAction(self.a_open)
         tb.addSeparator()
+        tb.addAction(self.a_check)
+        tb.addAction(self.a_recheck)
+        tb.addAction(self.a_settings)
+        tb.addSeparator()
         tb.addAction(self.a_fit)
+        tb.addAction(self.a_labels)
+        tb.addAction(self.a_prev)
+        tb.addAction(self.a_next)
         self.addToolBar(tb)
         self.toolbar = tb
 
@@ -151,9 +194,14 @@ class MainWindow(QMainWindow):
         self.project = project
         self.settings.setValue("projekt/posledni", str(project.root))
         self._update_title()
+        self.set_issues([])
         path = project.drawing_path_for_loading()
         if path is not None:
-            self.load_drawing_file(path, add_to_project=False)
+            stored = project.load_issues()
+            self.load_drawing_file(path, add_to_project=False,
+                                   after=(lambda d: self.set_issues(stored, "Výsledek poslední kontroly "
+                                                                    "(pro aktuální stav spusťte kontrolu).")
+                                          ) if stored else None)
 
     def _update_title(self):
         parts = [APP_NAME]
@@ -181,7 +229,7 @@ class MainWindow(QMainWindow):
                                     f"Soubor {Path(path).name} není výkres. Podklady (tabulky, náčrty, "
                                     f"fotky) přidejte na záložce Zadání.")
 
-    def load_drawing_file(self, path: Path, add_to_project: bool = True, after=None):
+    def load_drawing_file(self, path: Path, add_to_project: bool = True, after=None, keep_view=False):
         if self.task is not None and self.task.is_running():
             QMessageBox.information(self, APP_NAME, "Počkejte na dokončení probíhající úlohy.")
             return
@@ -197,7 +245,7 @@ class MainWindow(QMainWindow):
                     self.project.save()
                 except OSError as exc:
                     QMessageBox.warning(self, APP_NAME, f"Výkres se nepodařilo zkopírovat do projektu: {exc}")
-            self.set_drawing(drawing)
+            self.set_drawing(drawing, keep_view=keep_view)
             if after:
                 after(drawing)
 
@@ -207,16 +255,95 @@ class MainWindow(QMainWindow):
         title = "Výkres nelze otevřít"
         QMessageBox.warning(self, title, msg)
 
-    def set_drawing(self, drawing: Drawing):
+    def set_drawing(self, drawing: Drawing, keep_view: bool = False):
         self.drawing = drawing
+        tr, center = self.view.transform(), self.view.mapToScene(self.view.viewport().rect().center())
         self.view.set_drawing(drawing)
+        if keep_view:
+            self.view.setTransform(tr)
+            self.view.centerOn(center)
         self.layers.set_drawing(drawing)
+        self.set_issues([])
         n = len(drawing.features)
         self.info_label.setText(f"Načteno {n} prvků, {sum(1 for l in drawing.layers.values() if l.count)} hladin.")
         self._update_title()
         if drawing.warnings:
             self.statusBar().showMessage(f"Upozornění při načítání: {len(drawing.warnings)} "
                                          f"(např. {drawing.warnings[0]})", 15000)
+
+    # ------------------------------------------------------------------ kontroly
+    def run_checks(self, after=None):
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres (tlačítko Otevřít výkres "
+                                                    "nebo přetažením souboru do okna).")
+            return
+        if self.task is not None and self.task.is_running():
+            return
+        drawing, rules, config = self.drawing, self.project.rules, self.project.config
+
+        def job(progress, cancelled):
+            return run_checks(drawing, rules, config, progress, cancelled)
+
+        self._run_task(job, lambda res: self._checks_done(res, after), "Spouštím kontroly…")
+
+    def _checks_done(self, res: CheckResult, after=None):
+        if res.cancelled:
+            self.info_label.setText("Kontrola byla zrušena.")
+            return
+        carry_states(self.project.issue_states(), res.issues, recheck=after is not None)
+        summary = None
+        if after is not None:
+            summary = after(res)
+        self.set_issues(res.issues, summary)
+        self.project.store_issues(res.issues)
+        self.project.save()
+        if res.notes:
+            self.statusBar().showMessage(" | ".join(res.notes[:4]), 20000)
+        self.last_notes = res.notes
+
+    def recheck(self):
+        if self.project is None:
+            return
+        path = self.project.drawing_path_for_loading()
+        if path is None:
+            self.run_checks()
+            return
+        old = list(self.issues)
+
+        def compare_text(res: CheckResult) -> str:
+            cmp = compare(old, res.issues)
+            msg = (f"Opakovaná kontrola: {len(res.issues)} problémů (předtím {len(old)}). {cmp.text()}")
+            QMessageBox.information(self, "Zkontrolovat znovu", msg)
+            return msg
+
+        self.project.refresh_drawing_copy()
+        self.load_drawing_file(path, add_to_project=False, keep_view=True,
+                               after=lambda d: self.run_checks(after=compare_text))
+
+    def set_issues(self, issues: list[Issue], summary: str | None = None):
+        self.issues = issues
+        self.view.set_issues(issues)
+        self.issue_panel.set_issues(issues, summary or "")
+
+    def edit_settings(self):
+        dlg = SettingsDialog(self.project.config, self.project.rules, self)
+        if dlg.exec():
+            self.project.config = dlg.result_config()
+            dlg.apply_rules_settings(self.project.rules)
+            self.project.save()
+
+    def _on_issue_selected(self, number: int):
+        self.view.highlight_issue(number, zoom=True)
+
+    def _on_marker_clicked(self, number: int):
+        self.issue_panel.select_issue(number)
+        self.view.highlight_issue(number, zoom=False)
+
+    def _on_states_changed(self):
+        self.view.refresh_markers()
+        if self.project is not None:
+            self.project.store_issues(self.issues)
+            self.project.save()
 
     # ------------------------------------------------------------------ úlohy na pozadí
     def _run_task(self, fn, on_done, text: str, on_fail=None):
