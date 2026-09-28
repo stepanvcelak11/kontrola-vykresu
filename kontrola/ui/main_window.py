@@ -133,6 +133,9 @@ class MainWindow(QMainWindow):
         self.a_check = self._act("Zkontrolovat", self.run_checks, "F5", "Spustit zapnuté kontroly")
         self.a_recheck = self._act("Zkontrolovat znovu", self.recheck, "Ctrl+F5",
                                    "Znovu načíst výkres ze souboru, zkontrolovat a porovnat počet chyb")
+        self.a_repair = self._act("Automatická oprava…", self.repair, "Ctrl+R",
+                                  "Opravit duplicity, nedotažení, přetažení, uzly a téměř uzavřené polygony "
+                                  "do nového DXF (jako režim oprava v MGEO)")
         self.a_settings = self._act("Nastavení kontrol…", self.edit_settings, "Ctrl+,",
                                     "Tolerance, zapnutí/vypnutí kontrol a jejich závažnost")
         self.a_labels = self._act("Popisky chyb", self.view.set_labels_visible, "Ctrl+L",
@@ -180,6 +183,7 @@ class MainWindow(QMainWindow):
         m_check = self.menuBar().addMenu("&Kontrola")
         m_check.addAction(self.a_check)
         m_check.addAction(self.a_recheck)
+        m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_settings)
         m_help = self.menuBar().addMenu("&Nápověda")
@@ -193,6 +197,7 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self.a_check)
         tb.addAction(self.a_recheck)
+        tb.addAction(self.a_repair)
         tb.addAction(self.a_settings)
         tb.addSeparator()
         tb.addAction(self.a_fit)
@@ -464,6 +469,37 @@ class MainWindow(QMainWindow):
         self.issues = issues
         self.view.set_issues(issues)
         self.issue_panel.set_issues(issues, summary or "")
+
+    def repair(self):
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
+            return
+        if self.task is not None and self.task.is_running():
+            return
+        from ..repair import repair_drawing
+        from .repair_dialog import RepairDialog
+        src = self.drawing.source_path or self.drawing.path
+        dlg = RepairDialog(src, self.project.config.tolerance, bool(self.project.rules.pravidla), self)
+        if not dlg.exec():
+            return
+        out, opts = dlg.out_path(), dlg.options()
+        drawing, rules, config = self.drawing, self.project.rules, self.project.config
+
+        def job(progress, cancelled):
+            progress(10, "Opravuji výkres…")
+            return repair_drawing(drawing, rules, config, out, opts)
+
+        def done(rep):
+            text = rep.text() + f"\n\nOpravený výkres: {out}"
+            if rep.skipped:
+                text += "\n\nNeopraveno:\n" + "\n".join("• " + s for s in rep.skipped[:12])
+                if len(rep.skipped) > 12:
+                    text += f"\n… a dalších {len(rep.skipped) - 12}"
+            if QMessageBox.question(self, "Automatická oprava", text + "\n\nOtevřít opravený výkres "
+                                    "a zkontrolovat ho?") == QMessageBox.Yes:
+                self.load_drawing_file(Path(out), add_to_project=True, after=lambda d: self.run_checks())
+
+        self._run_task(job, done, "Opravuji výkres…")
 
     def edit_settings(self):
         dlg = SettingsDialog(self.project.config, self.project.rules, self)

@@ -38,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--xlsx", help="uložit seznam chyb do Excelu")
     ap.add_argument("--dxf", help="uložit DXF s hladinou KONTROLA_CHYBY")
     ap.add_argument("--pdf", help="uložit protokol PDF (bez obrázků – ty vytvoří grafická aplikace)")
+    ap.add_argument("--oprav", metavar="VYSTUP.dxf",
+                    help="automaticky opravit jednoznačné chyby a uložit do nového DXF")
     ap.add_argument("--seznam-kontrol", action="store_true", help="vypsat dostupné kontroly")
     a = ap.parse_args(argv)
 
@@ -84,6 +86,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.dxf:
         from .export.dxf_export import export_dxf
         export_dxf(drawing, res.issues, a.dxf)
+    if a.oprav:
+        from .repair import repair_drawing
+        rep = repair_drawing(drawing, rules, config, a.oprav)
+        print(rep.text())
+        for s in rep.skipped:
+            print("Neopraveno:", s)
+        print("Opravený výkres:", a.oprav)
     if a.pdf:
         from .export.pdf_report import export_pdf
         export_pdf(res.issues, a.pdf, drawing_name=Path(a.vykres).name, rules_count=len(rules.pravidla),

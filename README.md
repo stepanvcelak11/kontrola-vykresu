@@ -35,10 +35,11 @@ od učitele nebo ze vzorového výkresu.
 
 ### Hotový program (.exe)
 
-Na GitHubu otevřete **Actions → Testy a sestavení .exe**, vyberte poslední úspěšný běh
-a stáhněte artefakt **KontrolaVykresu-windows**. Obsahuje jediný soubor
-`KontrolaVykresu.exe`, který nevyžaduje instalaci. Nebo si ho sestavte sami, viz
-[Sestavení .exe](#sestavení-exe).
+**Stažení:** [KontrolaVykresu.exe](https://github.com/stepanvcelak11/kontrola-vykresu/releases/latest/download/KontrolaVykresu.exe)
+(poslední verze, sestavuje se automaticky po každé změně). Program se neinstaluje, stačí ho
+spustit. Windows může upozornit na neznámého vydavatele: *Další informace → Přesto spustit*.
+Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnete přes
+*Code → Download ZIP*). Program si můžete sestavit i sami, viz [Sestavení .exe](#sestavení-exe).
 
 ### Z Pythonu (Windows, Python 3.11 nebo novější)
 
@@ -331,6 +332,38 @@ uložení do DXF barvy přečísluje na AutoCAD (ACI), proto aplikace porovnáv�
 
 Pokud učitel uvádí čísla barev z AutoCADu, přepněte „Čísla barev v pravidlech“ na *AutoCAD (ACI)*.
 Tloušťky MicroStationu (wt 0–31) se v DXF ověřit nedají. Uvádějte je v mm, nebo je nechte prázdné.
+
+---
+
+## Srovnání s MGEO
+
+| MGEO | Kontrola výkresu |
+|---|---|
+| Kontrola a oprava čárové kresby: duplicitní linie | Duplicitní prvek |
+| … nedotažené a přetažené linie | Nedotažená / přetažená linie (tolerance, max. přetažení) |
+| … průsečíky linií, linie nerozdělené v uzlu | Průsečík bez uzlu (volitelně „linie musí být v uzlu rozdělené“) |
+| … volné konce | Visící konec linie |
+| … krátké a bodové linie | Krátká linie nebo úsek, Prvek nulové délky |
+| … blízké body | Body téměř na sobě |
+| Kontrola a oprava duplicitních prvků | Duplicitní prvek (i body, texty, buňky) |
+| Kontrola a změna symbologie | Hladina, barva nebo styl; Nepovolená hladina; Nekódovaný prvek |
+| Plocha má právě jeden definiční bod | Popis (text) prvku: chybí popis / více popisů v ploše / popis mimo plochu |
+| Režim „oprava“ | **Kontrola → Automatická oprava** (do nového DXF) |
+| Značky chyb ve výkresu | Kroužky s popisky; export DXF s hladinou `KONTROLA_CHYBY` |
+
+**Automatická oprava** (Ctrl+R, z příkazové řádky `--oprav vystup.dxf`) uloží opravený výkres
+vždy do nového souboru. Opraví:
+
+* duplicity a linie nulové délky,
+* nedotažené a přetažené linie do tolerance,
+* chybějící uzly (lomené čáry dostanou nový vrchol, úsečky se rozdělí),
+* téměř uzavřené polygony,
+* volitelně symbologii podle pravidel.
+
+Co opravit nejde (plochy, překryvy, atributy), zůstane v seznamu k ruční opravě.
+
+MGEO pracuje přímo nad výkresem DGN v MicroStationu. Tato aplikace kontroluje výkres uložený
+jako DXF a opravy zapisuje do nového DXF, který se otevře zpět v MicroStationu.
 
 ---
 
