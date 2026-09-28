@@ -73,6 +73,10 @@ def fmt_num(value: float, decimals: int = 3) -> str:
 
 
 def fmt_m(value: float, decimals: int = 3) -> str:
+    """Délka v metrech; pod 1 cm v milimetrech (0,0004 -> "0,4 mm")."""
+    if 0 < abs(value) < 0.01:
+        mm = abs(value) * 1000
+        return "< 0,1 mm" if mm < 0.1 else f"{fmt_num(mm, 1)} mm"
     return f"{fmt_num(value, decimals)} m"
 
 
@@ -226,9 +230,16 @@ class CheckContext:
         key = "linear|" + ",".join(self.layer_filter() or [])
         if key not in self._cache:
             out = []
+            allowed: dict[str, bool] = {}
             for f in self.features(self.layer_filter()):
                 if not f.is_linear or f.geometry.is_empty:
                     continue
+                if self.rules.pravidla:
+                    ok = allowed.get(f.layer)
+                    if ok is None:
+                        ok = allowed[f.layer] = self.rules.allowed_layer(f.layer)
+                    if not ok:
+                        continue  # nepovolená hladina (kóty, pomocné čáry…) – hlásí ji kontrola atributů
                 r = self.rule_for(f) if self.rules.pravidla else None
                 if r is not None and not r.topologie:
                     continue  # vstupy, sdružené značky – výjimka z topologie

@@ -121,7 +121,7 @@ def test_nepovolene_hladiny_a_nekodovane(make_dxf, pravidla):
         msp.add_line((0, 0), (1, 1), dxfattribs={"layer": "RAM"})  # povoleno bez kódu
         msp.add_point((3, 3), dxfattribs={"layer": "POPIS_BUDOV"})  # povolená hladina, ale bod nemá pravidlo
     d = make_dxf(build)
-    assert [i.message for i in check(d, "nepovolene_hladiny", pravidla)] == ["Nepovolená hladina POKUS"]
+    assert [i.message for i in check(d, "nepovolene_hladiny", pravidla)] == ["Nepovolená hladina POKUS (1 prvek)"]
     assert [i.message for i in check(d, "nekodovane", pravidla)] == ["Nekódovaný bod na hladině POPIS_BUDOV"]
 
 

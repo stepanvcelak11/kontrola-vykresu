@@ -34,7 +34,7 @@ def test_kratka_linie_a_kratky_usek(make_dxf):
         msp.add_line((0, 10), (10, 10))
     d = make_dxf(build)
     msgs = sorted(i.message for i in check(d, "kratke_linie"))
-    assert msgs == ["Krátká linie, délka 0,02 m", "Krátký úsek linie, délka 0,003 m"]
+    assert msgs == ["Krátká linie, délka 0,02 m", "Krátký úsek linie, délka 3 mm"]
 
 
 def test_vyzadovat_rozdeleni_v_uzlu(make_dxf):

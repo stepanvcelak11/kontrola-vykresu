@@ -263,19 +263,23 @@ def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
     return f"styl {got} (většina {expected})"
 
 
+def _prvku(n: int) -> str:
+    return f"{n} prvek" if n == 1 else f"{n} prvky" if 2 <= n <= 4 else f"{n} prvků"
+
+
 @register
 class NepovoleneHladiny(Check):
     id = "nepovolene_hladiny"
     nazev = "Nepovolená hladina"
     skupina = "Atributy"
     popis = ("Prvek leží na hladině, která není v pravidlech ani v seznamu povolených hladin. "
-             "Hlásí se jedna chyba na každý prvek (u velkého počtu použijte filtr podle hladiny).")
+             "Hlásí se jedna chyba na hladinu s počtem prvků (lze přepnout na chybu u každého prvku).")
     vychozi_zavaznost = Severity.CHYBA
     potrebuje_pravidla = True
-    parametry = [Param("jedna_na_hladinu", "Jen jedna chyba na hladinu", "bool", False)]
+    parametry = [Param("jedna_na_hladinu", "Jen jedna chyba na hladinu", "bool", True)]
 
     def run(self, ctx: CheckContext):
-        once = bool(ctx.param("jedna_na_hladinu", False))
+        once = bool(ctx.param("jedna_na_hladinu", True))
         reported: set[str] = set()
         cache: dict[str, bool] = {}
         for f in ctx.features():
@@ -288,8 +292,8 @@ class NepovoleneHladiny(Check):
                 if f.layer in reported:
                     continue
                 reported.add(f.layer)
-                n = sum(1 for x in ctx.features() if x.layer == f.layer)
-                yield ctx.issue(self, f, f"Nepovolená hladina {f.layer} ({n} prvků)")
+                feats = [x for x in ctx.features() if x.layer == f.layer]
+                yield ctx.issue(self, feats, f"Nepovolená hladina {f.layer} ({_prvku(len(feats))})")
             else:
                 yield ctx.issue(self, f, f"Nepovolená hladina {f.layer}")
 

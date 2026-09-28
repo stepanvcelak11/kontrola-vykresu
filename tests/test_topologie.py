@@ -113,4 +113,4 @@ def test_body_blizko(make_dxf):
         msp.add_point((9.2, 9))  # 20 cm – mimo toleranci
     d = make_dxf(build)
     issues = check(d, "body_blizko")
-    assert [i.message for i in issues] == ["Body téměř na sobě, vzdálenost 0,004 m"]
+    assert [i.message for i in issues] == ["Body téměř na sobě, vzdálenost 4 mm"]

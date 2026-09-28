@@ -67,7 +67,8 @@ def export_mgeo_log(drawing: Drawing, rules: RuleSet, issues: list[Issue], path:
     for iss in issues:
         if iss.check_id not in ATTR_CHECKS or iss.state == "ignorovat":
             continue
-        for fid in iss.feature_ids[:1]:
+        fids = iss.feature_ids if iss.check_id == "nepovolene_hladiny" else iss.feature_ids[:1]
+        for fid in fids:
             wrong_by_feature.setdefault(fid, set()).update(_wrong_fields(iss.message, iss.check_id))
     groups: Counter = Counter()
     samples: dict[tuple, tuple] = {}

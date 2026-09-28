@@ -9,6 +9,7 @@ učitele, ze vzorového výkresu nebo ručně a ukládají se do YAML.
 from __future__ import annotations
 
 import fnmatch
+import functools
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -108,6 +109,69 @@ def color_rgb(value: int | str, palette: str = "microstation",
     return None
 
 
+def _autocad_palette() -> dict[int, tuple[int, int, int]]:
+    """Paleta ACI, jak ji používá AutoCAD (a MicroStation při exportu do DXF).
+
+    Liší se od palety ezdxf v odstínech 10–249 (jasy 100/80/60/50/30 %) a v šedých 250–255.
+    """
+    import colorsys
+    pal = {1: (255, 0, 0), 2: (255, 255, 0), 3: (0, 255, 0), 4: (0, 255, 255), 5: (0, 0, 255),
+           6: (255, 0, 255), 7: (255, 255, 255), 8: (128, 128, 128), 9: (192, 192, 192)}
+    levels = (1.0, 0.8, 0.6, 0.5, 0.3)
+    for i in range(10, 250):
+        k = i % 10
+        r, g, b = colorsys.hsv_to_rgb(((i - 10) // 10) * 15 / 360, 1.0 if k % 2 == 0 else 0.5, levels[k // 2])
+        pal[i] = (round(r * 255), round(g * 255), round(b * 255))
+    for i, g in zip(range(250, 256), (51, 91, 132, 173, 214, 255)):
+        pal[i] = (g, g, g)
+    return pal
+
+
+AUTOCAD_ACI = _autocad_palette()
+
+
+def _ezdxf_palette() -> dict[int, tuple[int, int, int]]:
+    from ezdxf import colors
+    return {i: tuple(colors.aci2rgb(i)) for i in range(1, 256)}  # type: ignore[misc]
+
+
+_EZDXF_ACI: dict[int, tuple[int, int, int]] = {}
+
+
+@functools.lru_cache(maxsize=4096)
+def rgb_to_aci(rgb: tuple[int, int, int]) -> frozenset[int]:
+    """Čísla ACI, na která převede RGB export do DXF (MicroStation: nejbližší barva palety AutoCADu).
+
+    Vrací nejbližší barvu v paletě AutoCADu i v paletě ezdxf (jiné programy)."""
+    if not _EZDXF_ACI:
+        _EZDXF_ACI.update(_ezdxf_palette())
+    out = set()
+    for pal in (AUTOCAD_ACI, _EZDXF_ACI):
+        out.add(min(pal, key=lambda i: sum((a - b) ** 2 for a, b in zip(pal[i], rgb))))
+    return frozenset(out)
+
+
+def ms_index_for_aci(aci: int, table: dict[int, tuple[int, int, int]] | None = None) -> int | None:
+    """Číslo barvy MicroStationu, ze kterého mohlo při exportu vzniknout dané ACI (nejpodobnější)."""
+    tab = dict(MICROSTATION_COLORS)
+    if table:
+        tab.update(table)
+    cands = [i for i, c in tab.items() if aci in rgb_to_aci(tuple(c))]
+    if not cands:
+        return None
+    ref = AUTOCAD_ACI.get(aci, (255, 255, 255))
+    return min(cands, key=lambda i: (rgb_distance(tab[i], ref), i))
+
+
+def has_true_color(f: Feature) -> bool:
+    """Má prvek skutečnou barvu (RGB)? Výkres z MicroStationu v DXF má jen čísla ACI."""
+    if f.color_aci is None or not 1 <= f.color_aci <= 255:
+        return True
+    if not _EZDXF_ACI:
+        _EZDXF_ACI.update(_ezdxf_palette())
+    return tuple(f.color_rgb) != _EZDXF_ACI[f.color_aci]
+
+
 def rgb_distance(a, b) -> float:
     return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
 
@@ -160,9 +224,18 @@ def load_ms_color_table(path: str | Path) -> dict[int, tuple[int, int, int]]:
     if len(raw) < 768:
         raise ValueError(f"Soubor má {len(raw)} bajtů, barevná tabulka musí mít aspoň 768 (256 × RGB).")
     data = raw[len(raw) - 768:] if len(raw) != 768 else raw  # případná hlavička je na začátku
-    for i in range(256):
-        r, g, b = data[3 * i:3 * i + 3]
-        table[i] = (r, g, b)
+    trip = [tuple(data[3 * i:3 * i + 3]) for i in range(256)]
+    # MicroStation ukládá v color.tbl nejdřív barvu pozadí (255) a pak barvy 0–254.
+    # Rozhodne shoda se známými výchozími barvami 0–15.
+    direct = sum(trip[i] == MICROSTATION_COLORS[i] for i in range(16))
+    shifted = sum(trip[i + 1] == MICROSTATION_COLORS[i] for i in range(16))
+    if shifted > direct:
+        for i in range(255):
+            table[i] = trip[i + 1]
+        table[255] = trip[0]
+    else:
+        for i in range(256):
+            table[i] = trip[i]
     return table
 
 
@@ -434,6 +507,9 @@ class RuleSet:
     def describe_feature_color(self, f: Feature) -> str:
         """Barva prvku v soustavě pravidel (číslo MicroStationu, jinak ACI/RGB)."""
         if self.paleta == "microstation":
+            if not has_true_color(f):
+                idx = ms_index_for_aci(f.color_aci, self.barevna_tabulka)
+                return str(idx) if idx is not None else f"ACI {f.color_aci}"
             idx = nearest_ms_index(f.color_rgb, self.barevna_tabulka)
             if idx is not None:
                 return str(idx)
@@ -573,6 +649,9 @@ def color_matches(expected: int | str, f: Feature, palette: str = "microstation"
     rgb = color_rgb(expected, palette, table)
     if rgb is None:
         return True
+    if palette == "microstation" and not has_true_color(f):
+        # DXF z MicroStationu: barva byla při exportu převedena na nejbližší ACI
+        return f.color_aci in rgb_to_aci(tuple(rgb))
     return rgb_distance(rgb, f.color_rgb) < COLOR_TOLERANCE
 
 
