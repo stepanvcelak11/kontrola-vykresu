@@ -32,6 +32,8 @@ def main(argv: list[str] | None = None) -> int:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("KontrolaVykresu.App")
         except (AttributeError, OSError):
             pass
+    from .ui import crash
+    crash.install(lambda: QApplication.activeWindow())
     win = MainWindow()
     win.show()
     if not win.settings.value("pruvodce/skryt", False, type=bool):

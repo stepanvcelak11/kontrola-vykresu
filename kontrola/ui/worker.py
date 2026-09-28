@@ -24,6 +24,11 @@ class _Worker(QObject):
             result = self._fn(lambda p, msg="": self.progress.emit(int(p), msg), self._cancel.is_set)
         except Exception as exc:  # předáme do GUI vlákna
             detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
+            try:
+                from .crash import write_log
+                write_log("Úloha na pozadí selhala:\n" + traceback.format_exc())
+            except Exception:  # noqa: BLE001
+                pass
             self.failed.emit(str(exc) if str(exc) else detail)
             return
         self.finished.emit(result)

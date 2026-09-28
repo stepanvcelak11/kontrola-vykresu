@@ -259,6 +259,8 @@ class MainWindow(QMainWindow):
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
         m_help.addSeparator()
+        m_help.addAction(self._act("Nahlásit chybu / složka s logy…", self._open_logs, None,
+                                   "Pokud se něco pokazilo: záznam chyb je v této složce"))
         m_help.addAction(self._act("Zkontrolovat aktualizace", lambda: self.check_updates(manual=True)))
         self.a_autoupdate = self._act("Hledat aktualizace při spuštění", self._set_autoupdate, None,
                                       "Jednou denně se podívá na GitHub, jestli není novější verze. "
@@ -1003,6 +1005,17 @@ class MainWindow(QMainWindow):
                                         f"přes git. Poslední zveřejněné sestavení: č. {latest or '?'}.")
             else:
                 QMessageBox.information(self, "Aktualizace", f"Máte nejnovější verzi ({version_text()}).")
+
+    def _open_logs(self):
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from .crash import ISSUES_URL, log_dir
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(log_dir())))
+        if QMessageBox.question(self, "Nahlásit chybu", "Otevřela se složka se záznamem chyb (chyby.log).\n\n"
+                                "Chcete otevřít stránku pro nahlášení chyby na GitHubu? (Soubor chyby.log "
+                                "tam můžete přiložit.)") == QMessageBox.Yes:
+            QDesktopServices.openUrl(QUrl(ISSUES_URL))
 
     def show_guide(self):
         from .guide_dialog import GuideDialog

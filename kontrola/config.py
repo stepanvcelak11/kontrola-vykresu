@@ -134,8 +134,8 @@ class Config:
         return cfg
 
     def save(self, path: str | Path):
-        Path(path).write_text(yaml.safe_dump(self.to_dict(), allow_unicode=True, sort_keys=False),
-                              encoding="utf-8")
+        from .safeio import write_text_atomic
+        write_text_atomic(path, yaml.safe_dump(self.to_dict(), allow_unicode=True, sort_keys=False))
 
     @classmethod
     def load(cls, path: str | Path) -> "Config":

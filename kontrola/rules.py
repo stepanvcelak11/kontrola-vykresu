@@ -772,7 +772,8 @@ class RuleSet:
         text = yaml.safe_dump(self.to_dict(), allow_unicode=True, sort_keys=False, width=120)
         if header:
             text = "".join(f"# {line}\n" for line in header.splitlines()) + text
-        Path(path).write_text(text, encoding="utf-8")
+        from .safeio import write_text_atomic
+        write_text_atomic(path, text)
 
     @classmethod
     def load(cls, path: str | Path) -> "RuleSet":

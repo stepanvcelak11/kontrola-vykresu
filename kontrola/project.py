@@ -125,8 +125,8 @@ class Project:
     def save(self):
         self.root.mkdir(parents=True, exist_ok=True)
         self.meta["ulozeno"] = dt.datetime.now().isoformat(timespec="seconds")
-        (self.root / "projekt.yaml").write_text(
-            yaml.safe_dump(self.meta, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        from .safeio import write_text_atomic
+        write_text_atomic(self.root / "projekt.yaml", yaml.safe_dump(self.meta, allow_unicode=True, sort_keys=False))
         self.rules.save(self.root / "pravidla.yaml",
                         header="Pravidla kontrol atributů – lze upravit v aplikaci (Zadání → Pravidla).")
         self.config.save(self.root / "nastaveni.yaml")
