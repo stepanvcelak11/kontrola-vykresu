@@ -15,22 +15,24 @@ import math
 from pathlib import Path
 
 import ezdxf
+import ezdxf.colors
 
 HERE = Path(__file__).resolve().parent
 X0, Y0 = -743200.0, -1043500.0  # levý dolní roh v S-JTSK (souřadnice DXF z MicroStationu)
 
 TABULKA = [
-    # kód, název, hladina, barva, styl, typ, povinné atributy, povolené hodnoty, blok, text na hladině
-    ("101", "Budova", "BUDOVY", "1 (červená)", "plná", "plocha", "", "", "", "POPIS_BUDOV"),
-    ("102", "Parcela", "PARCELY", "3 (zelená)", "plná", "plocha", "", "", "", "PARCELNI_CISLA"),
+    # kód, název, hladina, barva (číslo MicroStationu), styl, typ, povinné atributy, povolené hodnoty,
+    # blok, text na hladině
+    ("101", "Budova", "BUDOVY", "3 (červená)", "plná", "plocha", "", "", "", "POPIS_BUDOV"),
+    ("102", "Parcela", "PARCELY", "2 (zelená)", "plná", "plocha", "", "", "", "PARCELNI_CISLA"),
     ("201", "Okraj silnice", "KOMUNIKACE", "8", "plná", "linie", "", "", "", ""),
     ("202", "Okraj chodníku", "KOMUNIKACE", "9", "čárkovaná", "linie", "", "", "", ""),
-    ("301", "Plot", "PLOTY", "5 (modrá)", "DASHDOT", "linie", "", "", "", ""),
-    ("401", "Podrobný bod", "BODY", "7", "", "bod", "CISLO, KOD", "", "BOD", ""),
-    ("402", "Strom listnatý", "VEGETACE", "3", "", "bod", "DRUH", "lípa, dub, javor, bříza, buk", "STROM_L", ""),
-    ("403", "Šachta", "SITE", "6", "", "bod", "", "", "SACHTA", ""),
-    ("501", "Popis budovy (č. p.)", "POPIS_BUDOV", "7", "", "text", "", "", "", ""),
-    ("502", "Parcelní číslo", "PARCELNI_CISLA", "3", "", "text", "", "", "", ""),
+    ("301", "Plot", "PLOTY", "1 (modrá)", "DASHDOT", "linie", "", "", "", ""),
+    ("401", "Podrobný bod", "BODY", "0", "", "bod", "CISLO, KOD", "", "BOD", ""),
+    ("402", "Strom listnatý", "VEGETACE", "2", "", "bod", "DRUH", "lípa, dub, javor, bříza, buk", "STROM_L", ""),
+    ("403", "Šachta", "SITE", "5", "", "bod", "", "", "SACHTA", ""),
+    ("501", "Popis budovy (č. p.)", "POPIS_BUDOV", "0", "", "text", "", "", "", ""),
+    ("502", "Parcelní číslo", "PARCELNI_CISLA", "2", "", "text", "", "", "", ""),
     ("???", "Lavička", "MOBILIAR", "", "", "", "", "", "", ""),  # záměrně neúplný řádek
 ]
 
@@ -120,16 +122,18 @@ def vytvor_vykres(path: Path, s_chybami: bool = True):
         msp.add_text("č.p. 13", height=1.2, dxfattribs={"layer": "POPIS_BUDOV"}).set_placement(P(75, 20))
     # --- komunikace
     kom = {"layer": "KOMUNIKACE"}
-    msp.add_line(P(0, -5), P(120, -5), dxfattribs={**kom, "color": 8})
-    msp.add_line(P(0, -12), P(120, -12), dxfattribs={**kom, "color": 8})
-    msp.add_line(P(0, -3), P(120, -3), dxfattribs={**kom, "color": 9, "linetype": "DASHED"})
+    msp.add_line(P(0, -5), P(120, -5), dxfattribs={**kom, "color": 8, "true_color": 0x404040})
+    msp.add_line(P(0, -12), P(120, -12), dxfattribs={**kom, "color": 8, "true_color": 0x404040})
+    # MicroStation ukládá barvy do DXF i jako RGB (true color) – barva 9 = světle šedá
+    msp.add_line(P(0, -3), P(120, -3), dxfattribs={**kom, "color": 9, "linetype": "DASHED",
+                                                   "true_color": ezdxf.colors.rgb2int((192, 192, 192))})
     if s_chybami:
         # příčná silnice kříží okraje bez uzlu
-        msp.add_line(P(50, -20), P(50, -1), dxfattribs={**kom, "color": 8})
+        msp.add_line(P(50, -20), P(50, -1), dxfattribs={**kom, "color": 8, "true_color": 0x404040})
         # duplicitní okraj
-        msp.add_line(P(0, -12), P(120, -12), dxfattribs={**kom, "color": 8})
+        msp.add_line(P(0, -12), P(120, -12), dxfattribs={**kom, "color": 8, "true_color": 0x404040})
         # linie nulové délky
-        msp.add_line(P(10, -8), P(10, -8), dxfattribs={**kom, "color": 8})
+        msp.add_line(P(10, -8), P(10, -8), dxfattribs={**kom, "color": 8, "true_color": 0x404040})
     # --- plot se zapojením na budovu
     pl = {"layer": "PLOTY"}
     msp.add_lwpolyline([P(30, 25), P(30, 40), P(55, 40)], dxfattribs=pl)

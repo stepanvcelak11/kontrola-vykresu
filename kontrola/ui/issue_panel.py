@@ -8,7 +8,7 @@ from PySide6.QtCore import (QAbstractTableModel, QItemSelectionModel, QModelInde
                             Qt, Signal)
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
-                               QHeaderView, QLabel, QListWidget, QListWidgetItem, QMenu,
+                               QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
                                QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget)
 
 from ..checks.base import ISSUE_STATES, Issue, Severity, fmt_num
@@ -86,6 +86,7 @@ class IssueFilter(QSortFilterProxyModel):
         self.severities: set[Severity] = set(Severity)
         self.layer: str | None = None
         self.hide_done = False
+        self.text = ""
         self.setSortRole(Qt.UserRole)
 
     def filterAcceptsRow(self, row, parent):  # noqa: N802
@@ -101,6 +102,10 @@ class IssueFilter(QSortFilterProxyModel):
             return False
         if self.hide_done and iss.state != "nová":
             return False
+        if self.text:
+            hay = f"{iss.number} {iss.check_name} {iss.message} {iss.layer} {iss.note} {' '.join(iss.handles)}"
+            if self.text not in hay.lower():
+                return False
         return True
 
     def refresh(self):
@@ -168,6 +173,11 @@ class IssuePanel(QWidget):
         self.hide_done = QCheckBox("Skrýt opravené a ignorované")
         self.hide_done.toggled.connect(self._filters_changed)
         fl.addWidget(self.hide_done)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Hledat v popisu, hladině, čísle chyby…")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._filters_changed)
+        fl.addWidget(self.search)
         split.addWidget(fbox)
 
         # ---- tabulka
@@ -212,6 +222,14 @@ class IssuePanel(QWidget):
         for b in (self.b_prev, self.b_next, self.b_fixed, self.b_ignore, self.b_new):
             nav.addWidget(b)
         tl.addLayout(nav)
+        nrow = QHBoxLayout()
+        nrow.addWidget(QLabel("Poznámka:"))
+        self.note = QLineEdit()
+        self.note.setPlaceholderText("Poznámka k vybrané chybě (uloží se do projektu)")
+        self.note.setEnabled(False)
+        self.note.editingFinished.connect(self._note_edited)
+        nrow.addWidget(self.note, 1)
+        tl.addLayout(nrow)
         split.addWidget(tw)
         split.setSizes([230, 520])
 
@@ -273,6 +291,7 @@ class IssuePanel(QWidget):
         self.proxy.severities = {s for s, cb in self.sev_boxes.items() if cb.isChecked()}
         self.proxy.layer = self.layer_combo.currentData()
         self.proxy.hide_done = self.hide_done.isChecked()
+        self.proxy.text = self.search.text().strip().lower()
         self.proxy.refresh()
         self.filterChanged.emit(self.visible_numbers())
 
@@ -304,6 +323,7 @@ class IssuePanel(QWidget):
             cb.setChecked(True)
         self.layer_combo.setCurrentIndex(0)
         self.hide_done.setChecked(False)
+        self.search.clear()
         self._updating = False
         self.proxy.hidden_types.clear()
         self._filters_changed()
@@ -333,7 +353,19 @@ class IssuePanel(QWidget):
     def _current_changed(self, cur, prev):
         if cur.isValid():
             iss = self.model.issues[self.proxy.mapToSource(cur).row()]
+            self.note.setEnabled(True)
+            self.note.setText(iss.note)
             self.issueSelected.emit(iss.number)
+        else:
+            self.note.setEnabled(False)
+            self.note.clear()
+
+    def _note_edited(self):
+        iss = self.current_issue()
+        if iss is not None and iss.note != self.note.text():
+            iss.note = self.note.text()
+            self.model.refresh_row(self.model.row_of(iss.number))
+            self.stateChanged.emit()
 
     def select_issue(self, number: int):
         row = self.model.row_of(number)

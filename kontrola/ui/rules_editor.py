@@ -63,8 +63,8 @@ class RulesEditor(QWidget):
             self.table.setColumnWidth(c, w)
         self.table.itemChanged.connect(self._sync)
         lay.addWidget(self.table, 1)
-        hint = QLabel("Změny se ukládají do projektu automaticky. Barva: číslo (ACI, případně MicroStation "
-                      "podle nastavení), název nebo #RRGGBB. Hladina smí obsahovat * (např. POPIS_*). "
+        hint = QLabel("Změny se ukládají do projektu automaticky. Barva: číslo barvy MicroStationu (nebo ACI "
+                      "podle Nastavení kontrol), název nebo #RRGGBB. Hladina smí obsahovat * (např. POPIS_*). "
                       "Povolené hodnoty: DRUH=lípa, dub; MATERIAL=zděná")
         hint.setWordWrap(True)
         hint.setStyleSheet("color: palette(mid);")
@@ -221,6 +221,8 @@ class RulesEditor(QWidget):
             self.rules.pravidla[:] = rs.pravidla
             self.rules.povolene_hladiny[:] = rs.povolene_hladiny
             self.rules.paleta = rs.paleta
+            if rs.barevna_tabulka:
+                self.rules.barevna_tabulka = rs.barevna_tabulka
             if rs.rozsah:
                 self.rules.rozsah = rs.rozsah
         else:

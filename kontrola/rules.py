@@ -20,7 +20,9 @@ from .model import Feature, GeomType
 
 CODE_ATTRS = ("KOD", "KÓD", "CODE", "KOD_PRVKU", "KODPRVKU", "KOD_ZPMZ", "TYP")
 
-# Výchozí barevná tabulka MicroStationu (color.tbl) – barvy 0–15.
+# Výchozí barevná tabulka MicroStationu (color.tbl) – barvy 0–15. Ostatní barvy (16–255) se
+# liší podle nastavení MicroStationu; přesnou tabulku lze načíst (Nastavení kontrol →
+# „Načíst barevnou tabulku MicroStationu“), pak se porovnává všech 256 barev.
 MICROSTATION_COLORS = {
     0: (255, 255, 255), 1: (0, 0, 255), 2: (0, 255, 0), 3: (255, 0, 0), 4: (255, 255, 0),
     5: (255, 0, 255), 6: (255, 127, 0), 7: (0, 255, 255), 8: (64, 64, 64), 9: (192, 192, 192),
@@ -28,14 +30,23 @@ MICROSTATION_COLORS = {
     15: (0, 240, 240),
 }
 
+# Názvy barev se převádějí na RGB, takže fungují pro obě palety (MicroStation i AutoCAD).
 COLOR_NAMES = {
-    "červená": 1, "cervena": 1, "red": 1, "žlutá": 2, "zluta": 2, "yellow": 2,
-    "zelená": 3, "zelena": 3, "green": 3, "azurová": 4, "azurova": 4, "tyrkysová": 4, "cyan": 4,
-    "modrá": 5, "modra": 5, "blue": 5, "purpurová": 6, "purpurova": 6, "fialová": 6, "fialova": 6,
-    "magenta": 6, "bílá": 7, "bila": 7, "černá": 7, "cerna": 7, "white": 7, "black": 7,
-    "šedá": 8, "seda": 8, "tmavě šedá": 8, "gray": 8, "grey": 8, "světle šedá": 9, "svetle seda": 9,
-    "hnědá": 34, "hneda": 34, "brown": 34, "oranžová": 30, "oranzova": 30, "orange": 30,
+    "červená": "#FF0000", "cervena": "#FF0000", "red": "#FF0000",
+    "žlutá": "#FFFF00", "zluta": "#FFFF00", "yellow": "#FFFF00",
+    "zelená": "#00FF00", "zelena": "#00FF00", "green": "#00FF00",
+    "azurová": "#00FFFF", "azurova": "#00FFFF", "tyrkysová": "#00FFFF", "cyan": "#00FFFF",
+    "modrá": "#0000FF", "modra": "#0000FF", "blue": "#0000FF",
+    "purpurová": "#FF00FF", "purpurova": "#FF00FF", "fialová": "#FF00FF", "fialova": "#FF00FF",
+    "magenta": "#FF00FF", "bílá": "#FFFFFF", "bila": "#FFFFFF", "white": "#FFFFFF",
+    "černá": "#FFFFFF", "cerna": "#FFFFFF", "black": "#FFFFFF",  # černá na bílém = bílá na černém
+    "tmavě šedá": "#404040", "tmave seda": "#404040", "světle šedá": "#C0C0C0", "svetle seda": "#C0C0C0",
+    "šedá": "#808080", "seda": "#808080", "gray": "#808080", "grey": "#808080",
+    "hnědá": "#A0522D", "hneda": "#A0522D", "brown": "#A0522D",
+    "oranžová": "#FF7F00", "oranzova": "#FF7F00", "orange": "#FF7F00",
 }
+
+COLOR_TOLERANCE = 40  # max. vzdálenost v RGB, kdy se barvy považují za shodné
 
 LINETYPE_ALIASES = {
     "plná": "CONTINUOUS", "plna": "CONTINUOUS", "souvislá": "CONTINUOUS", "souvisla": "CONTINUOUS",
@@ -75,22 +86,84 @@ def parse_color(value: Any) -> int | str | None:
     if m:
         return int(m.group(1))
     low = s.lower()
-    for name, aci in COLOR_NAMES.items():
+    for name in sorted(COLOR_NAMES, key=len, reverse=True):
         if low.startswith(name):
-            return aci
+            return COLOR_NAMES[name]
     return None
 
 
-def color_rgb(value: int | str, palette: str = "autocad") -> tuple[int, int, int] | None:
+def color_rgb(value: int | str, palette: str = "microstation",
+              table: dict[int, tuple[int, int, int]] | None = None) -> tuple[int, int, int] | None:
+    """RGB barvy z pravidla. Pro MicroStation se použije načtená tabulka, jinak výchozí barvy 0–15."""
     if isinstance(value, str) and value.startswith("#"):
         return int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16)
     if isinstance(value, int):
         if palette == "microstation":
+            if table and value in table:
+                return table[value]
             return MICROSTATION_COLORS.get(value)
         from ezdxf import colors
         if 1 <= value <= 255:
             return tuple(colors.aci2rgb(value))  # type: ignore[return-value]
     return None
+
+
+def rgb_distance(a, b) -> float:
+    return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
+
+
+def nearest_ms_index(rgb: tuple[int, int, int], table: dict[int, tuple[int, int, int]] | None = None
+                     ) -> int | None:
+    """Číslo barvy MicroStationu, které odpovídá RGB (nebo None, pokud žádné není dost blízko)."""
+    tab = dict(MICROSTATION_COLORS)
+    if table:
+        tab.update(table)
+    best, dist = None, COLOR_TOLERANCE
+    for idx, c in tab.items():
+        d = rgb_distance(c, rgb)
+        if d < dist:
+            best, dist = idx, d
+    return best
+
+
+def load_ms_color_table(path: str | Path) -> dict[int, tuple[int, int, int]]:
+    """Načte barevnou tabulku MicroStationu.
+
+    Podporované formáty:
+      * binární ``*.tbl`` z MicroStationu – 256 trojic RGB (768 bajtů, případně s hlavičkou),
+      * textový soubor / CSV: na řádku ``číslo r g b`` nebo ``číslo;#RRGGBB``.
+    """
+    p = Path(path)
+    raw = p.read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+        is_text = all(ch.isprintable() or ch in "\r\n\t" for ch in text[:2000])
+    except UnicodeDecodeError:
+        is_text = False
+    table: dict[int, tuple[int, int, int]] = {}
+    if is_text:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith(("#", "//")) and not re.match(r"^#[0-9A-Fa-f]{6}", line):
+                continue
+            m = re.match(r"^(\d{1,3})\s*[;,\s]\s*#?([0-9A-Fa-f]{6})\s*$", line)
+            if m:
+                h = m.group(2)
+                table[int(m.group(1))] = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+                continue
+            nums = [int(x) for x in re.findall(r"\d+", line)]
+            if len(nums) >= 4 and nums[0] <= 255 and all(0 <= v <= 255 for v in nums[1:4]):
+                table[nums[0]] = (nums[1], nums[2], nums[3])
+        if not table:
+            raise ValueError("V souboru nejsou řádky ve tvaru „číslo r g b“ ani „číslo;#RRGGBB“.")
+        return table
+    if len(raw) < 768:
+        raise ValueError(f"Soubor má {len(raw)} bajtů, barevná tabulka musí mít aspoň 768 (256 × RGB).")
+    data = raw[len(raw) - 768:] if len(raw) != 768 else raw  # případná hlavička je na začátku
+    for i in range(256):
+        r, g, b = data[3 * i:3 * i + 3]
+        table[i] = (r, g, b)
+    return table
 
 
 def split_list(value: Any) -> list[str]:
@@ -241,8 +314,21 @@ class Rule:
 class RuleSet:
     pravidla: list[Rule] = field(default_factory=list)
     povolene_hladiny: list[str] = field(default_factory=list)  # hladiny povolené i bez kódu
-    paleta: str = "autocad"  # jak číst čísla barev: autocad (ACI) / microstation
+    paleta: str = "microstation"  # jak číst čísla barev: microstation (color.tbl) / autocad (ACI)
     rozsah: dict | str | None = None  # {xmin, ymin, xmax, ymax} nebo "sjtsk"
+    barevna_tabulka: dict[int, tuple[int, int, int]] = field(default_factory=dict)  # načtený color.tbl
+
+    def rule_rgb(self, value) -> tuple[int, int, int] | None:
+        return color_rgb(value, self.paleta, self.barevna_tabulka)
+
+    def describe_feature_color(self, f: Feature) -> str:
+        """Barva prvku v soustavě pravidel (číslo MicroStationu, jinak ACI/RGB)."""
+        if self.paleta == "microstation":
+            idx = nearest_ms_index(f.color_rgb, self.barevna_tabulka)
+            if idx is not None:
+                return str(idx)
+            return "#%02X%02X%02X" % tuple(f.color_rgb)
+        return str(f.color_aci)
 
     # ------------------------------------------------------------ přiřazení kódu
     def by_code(self) -> dict[str, Rule]:
@@ -294,7 +380,7 @@ class RuleSet:
             s += 3
         elif r.geometrie == GeomType.POLYGON and f.geom_type == GeomType.LINIE:
             s += 1
-        if r.barva is not None and color_matches(r.barva, f, self.paleta):
+        if r.barva is not None and color_matches(r.barva, f, self.paleta, self.barevna_tabulka):
             s += 2
         if r.styl_cary and linetype_matches(r.styl_cary, f.linetype):
             s += 2
@@ -305,6 +391,8 @@ class RuleSet:
     # ------------------------------------------------------------ YAML
     def to_dict(self) -> dict:
         d: dict[str, Any] = {"paleta": self.paleta}
+        if self.barevna_tabulka:
+            d["barevna_tabulka"] = {i: "#%02X%02X%02X" % c for i, c in sorted(self.barevna_tabulka.items())}
         if self.rozsah:
             d["rozsah"] = self.rozsah
         if self.povolene_hladiny:
@@ -318,9 +406,13 @@ class RuleSet:
         rs = cls(
             pravidla=[Rule.from_dict(x) for x in (d.get("pravidla") or []) if isinstance(x, dict)],
             povolene_hladiny=split_list(d.get("povolene_hladiny")),
-            paleta=str(d.get("paleta", "autocad")).lower(),
+            paleta=str(d.get("paleta", "microstation")).lower(),
             rozsah=d.get("rozsah"),
         )
+        for k, v in (d.get("barevna_tabulka") or {}).items():
+            rgb = color_rgb(str(v)) if str(v).startswith("#") else None
+            if rgb is not None:
+                rs.barevna_tabulka[int(k)] = rgb
         return rs
 
     def save(self, path: str | Path, header: str | None = None):
@@ -353,14 +445,20 @@ class RuleSet:
         return added, replaced
 
 
-def color_matches(expected: int | str, f: Feature, palette: str = "autocad") -> bool:
-    if isinstance(expected, int) and palette != "microstation" and f.color_aci is not None:
+def color_known(expected: int | str, palette: str = "microstation", table=None) -> bool:
+    """Lze barvu z pravidla ověřit? (U MicroStationu bez načtené tabulky jen barvy 0–15.)"""
+    return color_rgb(expected, palette, table) is not None
+
+
+def color_matches(expected: int | str, f: Feature, palette: str = "microstation", table=None) -> bool:
+    """Shoduje se barva prvku s pravidlem? Neznámou barvu (nelze ověřit) bere jako shodu."""
+    if isinstance(expected, int) and palette == "autocad" and f.color_aci is not None:
         if expected == f.color_aci:
             return True
-    rgb = color_rgb(expected, palette)
+    rgb = color_rgb(expected, palette, table)
     if rgb is None:
-        return isinstance(expected, int) and expected == f.color_aci
-    return sum((a - b) ** 2 for a, b in zip(rgb, f.color_rgb)) ** 0.5 < 40
+        return True
+    return rgb_distance(rgb, f.color_rgb) < COLOR_TOLERANCE
 
 
 def linetype_matches(expected: str, actual: str) -> bool:

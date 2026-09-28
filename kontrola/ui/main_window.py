@@ -157,6 +157,8 @@ class MainWindow(QMainWindow):
 
         m_file = self.menuBar().addMenu("&Soubor")
         m_file.addAction(self.a_open)
+        self.m_recent = m_file.addMenu("Naposledy otevřené výkresy")
+        self.m_recent.aboutToShow.connect(self._fill_recent)
         m_file.addSeparator()
         m_file.addAction(self.a_new_project)
         m_file.addAction(self.a_open_project)
@@ -356,6 +358,8 @@ class MainWindow(QMainWindow):
 
         def done(result):
             drawing, prepared = result
+            if add_to_project:
+                self._remember_recent(path)
             if add_to_project and self.project is not None:
                 try:
                     self.project.set_drawing(path)
@@ -367,6 +371,25 @@ class MainWindow(QMainWindow):
                 after(drawing)
 
         self._run_task(job, done, f"Načítám {path.name}…", self._load_failed)
+
+    def _remember_recent(self, path: Path):
+        items = [p for p in (self.settings.value("cesty/posledni_vykresy", []) or []) if p != str(path)]
+        if isinstance(items, str):
+            items = [items]
+        self.settings.setValue("cesty/posledni_vykresy", [str(path)] + items[:7])
+
+    def _fill_recent(self):
+        self.m_recent.clear()
+        items = self.settings.value("cesty/posledni_vykresy", []) or []
+        if isinstance(items, str):
+            items = [items]
+        items = [p for p in items if Path(p).is_file()]
+        if not items:
+            a = self.m_recent.addAction("(žádné)")
+            a.setEnabled(False)
+            return
+        for p in items:
+            self.m_recent.addAction(Path(p).name, lambda p=p: self.open_path(p)).setToolTip(p)
 
     def _load_failed(self, msg: str):
         title = "Výkres nelze otevřít"

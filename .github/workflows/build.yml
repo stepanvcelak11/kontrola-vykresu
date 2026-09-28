@@ -32,12 +32,29 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q tests
       - run: pyinstaller --noconfirm --clean kontrola_vykresu.spec
-      - name: Kontrola, že .exe umí zkontrolovat ukázkový výkres
+      - name: Sestavené .exe zkontroluje ukázkový výkres (CSV, Excel, PDF, DXF)
         shell: pwsh
         run: |
-          python spustit.py zkontroluj ukazky/ukazkovy_vykres.dxf --pravidla ukazky/konfigurace.yaml --csv chyby.csv
-          if ($LASTEXITCODE -ne 1) { throw "Očekáván návratový kód 1 (výkres obsahuje chyby)" }
-          if (!(Test-Path dist/KontrolaVykresu.exe)) { throw "Chybí dist/KontrolaVykresu.exe" }
+          $p = Start-Process -FilePath dist/KontrolaVykresu.exe -Wait -PassThru -ArgumentList @(
+            "zkontroluj", "ukazky/ukazkovy_vykres.dxf", "--pravidla", "ukazky/konfigurace.yaml",
+            "--csv", "chyby.csv", "--xlsx", "chyby.xlsx", "--pdf", "protokol.pdf", "--dxf", "kontrola.dxf")
+          if ($p.ExitCode -ne 1) { throw "Očekáván návratový kód 1 (výkres obsahuje chyby), je $($p.ExitCode)" }
+          foreach ($f in "chyby.csv", "chyby.xlsx", "protokol.pdf", "kontrola.dxf") {
+            if (!(Test-Path $f)) { throw "Chybí výstup $f" }
+          }
+          $n = (Get-Content chyby.csv -Encoding UTF8 | Measure-Object -Line).Lines - 1
+          if ($n -lt 20) { throw "Očekáváno aspoň 20 chyb, nalezeno $n" }
+          Write-Host "Nalezeno chyb: $n"
+          exit 0
+      - name: Sestavené .exe spustí grafické okno bez pádu
+        shell: pwsh
+        run: |
+          $env:HOME = "$env:RUNNER_TEMP"
+          $p = Start-Process -FilePath dist/KontrolaVykresu.exe -PassThru -ArgumentList "ukazky/ukazkovy_vykres.dxf"
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) { throw "Aplikace skončila předčasně s kódem $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "Okno běželo 20 s bez pádu."
           exit 0
       - uses: actions/upload-artifact@v4
         with:

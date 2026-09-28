@@ -49,7 +49,7 @@ def test_odhad_hlavicky_a_sloupcu(tmp_path):
     assert len(res.errors) == 2  # bez kódu, duplicitní kód
     assert any("nerozpoznaný typ geometrie" in w for w in res.warnings)
     b = res.rules.by_code()
-    assert b["101"].barva == 1 and b["101"].geometrie == GeomType.POLYGON
+    assert b["101"].barva == "#FF0000" and b["101"].geometrie == GeomType.POLYGON  # „červená“
     assert b["101"].styl_cary == "CONTINUOUS"
     assert b["402"].povolene_hodnoty == {"DRUH": ["lípa", "dub"]}
     assert b["301"].styl_cary == "DASHED"
@@ -131,6 +131,10 @@ def test_stavy_chyb_a_porovnani(tmp_path, make_dxf):
     new = check(d2, "visici_konce")
     c = compare(issues, new)
     assert (c.fixed, c.new, c.remaining) == (2, 0, 2)
+    # dvě shodné chyby (stejné místo i text) se počítají dvakrát
+    dup = issues[:1] * 2
+    c = compare(dup, issues[:1])
+    assert (c.fixed, c.new, c.remaining) == (1, 0, 1)
 
 
 def test_vzor_pravidla_a_porovnani():
@@ -138,7 +142,8 @@ def test_vzor_pravidla_a_porovnani():
     vzor = tpl.analyze(read_dxf(UKAZKY / "vzorovy_vykres.dxf"))
     kontrolovany = tpl.analyze(read_dxf(UKAZKY / "ukazkovy_vykres.dxf"))
     props = {r.kod: r for r in tpl.propose_rules(vzor)}
-    assert props["BUDOVY"].geometrie == GeomType.POLYGON and props["BUDOVY"].barva == 1
+    # červená budova ze vzoru → číslo barvy MicroStationu 3
+    assert props["BUDOVY"].geometrie == GeomType.POLYGON and props["BUDOVY"].barva == 3
     assert props["BUDOVY"].text.hladina == "POPIS_BUDOV"
     assert props["STROM_L"].blok == "STROM_L" and props["STROM_L"].povinne_atributy == ["DRUH"]
     assert props["PLOTY"].styl_cary == "DASHDOT"

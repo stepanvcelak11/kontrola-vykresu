@@ -8,7 +8,7 @@ import numpy as np
 import shapely
 
 from ..model import Feature, GeomType
-from ..rules import color_matches, linetype_matches
+from ..rules import color_known, color_matches, linetype_matches
 from .base import Check, CheckContext, Param, Severity, fmt_num, register
 
 
@@ -74,7 +74,10 @@ class Symbologie(Check):
         do_color = bool(ctx.param("kontrolovat_barvu", True))
         do_style = bool(ctx.param("kontrolovat_styl", True))
         do_weight = bool(ctx.param("kontrolovat_tloustku", True))
-        pal = ctx.rules.paleta
+        rs = ctx.rules
+        pal, table = rs.paleta, rs.barevna_tabulka
+        unknown_colors: set = set()
+        ms_weights: set = set()
         feats = ctx.features()
         for i, f in enumerate(feats):
             if i % 2000 == 0:
@@ -85,15 +88,28 @@ class Symbologie(Check):
             diffs = []
             if r.hladina and not r.matches_layer(f.layer):
                 diffs.append(f"hladina {f.layer} (má být {r.hladina})")
-            if do_color and r.barva is not None and not color_matches(r.barva, f, pal):
-                diffs.append(f"barva {f.color_aci} (má být {r.barva})")
+            if do_color and r.barva is not None:
+                if not color_known(r.barva, pal, table):
+                    unknown_colors.add(r.barva)
+                elif not color_matches(r.barva, f, pal, table):
+                    diffs.append(f"barva {rs.describe_feature_color(f)} (má být {r.barva})")
             if (do_style and r.styl_cary and f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
                     and not linetype_matches(r.styl_cary, f.linetype)):
                 diffs.append(f"styl {f.linetype} (má být {r.styl_cary})")
-            if do_weight and r.tloustka is not None and abs(r.tloustka - f.lineweight) > 0.051:
-                diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {fmt_num(r.tloustka, 2)})")
+            if do_weight and r.tloustka is not None:
+                if pal == "microstation" and float(r.tloustka).is_integer() and r.tloustka <= 31 \
+                        and r.tloustka >= 1:
+                    ms_weights.add(int(r.tloustka))  # tloušťka MicroStationu (wt), ne mm
+                elif abs(r.tloustka - f.lineweight) > 0.051:
+                    diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {fmt_num(r.tloustka, 2)})")
             if diffs:
                 yield ctx.issue(self, f, f"{r.nazev or r.kod}: " + ", ".join(diffs))
+        if unknown_colors:
+            ctx.notes.append("barvy MicroStationu " + ", ".join(map(str, sorted(unknown_colors, key=str)))
+                             + " nelze ověřit bez barevné tabulky – načtěte ji v Nastavení kontrol → Obecné.")
+        if ms_weights:
+            ctx.notes.append("tloušťky MicroStationu (wt " + ", ".join(map(str, sorted(ms_weights)))
+                             + ") nelze v DXF ověřit – zadejte tloušťku v mm, nebo ji nechte prázdnou.")
 
 
 @register

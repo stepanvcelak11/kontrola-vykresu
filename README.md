@@ -300,7 +300,7 @@ nastaveni:
   tolerance: 0.05
 kontroly:
   visici_konce: {zapnuto: true, zavaznost: varování}
-paleta: autocad          # čísla barev: autocad (ACI) nebo microstation (0–15)
+paleta: microstation     # čísla barev: microstation (výchozí) nebo autocad (ACI)
 rozsah: sjtsk            # nebo {xmin: .., ymin: .., xmax: .., ymax: ..}
 povolene_hladiny: [RAM]
 pravidla:
@@ -314,11 +314,19 @@ pravidla:
       DRUH: [lípa, dub, javor]
 ```
 
-**Barvy:** MicroStation při uložení do DXF převádí svoje barvy na barvy AutoCADu (ACI).
-Pokud má učitel v tabulce čísla barev z MicroStationu, přepněte v Nastavení kontrol
-„Čísla barev v pravidlech“ na *microstation*. Pro barvy 0–15 se použije výchozí barevná tabulka
-MicroStationu a porovnání proběhne podle RGB. Nejspolehlivější je vytvořit pravidla ze
-vzorového výkresu: pak jsou barvy ve stejné soustavě jako kontrolovaný DXF.
+**Barvy:** čísla barev v pravidlech jsou ve výchozím stavu **čísla MicroStationu** (0 bílá,
+1 modrá, 2 zelená, 3 červená, 4 žlutá, 5 purpurová, 6 oranžová, 7 azurová…). MicroStation při
+uložení do DXF barvy přečísluje na AutoCAD (ACI), proto aplikace porovnává barvy podle RGB:
+
+* barvy 0–15 zná z výchozí barevné tabulky MicroStationu,
+* pro ostatní barvy (16–255) načtěte barevnou tabulku, kterou máte v MicroStationu
+  (*Nastavení kontrol → Obecné → Načíst barevnou tabulku…*). Umí binární `*.tbl` nebo text
+  s řádky `číslo r g b` či `číslo;#RRGGBB`. Bez tabulky se tyto barvy neověřují
+  a kontrola to napíše do poznámky,
+* v hlášení je barva prvku také jako číslo MicroStationu, např. „barva 2 (má být 3)“.
+
+Pokud učitel uvádí čísla barev z AutoCADu, přepněte „Čísla barev v pravidlech“ na *AutoCAD (ACI)*.
+Tloušťky MicroStationu (wt 0–31) se v DXF ověřit nedají. Uvádějte je v mm, nebo je nechte prázdné.
 
 ---
 
@@ -428,8 +436,8 @@ průběhu a jdou zrušit.
 * Oblouky a kružnice se pro kontroly nahrazují lomenou čarou s odchylkou 5 mm.
   Souřadnice Z se ignorují.
 * Kružnice (CIRCLE) se považuje za bodový prvek (značku) se středem v kružnici.
-* Tabulka MicroStation barev je vestavěná jen pro barvy 0–15. Ostatní barvy zadávejte jako ACI
-  nebo `#RRGGBB`.
+* Barevná tabulka MicroStationu je vestavěná jen pro barvy 0–15. Pro ostatní barvy je potřeba
+  načíst vlastní `color.tbl`.
 * Starý formát Excelu `.xls` není podporován, uložte tabulku jako `.xlsx`. Skenované PDF bez
   textové vrstvy nejde přečíst.
 * Kontroly jsou předkontrola. Nenahrazují kontrolu učitele ani oficiální nástroje (MGEO,

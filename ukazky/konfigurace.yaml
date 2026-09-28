@@ -110,9 +110,17 @@ kontroly:
 # -----------------------------------------------------------------------------
 #  Pravidla atributů
 # -----------------------------------------------------------------------------
-# paleta: jak číst čísla barev – autocad (ACI, jak je uloží DXF)
-#         nebo microstation (výchozí color.tbl, barvy 0–15).
-paleta: autocad
+# paleta: jak číst čísla barev v pravidlech
+#   microstation – čísla barev MicroStationu (výchozí; porovnává se podle RGB),
+#   autocad      – čísla ACI, jak je uloží DXF.
+paleta: microstation
+
+# Barevná tabulka MicroStationu. Bez ní se ověřují jen základní barvy 0–15.
+# Přesnou tabulku načtěte v aplikaci (Nastavení kontrol → Obecné → Načíst barevnou tabulku)
+# ze souboru color.tbl, nebo ji zapište sem:
+# barevna_tabulka:
+#   16: "#FF8000"
+#   17: "#804000"
 
 # rozsah výkresu pro kontrolu „Prvek mimo rozsah“:
 #   rozsah: sjtsk                      # celé území ČR v S-JTSK (záporné i kladné souřadnice)
@@ -135,7 +143,7 @@ povolene_hladiny:
 #   kod, nazev             – kód a název prvku
 #   geometrie              – bod / linie / polygon / text
 #   hladina                – název hladiny, smí obsahovat * (např. POPIS_*)
-#   barva                  – číslo (dle palety), název (červená) nebo "#RRGGBB"
+#   barva                  – číslo barvy MicroStationu (dle palety), název (červená) nebo "#RRGGBB"
 #   styl_cary              – CONTINUOUS, DASHED, DASHDOT… (česky: plná, čárkovaná, čerchovaná)
 #   tloustka               – tloušťka čáry v mm
 #   blok                   – název buňky (bloku) u bodových značek
@@ -150,7 +158,7 @@ pravidla:
     nazev: Budova
     geometrie: polygon
     hladina: BUDOVY
-    barva: 1
+    barva: 3                 # MicroStation 3 = červená
     styl_cary: CONTINUOUS
     text:
       povinny: true
@@ -160,7 +168,7 @@ pravidla:
     nazev: Parcela
     geometrie: polygon
     hladina: PARCELY
-    barva: 3
+    barva: 2                 # zelená
     styl_cary: CONTINUOUS
     text:
       povinny: true
@@ -181,7 +189,7 @@ pravidla:
     nazev: Plot
     geometrie: linie
     hladina: PLOTY
-    barva: 5
+    barva: 1                 # modrá
     styl_cary: DASHDOT
   - kod: "401"
     nazev: Podrobný bod
@@ -193,7 +201,7 @@ pravidla:
     nazev: Strom listnatý
     geometrie: bod
     hladina: VEGETACE
-    barva: 3
+    barva: 2
     blok: STROM_L
     povinne_atributy: [DRUH]
     povolene_hodnoty:
@@ -202,7 +210,7 @@ pravidla:
     nazev: Šachta
     geometrie: bod
     hladina: SITE
-    barva: 6
+    barva: 5                 # purpurová
     blok: SACHTA
   - kod: "501"
     nazev: Popis budovy (č. p.)
@@ -212,4 +220,4 @@ pravidla:
     nazev: Parcelní číslo
     geometrie: text
     hladina: PARCELNI_CISLA
-    barva: 3
+    barva: 2

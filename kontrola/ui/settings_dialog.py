@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 
 from ..checks.base import REGISTRY, Severity
 from ..config import Config
-from ..rules import RuleSet
+from ..rules import RuleSet, load_ms_color_table
 
 
 def _dspin(value: float, decimals=4, maximum=1e9, minimum=0.0, step=0.01) -> QDoubleSpinBox:
@@ -80,10 +80,25 @@ class SettingsDialog(QDialog):
         self._extent_mode_changed()
         fl.addRow(box)
         self.palette = QComboBox()
-        self.palette.addItems(["autocad", "microstation"])
-        self.palette.setCurrentText(rules.paleta)
-        self.palette.setToolTip("Jak číst čísla barev v pravidlech: AutoCAD (ACI) nebo MicroStation (color.tbl, 0–15).")
+        self.palette.addItem("MicroStation (čísla z color.tbl)", "microstation")
+        self.palette.addItem("AutoCAD (ACI)", "autocad")
+        self.palette.setCurrentIndex(max(0, self.palette.findData(rules.paleta)))
+        self.palette.setToolTip("Jak číst čísla barev v pravidlech (tabulce od učitele).")
         fl.addRow("Čísla barev v pravidlech:", self.palette)
+        self.ms_table = dict(rules.barevna_tabulka)
+        row_t = QHBoxLayout()
+        self.ms_table_label = QLabel()
+        b_tbl = QPushButton("Načíst barevnou tabulku…")
+        b_tbl.setToolTip("Barevná tabulka MicroStationu (*.tbl, nebo text „číslo r g b“). Bez ní se "
+                         "ověřují jen základní barvy 0–15.")
+        b_tbl.clicked.connect(self._load_ms_table)
+        b_tbl_clear = QPushButton("Výchozí")
+        b_tbl_clear.clicked.connect(self._clear_ms_table)
+        row_t.addWidget(self.ms_table_label, 1)
+        row_t.addWidget(b_tbl)
+        row_t.addWidget(b_tbl_clear)
+        fl.addRow("Barevná tabulka MicroStationu:", row_t)
+        self._update_ms_label()
         tabs.addTab(gen, "Obecné")
 
         # --- kontroly po skupinách
@@ -155,6 +170,31 @@ class SettingsDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
+
+    def _update_ms_label(self):
+        if self.ms_table:
+            sample = ", ".join(f"{i}=#%02X%02X%02X" % self.ms_table[i] for i in sorted(self.ms_table)[:4])
+            self.ms_table_label.setText(f"vlastní ({len(self.ms_table)} barev)")
+            self.ms_table_label.setToolTip(sample + "…")
+        else:
+            self.ms_table_label.setText("výchozí (barvy 0–15)")
+            self.ms_table_label.setToolTip("")
+
+    def _load_ms_table(self):
+        p, _ = QFileDialog.getOpenFileName(self, "Barevná tabulka MicroStationu", "",
+                                           "Barevné tabulky (*.tbl *.txt *.csv);;Vše (*)")
+        if not p:
+            return
+        try:
+            self.ms_table = load_ms_color_table(p)
+        except Exception as exc:
+            QMessageBox.warning(self, "Barevná tabulka", f"Tabulku nelze načíst: {exc}")
+            return
+        self._update_ms_label()
+
+    def _clear_ms_table(self):
+        self.ms_table = {}
+        self._update_ms_label()
 
     def _extent_mode_changed(self):
         on = self.extent_mode.currentIndex() == 1
@@ -243,4 +283,5 @@ class SettingsDialog(QDialog):
             rules.rozsah = "sjtsk"
         else:
             rules.rozsah = {k: w.value() for k, w in self.ext.items()}
-        rules.paleta = self.palette.currentText()
+        rules.paleta = self.palette.currentData()
+        rules.barevna_tabulka = dict(self.ms_table)

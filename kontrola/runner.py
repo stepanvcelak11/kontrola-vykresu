@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -82,9 +83,11 @@ class Comparison:
 
 
 def compare(old: list[Issue], new: list[Issue]) -> Comparison:
-    ok = {i.key for i in old}
-    nk = {i.key for i in new}
-    return Comparison(fixed=len(ok - nk), new=len(nk - ok), remaining=len(nk & ok))
+    # počítáme s násobnostmi – dvě stejné chyby na stejném místě jsou dvě chyby
+    ok = Counter(i.key for i in old)
+    nk = Counter(i.key for i in new)
+    return Comparison(fixed=sum((ok - nk).values()), new=sum((nk - ok).values()),
+                      remaining=sum((ok & nk).values()))
 
 
 def carry_states(old_states: dict[str, dict], issues: list[Issue], recheck: bool = False):

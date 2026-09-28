@@ -336,6 +336,8 @@ class DrawingView(QGraphicsView):
         self.origin = prepared.origin
         self._prepared = prepared
         self._build(drawing)
+        if getattr(self, "_bg_args", None):
+            self.set_background_image(*self._bg_args)
         self.fit_all()
 
     def _build(self, drawing: Drawing):
@@ -423,6 +425,8 @@ class DrawingView(QGraphicsView):
     def set_background_image(self, pixmap: QPixmap | None, x: float = 0.0, y: float = 0.0,
                              meters_per_px: float = 0.1, rotation: float = 0.0, opacity: float = 0.5):
         """Obrázek pod výkresem: (x, y) = levý dolní roh v souřadnicích výkresu."""
+        # parametry si pamatujeme – po načtení jiného výkresu se mění počátek scény
+        self._bg_args = (pixmap, x, y, meters_per_px, rotation, opacity) if pixmap is not None else None
         if self.background is not None:
             self.scene().removeItem(self.background)
             self.background = None

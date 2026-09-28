@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from ..model import Drawing, GeomType
-from ..rules import Rule, RuleSet, TextRule
+from ..rules import Rule, RuleSet, TextRule, nearest_ms_index
 
 
 @dataclass
@@ -14,6 +14,7 @@ class LayerUsage:
     name: str
     count: int = 0
     colors: Counter = field(default_factory=Counter)
+    rgbs: Counter = field(default_factory=Counter)
     linetypes: Counter = field(default_factory=Counter)
     lineweights: Counter = field(default_factory=Counter)
     geoms: Counter = field(default_factory=Counter)
@@ -49,6 +50,7 @@ def analyze(drawing: Drawing) -> TemplateInfo:
         lu = info.layers.setdefault(f.layer, LayerUsage(f.layer))
         lu.count += 1
         lu.colors[f.color_aci] += 1
+        lu.rgbs[tuple(f.color_rgb)] += 1
         lu.geoms[f.geom_type] += 1
         if f.geom_type in (GeomType.LINIE, GeomType.POLYGON):
             lu.linetypes[f.linetype] += 1
@@ -64,6 +66,16 @@ def analyze(drawing: Drawing) -> TemplateInfo:
 def propose_rules(info: TemplateInfo, existing: RuleSet | None = None) -> list[Rule]:
     """Navrhne pravidla: pro každou buňku jedno bodové pravidlo, pro ostatní prvky pravidlo na hladinu."""
     existing = existing or RuleSet()
+
+    def color_of(lu: LayerUsage):
+        """Barva pro pravidlo v soustavě projektu (číslo MicroStationu, jinak ACI)."""
+        if existing.paleta != "microstation":
+            return lu.color
+        rgb = lu.main(lu.rgbs)
+        if rgb is None:
+            return None
+        idx = nearest_ms_index(rgb, existing.barevna_tabulka)
+        return idx if idx is not None else "#%02X%02X%02X" % rgb
     have_codes = {r.kod.upper() for r in existing.pravidla}
     have_layers = {r.hladina.upper() for r in existing.pravidla if r.hladina}
     have_blocks = {r.blok.upper() for r in existing.pravidla if r.blok}
@@ -77,7 +89,7 @@ def propose_rules(info: TemplateInfo, existing: RuleSet | None = None) -> list[R
                 continue
             attrs = sorted({k for (b, k), c in lu.attribs.items() if b == block and c == n})
             out.append(Rule(kod=block, nazev=f"Buňka {block}", geometrie=GeomType.BOD, hladina=name,
-                            barva=lu.color, blok=block, povinne_atributy=attrs,
+                            barva=color_of(lu), blok=block, povinne_atributy=attrs,
                             zdroj=f"vzor: hladina {name}, {n}× buňka"))
             have_blocks.add(block.upper())
         rest = Counter({g: c for g, c in lu.geoms.items()})
@@ -90,7 +102,7 @@ def propose_rules(info: TemplateInfo, existing: RuleSet | None = None) -> list[R
         lt = lu.linetype if geom in (GeomType.LINIE, GeomType.POLYGON) else None
         lw = lu.main(lu.lineweights) if geom in (GeomType.LINIE, GeomType.POLYGON) else None
         out.append(Rule(kod=name, nazev=name.replace("_", " ").capitalize(), geometrie=geom, hladina=name,
-                        barva=lu.color, styl_cary=lt, tloustka=lw or None,
+                        barva=color_of(lu), styl_cary=lt, tloustka=lw or None,
                         zdroj=f"vzor: hladina {name}, {sum(rest.values())} prvků"))
     # polygon s texty na hladině se stejným základem názvu (např. BUDOVY + POPIS_BUDOV)
     for r in out:
