@@ -21,6 +21,12 @@ class RepairDialog(QDialog):
                       "který se pak otevře a znovu zkontroluje. Upravují se entity LINE a LWPOLYLINE.")
         info.setWordWrap(True)
         lay.addWidget(info)
+        warn = QLabel("⚠ Pozor: podle zadání „výkres opravený automatickou opravou nebude uznán“. "
+                      "Automatickou opravu používejte jen k tomu, abyste viděli, co je špatně – do "
+                      "odevzdávaného DGN chyby opravte ručně v MicroStationu.")
+        warn.setWordWrap(True)
+        warn.setStyleSheet("color: #b35900; font-weight: bold;")
+        lay.addWidget(warn)
         box = QGroupBox("Co opravit")
         bl = QVBoxLayout(box)
         defaults = RepairOptions()

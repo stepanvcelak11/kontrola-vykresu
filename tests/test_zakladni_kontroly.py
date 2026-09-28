@@ -38,7 +38,7 @@ def test_visici_konec(make_dxf):
         msp.add_line((10, 0), (10, 10))  # napojeno
         msp.add_line((20, 0), (30, 0))  # samostatná linie → 2 visící konce
     d = make_dxf(build)
-    issues = check(d, "visici_konce")
+    issues = check(d, "visici_konce", okraj=0)
     pts = sorted((round(i.x), round(i.y)) for i in issues)
     assert pts == [(0, 0), (10, 10), (20, 0), (30, 0)]
 
@@ -58,7 +58,7 @@ def test_chybejici_napojeni_v_toleranci(make_dxf):
 def test_napojeni_mimo_toleranci_neni_chybejici(make_dxf):
     d = make_dxf(lambda msp, doc: (msp.add_line((0, 0), (10, 0)), msp.add_line((5, 0.5), (5, 10))))
     assert check(d, "chybejici_napojeni") == []
-    assert len(check(d, "visici_konce")) == 4
+    assert len(check(d, "visici_konce", okraj=0)) == 4
 
 
 def test_duplicitni_linie_i_opacny_smer(make_dxf):
@@ -83,3 +83,13 @@ def test_duplicitni_body_a_ruzne_hladiny(make_dxf):
     assert [i.message for i in issues] == ["Duplicitní bod (2×)"]
     issues = check(d, "duplicity", stejna_hladina=False)
     assert len(issues) == 2
+
+
+def test_visici_konce_na_okraji_vykresu_se_nehlasi(make_dxf):
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (100, 0), (100, 100), (0, 100)], close=True)  # hranice území
+        msp.add_line((50, 100), (50, 60))  # plot od okraje dovnitř – konec uvnitř visí
+        msp.add_line((100.5, 50), (80, 50))  # konec 0,5 m od okraje
+    d = make_dxf(build)
+    pts = sorted((round(i.x), round(i.y)) for i in check(d, "visici_konce"))
+    assert pts == [(50, 60), (80, 50)]

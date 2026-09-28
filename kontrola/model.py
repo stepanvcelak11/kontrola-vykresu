@@ -88,6 +88,10 @@ class Feature:
     display_texts: list[tuple[str, float, float, float, float]] = field(default_factory=list)
     halign: int = 0  # 0 vlevo, 1 na střed, 2 vpravo
     valign: int = 0  # 0 účaří, 1 dole, 2 uprostřed, 3 nahoře
+    width_factor: float = 1.0  # poměr šířky a výšky písma
+    font: str = ""  # název stylu / fontu textu
+    bylayer: frozenset = frozenset()  # vlastnosti převzaté z hladiny: {"barva", "styl", "tloušťka"}
+    zero_length: bool = False  # úsečka nulové délky (bod MicroStationu)
 
     @property
     def is_linear(self) -> bool:

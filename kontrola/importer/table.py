@@ -18,8 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..model import GeomType
-from ..rules import (Rule, RuleSet, TextRule, normalize_linetype, parse_allowed_values, parse_color,
-                     split_list)
+from ..rules import (Rule, RuleSet, TextRule, geometry_from_element_types, normalize_linetype,
+                     parse_allowed_values, parse_color, parse_element_types, split_list)
 
 FIELDS: list[tuple[str, str]] = [
     ("kod", "Kód prvku"),
@@ -33,6 +33,12 @@ FIELDS: list[tuple[str, str]] = [
     ("povolene_hodnoty", "Povolené hodnoty"),
     ("blok", "Buňka / blok"),
     ("text_hladina", "Popis (text) na hladině"),
+    ("styl_uzivatelsky", "Uživatelský styl čáry"),
+    ("typy_prvku", "Typy prvků (MicroStation)"),
+    ("font", "Font textu"),
+    ("vyska_textu", "Výška textu"),
+    ("sirka_textu", "Šířka textu"),
+    ("zarovnani", "Zarovnání textu"),
     ("poznamka", "Poznámka"),
 ]
 FIELD_LABELS = dict(FIELDS)
@@ -40,12 +46,18 @@ FIELD_LABELS = dict(FIELDS)
 # klíčová slova v hlavičce (bez diakritiky, malými písmeny)
 _KEYWORDS: dict[str, list[str]] = {
     "kod": ["kod", "code", "cislo prvku", "c. prvku", "id prvku", "znacka kodu"],
-    "nazev": ["nazev", "popis prvku", "prvek", "objekt", "name", "vyznam", "jev"],
-    "hladina": ["hladina", "level", "vrstva", "layer", "lv"],
-    "barva": ["barva", "color", "colour", "co"],
-    "styl_cary": ["styl", "typ cary", "linetype", "line style", "druh cary", "lc"],
-    "tloustka": ["tloustka", "weight", "lineweight", "sirka", "wt"],
+    "nazev": ["nazev", "popis prvku", "prvek", "objekt", "name", "vyznam", "jev", "trida prvku", "trida"],
+    "hladina": ["hladina", "level", "vrstva", "layer", "lv", "vr", "cislo vrstvy"],
+    "barva": ["barva", "color", "colour", "co", "ba"],
+    "styl_cary": ["styl", "typ cary", "linetype", "line style", "druh cary", "lc", "st"],
+    "tloustka": ["tloustka", "weight", "lineweight", "wt", "tl"],
     "geometrie": ["typ geometrie", "geometrie", "typ prvku", "typ objektu", "geometry", "druh", "typ"],
+    "styl_uzivatelsky": ["us", "uzivatelsky styl", "uziv. styl", "custom style"],
+    "typy_prvku": ["prvky", "typy prvku", "typ prvku ms", "element type", "typy kresebnych prvku"],
+    "font": ["font", "pismo"],
+    "vyska_textu": ["vyska", "vyska textu", "text height"],
+    "sirka_textu": ["sirka", "sirka textu", "text width"],
+    "zarovnani": ["zarovnani", "vztazny bod", "justification"],
     "povinne_atributy": ["povinne atributy", "atributy", "povinne", "attributes", "atribut"],
     "povolene_hodnoty": ["povolene hodnoty", "hodnoty", "ciselnik", "domena", "values", "povolene"],
     "blok": ["bunka", "blok", "cell", "block", "znacka", "symbol"],
@@ -92,7 +104,7 @@ def read_table(path: str | Path, sheet: str | None = None) -> TableData:
     if suf == ".pdf":
         return _read_pdf(p)
     if suf == ".xls":
-        raise ValueError("Starý formát .xls není podporován – uložte tabulku v Excelu jako .xlsx nebo .csv.")
+        return _read_xls(p, sheet)
     raise ValueError(f"Nepodporovaný formát tabulky: {p.suffix}")
 
 
@@ -108,6 +120,21 @@ def _read_xlsx(p: Path, sheet: str | None) -> TableData:
     while rows and not any(rows[-1]):
         rows.pop()
     return TableData(str(p), names, ws.title, _trim(rows))
+
+
+def _read_xls(p: Path, sheet: str | None) -> TableData:
+    """Starý formát Excelu (.xls, např. „Směrnice-výběr.xls“)."""
+    try:
+        import xlrd
+    except ImportError as exc:  # pragma: no cover
+        raise ValueError("Pro čtení .xls chybí knihovna xlrd – uložte tabulku jako .xlsx.") from exc
+    wb = xlrd.open_workbook(str(p))
+    names = wb.sheet_names()
+    sh = wb.sheet_by_name(sheet) if sheet in names else wb.sheet_by_index(0)
+    rows = [[_cell(c.value) for c in sh.row(r)] for r in range(sh.nrows)]
+    while rows and not any(rows[-1]):
+        rows.pop()
+    return TableData(str(p), names, sh.name, _trim(rows))
 
 
 def _read_csv(p: Path) -> TableData:
@@ -242,6 +269,11 @@ class ImportResult:
         return s
 
 
+def _num(txt: str) -> float | None:
+    m = re.search(r"-?\d+(?:[.,]\d+)?", txt or "")
+    return float(m.group(0).replace(",", ".")) if m else None
+
+
 def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[str, int],
                    source: str = "") -> ImportResult:
     rs = RuleSet()
@@ -272,7 +304,7 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
             if "kod" in mapping:
                 res.errors.append(f"Řádek {rowno}: chybí kód prvku ({nazev or ' / '.join(filled[:3])}).")
                 continue
-            kod = hladina or blok
+            kod = nazev or hladina or blok  # bez sloupce s kódem je kódem název prvku
         if not re.search(r"[0-9A-Za-zÀ-ž]", kod):
             res.errors.append(f"Řádek {rowno}: neplatný kód „{kod}“ ({nazev}).")
             continue
@@ -285,6 +317,11 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
         warn = []
         geom_txt = get(r, "geometrie")
         geom = GeomType.parse(geom_txt)
+        types = parse_element_types(get(r, "typy_prvku"))
+        if get(r, "typy_prvku") and not types:
+            warn.append(f"nerozpoznané typy prvků „{get(r, 'typy_prvku')}“")
+        if geom is None and types:
+            geom = geometry_from_element_types(types)
         if geom_txt and geom is None:
             warn.append(f"nerozpoznaný typ geometrie „{geom_txt}“")
         if geom is None and blok:
@@ -310,9 +347,18 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
         text_rule = None
         if text_layer and geom != GeomType.TEXT:
             text_rule = TextRule(povinny=True, hladina=text_layer)
+        # uživatelský styl čáry (např. „2.123“ z ugeo_vp.rsc) má přednost před základním stylem
+        styl = get(r, "styl_uzivatelsky") or get(r, "styl_cary")
+        font = get(r, "font")
+        font = re.sub(r"^\s*\d+\s*[-–]\s*", "", font) if font else ""  # „1 - CS_WORKING“ → „CS_WORKING“
         rule = Rule(kod=kod, nazev=nazev, geometrie=geom, hladina=hladina or None, barva=barva,
-                    styl_cary=normalize_linetype(get(r, "styl_cary")), tloustka=tl, blok=blok or None,
+                    styl_cary=normalize_linetype(styl) if styl and "," not in styl else (styl or None),
+                    tloustka=tl, blok=blok or None,
                     povinne_atributy=attrs, povolene_hodnoty=allowed, text=text_rule,
+                    typy_prvku=types, vyska_textu=_num(get(r, "vyska_textu")),
+                    sirka_textu=_num(get(r, "sirka_textu")), font=font or None,
+                    zarovnani=get(r, "zarovnani") or None,
+                    topologie=not re.search(r"\bvstup", nazev, re.IGNORECASE),
                     poznamka=get(r, "poznamka") or None,
                     zdroj=f"{Path(source).name}, řádek {rowno}" if source else f"řádek {rowno}")
         rs.pravidla.append(rule)

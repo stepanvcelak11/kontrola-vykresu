@@ -14,7 +14,7 @@ def test_pretazena_linie(make_dxf):
     issues = check(d, "chybejici_napojeni")
     assert [i.message for i in issues] == ["Přetažená linie o 0,2 m"]
     # přetažený konec se nehlásí jako visící ani jako průsečík bez uzlu
-    assert all(round(i.y, 1) != -0.2 for i in check(d, "visici_konce"))
+    assert all(round(i.y, 1) != -0.2 for i in check(d, "visici_konce", okraj=0))
     assert check(d, "pruseciky_bez_uzlu") == []
 
 
@@ -42,9 +42,16 @@ def test_vyzadovat_rozdeleni_v_uzlu(make_dxf):
         msp.add_lwpolyline([(0, 0), (5, 0), (10, 0)])
         msp.add_lwpolyline([(5, -5), (5, 0), (5, 5)])  # společný lomový bod, ale linie nerozdělené
     d = make_dxf(build)
+    assert check(d, "pruseciky_bez_uzlu", vyzadovat_rozdeleni=False) == []
+    assert [i.message for i in check(d, "pruseciky_bez_uzlu")] == ["Linie nejsou v uzlu rozdělené"]
+
+
+def test_t_spojeni_se_delit_nemusi(make_dxf):
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (5, 0), (10, 0)])
+        msp.add_line((5, 0), (5, 5))  # T-spojení v lomovém bodě
+    d = make_dxf(build)
     assert check(d, "pruseciky_bez_uzlu") == []
-    assert [i.message for i in check(d, "pruseciky_bez_uzlu", vyzadovat_rozdeleni=True)] == \
-        ["Linie nejsou v uzlu rozdělené"]
 
 
 def test_jeden_popis_nebo_definicni_bod_v_plose(make_dxf):

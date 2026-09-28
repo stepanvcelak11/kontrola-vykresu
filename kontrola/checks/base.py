@@ -225,8 +225,15 @@ class CheckContext:
         """Liniové prvky (linie a polygony, bez šraf) podle filtru hladin kontroly."""
         key = "linear|" + ",".join(self.layer_filter() or [])
         if key not in self._cache:
-            self._cache[key] = [f for f in self.features(self.layer_filter())
-                                if f.is_linear and not f.geometry.is_empty]
+            out = []
+            for f in self.features(self.layer_filter()):
+                if not f.is_linear or f.geometry.is_empty:
+                    continue
+                r = self.rule_for(f) if self.rules.pravidla else None
+                if r is not None and not r.topologie:
+                    continue  # vstupy, sdružené značky – výjimka z topologie
+                out.append(f)
+            self._cache[key] = out
         return self._cache[key]
 
     def boundary(self, f: Feature) -> BaseGeometry:
@@ -258,11 +265,11 @@ class CheckContext:
         """Popisy: texty, a na zadané hladině i bodové prvky (definiční body ploch, buňky)."""
         key = f"texts|{layer or ''}"
         if key not in self._cache:
-            import fnmatch
+            from ..rules import layer_matches
             if layer:
                 self._cache[key] = [f for f in self.features()
                                     if f.geom_type in (GeomType.TEXT, GeomType.BOD)
-                                    and fnmatch.fnmatchcase(f.layer.upper(), layer.upper())]
+                                    and layer_matches(layer, f.layer)]
             else:
                 self._cache[key] = [f for f in self.features() if f.geom_type == GeomType.TEXT]
         return self._cache[key]

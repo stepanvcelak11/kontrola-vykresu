@@ -236,6 +236,87 @@ class TextRule:
                    uvnitr=bool(d.get("uvnitr", True)))
 
 
+# Typy prvků MicroStationu (sloupec „PRVKY“ ve směrnici; stejné názvy používá protokol GISoft)
+MS_ELEMENT_NAMES = {
+    2: "Buňka", 3: "Úsečka", 4: "Lomená čára", 6: "Tvar", 7: "Textový uzel", 11: "Křivka",
+    12: "Komplexní řetězec", 14: "Komplexní tvar", 15: "Elipsa", 16: "Oblouk", 17: "Text",
+    22: "Bodový řetězec",
+}
+
+
+def parse_element_types(value: Any) -> list[int]:
+    """„3,4,15,16“ → [3, 4, 15, 16]; „2.0“ → [2]."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        items = value
+    else:
+        items = re.split(r"[,;\s]+", str(value).strip())
+    out = []
+    for it in items:
+        try:
+            n = int(float(str(it).replace(",", ".")))
+        except ValueError:
+            continue
+        if n in MS_ELEMENT_NAMES and n not in out:
+            out.append(n)
+    return out
+
+
+def geometry_from_element_types(types: list[int]) -> GeomType | None:
+    if not types:
+        return None
+    s = set(types)
+    if s <= {17, 7}:
+        return GeomType.TEXT
+    if s == {2}:
+        return GeomType.BOD
+    if s <= {6, 14}:
+        return GeomType.POLYGON
+    if s & {3, 4, 11, 12, 15, 16, 22}:
+        return GeomType.LINIE
+    return None
+
+
+def feature_element_type(f: Feature) -> int | None:
+    """Typ prvku MicroStationu, kterému odpovídá entita DXF."""
+    t = f.dxftype
+    if t in ("LINE", "POINT"):
+        return 3  # bod MicroStationu = úsečka nulové délky
+    if t in ("LWPOLYLINE", "POLYLINE"):
+        return 6 if f.closed else 4
+    if t == "ARC":
+        return 16
+    if t in ("CIRCLE", "ELLIPSE"):
+        return 15
+    if t == "SPLINE":
+        return 11
+    if t == "INSERT":
+        return 2
+    if t == "TEXT":
+        return 17
+    if t == "MTEXT":
+        return 7
+    return None
+
+
+_LEVEL_NUM = re.compile(r"^(?:vrstva|level|hladina|lv|layer|úroveň|uroven)?[\s_\-]*0*(\d+)$", re.IGNORECASE)
+
+
+def layer_number(layer: str) -> int | None:
+    """Číslo hladiny z názvu: „Vrstva 7“, „Level 7“, „LV07“, „7“ → 7."""
+    m = _LEVEL_NUM.match(layer.strip())
+    return int(m.group(1)) if m else None
+
+
+def layer_matches(pattern: str, layer: str) -> bool:
+    """Hladina odpovídá vzoru: číslo vrstvy MicroStationu, přesný název nebo zástupné znaky (*, ?)."""
+    p = str(pattern).strip()
+    if p.isdigit():
+        return layer_number(layer) == int(p)
+    return fnmatch.fnmatchcase(layer.upper(), p.upper())
+
+
 @dataclass
 class Rule:
     kod: str
@@ -243,7 +324,7 @@ class Rule:
     geometrie: GeomType | None = None
     hladina: str | None = None
     barva: int | str | None = None
-    styl_cary: str | None = None
+    styl_cary: str | None = None  # název, číslo stylu MicroStationu, nebo seznam „0,2,4,7“
     tloustka: float | None = None
     blok: str | None = None
     povinne_atributy: list[str] = field(default_factory=list)
@@ -252,6 +333,12 @@ class Rule:
     obrazek: str | None = None
     poznamka: str | None = None
     zdroj: str | None = None  # odkud pravidlo vzniklo (řádek tabulky, vzor…)
+    typy_prvku: list[int] = field(default_factory=list)  # povolené typy prvků MicroStationu
+    vyska_textu: float | None = None
+    sirka_textu: float | None = None
+    font: str | None = None
+    zarovnani: str | None = None  # např. „vlevo nahoře“
+    topologie: bool = True  # False = prvky se nekontrolují topologicky (vstupy, sdružené značky)
 
     @property
     def label(self) -> str:
@@ -260,7 +347,7 @@ class Rule:
     def matches_layer(self, layer: str) -> bool:
         if not self.hladina:
             return False
-        return fnmatch.fnmatchcase(layer.upper(), self.hladina.upper())
+        return layer_matches(self.hladina, layer)
 
     def to_dict(self) -> dict:
         d: dict[str, Any] = {"kod": self.kod}
@@ -278,6 +365,14 @@ class Rule:
             d["povolene_hodnoty"] = {k: list(v) for k, v in self.povolene_hodnoty.items()}
         if self.text:
             d["text"] = self.text.to_dict()
+        if self.typy_prvku:
+            d["typy_prvku"] = list(self.typy_prvku)
+        for k in ("vyska_textu", "sirka_textu", "font", "zarovnani"):
+            v = getattr(self, k)
+            if v not in (None, ""):
+                d[k] = v
+        if not self.topologie:
+            d["topologie"] = False
         for k in ("obrazek", "poznamka", "zdroj"):
             v = getattr(self, k)
             if v:
@@ -292,10 +387,24 @@ class Rule:
         except (TypeError, ValueError):
             tl = None
         attrs = [a.upper() for a in split_list(d.get("povinne_atributy"))]
+
+        def fnum(k):
+            try:
+                v = d.get(k)
+                return float(str(v).replace(",", ".")) if v not in (None, "") else None
+            except (TypeError, ValueError):
+                return None
+        types = parse_element_types(d.get("typy_prvku"))
         return cls(
             kod=str(d.get("kod", "")).strip(),
             nazev=str(d.get("nazev", "") or "").strip(),
-            geometrie=GeomType.parse(d.get("geometrie")),
+            geometrie=GeomType.parse(d.get("geometrie")) or geometry_from_element_types(types),
+            typy_prvku=types,
+            vyska_textu=fnum("vyska_textu"),
+            sirka_textu=fnum("sirka_textu"),
+            font=(str(d["font"]).strip() if d.get("font") else None),
+            zarovnani=(str(d["zarovnani"]).strip() if d.get("zarovnani") else None),
+            topologie=bool(d.get("topologie", True)),
             hladina=(str(d["hladina"]).strip() if d.get("hladina") else None),
             barva=parse_color(d.get("barva")),
             styl_cary=normalize_linetype(d.get("styl_cary")),
@@ -317,6 +426,7 @@ class RuleSet:
     paleta: str = "microstation"  # jak číst čísla barev: microstation (color.tbl) / autocad (ACI)
     rozsah: dict | str | None = None  # {xmin, ymin, xmax, ymax} nebo "sjtsk"
     barevna_tabulka: dict[int, tuple[int, int, int]] = field(default_factory=dict)  # načtený color.tbl
+    mapa_tloustek: dict[int, float] = field(default_factory=dict)  # tloušťka MicroStationu → mm v DXF
 
     def rule_rgb(self, value) -> tuple[int, int, int] | None:
         return color_rgb(value, self.paleta, self.barevna_tabulka)
@@ -338,14 +448,12 @@ class RuleSet:
         return {r.text.hladina.upper() for r in self.pravidla if r.text and r.text.hladina}
 
     def allowed_layer(self, layer: str) -> bool:
-        up = layer.upper()
         patterns = [r.hladina for r in self.pravidla if r.hladina] + list(self.povolene_hladiny)
         patterns += [r.text.hladina for r in self.pravidla if r.text and r.text.hladina]
-        return any(fnmatch.fnmatchcase(up, p.upper()) for p in patterns)
+        return any(layer_matches(p, layer) for p in patterns)
 
     def explicit_layer(self, layer: str) -> bool:
-        up = layer.upper()
-        return any(fnmatch.fnmatchcase(up, p.upper()) for p in self.povolene_hladiny)
+        return any(layer_matches(p, layer) for p in self.povolene_hladiny)
 
     def resolve(self, f: Feature) -> Rule | None:
         """Najde pravidlo (kód) pro prvek."""
@@ -391,6 +499,8 @@ class RuleSet:
     # ------------------------------------------------------------ YAML
     def to_dict(self) -> dict:
         d: dict[str, Any] = {"paleta": self.paleta}
+        if self.mapa_tloustek:
+            d["mapa_tloustek"] = {int(k): float(v) for k, v in sorted(self.mapa_tloustek.items())}
         if self.barevna_tabulka:
             d["barevna_tabulka"] = {i: "#%02X%02X%02X" % c for i, c in sorted(self.barevna_tabulka.items())}
         if self.rozsah:
@@ -409,6 +519,11 @@ class RuleSet:
             paleta=str(d.get("paleta", "microstation")).lower(),
             rozsah=d.get("rozsah"),
         )
+        for k, v in (d.get("mapa_tloustek") or {}).items():
+            try:
+                rs.mapa_tloustek[int(k)] = float(v)
+            except (TypeError, ValueError):
+                pass
         for k, v in (d.get("barevna_tabulka") or {}).items():
             rgb = color_rgb(str(v)) if str(v).startswith("#") else None
             if rgb is not None:
@@ -462,6 +577,13 @@ def color_matches(expected: int | str, f: Feature, palette: str = "microstation"
 
 
 def linetype_matches(expected: str, actual: str) -> bool:
+    """Shoda stylu čáry; ``expected`` smí být seznam povolených stylů („0,2,4,7“)."""
+    if expected and re.search(r"[,;]", str(expected)):
+        return any(linetype_matches(e, actual) for e in split_list(expected))
+    return _linetype_matches_one(expected, actual)
+
+
+def _linetype_matches_one(expected: str, actual: str) -> bool:
     e = normalize_linetype(expected)
     a = normalize_linetype(actual) or "CONTINUOUS"
     if not e:

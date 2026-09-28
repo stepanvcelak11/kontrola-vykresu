@@ -109,7 +109,14 @@ def _entity_style(e, ctx: _Ctx, parent: Feature | None = None):
         lw = parent.lineweight
     else:
         lw = _lineweight_mm(lw_raw)
-    return layer_name, color_aci, rgb, lt, lw
+    bylayer = set()
+    if aci == 256 and not e.dxf.hasattr("true_color"):
+        bylayer.add("barva")
+    if (e.dxf.get("linetype", "BYLAYER") or "BYLAYER").upper() == "BYLAYER":
+        bylayer.add("styl")
+    if lw_raw == -1:
+        bylayer.add("tloušťka")
+    return layer_name, color_aci, rgb, lt, lw, frozenset(bylayer)
 
 
 def _xdata(e) -> tuple[dict[str, list], dict[str, str]]:
@@ -227,16 +234,21 @@ class _Loader:
 
     # ------------------------------------------------------------------
     def _base(self, e, parent: Feature | None = None) -> dict:
-        layer, aci, rgb, lt, lw = _entity_style(e, self.ctx, parent)
+        layer, aci, rgb, lt, lw, bylayer = _entity_style(e, self.ctx, parent)
         raw, xattrs = _xdata(e)
         return dict(layer=layer, color_aci=aci, color_rgb=rgb, linetype=lt, lineweight=lw,
-                    handle=e.dxf.get("handle", ""), xdata=raw, attributes=xattrs)
+                    handle=e.dxf.get("handle", ""), xdata=raw, attributes=xattrs, bylayer=bylayer)
 
     def _convert(self, e) -> Iterable[Feature]:
         t = e.dxftype()
         base = self._base(e)
         if t == "LINE":
             a, b = self.ctx.xy(e.dxf.start), self.ctx.xy(e.dxf.end)
+            if math.dist(a, b) < 1e-9:
+                # úsečka nulové délky = bod MicroStationu („umístit aktivní bod“)
+                yield self._new(dxftype=t, geom_type=GeomType.BOD, geometry=Point(a), vertices=[a],
+                                zero_length=True, **base)
+                return
             yield self._new(dxftype=t, geom_type=GeomType.LINIE, geometry=LineString([a, b]),
                             vertices=[a, b], **base)
         elif t in ("LWPOLYLINE", "POLYLINE"):
@@ -370,9 +382,18 @@ class _Loader:
             height = e.dxf.get("height", 1.0) * self.factor
             rotation = e.dxf.get("rotation", 0.0)
         h, v = _text_align(e)
+        style_name = e.dxf.get("style", "Standard") or "Standard"
+        font = style_name
+        try:
+            st = self.doc.styles.get(style_name)
+            if st is not None and st.dxf.get("font"):
+                font = f"{style_name} ({st.dxf.font})"
+        except Exception:
+            pass
+        wf = e.dxf.get("width", 1.0) if t == "TEXT" else 1.0
         return self._new(dxftype=t, geom_type=GeomType.TEXT, geometry=Point(p), vertices=[p],
                          text=text.strip(), text_height=height, rotation=rotation,
-                         halign=h, valign=v, **base)
+                         halign=h, valign=v, width_factor=float(wf or 1.0), font=font, **base)
 
     def _hatch(self, e, base: dict) -> Iterable[Feature]:
         rings = []

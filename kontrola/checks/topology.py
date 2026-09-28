@@ -189,18 +189,28 @@ class VisiciKonce(Check):
     popis = ("Konec linie, u kterého v okruhu tolerance není žádná jiná linie (dangle). "
              "U plotů a jiných volně končících linií může být v pořádku.")
     vychozi_zavaznost = Severity.VAROVANI
-    parametry = [LAYERS_PARAM]
+    parametry = [
+        Param("okraj", "Nehlásit konce u okraje výkresu do [m]", "float", 1.0,
+              "Volné konce čar na okrajích výkresu nejsou chybou (kresba končí na hranici území)."),
+        LAYERS_PARAM,
+    ]
 
     def run(self, ctx: CheckContext):
         an = _endpoint_analysis(ctx)
         ctx.progress(0.3)
         over = _overshoots(ctx, an)
         ctx.progress(0.7)
+        edge = float(ctx.param("okraj", 1.0))
+        hull = None
+        if edge > 0 and len(an.geoms):
+            hull = shapely.union_all(an.geoms).convex_hull.boundary
         for k in range(len(an.points)):
             if np.isfinite(an.nearest[k]) or an.self_touch[k] or an.own_gap[k] <= ctx.tolerance:
                 continue  # napojeno, nebo jde o téměř uzavřený polygon (řeší jiná kontrola)
             if k in over:
                 continue  # přetažená linie – hlásí kontrola nedotažení/přetažení
+            if hull is not None and hull.distance(an.pgeoms[k]) <= edge:
+                continue  # konec na okraji výkresu
             f = an.feats[an.owner[k]]
             if _expects_polygon(ctx, f):
                 continue  # řeší kontrola nezavřených polygonů
@@ -387,9 +397,9 @@ class PrusecikyBezUzlu(Check):
     parametry = [
         Param("napojeni_bez_uzlu", "Hlásit i napojení (T-spoj) bez uzlu", "bool", True,
               "Konec linie leží na jiné linii, ta ale v tom místě nemá lomový bod."),
-        Param("vyzadovat_rozdeleni", "Linie musí být v uzlu rozdělené", "bool", False,
-              "Přísnější režim (jako topologické začištění v MGEO): nestačí společný lomový bod, "
-              "obě linie musí v průsečíku končit."),
+        Param("vyzadovat_rozdeleni", "Linie musí být v uzlu (křížení) rozdělené", "bool", True,
+              "Jako topologická kontrola MGEO („nerozdělená čára v uzlovém bodě“): kříží-li se dvě linie "
+              "ve společném lomovém bodě, musí v něm obě končit. T-spojení se dělit nemusí."),
         LAYERS_PARAM,
     ]
 
@@ -449,8 +459,9 @@ class PrusecikyBezUzlu(Check):
                 key = (round(p[0], 3), round(p[1], 3))
                 if vi and vj:
                     # MGEO-styl: linie mají být v uzlu rozdělené (končit v něm), ne jen mít lomový bod
+                    # (T-spojení, kde jedna linie v uzlu končí, se podle zadání dělit nemusí)
                     if split and key not in seen and feats[i].geom_type == GeomType.LINIE \
-                            and feats[j].geom_type == GeomType.LINIE and not (is_end(i, p) and is_end(j, p)):
+                            and feats[j].geom_type == GeomType.LINIE and not is_end(i, p) and not is_end(j, p):
                         seen.add(key)
                         yield ctx.issue(self, [feats[i], feats[j]], "Linie nejsou v uzlu rozdělené", at=p,
                                         geometry=Point(p).buffer(0.01))
@@ -478,8 +489,22 @@ class NulovaDelka(Check):
 
     def run(self, ctx: CheckContext):
         eps = max(ctx.precision, 1e-9)
-        for f in ctx.features(ctx.layer_filter()):
+        feats = ctx.features(ctx.layer_filter())
+        # hladiny, kde úsečky nulové délky tvoří většinu prvků = záměrné body (MicroStation „aktivní bod“)
+        per_layer: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        for f in feats:
+            per_layer[f.layer][0] += 1
+            per_layer[f.layer][1] += int(f.zero_length)
+        point_layers = {k for k, (n, z) in per_layer.items() if n >= 5 and z / n >= 0.8}
+        for f in feats:
             g = f.geometry
+            if f.zero_length:
+                r = ctx.rule_for(f)
+                intended = (r is not None and r.geometrie == GeomType.BOD) \
+                    or (r is None and f.layer in point_layers)
+                if not intended:
+                    yield ctx.issue(self, f, "Linie nulové délky")
+                continue
             if f.geom_type == GeomType.LINIE:
                 if g.is_empty or g.length <= eps:
                     yield ctx.issue(self, f, "Linie nulové délky")

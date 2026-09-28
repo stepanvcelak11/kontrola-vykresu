@@ -156,6 +156,7 @@ class MainWindow(QMainWindow):
         self.a_exp_xlsx = self._act("Seznam chyb do Excelu…", lambda: self.export("xlsx"))
         self.a_exp_pdf = self._act("Protokol do PDF…", lambda: self.export("pdf"))
         self.a_exp_dxf = self._act("DXF s hladinou KONTROLA_CHYBY…", lambda: self.export("dxf"))
+        self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
                                   "Zobrazit náčrt a fotky v panelu vedle výkresu (panel lze odpojit)")
 
@@ -170,7 +171,7 @@ class MainWindow(QMainWindow):
         m_file.addAction(self.a_save_project_as)
         m_file.addSeparator()
         m_exp = m_file.addMenu("Export")
-        for a in (self.a_exp_csv, self.a_exp_xlsx, self.a_exp_pdf, self.a_exp_dxf):
+        for a in (self.a_exp_csv, self.a_exp_xlsx, self.a_exp_pdf, self.a_exp_dxf, self.a_exp_log):
             m_exp.addAction(a)
         m_file.addSeparator()
         m_file.addAction(self.a_quit)
@@ -605,6 +606,7 @@ class MainWindow(QMainWindow):
             "xlsx": ("Uložit seznam chyb", f"{base}_chyby.xlsx", "Excel (*.xlsx)"),
             "pdf": ("Uložit protokol", f"{base}_protokol.pdf", "PDF (*.pdf)"),
             "dxf": ("Uložit DXF s chybami", f"{base}_kontrola.dxf", "DXF (*.dxf)"),
+            "log": ("Uložit protokol (.log)", f"{base}.log", "Protokol (*.log *.txt)"),
         }[kind]
         path, _ = QFileDialog.getSaveFileName(self, spec[0], str(start_dir / spec[1]), spec[2])
         if not path:
@@ -631,6 +633,12 @@ class MainWindow(QMainWindow):
                 dxf_export.export_dxf(self.drawing, issues, path)
             elif kind == "pdf":
                 self._export_pdf(issues, path)
+            elif kind == "log":
+                from ..export.mgeo_log import export_mgeo_log
+                if self.drawing is None:
+                    raise ValueError("Není otevřený výkres.")
+                export_mgeo_log(self.drawing, self.project.rules, issues, path, self.project.name,
+                                tolerance=self.project.config.tolerance)
         except Exception as exc:
             QMessageBox.warning(self, "Export", f"Export se nezdařil: {exc}")
             return

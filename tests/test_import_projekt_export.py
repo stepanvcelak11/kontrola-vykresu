@@ -118,7 +118,7 @@ def test_projekt_ulozeni_a_zip(tmp_path):
 
 def test_stavy_chyb_a_porovnani(tmp_path, make_dxf):
     d = make_dxf(lambda msp, doc: (msp.add_line((0, 0), (10, 0)), msp.add_line((20, 0), (30, 0))))
-    issues = check(d, "visici_konce")
+    issues = check(d, "visici_konce", okraj=0)
     assert len(issues) == 4
     issues[0].state = "ignorovat"
     p = Project.create(tmp_path / "p")
@@ -128,7 +128,7 @@ def test_stavy_chyb_a_porovnani(tmp_path, make_dxf):
     assert q.issue_states()[issues[0].key]["stav"] == "ignorovat"
     assert len(q.load_issues()) == 4
     d2 = make_dxf(lambda msp, doc: msp.add_line((0, 0), (10, 0)))
-    new = check(d2, "visici_konce")
+    new = check(d2, "visici_konce", okraj=0)
     c = compare(issues, new)
     assert (c.fixed, c.new, c.remaining) == (2, 0, 2)
     # dvě shodné chyby (stejné místo i text) se počítají dvakrát

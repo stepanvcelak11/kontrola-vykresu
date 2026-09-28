@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--xlsx", help="uložit seznam chyb do Excelu")
     ap.add_argument("--dxf", help="uložit DXF s hladinou KONTROLA_CHYBY")
     ap.add_argument("--pdf", help="uložit protokol PDF (bez obrázků – ty vytvoří grafická aplikace)")
+    ap.add_argument("--log", help="uložit protokol ve formátu MGEO / GISoft (.log)")
     ap.add_argument("--oprav", metavar="VYSTUP.dxf",
                     help="automaticky opravit jednoznačné chyby a uložit do nového DXF")
     ap.add_argument("--seznam-kontrol", action="store_true", help="vypsat dostupné kontroly")
@@ -86,6 +87,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.dxf:
         from .export.dxf_export import export_dxf
         export_dxf(drawing, res.issues, a.dxf)
+    if a.log:
+        from .export.mgeo_log import export_mgeo_log
+        export_mgeo_log(drawing, rules, res.issues, a.log, Path(a.pravidla).name if a.pravidla else "",
+                        tolerance=config.tolerance)
     if a.oprav:
         from .repair import repair_drawing
         rep = repair_drawing(drawing, rules, config, a.oprav)

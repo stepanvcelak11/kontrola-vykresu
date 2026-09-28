@@ -162,6 +162,40 @@ python -m pytest -q tests\test_topologie.py tests\test_atributy.py
 
 ---
 
+## Zadání z předmětu (MicroStation, Směrnice-výběr.xls)
+
+Ve složce [`podklady/zadani1-microstation/`](podklady/zadani1-microstation/) je zadání, učitelova
+tabulka atributů `Směrnice-výběr.xls` a hotová pravidla
+[`pravidla_zadani1.yaml`](podklady/zadani1-microstation/pravidla_zadani1.yaml). Pravidla obsahují
+celou Směrnici a navíc vrstvy 58–60 (podrobné body, čísla a výšky bodů) podle zadání, přepočtené
+pro měřítko 1:500.
+
+Postup:
+
+1. Výkres uložte z MicroStationu jako DXF vedle DGN (viz níže) a přetáhněte do aplikace.
+2. **Zadání → Pravidla → Načíst YAML…** a vyberte `pravidla_zadani1.yaml`. Nebo přetáhněte
+   přímo `Směrnice-výběr.xls` na *Tabulka atributů*, průvodce sloupce rozpozná sám.
+3. **F5**. Kontrola dělá totéž co učitelova kontrola:
+   * **Atributová kontrola (jako GISoft „Kontrola a změna symbologie“):**
+     * vrstva podle čísla (VR 5 = „Vrstva 5“ / „Level 5“),
+     * typ prvku MicroStationu (úsečka, lomená čára, elipsa, oblouk, text, buňka),
+     * barva (číslo MicroStationu) a styl (0, 2, 4, 7 nebo uživatelský 2.123…),
+     * u textů výška, šířka a zarovnání,
+     * **zákaz atributu „dle vrstvy“ (ByLevel)**.
+   * **Topologická kontrola (jako MGEO):** duplicity, nedotažení a přetažení, **nerozdělené čáry
+     v uzlu** a volné konce. Volné konce na okraji výkresu a nedělené čáry v T-spojení se podle
+     zadání nehlásí. Úsečky nulové délky na vrstvě bodů (58) jsou body, ne chyba.
+4. **Soubor → Export → Protokol jako MGEO / GISoft (.log)** vytvoří protokol ve stejné podobě,
+   jakou vrací učitel: prvky seskupené podle atributů, chybný atribut označený „(!)“.
+
+> Podle zadání se výkres opravený automatickou opravou neuzná. **Kontrola → Automatická oprava**
+> slouží jen k tomu, abyste viděli, co je špatně. Chyby opravujte ručně v MicroStationu.
+
+**Barvy a tloušťky:** porovnání barev MicroStationu (např. 94–97 u budov) potřebuje tabulku
+barev `color.tbl`. Načtěte ji v *Nastavení kontrol → Obecné*. Tloušťky MicroStationu (TL) se
+v DXF ukládají v mm. Převod jde nastavit v pravidlech (`mapa_tloustek`), bez něj se tloušťky
+neověřují.
+
 ## Převod DGN na DXF
 
 Formát DGN z MicroStationu V8 (V8i, CONNECT) nejde číst žádnou volně dostupnou knihovnou.

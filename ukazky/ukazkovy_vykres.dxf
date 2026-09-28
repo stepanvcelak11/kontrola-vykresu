@@ -493,7 +493,7 @@ $SKPOLY
   9
 $TDCREATE
  40
-2461312.5871296297
+2461312.6034375
   9
 $TDUCREATE
  40
@@ -501,7 +501,7 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461312.5871296297
+2461312.6034375
   9
 $TDUUPDATE
  40
@@ -933,11 +933,11 @@ $PSTYLEMODE
   9
 $FINGERPRINTGUID
   2
-{22B66700-EF13-43E3-98D7-F1A02483A1AB}
+{8E3A8B95-847E-4311-A7DC-992F78F33DAB}
   9
 $VERSIONGUID
   2
-{2395022A-EDD7-4B69-9B46-24DE1436591A}
+{C7DDEEAB-8694-4CA5-8AB0-64FD1B54F4D6}
   9
 $EXTNAMES
 290
@@ -5870,6 +5870,12 @@ A6
 AcDbEntity
   8
 PARCELY
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbPolyline
  90
@@ -5902,6 +5908,12 @@ A7
 AcDbEntity
   8
 PARCELY
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbPolyline
  90
@@ -5934,6 +5946,12 @@ A8
 AcDbEntity
   8
 PARCELY
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbPolyline
  90
@@ -5966,6 +5984,12 @@ A9
 AcDbEntity
   8
 PARCELY
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbPolyline
  90
@@ -5998,6 +6022,12 @@ AA
 AcDbEntity
   8
 PARCELNI_CISLA
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbText
  10
@@ -6028,6 +6058,12 @@ AB
 AcDbEntity
   8
 PARCELNI_CISLA
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbText
  10
@@ -6058,6 +6094,12 @@ AC
 AcDbEntity
   8
 PARCELNI_CISLA
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbText
  10
@@ -6088,6 +6130,12 @@ AD
 AcDbEntity
   8
 PARCELNI_CISLA
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbText
  10
@@ -6118,6 +6166,12 @@ AE
 AcDbEntity
   8
 BUDOVY
+  6
+CONTINUOUS
+ 62
+1
+370
+0
 100
 AcDbPolyline
  90
@@ -6150,6 +6204,12 @@ AF
 AcDbEntity
   8
 POPIS_BUDOV
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbText
  10
@@ -6180,6 +6240,12 @@ B0
 AcDbEntity
   8
 BUDOVY
+  6
+CONTINUOUS
+ 62
+1
+370
+0
 100
 AcDbPolyline
  90
@@ -6216,6 +6282,12 @@ B1
 AcDbEntity
   8
 POPIS_BUDOV
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbText
  10
@@ -6246,6 +6318,12 @@ B2
 AcDbEntity
   8
 BUDOVY
+  6
+CONTINUOUS
+ 62
+1
+370
+0
 100
 AcDbPolyline
  90
@@ -6278,6 +6356,12 @@ B3
 AcDbEntity
   8
 POPIS_BUDOV
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbText
  10
@@ -6308,6 +6392,12 @@ B4
 AcDbEntity
   8
 BUDOVY
+  6
+CONTINUOUS
+ 62
+1
+370
+0
 100
 AcDbPolyline
  90
@@ -6340,6 +6430,12 @@ B5
 AcDbEntity
   8
 POPIS_BUDOV
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbText
  10
@@ -6370,8 +6466,12 @@ B6
 AcDbEntity
   8
 BUDOVY
+  6
+CONTINUOUS
  62
 3
+370
+0
 100
 AcDbPolyline
  90
@@ -6404,6 +6504,12 @@ B7
 AcDbEntity
   8
 POPIS_BUDOV
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbText
  10
@@ -6434,8 +6540,12 @@ B8
 AcDbEntity
   8
 KOMUNIKACE
+  6
+CONTINUOUS
  62
 8
+370
+0
 420
 4210752
 100
@@ -6462,8 +6572,12 @@ B9
 AcDbEntity
   8
 KOMUNIKACE
+  6
+CONTINUOUS
  62
 8
+370
+0
 420
 4210752
 100
@@ -6494,6 +6608,8 @@ KOMUNIKACE
 DASHED
  62
 9
+370
+0
 420
 12632256
 100
@@ -6520,8 +6636,12 @@ BB
 AcDbEntity
   8
 KOMUNIKACE
+  6
+CONTINUOUS
  62
 8
+370
+0
 420
 4210752
 100
@@ -6548,8 +6668,12 @@ BC
 AcDbEntity
   8
 KOMUNIKACE
+  6
+CONTINUOUS
  62
 8
+370
+0
 420
 4210752
 100
@@ -6576,8 +6700,12 @@ BD
 AcDbEntity
   8
 KOMUNIKACE
+  6
+CONTINUOUS
  62
 8
+370
+0
 420
 4210752
 100
@@ -6604,6 +6732,12 @@ BE
 AcDbEntity
   8
 PLOTY
+  6
+DASHDOT
+ 62
+5
+370
+0
 100
 AcDbPolyline
  90
@@ -6632,6 +6766,12 @@ BF
 AcDbEntity
   8
 PLOTY
+  6
+DASHDOT
+ 62
+5
+370
+0
 100
 AcDbPolyline
  90
@@ -6660,6 +6800,12 @@ C0
 AcDbEntity
   8
 PLOTY
+  6
+DASHDOT
+ 62
+5
+370
+0
 100
 AcDbPolyline
  90
@@ -6688,6 +6834,12 @@ C1
 AcDbEntity
   8
 PLOTY
+  6
+DASHDOT
+ 62
+5
+370
+0
 100
 AcDbPolyline
  90
@@ -6712,6 +6864,12 @@ C2
 AcDbEntity
   8
 PLOTY
+  6
+DASHDOT
+ 62
+5
+370
+0
 100
 AcDbPolyline
  90
@@ -6736,6 +6894,12 @@ C3
 AcDbEntity
   8
 PLOTY
+  6
+DASHDOT
+ 62
+5
+370
+0
 100
 AcDbPolyline
  90
@@ -6760,6 +6924,12 @@ C4
 AcDbEntity
   8
 POPIS_BUDOV
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbText
  10
@@ -6790,6 +6960,12 @@ C5
 AcDbEntity
   8
 POKUS
+  6
+Continuous
+ 62
+7
+370
+0
 100
 AcDbLine
  10
@@ -6814,6 +6990,12 @@ C6
 AcDbEntity
   8
 BUDOVY
+  6
+CONTINUOUS
+ 62
+1
+370
+0
 100
 AcDbCircle
  10
@@ -6834,6 +7016,12 @@ C7
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -6934,6 +7122,12 @@ CB
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7034,6 +7228,12 @@ CF
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7134,6 +7334,12 @@ D3
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7234,6 +7440,12 @@ D7
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7334,6 +7546,12 @@ DB
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7434,6 +7652,12 @@ DF
 AcDbEntity
   8
 VEGETACE
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbBlockReference
  66
@@ -7500,6 +7724,12 @@ E2
 AcDbEntity
   8
 VEGETACE
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbBlockReference
  66
@@ -7566,6 +7796,12 @@ E5
 AcDbEntity
   8
 SITE
+  6
+CONTINUOUS
+ 62
+6
+370
+0
 100
 AcDbBlockReference
   2
@@ -7586,6 +7822,12 @@ E7
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7686,6 +7928,12 @@ EB
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7786,6 +8034,12 @@ EF
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -7886,6 +8140,12 @@ F3
 AcDbEntity
   8
 VEGETACE
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbBlockReference
  66
@@ -7952,6 +8212,12 @@ F6
 AcDbEntity
   8
 VEGETACE
+  6
+CONTINUOUS
+ 62
+3
+370
+0
 100
 AcDbBlockReference
   2
@@ -7972,6 +8238,12 @@ F8
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbBlockReference
  66
@@ -8072,6 +8344,12 @@ FC
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbPoint
  10
@@ -8090,6 +8368,12 @@ FD
 AcDbEntity
   8
 BODY
+  6
+CONTINUOUS
+ 62
+7
+370
+0
 100
 AcDbPoint
  10
@@ -9201,7 +9485,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-09-28T14:05:28.315807+00:00
+1.4.4 @ 2026-09-28T14:28:57.520434+00:00
   0
 VISUALSTYLE
   5
@@ -15763,7 +16047,7 @@ DictionaryVariables
 280
 0
   1
-1.4.4 @ 2026-09-28T14:05:28.327507+00:00
+1.4.4 @ 2026-09-28T14:28:57.529076+00:00
   0
 ENDSEC
   0

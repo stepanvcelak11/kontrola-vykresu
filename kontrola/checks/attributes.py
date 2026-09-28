@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import fnmatch
+import re
 
 import numpy as np
 import shapely
 
 from ..model import Feature, GeomType
-from ..rules import color_known, color_matches, linetype_matches
+from ..rules import color_known, color_matches, layer_matches, linetype_matches
 from .base import Check, CheckContext, Param, Severity, fmt_num, register
 
 
@@ -61,21 +62,28 @@ class Symbologie(Check):
     id = "symbologie"
     nazev = "Hladina, barva nebo styl"
     skupina = "Atributy"
-    popis = "Porovná hladinu, barvu, styl a tloušťku čáry prvku s pravidlem pro jeho kód."
-    vychozi_zavaznost = Severity.VAROVANI
+    popis = ("Porovná vrstvu, barvu, styl a tloušťku čáry prvku s pravidlem pro jeho kód (jako „Kontrola "
+             "symbologie“ GISoft/MGEO). U textů také výšku, šířku, zarovnání a volitelně font.")
+    vychozi_zavaznost = Severity.CHYBA
     potrebuje_pravidla = True
     parametry = [
         Param("kontrolovat_barvu", "Kontrolovat barvu", "bool", True),
         Param("kontrolovat_styl", "Kontrolovat styl čáry", "bool", True),
         Param("kontrolovat_tloustku", "Kontrolovat tloušťku", "bool", True),
+        Param("kontrolovat_text", "Kontrolovat výšku, šířku a zarovnání textu", "bool", True),
+        Param("kontrolovat_font", "Kontrolovat font textu", "bool", False,
+              "Název fontu v DXF nemusí odpovídat názvu v MicroStationu – zapněte, až ověříte."),
     ]
 
     def run(self, ctx: CheckContext):
         do_color = bool(ctx.param("kontrolovat_barvu", True))
         do_style = bool(ctx.param("kontrolovat_styl", True))
         do_weight = bool(ctx.param("kontrolovat_tloustku", True))
+        do_text = bool(ctx.param("kontrolovat_text", True))
+        do_font = bool(ctx.param("kontrolovat_font", False))
         rs = ctx.rules
         pal, table = rs.paleta, rs.barevna_tabulka
+        wmap = rs.mapa_tloustek
         unknown_colors: set = set()
         ms_weights: set = set()
         feats = ctx.features()
@@ -96,20 +104,91 @@ class Symbologie(Check):
             if (do_style and r.styl_cary and f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
                     and not linetype_matches(r.styl_cary, f.linetype)):
                 diffs.append(f"styl {f.linetype} (má být {r.styl_cary})")
-            if do_weight and r.tloustka is not None:
-                if pal == "microstation" and float(r.tloustka).is_integer() and r.tloustka <= 31 \
-                        and r.tloustka >= 1:
-                    ms_weights.add(int(r.tloustka))  # tloušťka MicroStationu (wt), ne mm
-                elif abs(r.tloustka - f.lineweight) > 0.051:
-                    diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {fmt_num(r.tloustka, 2)})")
+            if do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT:
+                expected = r.tloustka
+                if pal == "microstation" and float(r.tloustka).is_integer() and 0 <= r.tloustka <= 31:
+                    # tloušťka MicroStationu (wt 0–31) – v DXF jen přes převodní tabulku na mm
+                    expected = wmap.get(int(r.tloustka))
+                    if expected is None:
+                        ms_weights.add(int(r.tloustka))
+                if expected is not None and abs(expected - f.lineweight) > 0.051:
+                    diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {fmt_num(expected, 2)})")
+            if f.geom_type == GeomType.TEXT and do_text:
+                diffs += _text_diffs(r, f)
+            if f.geom_type == GeomType.TEXT and do_font and r.font and \
+                    _norm_font(r.font) not in _norm_font(f.font):
+                diffs.append(f"font {f.font or '–'} (má být {r.font})")
             if diffs:
                 yield ctx.issue(self, f, f"{r.nazev or r.kod}: " + ", ".join(diffs))
         if unknown_colors:
             ctx.notes.append("barvy MicroStationu " + ", ".join(map(str, sorted(unknown_colors, key=str)))
-                             + " nelze ověřit bez barevné tabulky – načtěte ji v Nastavení kontrol → Obecné.")
+                             + " nelze ověřit bez barevné tabulky – načtěte color.tbl v Nastavení kontrol → Obecné.")
         if ms_weights:
             ctx.notes.append("tloušťky MicroStationu (wt " + ", ".join(map(str, sorted(ms_weights)))
-                             + ") nelze v DXF ověřit – zadejte tloušťku v mm, nebo ji nechte prázdnou.")
+                             + ") se ověřují jen s převodní tabulkou tlouštěk (mapa_tloustek v pravidlech).")
+
+
+def _norm_font(s: str) -> str:
+    return re.sub(r"[\s_\-]+", "", (s or "").lower())
+
+
+_HALIGN = {"vlevo": 0, "left": 0, "střed": 1, "stred": 1, "na střed": 1, "center": 1, "vpravo": 2, "right": 2}
+_VALIGN = {"nahoře": 3, "nahore": 3, "top": 3, "uprostřed": 2, "uprostred": 2, "middle": 2,
+           "dole": 1, "bottom": 1, "účaří": 0, "ucari": 0, "baseline": 0}
+_HNAME = {0: "vlevo", 1: "střed", 2: "vpravo"}
+_VNAME = {0: "účaří", 1: "dole", 2: "uprostřed", 3: "nahoře"}
+
+
+def parse_alignment(text: str) -> tuple[int | None, int | None]:
+    t = (text or "").lower()
+    h = next((v for k, v in _HALIGN.items() if k in t), None)
+    v = next((v for k, v in _VALIGN.items() if k in t), None)
+    if h is None and "střed uprostřed" in t:
+        h = 1
+    return h, v
+
+
+def _text_diffs(r, f: Feature) -> list[str]:
+    out = []
+    tol = lambda x: max(0.01, 0.02 * x)  # noqa: E731
+    if r.vyska_textu and abs(f.text_height - r.vyska_textu) > tol(r.vyska_textu):
+        out.append(f"výška textu {fmt_num(f.text_height, 2)} (má být {fmt_num(r.vyska_textu, 2)})")
+    if r.sirka_textu and f.dxftype == "TEXT":
+        w = f.text_height * (f.width_factor or 1.0)
+        if abs(w - r.sirka_textu) > tol(r.sirka_textu):
+            out.append(f"šířka textu {fmt_num(w, 2)} (má být {fmt_num(r.sirka_textu, 2)})")
+    if r.zarovnani:
+        h, v = parse_alignment(r.zarovnani)
+        if (h is not None and h != f.halign) or (v is not None and v != f.valign):
+            out.append(f"zarovnání {_HNAME.get(f.halign, '?')} {_VNAME.get(f.valign, '?')} "
+                       f"(má být {r.zarovnani})")
+    return out
+
+
+@register
+class AtributDleVrstvy(Check):
+    id = "atribut_dle_vrstvy"
+    nazev = "Atribut dle vrstvy (ByLevel)"
+    skupina = "Atributy"
+    popis = ("Prvek má barvu, styl nebo tloušťku nastavenou „dle vrstvy“ (ByLevel, v DXF BYLAYER). "
+             "Podle zadání se atribut dle vrstvy nesmí používat – každý prvek má mít vlastní hodnoty.")
+    vychozi_zavaznost = Severity.CHYBA
+    potrebuje_pravidla = True
+    parametry = [
+        Param("barva", "Kontrolovat barvu", "bool", True),
+        Param("styl", "Kontrolovat styl čáry", "bool", True),
+        Param("tloustka", "Kontrolovat tloušťku", "bool", True),
+    ]
+
+    def run(self, ctx: CheckContext):
+        watch = {k for k, p in (("barva", "barva"), ("styl", "styl"), ("tloušťka", "tloustka"))
+                 if ctx.param(p, True)}
+        for f in ctx.features():
+            got = sorted(set(f.bylayer) & watch)
+            if f.geom_type == GeomType.TEXT or f.dxftype == "INSERT":
+                got = [g for g in got if g == "barva"]
+            if got:
+                yield ctx.issue(self, f, "Atribut dle vrstvy: " + ", ".join(got))
 
 
 @register
@@ -232,7 +311,7 @@ class Nekodovane(Check):
                 continue
             if ctx.rules.explicit_layer(f.layer):
                 continue
-            if f.geom_type == GeomType.TEXT and f.layer.upper() in text_layers:
+            if f.geom_type == GeomType.TEXT and any(layer_matches(p, f.layer) for p in text_layers):
                 continue
             if not ctx.rules.allowed_layer(f.layer):
                 continue  # hlásí kontrola nepovolených hladin
@@ -278,7 +357,7 @@ class Texty(Check):
                 ctx.progress(0.7 * i / max(1, len(feats)))
             if f.geom_type == GeomType.TEXT:
                 continue
-            if f.geom_type == GeomType.BOD and f.layer.upper() in text_layers:
+            if f.geom_type == GeomType.BOD and any(layer_matches(p, f.layer) for p in text_layers):
                 continue  # definiční bod sám je popisem
             r = ctx.rule_for(f)
             if r is None or r.text is None:
@@ -319,15 +398,26 @@ class TypGeometrie(Check):
     id = "typ_geometrie"
     nazev = "Typ geometrie"
     skupina = "Atributy"
-    popis = ("Typ prvku (bod / linie / polygon / text) neodpovídá typu očekávanému pro jeho kód. "
+    popis = ("Typ prvku neodpovídá pravidlu: buď povoleným typům prvků MicroStationu (úsečka, lomená "
+             "čára, tvar, elipsa, oblouk, text, buňka…), nebo typu bod / linie / polygon / text. "
              "Neuzavřená linie tam, kde má být polygon, se hlásí v kontrole nezavřených polygonů.")
     vychozi_zavaznost = Severity.CHYBA
     potrebuje_pravidla = True
 
     def run(self, ctx: CheckContext):
+        from ..rules import MS_ELEMENT_NAMES, feature_element_type
         for f in ctx.features():
             r = ctx.rule_for(f)
-            if r is None or r.geometrie is None:
+            if r is None:
+                continue
+            if r.typy_prvku:
+                t = feature_element_type(f)
+                if t is not None and t not in r.typy_prvku:
+                    allowed = ", ".join(MS_ELEMENT_NAMES.get(x, str(x)) for x in r.typy_prvku)
+                    yield ctx.issue(self, f, f"{r.nazev or r.kod}: typ prvku {MS_ELEMENT_NAMES.get(t, t)} "
+                                             f"(povoleno: {allowed})")
+                continue
+            if r.geometrie is None:
                 continue
             got = f.geom_type
             if got == r.geometrie:

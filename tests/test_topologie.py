@@ -30,8 +30,11 @@ def test_prusecik_bez_uzlu(make_dxf):
         msp.add_lwpolyline([(20, 0), (25, 0), (30, 0)])
         msp.add_lwpolyline([(25, -5), (25, 0), (25, 5)])  # kříží v uzlu obou linií
     d = make_dxf(build)
-    issues = check(d, "pruseciky_bez_uzlu")
+    issues = check(d, "pruseciky_bez_uzlu", vyzadovat_rozdeleni=False)
     assert [(i.message, round(i.x), round(i.y)) for i in issues] == [("Průsečík linií bez uzlu", 5, 0)]
+    # výchozí (jako MGEO): křížení ve společném lomovém bodě musí být rozdělené
+    msgs = sorted(i.message for i in check(d, "pruseciky_bez_uzlu"))
+    assert msgs == ["Linie nejsou v uzlu rozdělené", "Průsečík linií bez uzlu"]
 
 
 def test_napojeni_bez_uzlu_t_spoj(make_dxf):

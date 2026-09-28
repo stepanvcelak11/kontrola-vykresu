@@ -73,6 +73,18 @@ def _new_doc():
     return doc
 
 
+def _bez_bylayer(doc):
+    """Jako výkres z MicroStationu bez „atributu dle vrstvy“: barva a styl přímo u prvku."""
+    for e in doc.modelspace():
+        layer = doc.layers.get(e.dxf.layer) if e.dxf.layer in doc.layers else None
+        if e.dxf.get("color", 256) == 256:
+            e.dxf.color = abs(layer.color) if layer else 7
+        if (e.dxf.get("linetype", "BYLAYER") or "BYLAYER").upper() == "BYLAYER":
+            e.dxf.linetype = layer.dxf.linetype if layer else "Continuous"
+        if e.dxf.get("lineweight", -1) == -1:
+            e.dxf.lineweight = 0
+
+
 def _insert(msp, name, xy, layer, attribs=None):
     ins = msp.add_blockref(name, P(*xy), dxfattribs={"layer": layer})
     if attribs:
@@ -168,6 +180,7 @@ def vytvor_vykres(path: Path, s_chybami: bool = True):
         _insert(msp, "BOD", (260, 180), "BODY", {"CISLO": "9999", "KOD": "401"})  # mimo rozsah
         msp.add_point(P(70, 90), dxfattribs={"layer": "BODY"})  # bod bez kódu
         msp.add_point(P(70, 90), dxfattribs={"layer": "BODY"})  # duplicitní bod
+    _bez_bylayer(doc)
     doc.saveas(path)
 
 

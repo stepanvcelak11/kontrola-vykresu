@@ -164,6 +164,11 @@ class RulesEditor(QWidget):
             povolene_hodnoty=parse_allowed_values(self._text(row, C_VALS), attrs[0] if attrs else None),
             text=text_rule, obrazek=self.table.cellWidget(row, C_IMG).currentData(),
             poznamka=self._text(row, C_POZN) or None, zdroj=self._text(row, C_ZDROJ) or None,
+            # pole, která tabulka editoru nezobrazuje, se převezmou z původního pravidla
+            typy_prvku=list(old.typy_prvku) if old else [],
+            vyska_textu=old.vyska_textu if old else None, sirka_textu=old.sirka_textu if old else None,
+            font=old.font if old else None, zarovnani=old.zarovnani if old else None,
+            topologie=old.topologie if old else True,
         )
 
     def _sync(self, *_):
