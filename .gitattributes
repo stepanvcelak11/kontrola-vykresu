@@ -1,0 +1,8 @@
+* text=auto
+*.py text eol=lf
+*.bat text eol=crlf
+*.dxf binary
+*.xlsx binary
+*.png binary
+*.ico binary
+*.ttf binary

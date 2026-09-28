@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--csv", help="uložit seznam chyb do CSV")
     ap.add_argument("--xlsx", help="uložit seznam chyb do Excelu")
     ap.add_argument("--dxf", help="uložit DXF s hladinou KONTROLA_CHYBY")
+    ap.add_argument("--pdf", help="uložit protokol PDF (bez obrázků – ty vytvoří grafická aplikace)")
     ap.add_argument("--seznam-kontrol", action="store_true", help="vypsat dostupné kontroly")
     a = ap.parse_args(argv)
 
@@ -83,6 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.dxf:
         from .export.dxf_export import export_dxf
         export_dxf(drawing, res.issues, a.dxf)
+    if a.pdf:
+        from .export.pdf_report import export_pdf
+        export_pdf(res.issues, a.pdf, drawing_name=Path(a.vykres).name, rules_count=len(rules.pravidla),
+                   notes=res.notes, tolerance=config.tolerance)
     return 1 if counts.get("chyba") else 0
 
 

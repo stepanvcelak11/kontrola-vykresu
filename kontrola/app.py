@@ -21,6 +21,16 @@ def main(argv: list[str] | None = None) -> int:
     if tr.load(QLocale(QLocale.Czech), "qtbase", "_", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
         app.installTranslator(tr)
     app.setStyle("Fusion")
+    from PySide6.QtGui import QIcon
+
+    from .resources import resource_path
+    app.setWindowIcon(QIcon(str(resource_path("ikona.png"))))
+    if sys.platform == "win32":  # vlastní ikona na hlavním panelu Windows
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("KontrolaVykresu.App")
+        except (AttributeError, OSError):
+            pass
     win = MainWindow()
     win.show()
     for a in argv[1:]:
