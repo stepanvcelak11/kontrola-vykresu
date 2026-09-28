@@ -353,3 +353,21 @@ def test_rychle_tipy():
     names = [d.list.item(i).text().strip() for i in range(d.list.count()) if d.list.item(i).data(0x0100) is not None]
     assert names and all("olmice" in n for n in names)
     assert "Perpendicular" in d.view.toPlainText() or "AccuDraw" in d.view.toPlainText()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_uvod_a_skore(window):
+    w = window
+    assert w.tabs.widget(0) is w.home
+    w.home.refresh()
+    assert w.home.gauge.value is None
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    assert w.tabs.currentWidget() is w.split  # po otevření výkresu se ukáže výkres
+    assert w.home.gauge.value is not None and 0 <= w.home.gauge.value < 100
+    assert w.issue_panel.gauge.isVisibleTo(w.issue_panel)
+    from kontrola.skore import compute_score
+    for i in w.issues:
+        i.state = "opraveno"
+    assert compute_score(w.issues).hodnota == 100

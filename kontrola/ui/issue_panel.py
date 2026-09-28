@@ -229,6 +229,10 @@ class IssuePanel(QWidget):
             self.cards[key] = num
             self.card_caps[key] = cap
             cards.addWidget(fr, 1)
+        from .home_page import ScoreGauge
+        self.gauge = ScoreGauge(58)
+        self.gauge.setVisible(False)
+        cards.addWidget(self.gauge)
         lay.addLayout(cards)
         from .ready_dialog import HistoryChart
         self.history = HistoryChart(compact=True)
@@ -433,6 +437,15 @@ class IssuePanel(QWidget):
         if not issues:
             return "Zatím žádné nálezy. Otevřete výkres a stiskněte Zkontrolovat (F5)."
         return "Kliknutím na řádek se výkres přiblíží na chybu. Kliknutím na kartu nahoře vyfiltrujete závažnost."
+
+    def set_score(self, sk):
+        """Skóre připravenosti k odevzdání vedle karet (None = zatím nekontrolováno)."""
+        if sk is None:
+            self.gauge.setVisible(False)
+            return
+        self.gauge.set_score(sk.hodnota, sk.barva, f"Připravenost k odevzdání: {sk.hodnota}/100 – {sk.popis}"
+                             + ("\n" + "\n".join(f"−{s} {co}" for co, s in sk.rozpad) if sk.rozpad else ""))
+        self.gauge.setVisible(True)
 
     def set_banner(self, text: str):
         self.banner.setText(text)

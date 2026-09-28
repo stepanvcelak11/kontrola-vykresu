@@ -106,6 +106,11 @@ class MainWindow(QMainWindow):
 
         self._build_status()
         self._build_actions()
+        from .home_page import HomePage
+        self.home = HomePage(self)
+        self.home.openRecent.connect(self.open_path)
+        self.tabs.insertTab(0, self.home, "Úvod")
+        self.tabs.setCurrentWidget(self.home)
         self._init_watch()
         self._restore_geometry()
         if project is not None:
@@ -723,6 +728,8 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, title, msg)
 
     def set_drawing(self, drawing: Drawing, keep_view: bool = False, prepared=None):
+        if getattr(self, "home", None) is not None and self.tabs.currentWidget() is self.home:
+            self.tabs.setCurrentWidget(self.split)
         if self.drawing is not None and self.drawing is not drawing:
             self.prev_drawing = self.drawing  # pro „Porovnat verze výkresu“
         if getattr(self, "_compare_dlg", None) is not None:
@@ -776,6 +783,7 @@ class MainWindow(QMainWindow):
         summary = None
         if callable(after):
             summary = after(res)
+        self._checked_once = True
         self.set_issues(res.issues, summary)
         self.project.store_issues(res.issues)
         self.project.save()
@@ -809,6 +817,21 @@ class MainWindow(QMainWindow):
         self.issues = issues
         self.view.set_issues(issues)
         self.issue_panel.set_issues(issues, summary or "")
+        if not issues and not summary:
+            self._checked_once = False
+        elif issues and summary:
+            self._checked_once = True  # obnovený výsledek poslední kontroly
+        self.refresh_home()
+
+    def refresh_home(self):
+        if getattr(self, "home", None) is not None:
+            self.home.refresh()
+            from ..skore import compute_score
+            if getattr(self, "_checked_once", False) and self.drawing is not None:
+                sk = compute_score(self.issues, bool(self.project and self.project.rules.pravidla))
+                self.issue_panel.set_score(sk)
+            else:
+                self.issue_panel.set_score(None)
 
     def repair(self):
         if self.drawing is None:
@@ -850,10 +873,12 @@ class MainWindow(QMainWindow):
             self._update_banner()
 
     def _rules_changed(self):
+        self.refresh_home()
         self.statusBar().showMessage(f"Pravidla: {len(self.project.rules.pravidla)}. Pro jejich použití "
                                      f"spusťte kontrolu (F5).", 8000)
 
     def _project_modified(self):
+        self.refresh_home()
         self.sketch.refresh()
         self._update_title()
 

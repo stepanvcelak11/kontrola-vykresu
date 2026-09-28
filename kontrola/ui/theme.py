@@ -158,6 +158,9 @@ QProgressBar {{ border: 1px solid {BORDER}; border-radius: 5px; background: #F3F
     text-align: center; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 4px; }}
 
+QLabel#krok_nadpis {{ font-size: 14px; font-weight: 700; }}
+QLabel#uvod_nadpis {{ font-size: 24px; font-weight: 800; }}
+QLabel#uvod_podnadpis {{ color: {MUTED}; font-size: 12px; }}
 QLabel#karta_cislo {{ font-size: 20px; font-weight: 700; }}
 QLabel#karta_popis {{ color: {MUTED}; font-size: 11px; }}
 QLabel#navod {{ background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 6px; padding: 6px 8px;
