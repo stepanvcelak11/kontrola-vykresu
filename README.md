@@ -450,6 +450,57 @@ Postup:
    podle PDF nebo náčrtu (hladiny, barvy) a potvrďte. Kontroly pak hlídají, že se pravidel
    držíte v celém výkresu.
 
+### Úvodní obrazovka, skóre, tipy a další nástroje
+
+* **Úvod** (první záložka): čtyři kroky – zadání a pravidla → výkres → kontrola → odevzdání – s tím, co je
+  hotové, naposledy otevřené výkresy a nástroje na jedno kliknutí.
+* **Skóre připravenosti** 0–100 (u karet chyb a na Úvodu): srážky za chyby topologie, atributů a varování.
+  Je orientační, není to známka – 100 = nic k opravě.
+* **Rychlé tipy – MicroStation** (Nápověda, Ctrl+T): rovnoběžka, kolmice z bodu i v bodě (AccuDraw),
+  prodloužení, oříznutí, rozdělení v průsečíku, uzavření plochy, souřadnice z klávesnice (XY=, DX=, DL=),
+  přichytávání, AccuDraw, změna a výběr atributů – s obrázky a vyhledáváním.
+* **Interaktivní protokol (HTML)** (Soubor → Export): jeden soubor pro prohlížeč – přehledka výkresu
+  s klikacími kroužky, filtr Vše / K opravě / Topologie / Atributy, hledání, návod a výřez u každé chyby.
+* **Zkontrolovat více výkresů najednou** (Kontrola): souhrnná tabulka (chyby, varování, skóre,
+  nejčastější chyba) a export do CSV.
+
+### Kontrola výpočtu (Groma) – kontrola měření a diagnóza
+
+Okno *Kontrola → Kontrola výpočtu souřadnic* má záložky:
+
+* **Porovnání bodů** – vaše souřadnice proti výpočtu ze zápisníku,
+* **Diagnóza – proč se liší** – pozná typické chyby: body pootočené kolem stanoviska (jiný orientační
+  posun), rozdíl úměrný délce (měřítkový koeficient – i „zapomenutý“), stejný posun všech bodů
+  (souřadnice stanoviska), stejný rozdíl výšek (výška stanoviska / přístroje) a prohozená čísla bodů,
+* **Kontrola měření** – rozdíl I. a II. polohy (Hz, délka), indexová chyba z, opravy na orientacích
+  (v cc i mm), měřená délka na orientaci proti délce ze souřadnic, kontrolní (druhé) určení bodu,
+* **Mapa odchylek** – stanoviska a body, šipky = zvětšený rozdíl vašeho bodu,
+* **Postup výpočtu** – koeficient, výšky stanovisek, orientační posuny.
+
+### Kokeš, Atlas DMT, katastr (VFK), LibreOffice
+
+* **VFK** (výměnný formát katastru, s daty pracuje např. Kokeš) jde otevřít jako výkres: body, hranice
+  parcel, budovy, vnitřní kresba a čísla parcel (v souřadnicích jako výkres z MicroStationu).
+* Kresbu z **Kokeše**, **Atlasu DMT** i **AutoCADu** exportujte do DXF (Nápověda → Kokeš, Atlas DMT…).
+* Tabulky atributů lze nahrát i jako **.ods** (LibreOffice / OpenOffice Calc).
+* Binární seznam souřadnic (Kokeš .ss, Groma .crd) aplikace pozná a poradí export do textu.
+
+### Automatická oprava – co dělá a co ne
+
+Oprava (Kontrola → Oprava) vytvoří **nový** DXF, originál nemění. Dotáhne nedotažené a zkrátí přetažené
+čáry (do tolerance), smaže duplicity a nulové délky, uzavře téměř uzavřené plochy a rozdělí čáry
+v křížení. Uzly do **T-napojení** nevkládá (učitel je nevyžaduje) a **nevytvoří krátký úsek** – takové
+místo vypíše k ruční opravě. Výkres s kresbou v referenci umí také. Ověřeno na výkresech obou zadání:
+geometrie se posune nejvýš o toleranci (0,018 m). Podle zadání se automaticky opravený výkres
+neuznává – slouží k tomu, abyste viděli, co opravit v MicroStationu.
+
+### Když se něco pokazí
+
+Neočekávaná chyba se zapíše do logu a ukáže okno s tlačítky *Kopírovat podrobnosti* a *Nahlásit chybu*
+(otevře předvyplněnou stránku na GitHubu – nic se neodesílá samo). Složka s logem: Nápověda →
+Nahlásit chybu / složka s logy. Projekt se ukládá bezpečně (nejdřív do dočasného souboru), takže se
+při pádu nepoškodí.
+
 ### Pokyny ze zadání (Word)
 
 Zadání od učitele ve Wordu (DOC i DOCX), ODT, RTF nebo PDF přetáhněte do záložky **Zadání** – otevře se
