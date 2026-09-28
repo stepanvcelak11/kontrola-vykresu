@@ -19,7 +19,8 @@ from pathlib import Path
 
 from ..model import GeomType
 from ..rules import (Rule, RuleSet, TextRule, geometry_from_element_types, normalize_linetype,
-                     parse_allowed_values, parse_color, parse_element_types, split_list)
+                     parse_allowed_values, parse_bool, parse_color, parse_element_types, parse_weight,
+                     split_list)
 
 FIELDS: list[tuple[str, str]] = [
     ("kod", "Kód prvku"),
@@ -39,6 +40,8 @@ FIELDS: list[tuple[str, str]] = [
     ("vyska_textu", "Výška textu"),
     ("sirka_textu", "Šířka textu"),
     ("zarovnani", "Zarovnání textu"),
+    ("tucne", "Tučné písmo"),
+    ("kurziva", "Kurzíva"),
     ("poznamka", "Poznámka"),
 ]
 FIELD_LABELS = dict(FIELDS)
@@ -46,7 +49,7 @@ FIELD_LABELS = dict(FIELDS)
 # klíčová slova v hlavičce (bez diakritiky, malými písmeny)
 _KEYWORDS: dict[str, list[str]] = {
     "kod": ["kod", "code", "cislo prvku", "c. prvku", "id prvku", "znacka kodu"],
-    "nazev": ["nazev", "popis prvku", "prvek", "objekt", "name", "vyznam", "jev", "trida prvku", "trida"],
+    "nazev": ["nazev", "obsah", "popis prvku", "prvek", "objekt", "name", "vyznam", "jev", "trida prvku", "trida"],
     "hladina": ["hladina", "level", "vrstva", "layer", "lv", "vr", "cislo vrstvy"],
     "barva": ["barva", "color", "colour", "co", "ba"],
     "styl_cary": ["styl", "typ cary", "linetype", "line style", "druh cary", "lc", "st"],
@@ -58,6 +61,8 @@ _KEYWORDS: dict[str, list[str]] = {
     "vyska_textu": ["vyska", "vyska textu", "text height"],
     "sirka_textu": ["sirka", "sirka textu", "text width"],
     "zarovnani": ["zarovnani", "vztazny bod", "justification"],
+    "tucne": ["tucne", "tucny", "bold"],
+    "kurziva": ["kurziva", "italic"],
     "povinne_atributy": ["povinne atributy", "atributy", "povinne", "attributes", "atribut"],
     "povolene_hodnoty": ["povolene hodnoty", "hodnoty", "ciselnik", "domena", "values", "povolene"],
     "blok": ["bunka", "blok", "cell", "block", "znacka", "symbol"],
@@ -279,6 +284,8 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
     rs = RuleSet()
     res = ImportResult(rs)
     seen: dict[str, int] = {}
+    seen_layers: dict[str, set[str]] = {}
+    notes = False
     start = (header_row + 1) if header_row is not None else 0
     if "kod" not in mapping and "hladina" not in mapping and "blok" not in mapping:
         res.errors.append("Není přiřazen sloupec s kódem, hladinou ani buňkou – pravidla nelze vytvořit.")
@@ -294,12 +301,17 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
         r = rows[i]
         rowno = i + 1
         filled = [c for c in r if str(c).strip()]
+        if any(re.match(r"^\s*pozn[aá]mk[ay]\s*:?\s*$", c, re.IGNORECASE) for c in filled[:2]):
+            notes = True  # „Poznámky:“ – dál už jsou jen vysvětlivky pod tabulkou
+            continue
         if len(filled) <= 1:
             continue  # prázdný řádek nebo nadpis skupiny
         kod = get(r, "kod")
         nazev = get(r, "nazev")
         hladina = get(r, "hladina")
         blok = get(r, "blok")
+        if not kod and "kod" in mapping and (notes or (not hladina and not blok and "hladina" in mapping)):
+            continue  # poznámky pod tabulkou – nejde o prvek
         if not kod:
             if "kod" in mapping:
                 res.errors.append(f"Řádek {rowno}: chybí kód prvku ({nazev or ' / '.join(filled[:3])}).")
@@ -312,8 +324,13 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
             res.errors.append(f"Řádek {rowno}: chybí hladina i buňka.")
             continue
         if kod in seen:
-            res.errors.append(f"Řádek {rowno}: kód {kod} už je na řádku {seen[kod]} – přeskočeno.")
-            continue
+            # skupinový kód pro více řádků (např. „6.xx2“ pro různé druhy kanalizace) – rozliší se názvem
+            alt = f"{kod} {nazev}".strip() if nazev and re.search(r"x", kod, re.IGNORECASE) else ""
+            if not alt or alt in seen or (not hladina and not blok) or \
+                    (hladina or "").upper() in seen_layers.get(kod, set()):
+                res.errors.append(f"Řádek {rowno}: kód {kod} už je na řádku {seen[kod]} – přeskočeno.")
+                continue
+            kod = alt
         warn = []
         geom_txt = get(r, "geometrie")
         geom = GeomType.parse(geom_txt)
@@ -330,14 +347,10 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
         barva = parse_color(barva_txt)
         if barva_txt and barva is None:
             warn.append(f"nerozpoznaná barva „{barva_txt}“")
-        tl_txt = get(r, "tloustka").replace(",", ".")
-        tl = None
-        if tl_txt:
-            m = re.search(r"\d+(\.\d+)?", tl_txt)
-            if m:
-                tl = float(m.group(0))
-            else:
-                warn.append(f"nerozpoznaná tloušťka „{tl_txt}“")
+        tl_txt = get(r, "tloustka")
+        tl = parse_weight(tl_txt) if tl_txt else None
+        if tl_txt and tl is None:
+            warn.append(f"nerozpoznaná tloušťka „{tl_txt}“")
         attrs = [a.upper() for a in split_list(get(r, "povinne_atributy"))]
         allowed = parse_allowed_values(get(r, "povolene_hodnoty"), attrs[0] if attrs else None)
         if get(r, "povolene_hodnoty") and not allowed:
@@ -350,19 +363,29 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
         # uživatelský styl čáry (např. „2.123“ z ugeo_vp.rsc) má přednost před základním stylem
         styl = get(r, "styl_uzivatelsky") or get(r, "styl_cary")
         font = get(r, "font")
+        if "\n" in font:  # poznámka místo fontu (víc řádků) – font se nekontroluje
+            warn.append("ve sloupci s fontem je víceřádková poznámka – font se nepřevzal")
+            font = ""
         font = re.sub(r"^\s*\d+\s*[-–]\s*", "", font) if font else ""  # „1 - CS_WORKING“ → „CS_WORKING“
+        vyska, sirka = _num(get(r, "vyska_textu")), _num(get(r, "sirka_textu"))
+        if geom is None and not blok and (font or vyska):
+            geom = GeomType.TEXT
         rule = Rule(kod=kod, nazev=nazev, geometrie=geom, hladina=hladina or None, barva=barva,
-                    styl_cary=normalize_linetype(styl) if styl and "," not in styl else (styl or None),
+                    styl_cary=(normalize_linetype(styl) if styl and not re.search(r"[,;|–—]", styl)
+                               else (styl or None)),
                     tloustka=tl, blok=blok or None,
                     povinne_atributy=attrs, povolene_hodnoty=allowed, text=text_rule,
-                    typy_prvku=types, vyska_textu=_num(get(r, "vyska_textu")),
-                    sirka_textu=_num(get(r, "sirka_textu")), font=font or None,
+                    typy_prvku=types, vyska_textu=vyska, sirka_textu=sirka, font=font or None,
                     zarovnani=get(r, "zarovnani") or None,
-                    topologie=not re.search(r"\bvstup", nazev, re.IGNORECASE),
+                    tucne=parse_bool(get(r, "tucne")) if geom == GeomType.TEXT else None,
+                    kurziva=parse_bool(get(r, "kurziva")) if geom == GeomType.TEXT else None,
+                    topologie=not re.search(r"\bvstup|šraf", nazev, re.IGNORECASE),
                     poznamka=get(r, "poznamka") or None,
                     zdroj=f"{Path(source).name}, řádek {rowno}" if source else f"řádek {rowno}")
         rs.pravidla.append(rule)
         seen[kod] = rowno
+        base_kod = get(r, "kod") or kod
+        seen_layers.setdefault(base_kod, set()).add((hladina or "").upper())
         res.processed += 1
         if warn:
             res.warnings.append(f"Řádek {rowno} ({kod}): " + "; ".join(warn) + ".")
@@ -375,9 +398,39 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
     return res
 
 
+_CODE_RE = re.compile(r"^(?:\d{1,3}(?:\.[0-9a-z]{1,6})*|[A-Z]{2,6}\d*|[A-Za-z]{3,6}x?)$", re.IGNORECASE)
+
+
+def guess_code_column(rows: list[list[str]], header_row: int | None, mapping: dict[str, int]) -> int | None:
+    """Sloupec s kódy prvků, když nemá v hlavičce název (např. „1.10“, „2.xx1“, „SEVER“)."""
+    if "kod" in mapping or header_row is None:
+        return None
+    header = rows[header_row]
+    used = set(mapping.values())
+    body = rows[header_row + 1:]
+    for col in range(len(header)):
+        if col in used or header[col].strip():
+            continue
+        vals = [r[col].strip() for r in body if col < len(r) and r[col].strip()]
+        if len(vals) >= 3 and sum(1 for v in vals if _CODE_RE.match(v)) >= 0.6 * len(vals):
+            return col
+    return None
+
+
+def text_units_mm(rows: list[list[str]], header_row: int | None, mapping: dict[str, int]) -> bool:
+    """Jsou výšky textu v tabulce v mm (na papíře)? Např. hlavička „Výška [mm]“."""
+    col = mapping.get("vyska_textu")
+    if header_row is None or col is None:
+        return False
+    return "mm" in norm(rows[header_row][col])
+
+
 def import_table(path: str | Path, sheet: str | None = None) -> tuple[TableData, int | None, dict[str, int]]:
     """Načte tabulku a odhadne hlavičku i přiřazení sloupců."""
     td = read_table(path, sheet)
     hi = detect_header_row(td.rows)
     mapping = guess_mapping(td.rows[hi]) if hi is not None else {}
+    col = guess_code_column(td.rows, hi, mapping)
+    if col is not None:
+        mapping["kod"] = col
     return td, hi, mapping

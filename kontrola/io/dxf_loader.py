@@ -153,6 +153,14 @@ def _flatten(e, ctx: _Ctx) -> list[tuple[float, float]]:
     return _dedupe(pts)
 
 
+def _to_wcs(e, v):
+    """Bod v OCS prvku → WCS (prvky v obecné rovině, např. 3D výkres z MicroStationu)."""
+    ex = e.dxf.get("extrusion", None)
+    if ex is None or (abs(ex[0]) < 1e-12 and abs(ex[1]) < 1e-12 and ex[2] > 0):
+        return v
+    return e.ocs().to_wcs(v)
+
+
 def _dedupe(pts: list[tuple[float, float]]) -> list[tuple[float, float]]:
     out: list[tuple[float, float]] = []
     for p in pts:
@@ -239,8 +247,37 @@ class _Loader:
         return dict(layer=layer, color_aci=aci, color_rgb=rgb, linetype=lt, lineweight=lw,
                     handle=e.dxf.get("handle", ""), xdata=raw, attributes=xattrs, bylayer=bylayer)
 
-    def _convert(self, e) -> Iterable[Feature]:
+    def _is_reference(self, name: str) -> bool:
+        """Je blok připojený referenční výkres (MicroStation reference, xref), ne buňka/značka?
+
+        Reference se při exportu z MicroStationu uloží jako blok s celou kresbou na mnoha
+        hladinách – takový blok se rozbalí na samostatné prvky, aby šly zkontrolovat."""
+        cache = self.__dict__.setdefault("_ref_cache", {})
+        if name not in cache:
+            block = self.doc.blocks.get(name)
+            if block is None:
+                cache[name] = False
+            elif block.block.dxf.get("flags", 0) & (4 | 8):
+                cache[name] = True
+            else:
+                ents = list(block)
+                layers = {be.dxf.get("layer", "0") for be in ents} - {"0"}
+                cache[name] = len(ents) >= 30 and len(layers) >= 3
+        return cache[name]
+
+    def _convert(self, e, depth: int = 0) -> Iterable[Feature]:
         t = e.dxftype()
+        if t == "INSERT" and depth < 4 and self._is_reference(e.dxf.name):
+            n0 = self._next_id
+            for ve in e.virtual_entities():
+                if ve.dxftype() in SUPPORTED:
+                    try:
+                        yield from self._convert(ve, depth + 1)
+                    except Exception:
+                        continue
+            self.drawing.warnings.append(
+                f"Referenční výkres „{e.dxf.name}“ byl rozbalen na {self._next_id - n0} prvků a kontroluje se s výkresem.")
+            return
         base = self._base(e)
         if t == "LINE":
             a, b = self.ctx.xy(e.dxf.start), self.ctx.xy(e.dxf.end)
@@ -258,10 +295,10 @@ class _Loader:
             closed = bool(e.closed) if t == "LWPOLYLINE" else bool(e.is_closed)
             if t == "LWPOLYLINE":
                 raw = list(e.get_points("xyb"))
-                verts = [self.ctx.xy(p) for p in raw]
+                verts = [self.ctx.xy(p) for p in e.vertices_in_wcs()]
                 has_arc = any(abs(p[2]) > 1e-12 for p in raw)
             else:
-                verts = [self.ctx.xy(v.dxf.location) for v in e.vertices]
+                verts = [self.ctx.xy(p) for p in e.points_in_wcs()]
                 has_arc = any(abs(v.dxf.get("bulge", 0.0)) > 1e-12 for v in e.vertices)
             verts = _dedupe(verts)
             pts = _flatten(e, self.ctx) if (has_arc and len(verts) > 1) else list(verts)
@@ -278,7 +315,7 @@ class _Loader:
             verts = [pts[0], pts[-1]] if pts else []
             yield self._new(dxftype=t, geom_type=gt, geometry=geom, closed=closed, vertices=verts, **base)
         elif t == "CIRCLE":
-            c = self.ctx.xy(e.dxf.center)
+            c = self.ctx.xy(_to_wcs(e, e.dxf.center))
             yield self._new(dxftype=t, geom_type=GeomType.BOD, geometry=Point(c), vertices=[c],
                             radius=e.dxf.radius * self.factor, **base)
         elif t == "POINT":
@@ -292,7 +329,7 @@ class _Loader:
             yield from self._hatch(e, base)
 
     def _insert(self, e, base: dict) -> Feature:
-        c = self.ctx.xy(e.dxf.insert)
+        c = self.ctx.xy(_to_wcs(e, e.dxf.insert))
         name = e.dxf.name
         attrs = dict(base.pop("attributes"))
         texts = []
@@ -377,7 +414,7 @@ class _Loader:
             rotation = e.get_rotation()
         else:
             text = e.plain_text()
-            pt = e.get_placement()[1]
+            pt = _to_wcs(e, e.get_placement()[1])
             p = self.ctx.xy(pt)
             height = e.dxf.get("height", 1.0) * self.factor
             rotation = e.dxf.get("rotation", 0.0)

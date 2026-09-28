@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout
                                QWidget)
 
 from ..importer.table import (FIELDS, ImportResult, TableData, detect_header_row, generate_rules,
-                              guess_mapping, read_table)
+                              guess_code_column, guess_mapping, read_table, text_units_mm)
 
 
 def col_name(i: int) -> str:
@@ -51,6 +51,15 @@ class TableImportWizard(QDialog):
         self.header.setSpecialValueText("bez hlavičky")
         self.header.valueChanged.connect(self._header_changed)
         top.addWidget(self.header)
+        top.addWidget(QLabel("Měřítko mapy 1:"))
+        self.scale = QSpinBox()
+        self.scale.setRange(0, 100000)
+        self.scale.setSingleStep(100)
+        self.scale.setSpecialValueText("—")
+        self.scale.setToolTip("Vyplňte, pokud jsou výšky a šířky textu v tabulce v mm na papíře "
+                              "(např. „Výška [mm]“). Ve výkresu se pak porovnají s výškou × měřítko / 1000.")
+        self.scale.valueChanged.connect(self._update_summary)
+        top.addWidget(self.scale)
         b_guess = QPushButton("Odhadnout sloupce znovu")
         b_guess.clicked.connect(self._guess)
         top.addWidget(b_guess)
@@ -162,6 +171,9 @@ class TableImportWizard(QDialog):
     def _guess(self):
         hi = detect_header_row(self.data.rows)
         mapping = guess_mapping(self.data.rows[hi]) if hi is not None else {}
+        col = guess_code_column(self.data.rows, hi, mapping)
+        if col is not None:
+            mapping["kod"] = col
         self._apply(hi, mapping)
 
     def _apply(self, header_row: int | None, mapping: dict):
@@ -186,6 +198,9 @@ class TableImportWizard(QDialog):
     def _update_summary(self, *_):
         res = generate_rules(self.data.rows, self.header_row(), self.mapping(), self.path)
         s = f"<b>Náhled:</b> {res.summary()}"
+        if text_units_mm(self.data.rows, self.header_row(), self.mapping()) and not self.scale.value():
+            s += ("<br><span style='color:#c60'>Výšky textu jsou v tabulce v mm – vyplňte měřítko mapy "
+                  "(např. 200 nebo 500), jinak se výšky textu nebudou správně kontrolovat.</span>")
         if res.errors:
             s += "<br><span style='color:#c00'>" + "<br>".join(res.errors[:6]) + (
                 "<br>…" if len(res.errors) > 6 else "") + "</span>"
@@ -193,6 +208,12 @@ class TableImportWizard(QDialog):
 
     def _accept(self):
         self.result = generate_rules(self.data.rows, self.header_row(), self.mapping(), self.path)
+        if self.scale.value():
+            self.result.rules.meritko = self.scale.value()
+        elif text_units_mm(self.data.rows, self.header_row(), self.mapping()):
+            for r in self.result.rules.pravidla:  # bez měřítka nelze výšky v mm porovnat
+                r.vyska_textu = r.sirka_textu = None
+            self.result.warnings.append("Výšky textu v mm se nepřevzaly – nebylo zadáno měřítko mapy.")
         if not self.result.rules.pravidla:
             QMessageBox.warning(self, "Import tabulky", "Nevzniklo žádné pravidlo. Zkontrolujte řádek "
                                                         "s hlavičkou a přiřazení sloupců.\n\n"

@@ -70,8 +70,51 @@ def normalize_linetype(value: Any) -> str | None:
     return s.upper()
 
 
+ALT_SPLIT = re.compile(r"\s*[|;]\s*|\s*,\s*(?=\S)")
+
+
+def split_alternatives(value: Any) -> list[str]:
+    """„0|2.09–2.17|5.30“ nebo „0,2,4,7“ → jednotlivé povolené hodnoty (i rozsahy)."""
+    if value is None:
+        return []
+    return [p for p in ALT_SPLIT.split(str(value).strip()) if p]
+
+
+_RANGE = re.compile(r"^\s*([0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)\s*[–—-]\s*([0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)\s*$")
+
+
+def _code_key(s: str) -> tuple:
+    return tuple(int(p) if p.isdigit() else p.upper() for p in re.split(r"[.\s]+", s.strip()) if p)
+
+
+def code_in_range(pattern: str, value: str) -> bool:
+    """Shoda s hodnotou nebo rozsahem kódů značek: „2.09–2.17“ obsahuje „2.12“, „4.01-4.20“ obsahuje „4.02“."""
+    pattern, value = pattern.strip(), value.strip()
+    m = _RANGE.match(pattern)
+    if m and "." in pattern:
+        lo, hi, v = _code_key(m.group(1)), _code_key(m.group(2)), _code_key(value)
+        if len(lo) == len(hi) == len(v) and lo[:-1] == hi[:-1] == v[:-1]:
+            try:
+                return lo <= v <= hi
+            except TypeError:
+                return False
+        return False
+    return fnmatch.fnmatchcase(value.upper(), pattern.upper())
+
+
+def block_matches(pattern: str, name: str) -> bool:
+    """Shoda názvu buňky s pravidlem. MicroStation při exportu přidává k buňce pořadí („9.12_153“)."""
+    names = {name.strip().upper()}
+    base = re.sub(r"_\d+$", "", name.strip())
+    names.add(base.upper())
+    for alt in split_alternatives(pattern):
+        if any(code_in_range(alt, n) for n in names):
+            return True
+    return False
+
+
 def parse_color(value: Any) -> int | str | None:
-    """Barva: číslo ACI, název ("červená") nebo "#RRGGBB"."""
+    """Barva: číslo ACI, název ("červená") nebo "#RRGGBB"; alternativy „6|0“ zůstanou jako text."""
     if value is None:
         return None
     if isinstance(value, bool):
@@ -79,6 +122,11 @@ def parse_color(value: Any) -> int | str | None:
     if isinstance(value, (int, float)):
         return int(value)
     s = str(value).strip()
+    if "|" in s or ";" in s:
+        parts = [parse_color(p) for p in split_alternatives(s)]
+        if parts and all(p is not None for p in parts):
+            return "|".join(str(p) for p in parts)
+        return None
     if not s or s.lower() in ("bylayer", "dle hladiny", "-"):
         return None
     if s.startswith("#") and len(s) == 7:
@@ -142,12 +190,10 @@ _EZDXF_ACI: dict[int, tuple[int, int, int]] = {}
 def rgb_to_aci(rgb: tuple[int, int, int]) -> frozenset[int]:
     """Čísla ACI, na která převede RGB export do DXF (MicroStation: nejbližší barva palety AutoCADu).
 
-    Vrací nejbližší barvu v paletě AutoCADu i v paletě ezdxf (jiné programy)."""
-    if not _EZDXF_ACI:
-        _EZDXF_ACI.update(_ezdxf_palette())
+    Paleta ezdxf (starší paleta AutoCADu) dává u tmavších odstínů jiná čísla – MicroStation ji nepoužívá."""
     out = set()
-    for pal in (AUTOCAD_ACI, _EZDXF_ACI):
-        out.add(min(pal, key=lambda i: sum((a - b) ** 2 for a, b in zip(pal[i], rgb))))
+    pal = AUTOCAD_ACI
+    out.add(min(pal, key=lambda i: sum((a - b) ** 2 for a, b in zip(pal[i], rgb))))
     return frozenset(out)
 
 
@@ -398,8 +444,8 @@ class Rule:
     hladina: str | None = None
     barva: int | str | None = None
     styl_cary: str | None = None  # název, číslo stylu MicroStationu, nebo seznam „0,2,4,7“
-    tloustka: float | None = None
-    blok: str | None = None
+    tloustka: float | str | None = None  # číslo, nebo alternativy „0|1“
+    blok: str | None = None  # název buňky, alternativy a rozsahy „4.01–4.20|4.23“
     povinne_atributy: list[str] = field(default_factory=list)
     povolene_hodnoty: dict[str, list[str]] = field(default_factory=dict)
     text: TextRule | None = None
@@ -411,6 +457,8 @@ class Rule:
     sirka_textu: float | None = None
     font: str | None = None
     zarovnani: str | None = None  # např. „vlevo nahoře“
+    tucne: bool | None = None  # řez písma (None = nekontroluje se)
+    kurziva: bool | None = None
     topologie: bool = True  # False = prvky se nekontrolují topologicky (vstupy, sdružené značky)
 
     @property
@@ -440,7 +488,7 @@ class Rule:
             d["text"] = self.text.to_dict()
         if self.typy_prvku:
             d["typy_prvku"] = list(self.typy_prvku)
-        for k in ("vyska_textu", "sirka_textu", "font", "zarovnani"):
+        for k in ("vyska_textu", "sirka_textu", "font", "zarovnani", "tucne", "kurziva"):
             v = getattr(self, k)
             if v not in (None, ""):
                 d[k] = v
@@ -454,11 +502,7 @@ class Rule:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Rule":
-        tl = d.get("tloustka")
-        try:
-            tl = float(tl) if tl not in (None, "") else None
-        except (TypeError, ValueError):
-            tl = None
+        tl = parse_weight(d.get("tloustka"))
         attrs = [a.upper() for a in split_list(d.get("povinne_atributy"))]
 
         def fnum(k):
@@ -477,10 +521,12 @@ class Rule:
             sirka_textu=fnum("sirka_textu"),
             font=(str(d["font"]).strip() if d.get("font") else None),
             zarovnani=(str(d["zarovnani"]).strip() if d.get("zarovnani") else None),
+            tucne=parse_bool(d.get("tucne")),
+            kurziva=parse_bool(d.get("kurziva")),
             topologie=bool(d.get("topologie", True)),
             hladina=(str(d["hladina"]).strip() if d.get("hladina") else None),
             barva=parse_color(d.get("barva")),
-            styl_cary=normalize_linetype(d.get("styl_cary")),
+            styl_cary=norm_style(d.get("styl_cary")),
             tloustka=tl,
             blok=(str(d["blok"]).strip() if d.get("blok") else None),
             povinne_atributy=attrs,
@@ -492,6 +538,77 @@ class Rule:
         )
 
 
+def norm_style(v: Any) -> str | None:
+    if v is None or v == "":
+        return None
+    if re.search(r"[,;|]|[–—]", str(v)):
+        return str(v).strip()
+    return normalize_linetype(v)
+
+
+def parse_weight(value: Any) -> float | str | None:
+    """Tloušťka: číslo, nebo alternativy „0|1“ (text)."""
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    parts = split_alternatives(str(value).replace(",", "."))
+    nums = []
+    for p in parts:
+        try:
+            nums.append(float(p))
+        except ValueError:
+            m = re.search(r"\d+(?:\.\d+)?", p)
+            if m:
+                nums.append(float(m.group(0)))
+    if not nums:
+        return None
+    if len(nums) == 1:
+        return nums[0]
+    return "|".join(fmt_plain(n) for n in nums)
+
+
+def fmt_plain(n: float) -> str:
+    return str(int(n)) if float(n).is_integer() else str(n)
+
+
+def weight_values(value: float | str | None) -> list[float]:
+    if value is None:
+        return []
+    if isinstance(value, (int, float)):
+        return [float(value)]
+    return [float(p) for p in str(value).split("|") if p.strip()]
+
+
+def parse_bool(value: Any) -> bool | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    t = str(value).strip().lower()
+    if t in ("ano", "a", "yes", "y", "true", "1", "x"):
+        return True
+    if t in ("ne", "n", "no", "false", "0"):
+        return False
+    return None
+
+
+def font_style(font: str | None) -> tuple[bool, bool]:
+    """Odhad řezu písma z názvu stylu a souboru fontu → (tučně, kurzíva).
+
+    „Style-Arial Narrow IF (ARIALNI.TTF)“ → kurzíva, „ARIALNB.TTF“ / „arialbd.ttf“ → tučně."""
+    t = (font or "")
+    m = re.search(r"\(([^()]*)\)\s*$", t)
+    stem = re.sub(r"\.[a-z0-9]+$", "", (m.group(1) if m else "").strip().lower())
+    name = t[:m.start()] if m else t
+    low = name.lower()
+    bold = bool(re.search(r"\b(bold|bd)\b|\b(tučn|tucn)", low)) or bool(re.search(r"(bd|bi|nb|z)$", stem)) \
+        or stem.endswith("b") and len(stem) > 4
+    italic = bool(re.search(r"\b(italic|it|if)\b|\bkurz", low)) or bool(re.search(r"(i|bi|z|it)$", stem)) \
+        and len(stem) > 4
+    return bold, italic
+
+
 @dataclass
 class RuleSet:
     pravidla: list[Rule] = field(default_factory=list)
@@ -500,6 +617,27 @@ class RuleSet:
     rozsah: dict | str | None = None  # {xmin, ymin, xmax, ymax} nebo "sjtsk"
     barevna_tabulka: dict[int, tuple[int, int, int]] = field(default_factory=dict)  # načtený color.tbl
     mapa_tloustek: dict[int, float] = field(default_factory=dict)  # tloušťka MicroStationu → mm v DXF
+    meritko: int | None = None  # výšky/šířky textu v pravidlech jsou v mm na papíře v tomto měřítku
+
+    def text_size(self, value: float | None) -> float | None:
+        """Výška/šířka textu z pravidla převedená na jednotky výkresu (m)."""
+        if value is None:
+            return None
+        return value * self.meritko / 1000.0 if self.meritko else value
+
+    def expected_weights(self, r: Rule) -> tuple[list[float], list[int]]:
+        """Povolené tloušťky v mm (DXF) a tloušťky MicroStationu, které nejde převést."""
+        out, unknown = [], []
+        for w in weight_values(r.tloustka):
+            if self.paleta == "microstation" and float(w).is_integer() and 0 <= w <= 31:
+                mm = self.mapa_tloustek.get(int(w))
+                if mm is None:
+                    unknown.append(int(w))
+                else:
+                    out.append(mm)
+            else:
+                out.append(w)
+        return out, unknown
 
     def rule_rgb(self, value) -> tuple[int, int, int] | None:
         return color_rgb(value, self.paleta, self.barevna_tabulka)
@@ -539,13 +677,20 @@ class RuleSet:
             if v and str(v).strip() in codes:
                 return codes[str(v).strip()]
         if f.block_name:
-            bn = f.block_name.upper()
-            for r in self.pravidla:
-                if r.blok and fnmatch.fnmatchcase(bn, r.blok.upper()):
-                    return r
+            by_block = [r for r in self.pravidla if r.blok and block_matches(r.blok, f.block_name)]
+            if by_block:
+                on_layer = [r for r in by_block if r.matches_layer(f.layer)]
+                return max(on_layer or by_block, key=lambda r: self._score(r, f))
         cands = [r for r in self.pravidla if r.matches_layer(f.layer) and not r.blok]
         if not cands:
             cands = [r for r in self.pravidla if r.matches_layer(f.layer)]
+        if f.geom_type == GeomType.TEXT and not any(r.geometrie == GeomType.TEXT for r in cands) and cands:
+            # text na hladině linií (např. popis sítě „ve vrstvě a barvě dle sítě“) – pravidlo pro text bez hladiny
+            free = [r for r in self.pravidla if not r.hladina and not r.blok and r.geometrie == GeomType.TEXT]
+            if free:
+                return max(free, key=lambda r: self._score(r, f) + (
+                    2 if r.font and re.sub(r"\W", "", r.font.lower()) in re.sub(r"\W", "", (f.font or "").lower())
+                    else 0))
         if not cands:
             return None
         if len(cands) == 1:
@@ -568,13 +713,17 @@ class RuleSet:
             s += 2
         if r.styl_cary and linetype_matches(r.styl_cary, f.linetype):
             s += 2
-        if r.tloustka is not None and abs(r.tloustka - f.lineweight) < 0.06:
-            s += 1
+        if r.tloustka is not None:
+            ws, _ = self.expected_weights(r)
+            if any(abs(w - f.lineweight) < 0.06 for w in ws):
+                s += 1
         return s
 
     # ------------------------------------------------------------ YAML
     def to_dict(self) -> dict:
         d: dict[str, Any] = {"paleta": self.paleta}
+        if self.meritko:
+            d["meritko"] = int(self.meritko)
         if self.mapa_tloustek:
             d["mapa_tloustek"] = {int(k): float(v) for k, v in sorted(self.mapa_tloustek.items())}
         if self.barevna_tabulka:
@@ -595,6 +744,10 @@ class RuleSet:
             paleta=str(d.get("paleta", "microstation")).lower(),
             rozsah=d.get("rozsah"),
         )
+        try:
+            rs.meritko = int(d["meritko"]) if d.get("meritko") else None
+        except (TypeError, ValueError):
+            rs.meritko = None
         for k, v in (d.get("mapa_tloustek") or {}).items():
             try:
                 rs.mapa_tloustek[int(k)] = float(v)
@@ -633,16 +786,31 @@ class RuleSet:
         for h in other.povolene_hladiny:
             if h not in self.povolene_hladiny:
                 self.povolene_hladiny.append(h)
+        if other.meritko:
+            self.meritko = other.meritko
+        for k, v in other.mapa_tloustek.items():
+            self.mapa_tloustek.setdefault(k, v)
+        if other.barevna_tabulka and not self.barevna_tabulka:
+            self.barevna_tabulka = dict(other.barevna_tabulka)
         return added, replaced
+
+
+def _color_alts(expected: int | str) -> list[int | str]:
+    if isinstance(expected, str) and "|" in expected:
+        return [c for c in (parse_color(p) for p in expected.split("|")) if c is not None]
+    return [expected]
 
 
 def color_known(expected: int | str, palette: str = "microstation", table=None) -> bool:
     """Lze barvu z pravidla ověřit? (U MicroStationu bez načtené tabulky jen barvy 0–15.)"""
-    return color_rgb(expected, palette, table) is not None
+    return all(color_rgb(c, palette, table) is not None for c in _color_alts(expected))
 
 
 def color_matches(expected: int | str, f: Feature, palette: str = "microstation", table=None) -> bool:
     """Shoduje se barva prvku s pravidlem? Neznámou barvu (nelze ověřit) bere jako shodu."""
+    alts = _color_alts(expected)
+    if len(alts) > 1:
+        return any(color_matches(c, f, palette, table) for c in alts)
     if isinstance(expected, int) and palette == "autocad" and f.color_aci is not None:
         if expected == f.color_aci:
             return True
@@ -656,9 +824,11 @@ def color_matches(expected: int | str, f: Feature, palette: str = "microstation"
 
 
 def linetype_matches(expected: str, actual: str) -> bool:
-    """Shoda stylu čáry; ``expected`` smí být seznam povolených stylů („0,2,4,7“)."""
-    if expected and re.search(r"[,;]", str(expected)):
-        return any(linetype_matches(e, actual) for e in split_list(expected))
+    """Shoda stylu čáry; ``expected`` smí být seznam povolených stylů („0,2,4,7“, „0|2.09–2.17“)."""
+    if expected and re.search(r"[,;|]", str(expected)):
+        return any(linetype_matches(e, actual) for e in split_alternatives(expected))
+    if expected and _RANGE.match(str(expected)) and "." in str(expected):
+        return code_in_range(str(expected), normalize_linetype(actual) or "")
     return _linetype_matches_one(expected, actual)
 
 

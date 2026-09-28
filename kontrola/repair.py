@@ -90,7 +90,12 @@ class _Doc:
     def entity(self, handle: str):
         if not handle or handle in self.deleted:
             return None
-        return self.doc.entitydb.get(handle)
+        e = self.doc.entitydb.get(handle)
+        if e is not None and e.dxftype() == "LWPOLYLINE":
+            ex = e.dxf.get("extrusion", (0, 0, 1))
+            if abs(ex[0]) > 1e-12 or abs(ex[1]) > 1e-12 or ex[2] < 0:
+                return None  # lomená čára v obecné rovině (3D) – souřadnice nejsou v rovině XY, neopravuje se
+        return e
 
     def delete(self, handle: str) -> bool:
         e = self.entity(handle)

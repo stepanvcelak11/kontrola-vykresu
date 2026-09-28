@@ -1,0 +1,1169 @@
+# Pravidla pro zadání 2 (účelová mapa Husovice, 1:200) – vytvořeno z „Atributy ÚM.xlsx“.
+# Výšky textu jsou v mm na papíře (meritko: 200). Barvy = čísla MicroStationu (color.tbl).
+# Tloušťky MicroStationu: 0 → 0 mm, 2 → 0,30 mm, 3 → 0,40 mm, 4 → 0,53 mm (podle exportu do DXF).
+# Načtení v aplikaci: Zadání → Pravidla → Načíst YAML…
+paleta: microstation
+meritko: 200
+mapa_tloustek:
+  0: 0.0
+  2: 0.3
+  3: 0.4
+  4: 0.53
+barevna_tabulka:
+  0: '#FFFFFF'
+  1: '#0000FF'
+  2: '#00FF00'
+  3: '#FF0000'
+  4: '#FFFF00'
+  5: '#FF00FF'
+  6: '#FF7F00'
+  7: '#00FFFF'
+  8: '#404040'
+  9: '#C0C0C0'
+  10: '#FE0060'
+  11: '#A0E000'
+  12: '#00FEA0'
+  13: '#8000A0'
+  14: '#B0B0B0'
+  15: '#00F0F0'
+  16: '#F0F0F0'
+  17: '#0000F0'
+  18: '#00F000'
+  19: '#F00000'
+  20: '#F0F000'
+  21: '#F000F0'
+  22: '#F07A00'
+  23: '#00F0F0'
+  24: '#F0F0F0'
+  25: '#0000F0'
+  26: '#00F000'
+  27: '#F00000'
+  28: '#F0F000'
+  29: '#F000F0'
+  30: '#F07A00'
+  31: '#00E1E1'
+  32: '#E1E1E1'
+  33: '#0000E1'
+  34: '#00E100'
+  35: '#E10000'
+  36: '#E1E100'
+  37: '#E100E1'
+  38: '#E17500'
+  39: '#00E1E1'
+  40: '#E1E1E1'
+  41: '#0000E1'
+  42: '#00E100'
+  43: '#E10000'
+  44: '#E1E100'
+  45: '#E100E1'
+  46: '#E17500'
+  47: '#00D2D2'
+  48: '#D2D2D2'
+  49: '#0000D2'
+  50: '#00D200'
+  51: '#D20000'
+  52: '#D2D200'
+  53: '#D200D2'
+  54: '#D27000'
+  55: '#00D2D2'
+  56: '#D2D2D2'
+  57: '#0000D2'
+  58: '#00D200'
+  59: '#D20000'
+  60: '#D2D200'
+  61: '#D200D2'
+  62: '#D27000'
+  63: '#00C3C3'
+  64: '#C3C3C3'
+  65: '#0000C3'
+  66: '#00C300'
+  67: '#C30000'
+  68: '#C3C300'
+  69: '#C300C3'
+  70: '#C36B00'
+  71: '#00C3C3'
+  72: '#C3C3C3'
+  73: '#0000C3'
+  74: '#00C300'
+  75: '#C30000'
+  76: '#C3C300'
+  77: '#C300C3'
+  78: '#C36B00'
+  79: '#00B4B4'
+  80: '#B4B4B4'
+  81: '#0000B4'
+  82: '#00B400'
+  83: '#B40000'
+  84: '#B4B400'
+  85: '#B400B4'
+  86: '#B46600'
+  87: '#00B4B4'
+  88: '#B4B4B4'
+  89: '#0000B4'
+  90: '#00B400'
+  91: '#B40000'
+  92: '#B4B400'
+  93: '#B400B4'
+  94: '#B46600'
+  95: '#00A5A5'
+  96: '#A5A5A5'
+  97: '#0000A5'
+  98: '#00A500'
+  99: '#A50000'
+  100: '#A5A500'
+  101: '#A500A5'
+  102: '#A56100'
+  103: '#00A5A5'
+  104: '#A5A5A5'
+  105: '#0000A5'
+  106: '#00A500'
+  107: '#A50000'
+  108: '#A5A500'
+  109: '#A500A5'
+  110: '#A56100'
+  111: '#009696'
+  112: '#969696'
+  113: '#000096'
+  114: '#009600'
+  115: '#960000'
+  116: '#969600'
+  117: '#960096'
+  118: '#965C00'
+  119: '#009696'
+  120: '#969696'
+  121: '#000096'
+  122: '#009600'
+  123: '#960000'
+  124: '#969600'
+  125: '#960096'
+  126: '#965C00'
+  127: '#008787'
+  128: '#878787'
+  129: '#000087'
+  130: '#008700'
+  131: '#870000'
+  132: '#878700'
+  133: '#870087'
+  134: '#875700'
+  135: '#008787'
+  136: '#878787'
+  137: '#000087'
+  138: '#008700'
+  139: '#870000'
+  140: '#878700'
+  141: '#870087'
+  142: '#875700'
+  143: '#007878'
+  144: '#787878'
+  145: '#000078'
+  146: '#007800'
+  147: '#780000'
+  148: '#787800'
+  149: '#780078'
+  150: '#785200'
+  151: '#007878'
+  152: '#787878'
+  153: '#000078'
+  154: '#007800'
+  155: '#780000'
+  156: '#787800'
+  157: '#780078'
+  158: '#785200'
+  159: '#006969'
+  160: '#696969'
+  161: '#000069'
+  162: '#006900'
+  163: '#690000'
+  164: '#696900'
+  165: '#690069'
+  166: '#694D00'
+  167: '#006969'
+  168: '#696969'
+  169: '#000069'
+  170: '#006900'
+  171: '#690000'
+  172: '#696900'
+  173: '#690069'
+  174: '#694D00'
+  175: '#005A5A'
+  176: '#5A5A5A'
+  177: '#00005A'
+  178: '#005A00'
+  179: '#5A0000'
+  180: '#5A5A00'
+  181: '#5A005A'
+  182: '#5A4800'
+  183: '#005A5A'
+  184: '#5A5A5A'
+  185: '#00005A'
+  186: '#005A00'
+  187: '#5A0000'
+  188: '#5A5A00'
+  189: '#5A005A'
+  190: '#5A4800'
+  191: '#004B4B'
+  192: '#4B4B4B'
+  193: '#00004B'
+  194: '#004B00'
+  195: '#4B0000'
+  196: '#4B4B00'
+  197: '#4B004B'
+  198: '#4B4300'
+  199: '#004B4B'
+  200: '#4B4B4B'
+  201: '#00004B'
+  202: '#004B00'
+  203: '#4B0000'
+  204: '#4B4B00'
+  205: '#4B004B'
+  206: '#4B4300'
+  207: '#003C3C'
+  208: '#3C3C3C'
+  209: '#00003C'
+  210: '#003C00'
+  211: '#3C0000'
+  212: '#3C3C00'
+  213: '#3C003C'
+  214: '#3C3E00'
+  215: '#003C3C'
+  216: '#3C3C3C'
+  217: '#00003C'
+  218: '#003C00'
+  219: '#3C0000'
+  220: '#3C3C00'
+  221: '#3C003C'
+  222: '#3C3E00'
+  223: '#002D2D'
+  224: '#2D2D2D'
+  225: '#00002D'
+  226: '#002D00'
+  227: '#2D0000'
+  228: '#2D2D00'
+  229: '#2D002D'
+  230: '#2D3900'
+  231: '#002D2D'
+  232: '#2D2D2D'
+  233: '#00002D'
+  234: '#002D00'
+  235: '#2D0000'
+  236: '#2D2D00'
+  237: '#2D002D'
+  238: '#2D3900'
+  239: '#001E1E'
+  240: '#1E1E1E'
+  241: '#00001E'
+  242: '#001E00'
+  243: '#1E0000'
+  244: '#1E1E00'
+  245: '#1E001E'
+  246: '#1E3400'
+  247: '#001E1E'
+  248: '#1E1E1E'
+  249: '#00001E'
+  250: '#001E00'
+  251: '#1E0000'
+  252: '#1E1E00'
+  253: '#1E001E'
+  254: '#C0C0C0'
+  255: '#000000'
+rozsah: sjtsk
+pravidla:
+- kod: 1.0x
+  nazev: Body bodových polí a pomocné měřické body, … (bodové značky)
+  geometrie: bod
+  hladina: GS01-body-BP+PMS-buňky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 1.01–1.09|1.GPS
+  zdroj: Atributy ÚM.xlsx, řádek 3
+- kod: '1.00'
+  nazev: Body (elementy)
+  hladina: GS01-body-poloha
+  barva: 5
+  styl_cary: CONTINUOUS
+  tloustka: 4.0
+  poznamka: Vypnuto pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 4
+- kod: '1.10'
+  nazev: Podrobné body - čísla
+  geometrie: text
+  hladina: GS01-body-čísla
+  barva: 5
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 0.3
+  sirka_textu: 0.3
+  font: Arial Narrow
+  tucne: false
+  kurziva: true
+  poznamka: Vypnuto pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 5
+- kod: '1.11'
+  nazev: Kód bodu
+  geometrie: text
+  hladina: GS01-body-kódy
+  barva: 2
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 0.3
+  sirka_textu: 0.3
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  poznamka: Vypnuto pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 6
+- kod: '1.12'
+  nazev: Informace o bodu
+  hladina: GS01-body-info
+  barva: 5
+  styl_cary: CONTINUOUS
+  tloustka: 4.0
+  poznamka: Vypnuto pro tisk, Import pomocí Gromy (databázové informace)
+  zdroj: Atributy ÚM.xlsx, řádek 7
+- kod: 2.xx1
+  nazev: Ploty, ohradní zdi, podezdívky
+  hladina: GS02-hranice-rozhrady
+  barva: 0
+  styl_cary: 0|2.09–2.17|5.30
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 9
+- kod: 2.xx3
+  nazev: Pozemní komunikace - vozovky
+  hladina: GS02-hranice-vozovky
+  barva: 0
+  tloustka: 2.0
+  zdroj: Atributy ÚM.xlsx, řádek 10
+- kod: 2.xx4
+  nazev: Pozemní komunikace - ostatní cesty, chodníky, okap.chodníky, schody
+  hladina: GS02-hranice-jiné komunikace
+  barva: 0
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 11
+- kod: 2.xx5
+  nazev: Hranice druhů a způsobů využívání pozemků - zpevněné plochy
+  hladina: GS02-hranice-plochy zpevněné
+  barva: 0
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 12
+- kod: 2.xx6
+  nazev: Hranice druhů a způsobů využívání pozemků - nezpevněné plochy
+  hladina: GS02-hranice-plochy nezpevněné
+  barva: 146
+  tloustka: 0.0
+  poznamka: zpevněné plochy - barva 0, jinak 146
+  zdroj: Atributy ÚM.xlsx, řádek 13
+- kod: 2.xx7
+  nazev: Ostatní značky a hranice
+  hladina: GS02-hranice-ostatní
+  barva: 0
+  styl_cary: 0|2.18–2.27
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 14
+- kod: 3.xx
+  nazev: Druhy a způsoby užívání pozemků (zpevněné plochy) – bodové značky
+  geometrie: bod
+  hladina: GS03-plochy zpevněné-buňky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 3.15|3.18
+  poznamka: zpevněné plochy - barva 0, jinak 146
+  zdroj: Atributy ÚM.xlsx, řádek 16
+- kod: 3.xx Druhy a způsoby užívání pozemků (nezpevněné plochy) – bodové značky
+  nazev: Druhy a způsoby užívání pozemků (nezpevněné plochy) – bodové značky
+  geometrie: bod
+  hladina: GS03-plochy nezpevněné-buňky
+  barva: 146
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 3.01–3.14|3.16| 3.17
+  poznamka: zpevněné plochy - barva 0, jinak 146
+  zdroj: Atributy ÚM.xlsx, řádek 17
+- kod: '3.13'
+  nazev: Jednotlivé stromy a keře
+  geometrie: bod
+  hladina: GS03-stromy
+  barva: 146
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.13'
+  poznamka: keře odlišit popisem
+  zdroj: Atributy ÚM.xlsx, řádek 18
+- kod: 4.xx1
+  nazev: Stavební objekty - linie
+  hladina: GS04-objekty-linie
+  barva: 0
+  tloustka: 3.0
+  zdroj: Atributy ÚM.xlsx, řádek 20
+- kod: 4.xx2
+  nazev: Stavební objekty - linie (shora neviditelná)
+  hladina: GS04-objekty-linie shora neviditelné
+  barva: 0
+  styl_cary: 0.02|2.20
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 21
+- kod: 4.xx3
+  nazev: Podzemní objekty - linie
+  hladina: GS04-objekty-linie podzemní
+  barva: 0
+  styl_cary: 0.05|2.26
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 22
+- kod: 4.xx4
+  nazev: Stavební objekty - bodové značky
+  geometrie: bod
+  hladina: GS04-objekty-buňky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 4.01–4.20
+  zdroj: Atributy ÚM.xlsx, řádek 23
+- kod: '4.23'
+  nazev: Vstupy do objektů a na pozemky
+  hladina: GS04-objekty-vstupy
+  barva: 80
+  styl_cary: 0|4.23
+  tloustka: 4.0
+  topologie: false
+  zdroj: Atributy ÚM.xlsx, řádek 24
+- kod: 4.xx5
+  nazev: Bet.základy, opěrné zdi, schodiště, zpevněné stupně a svahy, …
+  hladina: GS04-objekty-zaklady
+  barva: 0
+  styl_cary: 0|4.21–4.23
+  tloustka: 0.0
+  poznamka: upravit zakládací výkres
+  zdroj: Atributy ÚM.xlsx, řádek 25
+- kod: 4.xx6
+  nazev: Ostatní objekty
+  hladina: GS04-objekty-ostatní
+  zdroj: Atributy ÚM.xlsx, řádek 26
+- kod: 4.xx7
+  nazev: Povrchové znaky bez rozlišení
+  hladina: GS04-objekty-povrchové znaky bez rozlišení
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 27
+- kod: 5.xx1
+  nazev: Doprava - linie (osy kolejí, trolejového vedení apod.)
+  hladina: GS05-doprava-linie
+  barva: 149
+  styl_cary: 0|5.01–5.28
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 29
+- kod: 5.xx2
+  nazev: Zábradlí a svodidla
+  hladina: GS05-doprava-zábrany
+  barva: 0
+  styl_cary: 5.29|5.30
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 30
+- kod: 5.xx3
+  nazev: Doprava - bodové značky (mimo dopravní značky)
+  geometrie: bod
+  hladina: GS05-doprava-značky
+  barva: 149
+  styl_cary: 0|5.01-5.02|5.21-5.23
+  tloustka: 0.0
+  blok: 5.03-5.20|5.24-5.28
+  poznamka: Pozor, dopravní značky patří do samostat. vrstvy
+  zdroj: Atributy ÚM.xlsx, řádek 31
+- kod: '5.27'
+  nazev: Dopravní značky
+  geometrie: bod
+  hladina: GS05-doprava-dopravní značky
+  barva: 149
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '5.27'
+  zdroj: Atributy ÚM.xlsx, řádek 32
+- kod: 6.xx1
+  nazev: Vodovod
+  hladina: GS06-sítě-vodovod
+  barva: 1
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 34
+- kod: 6.xx2
+  nazev: Kanalizace bez rozlišení
+  hladina: GS06-sítě-kanalizace_NEROZ
+  barva: 131
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 35
+- kod: 6.xx2 Kanalizace dešťová
+  nazev: Kanalizace dešťová
+  hladina: GS06-sítě-kanalizace_DEST
+  barva: 2
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 36
+- kod: 6.xx2 Kanalizace splašková
+  nazev: Kanalizace splašková
+  hladina: GS06-sítě-kanalizace_SPLAS
+  barva: 131
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 37
+- kod: 6.xx2 Kanalizace jednotná
+  nazev: Kanalizace jednotná
+  hladina: GS06-sítě-kanalizace_JEDN
+  barva: 131
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 38
+- kod: 6.xx3
+  nazev: Plyn
+  hladina: GS06-sítě-plyn
+  barva: 116
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 39
+- kod: 6.xx4
+  nazev: Stlačený vzduch
+  hladina: GS06-sítě-stlačený vzduch
+  barva: 119
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 40
+- kod: 6.xx5
+  nazev: Teplovod, horkovod, pára
+  hladina: GS06-sítě-teplovod+horkovod+pára
+  barva: 83
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 41
+- kod: 6.xx6
+  nazev: Veřejné osvětlení
+  hladina: GS06-sítě-veřejné osvětlení
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 42
+- kod: 6.xx7
+  nazev: Silové vedení (elektrické) - bez rozlišení
+  hladina: GS06-sítě-silové vedení_NEROZ
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 43
+- kod: 6.xx7 Silové vedení (elektrické) - nízké napětí
+  nazev: Silové vedení (elektrické) - nízké napětí
+  hladina: GS06-sítě-silové vedení_NN
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 44
+- kod: 6.xx7 Silové vedení (elektrické) - vysoké napětí
+  nazev: Silové vedení (elektrické) - vysoké napětí
+  hladina: GS06-sítě-silové vedení_VN
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 45
+- kod: 6.xx7 Silové vedení (elektrické) - velmi vysoké napětí
+  nazev: Silové vedení (elektrické) - velmi vysoké napětí
+  hladina: GS06-sítě-silové vedení_VVN
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 46
+- kod: 6.xx7 Silové vedení (elektrické) - ochranné prvky
+  nazev: Silové vedení (elektrické) - ochranné prvky
+  hladina: GS06-sítě-silové vedení_OCHR
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 47
+- kod: 6.xx8
+  nazev: Sdělovací vedení
+  hladina: GS06-sítě-sdělovací vedení
+  barva: 5
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 48
+- kod: 6.xx9
+  nazev: Osa souběhu vedení
+  hladina: GS06-sítě-osa vedení
+  styl_cary: 6.05|6.06|6.07
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 49
+- kod: 6.xx10
+  nazev: Ostatní inženýrské sítě (produktovody, ...)
+  hladina: GS06-sítě-ostatní
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 50
+- kod: 6.xx1 Vodovod - výšky
+  nazev: Vodovod - výšky
+  hladina: GS06-sítě-vodovod-výšky
+  barva: 1
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 51
+- kod: 6.xx2 Kanalizace bez rozlišení - výšky
+  nazev: Kanalizace bez rozlišení - výšky
+  hladina: GS06-sítě-kanalizace_NEROZ-výšky
+  barva: 131
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 52
+- kod: 6.xx2 Kanalizace dešťová - výšky
+  nazev: Kanalizace dešťová - výšky
+  hladina: GS06-sítě-kanalizace_DEST-výšky
+  barva: 2
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 53
+- kod: 6.xx2 Kanalizace splašková - výšky
+  nazev: Kanalizace splašková - výšky
+  hladina: GS06-sítě-kanalizace_SPLAS-výšky
+  barva: 131
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 54
+- kod: 6.xx2 Kanalizace jednotná - výšky
+  nazev: Kanalizace jednotná - výšky
+  hladina: GS06-sítě-kanalizace_JEDN-výšky
+  barva: 131
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 55
+- kod: 6.xx3 Plyn - výšky
+  nazev: Plyn - výšky
+  hladina: GS06-sítě-plyn-výšky
+  barva: 116
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 56
+- kod: 6.xx4 Stlačený vzduch - výšky
+  nazev: Stlačený vzduch - výšky
+  hladina: GS06-sítě-stlačený vzduch-výšky
+  barva: 119
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 57
+- kod: 6.xx5 Teplovod, horkovod, pára - výšky
+  nazev: Teplovod, horkovod, pára - výšky
+  hladina: GS06-sítě-teplovod+horkovod+pára-výšky
+  barva: 83
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 58
+- kod: 6.xx6 Veřejné osvětlení - výšky
+  nazev: Veřejné osvětlení - výšky
+  hladina: GS06-sítě-veřejné osvětlení-výšky
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 59
+- kod: 6.xx7 Silové vedení (elektrické) - bez rozlišení - výšky
+  nazev: Silové vedení (elektrické) - bez rozlišení - výšky
+  hladina: GS06-sítě-silové vedení_NEROZ-výšky
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 60
+- kod: 6.xx7 Silové vedení (elektrické) - nízké napětí - výšky
+  nazev: Silové vedení (elektrické) - nízké napětí - výšky
+  hladina: GS06-sítě-silové vedení_NN-výšky
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 61
+- kod: 6.xx7 Silové vedení (elektrické) - vysoké napětí - výšky
+  nazev: Silové vedení (elektrické) - vysoké napětí - výšky
+  hladina: GS06-sítě-silové vedení_VN-výšky
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 62
+- kod: 6.xx7 Silové vedení (elektrické) - velmi vysoké napětí - výšky
+  nazev: Silové vedení (elektrické) - velmi vysoké napětí - výšky
+  hladina: GS06-sítě-silové vedení_VVN-výšky
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 63
+- kod: 6.xx7 Silové vedení (elektrické) - ochranné prvky - výšky
+  nazev: Silové vedení (elektrické) - ochranné prvky - výšky
+  hladina: GS06-sítě-silové vedení_OCHR-výšky
+  barva: 3
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 64
+- kod: 6.xx8 Sdělovací vedení - výšky
+  nazev: Sdělovací vedení - výšky
+  hladina: GS06-sítě-sdělovací vedení-výšky
+  barva: 5
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 65
+- kod: 7.xx1
+  nazev: Hornická a těžební zařízení
+  hladina: GS07-těžba
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 67
+- kod: 7.xx2
+  nazev: Sondy, vrty
+  hladina: GS07-sondy
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 68
+- kod: 8.xx1
+  nazev: Vodstvo, vodohospodářské stavby a zařízení – linie
+  hladina: GS08-vodstvo-linie
+  barva: 97
+  styl_cary: CONTINUOUS
+  tloustka: 2.0
+  zdroj: Atributy ÚM.xlsx, řádek 70
+- kod: 8.xx2
+  nazev: Vodstvo, vodohospodářské stavby a zařízení – bodové značky
+  hladina: GS08-vodstvo-buňky
+  barva: 97
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 71
+- kod: '9.01'
+  nazev: Vrstevnice základní
+  hladina: GS09-výškopis-vrstevnice základní
+  barva: 70
+  styl_cary: '9.01'
+  tloustka: 0|1
+  poznamka: spádovka - styl 0
+  zdroj: Atributy ÚM.xlsx, řádek 73
+- kod: '9.03'
+  nazev: Vrstevnice zdůrazněná
+  hladina: GS09-výškopis-vrstevnice zdůrazněná
+  barva: 70
+  styl_cary: '9.03'
+  tloustka: 0|3
+  poznamka: spádovka - styl 0
+  zdroj: Atributy ÚM.xlsx, řádek 74
+- kod: 9.05a
+  nazev: Vrstevnice doplňková v polovičním intervalu
+  hladina: GS09-výškopis-vrstevnice doplňková poloviční
+  barva: 70
+  styl_cary: 9.05A
+  tloustka: 1.0
+  poznamka: spádovka - styl 0
+  zdroj: Atributy ÚM.xlsx, řádek 75
+- kod: 9.05b
+  nazev: Vrstevnice doplňková ve čtvrtinovém intervalu
+  hladina: GS09-výškopis-vrstevnice doplňková čtvrtinová
+  barva: 70
+  styl_cary: 9.05B
+  tloustka: 1.0
+  poznamka: spádovka - styl 0
+  zdroj: Atributy ÚM.xlsx, řádek 76
+- kod: '9.08'
+  nazev: Šrafy svahů
+  hladina: GS09-výškopis-šrafy svahů
+  barva: 6|0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  topologie: false
+  zdroj: Atributy ÚM.xlsx, řádek 77
+- kod: '9.081'
+  nazev: Hrany svahů
+  hladina: GS09-výškopis-hrany svahů
+  barva: 6|0
+  styl_cary: CONTINUOUS
+  tloustka: 2.0
+  zdroj: Atributy ÚM.xlsx, řádek 78
+- kod: '9.09'
+  nazev: Terénní stupeň užší, než 0,5 mm na mapě
+  hladina: GS09-výškopis-hrany svahů
+  barva: 6|0
+  styl_cary: CONTINUOUS
+  tloustka: 4.0
+  zdroj: Atributy ÚM.xlsx, řádek 79
+- kod: '9.10'
+  nazev: Nástin horizontál (na hřbetnici a údolnici)
+  hladina: GS09-výškopis-terénní kostra ostatní
+  poznamka: pouze v náčrtu
+  zdroj: Atributy ÚM.xlsx, řádek 80
+- kod: '9.11'
+  nazev: Hřbetnice, údolnice
+  hladina: GS09-výškopis-terénní kostra ostatní
+  poznamka: pouze v náčrtu
+  zdroj: Atributy ÚM.xlsx, řádek 81
+- kod: '9.111'
+  nazev: Tvarové čáry
+  hladina: GS09-výškopis-terénní kostra ostatní
+  poznamka: pouze v náčrtu
+  zdroj: Atributy ÚM.xlsx, řádek 82
+- kod: '9.12'
+  nazev: Podrobné výškové body (terénní reliéf) - bodové značky
+  geometrie: bod
+  hladina: GS09-výškopis-body podrobné-buňky
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '9.12'
+  poznamka: Vypnuto pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 83
+- kod: '9.121'
+  nazev: Podrobné výškové body (terénní reliéf) - bodové značky TISK
+  geometrie: bod
+  hladina: GS09-výškopis-body podrobné-buňky-TISK
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '9.12'
+  poznamka: Pouze pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 84
+- kod: '9.13'
+  nazev: Význačné body terénního reliéfu - bodové značky
+  geometrie: bod
+  hladina: GS09-výškopis-body význačné-buňky
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '9.13'
+  zdroj: Atributy ÚM.xlsx, řádek 85
+- kod: '9.14'
+  nazev: Kóty na objektech a zařízení - bodové značky
+  geometrie: bod
+  hladina: GS09-výškopis-kóty na objektech-buňky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '9.14'
+  zdroj: Atributy ÚM.xlsx, řádek 86
+- kod: '9.15'
+  nazev: Výšky 1. nadzemního podlaží - bodové značky
+  geometrie: bod
+  hladina: GS09-výškopis-výšky 1NP+vodorovných rovin a hran-buňky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '9.15'
+  zdroj: Atributy ÚM.xlsx, řádek 87
+- kod: '9.16'
+  nazev: Výšky vodorovné hrany - bodové značky
+  hladina: GS09-výškopis-výšky 1NP+vodorovných rovin a hran-buňky
+  zdroj: Atributy ÚM.xlsx, řádek 88
+- kod: '9.19'
+  nazev: Ostatní značky, např. skály,…
+  hladina: GS09-výškopis-značky ostatní
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 89
+- kod: '9.20'
+  nazev: Ostatní linie, např. skály,…
+  hladina: GS09-výškopis-linie ostatní
+  barva: 70
+  zdroj: Atributy ÚM.xlsx, řádek 90
+- kod: '9.21'
+  nazev: Body bodových polí a pomocné měřické body - výšky
+  geometrie: text
+  hladina: GS09-výškopis-body-BP+PMS-výšky
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.9
+  sirka_textu: 1.8
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 91
+- kod: '9.22'
+  nazev: Zdůrazněné vrstevnice – výškové kóty
+  geometrie: text
+  hladina: GS09-výškopis-vrstevnice zdůrazněné-výšky
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.9
+  sirka_textu: 1.8
+  font: Arial Narrow
+  tucne: true
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 92
+- kod: '9.23'
+  nazev: Podrobné body - výškové kóty
+  geometrie: text
+  hladina: GS09-výškopis-body podrobné-výšky
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 0.6
+  sirka_textu: 0.3
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  poznamka: Vypnuto pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 93
+- kod: '9.24'
+  nazev: Podrobné body - výškové kóty TISK
+  geometrie: text
+  hladina: GS09-výškopis-body podrobné-výšky-TISK
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.6
+  sirka_textu: 1.3
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  poznamka: Pouze pro tisk
+  zdroj: Atributy ÚM.xlsx, řádek 94
+- kod: '9.25'
+  nazev: Význačné body terénního reliéfu - výškové kóty
+  geometrie: text
+  hladina: GS09-výškopis-body význačné-výšky
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.9
+  sirka_textu: 1.8
+  font: Arial Narrow
+  zdroj: Atributy ÚM.xlsx, řádek 95
+- kod: '9.26'
+  nazev: Výšky 1. nadzemního podlaží, kóty na objektech a zařízení, relativní kóty - výšky
+  geometrie: text
+  hladina: GS09-výškopis-objekty-výšky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.6
+  sirka_textu: 1.5
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 96
+- kod: '10.081'
+  nazev: Názvy ulic
+  geometrie: text
+  hladina: GS10-popis-názvy ulic
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 3.0
+  sirka_textu: 2.9
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 98
+- kod: 10.xx2
+  nazev: Popis objektů
+  geometrie: text
+  hladina: GS10-popis-objekty
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 2.3
+  sirka_textu: 2.2
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 99
+- kod: 10.xx3
+  nazev: Popis ploch
+  geometrie: text
+  hladina: GS10-popis-plochy
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.6
+  sirka_textu: 1.5
+  font: Arial Narrow
+  tucne: false
+  kurziva: true
+  zdroj: Atributy ÚM.xlsx, řádek 100
+- kod: 10.xx4
+  nazev: Popis vodstva
+  geometrie: text
+  hladina: GS10-popis-vodstvo
+  barva: 97
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 2.3
+  sirka_textu: 2.2
+  font: Arial Narrow
+  tucne: false
+  kurziva: true
+  zdroj: Atributy ÚM.xlsx, řádek 101
+- kod: 10.xx5
+  nazev: Budovy – čísla popisná a orientační
+  geometrie: text
+  hladina: GS10-popis-budovy-čísla popisná a orientační
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.9
+  sirka_textu: 1.8
+  font: Arial Narrow
+  tucne: true
+  kurziva: true
+  zdroj: Atributy ÚM.xlsx, řádek 102
+- kod: 10.xx6
+  nazev: Inženýrské sítě - popis
+  geometrie: text
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.6
+  sirka_textu: 1.4
+  font: Calibri
+  tucne: false
+  kurziva: true
+  poznamka: Vrstva a barva dle sítě
+  zdroj: Atributy ÚM.xlsx, řádek 103
+- kod: 10.xx7
+  nazev: Poznámky, odkazy, upozornění
+  geometrie: text
+  hladina: GS10-popis-poznámky
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.6
+  sirka_textu: 1.5
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 105
+- kod: 10.xx8
+  nazev: Body bodových polí a pomocné měřické body - čísla
+  geometrie: text
+  hladina: GS10-popis-body-BP+PMS-čísla
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.9
+  sirka_textu: 1.8
+  font: Arial Narrow
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 106
+- kod: '11.01'
+  nazev: Legenda
+  geometrie: text
+  hladina: GS11-výkres-legenda
+  vyska_textu: 2.3
+  sirka_textu: 2.3
+  font: ISOCPEUR
+  tucne: false
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 108
+- kod: '11.02'
+  nazev: Okrajové náčrtky, označení mapových listů
+  geometrie: text
+  hladina: GS11-výkres-okrajové náčrtky
+  barva: 0
+  styl_cary: 0|2
+  tloustka: 0.0
+  vyska_textu: 2.3
+  sirka_textu: 1.6
+  font: Arial Narrow
+  zdroj: Atributy ÚM.xlsx, řádek 109
+- kod: '11.03'
+  nazev: Průsečíky sítě pravoúhlých souřadnic, rohy mapových listů
+  hladina: GS11-výkres-průsečíky+rohy ML
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 110
+- kod: '11.04'
+  nazev: Popis průsečíků sítě pravoúhlých souřadnic
+  geometrie: text
+  hladina: GS11-výkres-průsečíky-souřadnice
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.9
+  sirka_textu: 1.6
+  font: ISOCPEUR
+  tucne: true
+  kurziva: false
+  zdroj: Atributy ÚM.xlsx, řádek 111
+- kod: SEVER
+  nazev: Směrová růžice
+  geometrie: bod
+  hladina: GS11-výkres-sever
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: SEVER|SEVERP
+  zdroj: Atributy ÚM.xlsx, řádek 112
+- kod: '11.05'
+  nazev: Ohraničení výkresu (rám)
+  hladina: GS11-výkres-rám
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 113
+- kod: Tabx
+  nazev: Popisová tabulka
+  hladina: GS11-výkres-tabulka
+  barva: 0
+  styl_cary: CONTINUOUS
+  zdroj: Atributy ÚM.xlsx, řádek 114
+- kod: PMSL
+  nazev: Měřická síť - linie
+  hladina: GS11-měřická-síť-linie
+  barva: 3
+  poznamka: pro vyznačení měřické sítě v náčrtu
+  zdroj: Atributy ÚM.xlsx, řádek 115
+- kod: PMSZ
+  nazev: Měřická síť - značky
+  hladina: GS11-měřická-síť-značky
+  barva: 3
+  poznamka: pro vyznačení měřické sítě v náčrtu
+  zdroj: Atributy ÚM.xlsx, řádek 116
+- kod: PMSP
+  nazev: Měřická síť - popis
+  hladina: GS11-měřická-síť-popis
+  barva: 3
+  poznamka: pro vyznačení měřické sítě v náčrtu
+  zdroj: Atributy ÚM.xlsx, řádek 117
+- kod: ORTO
+  nazev: Ortofotomapa
+  hladina: GS11-ortofoto
+  zdroj: Atributy ÚM.xlsx, řádek 118
+- kod: '12.01'
+  nazev: Hranice územně správních jednotek
+  hladina: GS12-KN-hranice USJ
+  barva: 114
+  tloustka: 2.0
+  zdroj: Atributy ÚM.xlsx, řádek 120
+- kod: '12.02'
+  nazev: Hranice parcel KN
+  hladina: GS12-KN-hranice parcel
+  barva: 114
+  styl_cary: '0.04'
+  tloustka: 1.0
+  zdroj: Atributy ÚM.xlsx, řádek 121
+- kod: '12.03'
+  nazev: Vnitřní kresba KN
+  hladina: GS12-KN-vnitřní kresba
+  barva: 116
+  styl_cary: '0.04'
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 122
+- kod: '12.04'
+  nazev: Druhy a způsoby využití pozemků (KN) – bodové značky
+  hladina: GS12-KN-buňky
+  barva: 114
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 123
+- kod: '12.05'
+  nazev: Popis KN (parcelní čísla, názvosloví, …)
+  geometrie: text
+  hladina: GS12-KN-popis
+  barva: 114
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  vyska_textu: 1.7
+  sirka_textu: 1.7
+  font: Arial Narrow
+  tucne: false
+  kurziva: true
+  zdroj: Atributy ÚM.xlsx, řádek 124
+- kod: '12.06'
+  nazev: Značky bodů BP
+  hladina: GS12-KN-bodová pole
+  barva: 114
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  zdroj: Atributy ÚM.xlsx, řádek 125
+- kod: '12.07'
+  nazev: Věcná břemena
+  hladina: GS12-KN-věcná břemena
+  barva: 117
+  zdroj: Atributy ÚM.xlsx, řádek 126
+- kod: '12.08'
+  nazev: Definiční body
+  geometrie: text
+  hladina: GS12-KN-definiční body
+  vyska_textu: 1.7
+  sirka_textu: 1.7
+  font: Arial Narrow
+  tucne: false
+  kurziva: true
+  poznamka: parcela - 1, budova - 3
+  zdroj: Atributy ÚM.xlsx, řádek 127
+- kod: '12.09'
+  nazev: Polygon parcely
+  hladina: GS12-KN-polygon parcely
+  zdroj: Atributy ÚM.xlsx, řádek 128
+- kod: '12.10'
+  nazev: Polygon budovy
+  hladina: GS12-KN-polygon budovy
+  zdroj: Atributy ÚM.xlsx, řádek 129

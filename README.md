@@ -191,10 +191,42 @@ Postup:
 > Podle zadání se výkres opravený automatickou opravou neuzná. **Kontrola → Automatická oprava**
 > slouží jen k tomu, abyste viděli, co je špatně. Chyby opravujte ručně v MicroStationu.
 
-**Barvy a tloušťky:** porovnání barev MicroStationu (např. 94–97 u budov) potřebuje tabulku
-barev `color.tbl`. Načtěte ji v *Nastavení kontrol → Obecné*. Tloušťky MicroStationu (TL) se
-v DXF ukládají v mm. Převod jde nastavit v pravidlech (`mapa_tloustek`), bez něj se tloušťky
-neověřují.
+**Barvy a tloušťky:** školní tabulka barev je v [`podklady/color.tbl`](podklady/color.tbl) a je už
+vložená v obou souborech pravidel. MicroStation při uložení do DXF převede každou barvu na
+nejbližší barvu palety AutoCADu (ACI), např. barva 99 se uloží jako ACI 14. Aplikace dělá stejný
+převod, takže barvy v DXF porovnává přesně (ověřeno na výkresech z obou zadání). Tloušťky
+MicroStationu se v DXF ukládají v mm: 0 → 0 mm, 2 → 0,30 mm, 3 → 0,40 mm, 4 → 0,53 mm
+(`mapa_tloustek` v pravidlech).
+
+**Co ukázala kontrola `Vcelak_13_navic.dxf`:** kóty na vrstvě 63 nejsou ve Směrnici, proto se
+hlásí jako nepovolená hladina (jedna chyba s počtem prvků) a do topologie se nepočítají.
+Zábradlí má styl Continuous místo 5.303. Schody jsou kreslené bez přichycení (mezery a přesahy
+desetin milimetru), proto nedotažení a přetažení. Délky pod 1 cm se vypisují v mm.
+
+## Zadání 2 (účelová mapa Husovice, Atributy ÚM.xlsx)
+
+Ve složce [`podklady/zadani2-husovice/`](podklady/zadani2-husovice/) jsou podklady a hotová pravidla
+[`pravidla_zadani2.yaml`](podklady/zadani2-husovice/pravidla_zadani2.yaml), vytvořená z tabulky
+`Atributy ÚM.xlsx` (115 pravidel, měřítko 1:200).
+
+* **Kontrolujte `…_Kresba.dxf`.** Hlavní výkres je v něm připojený jako reference. Aplikace
+  referenci (velký blok s kresbou na mnoha vrstvách) rozbalí a zkontroluje s kresbou dohromady.
+  Buňky (značky) zůstanou buňkami.
+* **3D výkres:** body mají výšky, takže některé čáry a oblouky leží v šikmé rovině. Aplikace je
+  správně převede do půdorysu.
+* **Tabulka se čte tak, jak je:** kódy ve sloupci bez nadpisu, alternativy „0|2.09–2.17|5.30“
+  (styl 0 nebo uživatelské styly 2.09 až 2.17 nebo 5.30), rozsahy buněk „4.01–4.20“ (buňka se
+  v DXF jmenuje např. `4.02_3`), barvy „6|0“ a tloušťky „0|1“, sloupce Tučně a Kurzíva.
+  Výšky písma v mm na papíře se přepočtou měřítkem (`meritko: 200`). Při importu v aplikaci
+  vyplňte v průvodci pole **Měřítko mapy 1:**.
+* Opakované kódy (např. `6.xx2` pro dešťovou, splaškovou a jednotnou kanalizaci) dostanou
+  k kódu název („6.xx2 Kanalizace dešťová“). Popis sítí „ve vrstvě a barvě dle sítě“ se hledá
+  i na vrstvách sítí. Šrafy svahů a vstupy se do topologie nepočítají.
+
+**Co ukázala kontrola `Husovice_Včelák_mapa_Kresba.dxf`** (8 nálezů):
+zábradlí má styl Continuous místo 5.29/5.30, číslo popisné a orientační není tučné
+(tabulka: tučně i kurzíva), 1 průsečík bez uzlu na hranici vozovky, 1 dvojice bodů 6 mm od sebe
+(bod zaměřený dvakrát?) a 4 volné konce čar (varování, zkontrolujte).
 
 ## Převod DGN na DXF
 

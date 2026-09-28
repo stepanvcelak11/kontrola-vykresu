@@ -729,12 +729,23 @@ class BodyBlizko(Check):
         if not len(a):
             return
         d = shapely.distance(pts[a], pts[b])
+        # jedna chyba na dvojici poloh – bod, jeho číslo, buňka… na stejném místě se nehlásí vícekrát
+        groups: dict[tuple, tuple[list[Feature], float]] = {}
         for i, j, dist in zip(a, b, d):
             if dist <= ctx.precision:
                 continue
             fi, fj = feats[i], feats[j]
             if same and fi.layer != fj.layer:
                 continue
+            q = max(ctx.precision, 1e-6)
+            key = tuple(sorted(((round(f.geometry.x / q), round(f.geometry.y / q)) for f in (fi, fj))))
+            fl, _ = groups.setdefault(key, ([], dist))
+            for f in (fi, fj):
+                if all(x.fid != f.fid for x in fl):
+                    fl.append(f)
+        for fl, dist in groups.values():
+            fi = fl[0]
+            fj = next(f for f in fl[1:] if f.geometry.distance(fi.geometry) > ctx.precision)
             mid = ((fi.geometry.x + fj.geometry.x) / 2, (fi.geometry.y + fj.geometry.y) / 2)
-            yield ctx.issue(self, [fi, fj], f"Body téměř na sobě, vzdálenost {fmt_m(dist)}", at=mid,
+            yield ctx.issue(self, fl, f"Body téměř na sobě, vzdálenost {fmt_m(dist)}", at=mid,
                             geometry=LineString([fi.geometry, fj.geometry]))

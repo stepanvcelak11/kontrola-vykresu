@@ -14,6 +14,11 @@
 7. **Soubor → Export → Protokol do PDF**.
 8. Pak totéž s vlastním výkresem: v MicroStationu *Soubor → Uložit jako → DXF*. Náčrt (JPG)
    přetáhni na *Zadání → Náčrt a fotky* nebo na *Vzorový výkres* a vlož pod výkres.
+9. Tvoje zadání (pravidla jsou hotová, barvy i tloušťky jsou v nich):
+   * zadání 1: přetáhni `podklady/zadani1-microstation/Vcelak_13_navic.dxf`, *Zadání → Pravidla →
+     Načíst YAML…* → `pravidla_zadani1.yaml`, **F5**,
+   * zadání 2: přetáhni `podklady/zadani2-husovice/Husovice_Včelák_mapa_Kresba.dxf`, načti
+     `pravidla_zadani2.yaml`, **F5**. Mělo by vyjít 8 nálezů (viz README, „Zadání 2“).
 
 ## Co mi poslat zpátky
 

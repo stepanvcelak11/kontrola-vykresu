@@ -9,7 +9,7 @@ import numpy as np
 import shapely
 
 from ..model import Feature, GeomType
-from ..rules import color_known, color_matches, layer_matches, linetype_matches
+from ..rules import color_known, color_matches, font_style, layer_matches, linetype_matches
 from .base import Check, CheckContext, Param, Severity, fmt_num, register
 
 
@@ -105,16 +105,16 @@ class Symbologie(Check):
                     and not linetype_matches(r.styl_cary, f.linetype)):
                 diffs.append(f"styl {f.linetype} (má být {r.styl_cary})")
             if do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT:
-                expected = r.tloustka
-                if pal == "microstation" and float(r.tloustka).is_integer() and 0 <= r.tloustka <= 31:
-                    # tloušťka MicroStationu (wt 0–31) – v DXF jen přes převodní tabulku na mm
-                    expected = wmap.get(int(r.tloustka))
-                    if expected is None:
-                        ms_weights.add(int(r.tloustka))
-                if expected is not None and abs(expected - f.lineweight) > 0.051:
-                    diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {fmt_num(expected, 2)})")
+                # tloušťka MicroStationu (wt 0–31) se v DXF ověří přes převodní tabulku na mm
+                expected, unknown = rs.expected_weights(r)
+                ms_weights.update(unknown)
+                if expected and not unknown and all(abs(w - f.lineweight) > 0.051 for w in expected):
+                    diffs.append(f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být "
+                                 f"{' nebo '.join(fmt_num(w, 2) for w in expected)} mm, wt {r.tloustka})"
+                                 if pal == "microstation" and wmap else
+                                 f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {r.tloustka})")
             if f.geom_type == GeomType.TEXT and do_text:
-                diffs += _text_diffs(r, f)
+                diffs += _text_diffs(r, f, rs)
             if f.geom_type == GeomType.TEXT and do_font and r.font and \
                     _norm_font(r.font) not in _norm_font(f.font):
                 diffs.append(f"font {f.font or '–'} (má být {r.font})")
@@ -148,15 +148,32 @@ def parse_alignment(text: str) -> tuple[int | None, int | None]:
     return h, v
 
 
-def _text_diffs(r, f: Feature) -> list[str]:
+def _text_diffs(r, f: Feature, rs=None) -> list[str]:
     out = []
-    tol = lambda x: max(0.01, 0.02 * x)  # noqa: E731
-    if r.vyska_textu and abs(f.text_height - r.vyska_textu) > tol(r.vyska_textu):
-        out.append(f"výška textu {fmt_num(f.text_height, 2)} (má být {fmt_num(r.vyska_textu, 2)})")
-    if r.sirka_textu and f.dxftype == "TEXT":
+    tol = lambda x: max(0.005, 0.02 * x)  # noqa: E731
+    scale = rs.meritko if rs is not None and rs.meritko else None
+
+    def show(v_m: float, rule_v: float) -> tuple[str, str]:
+        if scale:  # pravidla jsou v mm na papíře
+            return f"{fmt_num(v_m * 1000 / scale, 2)} mm", f"{fmt_num(rule_v, 2)} mm"
+        return fmt_num(v_m, 2), fmt_num(rule_v, 2)
+    size = rs.text_size if rs is not None else (lambda v: v)
+    h_exp = size(r.vyska_textu)
+    if h_exp and abs(f.text_height - h_exp) > tol(h_exp):
+        got, exp = show(f.text_height, r.vyska_textu)
+        out.append(f"výška textu {got} (má být {exp})")
+    w_exp = size(r.sirka_textu)
+    if w_exp and f.dxftype == "TEXT":
         w = f.text_height * (f.width_factor or 1.0)
-        if abs(w - r.sirka_textu) > tol(r.sirka_textu):
-            out.append(f"šířka textu {fmt_num(w, 2)} (má být {fmt_num(r.sirka_textu, 2)})")
+        if abs(w - w_exp) > tol(w_exp):
+            got, exp = show(w, r.sirka_textu)
+            out.append(f"šířka textu {got} (má být {exp})")
+    if (r.tucne is not None or r.kurziva is not None) and f.font:
+        bold, italic = font_style(f.font)
+        if r.tucne is not None and bold != r.tucne:
+            out.append("písmo " + ("není tučné" if r.tucne else "je tučné") + f" ({f.font})")
+        if r.kurziva is not None and italic != r.kurziva:
+            out.append("písmo " + ("není kurzíva" if r.kurziva else "je kurzíva") + f" ({f.font})")
     if r.zarovnani:
         h, v = parse_alignment(r.zarovnani)
         if (h is not None and h != f.halign) or (v is not None and v != f.valign):

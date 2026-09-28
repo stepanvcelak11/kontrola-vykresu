@@ -30,7 +30,8 @@ def _wrong_fields(msg: str, check_id: str) -> set[str]:
     if check_id == "typ_geometrie":
         out.add("typ")
     for key, fld in (("barva", "barva"), ("styl", "styl"), ("tloušťka", "tloušťka"), ("výška textu", "výška"),
-                     ("šířka textu", "šířka"), ("zarovnání", "zarovnání"), ("font", "font")):
+                     ("šířka textu", "šířka"), ("zarovnání", "zarovnání"), ("font", "font"),
+                     ("písmo", "font")):
         if key in m:
             out.add(fld)
     return out

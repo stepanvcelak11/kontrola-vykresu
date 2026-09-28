@@ -8,8 +8,8 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDia
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..model import GeomType
-from ..rules import (Rule, RuleSet, TextRule, normalize_linetype, parse_allowed_values, parse_color,
-                     split_list)
+from ..rules import (Rule, RuleSet, TextRule, norm_style, parse_allowed_values, parse_color,
+                     parse_weight, split_list)
 
 COLS = ["Kód", "Název", "Typ geometrie", "Hladina", "Barva", "Styl čáry", "Tloušťka [mm]", "Buňka",
         "Povinné atributy", "Povolené hodnoty", "Popis na hladině", "Popis povinný", "Obrázek",
@@ -144,11 +144,7 @@ class RulesEditor(QWidget):
         attrs = [a.upper() for a in split_list(self._text(row, C_ATTR))]
         thl = self._text(row, C_THL)
         tp = self.table.cellWidget(row, C_TPOV)
-        tl = self._text(row, C_TL).replace(",", ".")
-        try:
-            tl_v = float(tl) if tl else None
-        except ValueError:
-            tl_v = None
+        tl_v = parse_weight(self._text(row, C_TL))
         old = next((r for r in self.rules.pravidla if r.kod == kod), None)
         text_rule = None
         if thl or (tp is not None and tp.isChecked()):
@@ -159,7 +155,7 @@ class RulesEditor(QWidget):
             kod=kod, nazev=self._text(row, C_NAZEV),
             geometrie=self.table.cellWidget(row, C_GEOM).currentData(),
             hladina=self._text(row, C_HL) or None, barva=parse_color(self._text(row, C_BARVA)),
-            styl_cary=normalize_linetype(self._text(row, C_STYL)), tloustka=tl_v,
+            styl_cary=norm_style(self._text(row, C_STYL)), tloustka=tl_v,
             blok=self._text(row, C_BLOK) or None, povinne_atributy=attrs,
             povolene_hodnoty=parse_allowed_values(self._text(row, C_VALS), attrs[0] if attrs else None),
             text=text_rule, obrazek=self.table.cellWidget(row, C_IMG).currentData(),
@@ -168,6 +164,7 @@ class RulesEditor(QWidget):
             typy_prvku=list(old.typy_prvku) if old else [],
             vyska_textu=old.vyska_textu if old else None, sirka_textu=old.sirka_textu if old else None,
             font=old.font if old else None, zarovnani=old.zarovnani if old else None,
+            tucne=old.tucne if old else None, kurziva=old.kurziva if old else None,
             topologie=old.topologie if old else True,
         )
 
@@ -226,6 +223,9 @@ class RulesEditor(QWidget):
             self.rules.pravidla[:] = rs.pravidla
             self.rules.povolene_hladiny[:] = rs.povolene_hladiny
             self.rules.paleta = rs.paleta
+            self.rules.meritko = rs.meritko
+            if rs.mapa_tloustek:
+                self.rules.mapa_tloustek = dict(rs.mapa_tloustek)
             if rs.barevna_tabulka:
                 self.rules.barevna_tabulka = rs.barevna_tabulka
             if rs.rozsah:
