@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt, QTimer
+from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar)
 
 from .. import APP_NAME, __version__
-from ..checks.base import Issue
+from ..checks.base import Issue, Severity
 from ..io.dgn import DGN_NAVOD
 from ..io.dxf_loader import load_drawing
 from ..model import Drawing
@@ -28,8 +28,11 @@ DRAWING_FILTER = "Výkresy (*.dxf *.dgn *.dwg);;DXF (*.dxf);;DGN (*.dgn);;Všech
 
 
 class MainWindow(QMainWindow):
+    _updateResult = Signal(object, str, bool)  # výsledek kontroly aktualizací z vlákna na pozadí
+
     def __init__(self, project: Project | None = None):
         super().__init__()
+        self._updateResult.connect(self._on_update_result)
         self.settings = QSettings("KontrolaVykresu", "KontrolaVykresu")
         self.project: Project | None = None
         self.drawing: Drawing | None = None
@@ -154,6 +157,8 @@ class MainWindow(QMainWindow):
         self.a_mslook = self._act("Styly a tloušťky čar jako v MicroStationu", self.view.set_ms_look, None,
                                   "Čárkování, tloušťky a značky uživatelských stylů (ploty…). Vypnuto = tenké "
                                   "plné čáry.", checkable=True)
+        self.a_dark = self._act("Tmavý režim", self.set_dark, None, "Tmavé barvy oken (šetří oči večer)",
+                                checkable=True)
         self.a_quit = self._act("Konec", self.close, "Ctrl+Q")
         self.a_check = self._act("Zkontrolovat", self.run_checks, "F5", "Spustit zapnuté kontroly")
         self.a_recheck = self._act("Zkontrolovat znovu", self.recheck, "Ctrl+F5",
@@ -180,6 +185,9 @@ class MainWindow(QMainWindow):
         self.a_exp_csv = self._act("Seznam chyb do CSV…", lambda: self.export("csv"))
         self.a_exp_xlsx = self._act("Seznam chyb do Excelu…", lambda: self.export("xlsx"))
         self.a_exp_pdf = self._act("Protokol do PDF…", lambda: self.export("pdf"))
+        self.a_exp_todo = self._act("Seznam k opravě na tisk (PDF)…", lambda: self.export("todo"), "Ctrl+P",
+                                    "Chyby k opravě seskupené podle typu, s políčkem k odškrtnutí, návodem "
+                                    "a výřezem – vytisknout a mít vedle MicroStationu")
         self.a_exp_dxf = self._act("DXF s vrstvou KONTROLA_CHYBY…", lambda: self.export("dxf"))
         self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
         self.a_wip = self._act("Rozpracovaný výkres", self._toggle_wip, None,
@@ -216,7 +224,7 @@ class MainWindow(QMainWindow):
         m_file.addAction(self.a_save_project_as)
         m_file.addSeparator()
         m_exp = m_file.addMenu("Export")
-        for a in (self.a_exp_csv, self.a_exp_xlsx, self.a_exp_pdf, self.a_exp_dxf, self.a_exp_log):
+        for a in (self.a_exp_csv, self.a_exp_xlsx, self.a_exp_pdf, self.a_exp_todo, self.a_exp_dxf, self.a_exp_log):
             m_exp.addAction(a)
         m_file.addSeparator()
         m_file.addAction(self.a_quit)
@@ -224,6 +232,7 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.a_fit)
         m_view.addAction(self.a_light)
         m_view.addAction(self.a_mslook)
+        m_view.addAction(self.a_dark)
         m_view.addAction(self.a_labels)
         m_view.addAction(self.a_sketch)
         m_view.addAction(self.layers_dock.toggleViewAction())
@@ -249,15 +258,18 @@ class MainWindow(QMainWindow):
         m_help.addAction(self._act("Co znamenají chyby (s obrázky)…", self.show_help, "F1",
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
+        m_help.addSeparator()
+        m_help.addAction(self._act("Zkontrolovat aktualizace", lambda: self.check_updates(manual=True)))
+        self.a_autoupdate = self._act("Hledat aktualizace při spuštění", self._set_autoupdate, None,
+                                      "Jednou denně se podívá na GitHub, jestli není novější verze. "
+                                      "Zjišťuje se jen číslo verze, nic se neodesílá.", checkable=True)
+        self.a_autoupdate.blockSignals(True)
+        self.a_autoupdate.setChecked(self.settings.value("aktualizace/kontrolovat", True, type=bool))
+        self.a_autoupdate.blockSignals(False)
+        m_help.addAction(self.a_autoupdate)
         m_help.addAction(self._act("O aplikaci", self._about))
 
-        from .theme import icon
-        for a, name in ((self.a_open, "otevrit"), (self.a_check, "zkontrolovat"), (self.a_recheck, "znovu"),
-                        (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
-                        (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
-                        (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf"), (self.a_wip, "rozpracovany"),
-                        (self.a_region, "vyrez"), (self.a_ready, "odevzdat")):
-            a.setIcon(icon(name))
+        self._apply_icons()
         self.a_prev.setText("Předchozí")
         self.a_next.setText("Další")
         self.a_repair.setIconText("Oprava")
@@ -292,9 +304,30 @@ class MainWindow(QMainWindow):
         btn = tb.widgetForAction(self.a_check)
         if btn is not None:
             btn.setObjectName("primarni")
-            self.a_check.setIcon(icon("zkontrolovat", "#FFFFFF"))
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+        self._apply_icons()
+
+    def _apply_icons(self):
+        from .theme import icon
+        for a, name in ((self.a_open, "otevrit"), (self.a_check, "zkontrolovat"), (self.a_recheck, "znovu"),
+                        (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
+                        (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
+                        (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf"), (self.a_wip, "rozpracovany"),
+                        (self.a_region, "vyrez"), (self.a_ready, "odevzdat")):
+            a.setIcon(icon(name))
+        if getattr(self, "toolbar", None) is not None:
+            self.a_check.setIcon(icon("zkontrolovat", "#FFFFFF"))  # bílá ikona na modrém tlačítku
+
+    def set_dark(self, on: bool):
+        """Tmavý režim celé aplikace (uloží se)."""
+        from PySide6.QtWidgets import QApplication
+
+        from .theme import apply_theme
+        apply_theme(QApplication.instance(), bool(on))
+        self._apply_icons()
+        self.settings.setValue("zobrazeni/tmavy", bool(on))
+        self.issue_panel.model.layoutChanged.emit()
 
     def _restore_geometry(self):
         g = self.settings.value("okno/geometrie")
@@ -306,6 +339,10 @@ class MainWindow(QMainWindow):
         light = self.settings.value("zobrazeni/svetle_pozadi", False, type=bool)
         self.a_light.setChecked(light)
         self.a_mslook.setChecked(self.settings.value("zobrazeni/jako_microstation", True, type=bool))
+        from .theme import is_dark
+        self.a_dark.blockSignals(True)
+        self.a_dark.setChecked(is_dark())
+        self.a_dark.blockSignals(False)
 
     def closeEvent(self, event):  # noqa: N802
         if self.task is not None and self.task.is_running():
@@ -911,6 +948,62 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentWidget(self.split)
         self.statusBar().showMessage(f"Porovnání verzí: {len(changes)} změn.", 8000)
 
+    def _set_autoupdate(self, on: bool):
+        self.settings.setValue("aktualizace/kontrolovat", bool(on))
+
+    def maybe_check_updates(self):
+        """Při spuštění: nejvýš jednou denně, jen u sestaveného .exe a když to uživatel nevypnul."""
+        import time
+
+        from ..aktualizace import BUILD
+        if BUILD is None or not self.settings.value("aktualizace/kontrolovat", True, type=bool):
+            return
+        last = float(self.settings.value("aktualizace/posledni", 0) or 0)
+        if time.time() - last < 86400:
+            return
+        self.check_updates(manual=False)
+
+    def check_updates(self, manual: bool = False):
+        import threading
+        import time
+
+        from ..aktualizace import fetch_latest
+        self.settings.setValue("aktualizace/posledni", time.time())
+
+        def work():
+            try:
+                latest = fetch_latest()
+                err = ""
+            except Exception as exc:  # noqa: BLE001 – bez internetu apod.
+                latest, err = None, str(exc)
+            self._updateResult.emit(latest, err, manual)
+
+        threading.Thread(target=work, daemon=True).start()
+        if manual:
+            self.statusBar().showMessage("Zjišťuji, jestli je novější verze…", 5000)
+
+    def _on_update_result(self, latest, err: str, manual: bool):
+        from ..aktualizace import BUILD, DOWNLOAD_URL, RELEASES_URL, is_newer, version_text
+        if is_newer(latest):
+            self.statusBar().showMessage(f"K dispozici je novější verze (sestavení č. {latest}).", 20000)
+            box = QMessageBox(self)
+            box.setWindowTitle("Nová verze")
+            box.setTextFormat(Qt.RichText)
+            box.setText(f"Je k dispozici novější verze programu (sestavení č. {latest}, vy máte č. {BUILD}).<br><br>"
+                        f"<a href='{DOWNLOAD_URL}'>Stáhnout KontrolaVykresu.exe</a> "
+                        f"(<a href='{RELEASES_URL}'>co je nového</a>)<br><br>"
+                        "Stažený soubor stačí spustit místo starého; projekty a nastavení zůstanou.")
+            box.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            box.exec()
+        elif manual:
+            if err:
+                QMessageBox.information(self, "Aktualizace", f"Nepodařilo se spojit s GitHubem ({err}).")
+            elif BUILD is None:
+                QMessageBox.information(self, "Aktualizace", "Program běží ze zdrojových kódů – aktualizujte "
+                                        f"přes git. Poslední zveřejněné sestavení: č. {latest or '?'}.")
+            else:
+                QMessageBox.information(self, "Aktualizace", f"Máte nejnovější verzi ({version_text()}).")
+
     def show_guide(self):
         from .guide_dialog import GuideDialog
         GuideDialog(self).exec()
@@ -923,8 +1016,9 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Převod DGN na DXF", DGN_NAVOD)
 
     def _about(self):
+        from ..aktualizace import version_text
         QMessageBox.about(self, APP_NAME,
-                          f"<h3>{APP_NAME} {__version__}</h3>"
+                          f"<h3>{APP_NAME}</h3>Verze {version_text()}<br><br>"
                           "Předkontrola topologie a atributů geodetických výkresů (DXF z MicroStationu) "
                           "před odevzdáním.<br><br>Všechna data zůstávají na tomto počítači, nic se "
                           "nikam neodesílá.<br><br>Knihovny: PySide6 (Qt), ezdxf, shapely, openpyxl, "
@@ -942,6 +1036,7 @@ class MainWindow(QMainWindow):
             "csv": ("Uložit seznam chyb", f"{base}_chyby.csv", "CSV (*.csv)"),
             "xlsx": ("Uložit seznam chyb", f"{base}_chyby.xlsx", "Excel (*.xlsx)"),
             "pdf": ("Uložit protokol", f"{base}_protokol.pdf", "PDF (*.pdf)"),
+            "todo": ("Uložit seznam k opravě", f"{base}_k_oprave.pdf", "PDF (*.pdf)"),
             "dxf": ("Uložit DXF s chybami", f"{base}_kontrola.dxf", "DXF (*.dxf)"),
             "log": ("Uložit protokol (.log)", f"{base}.log", "Protokol (*.log *.txt)"),
         }[kind]
@@ -970,6 +1065,11 @@ class MainWindow(QMainWindow):
                 dxf_export.export_dxf(self.drawing, issues, path)
             elif kind == "pdf":
                 self._export_pdf(issues, path)
+            elif kind == "todo":
+                from ..export.pdf_report import export_checklist
+                todo = [i for i in issues if i.state == "nová" and i.severity != Severity.INFO]
+                name = Path(self.drawing.source_path or self.drawing.path).name if self.drawing else ""
+                export_checklist(issues, path, name, self._issue_images(todo, 80, 300))
             elif kind == "log":
                 from ..export.mgeo_log import export_mgeo_log
                 if self.drawing is None:
@@ -985,31 +1085,42 @@ class MainWindow(QMainWindow):
             from PySide6.QtGui import QDesktopServices
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
-    def _export_pdf(self, issues: list[Issue], path: str):
+    @staticmethod
+    def _png(pm) -> bytes:
         from PySide6.QtCore import QBuffer, QIODevice
+        buf = QBuffer()
+        buf.open(QIODevice.WriteOnly)
+        pm.save(buf, "PNG")
+        return bytes(buf.data())
 
-        from ..export.pdf_report import export_pdf
-        def png(pm) -> bytes:
-            buf = QBuffer()
-            buf.open(QIODevice.WriteOnly)
-            pm.save(buf, "PNG")
-            return bytes(buf.data())
-
+    def _issue_images(self, issues: list[Issue], limit: int = 60, size: int = 420) -> dict[int, bytes]:
+        """Výřezy výkresu kolem chyb (pro PDF)."""
         images: dict[int, bytes] = {}
-        limit = 60
-        overview = None
+        if self.drawing is None:
+            return images
         self.view.set_print_mode(True)
         try:
-            if self.drawing is not None:
-                for iss in [i for i in issues if i.state == "nová"][:limit]:
-                    span = 20.0
-                    if iss.geometry is not None and not iss.geometry.is_empty:
-                        b = iss.geometry.bounds
-                        span = min(80.0, max(span, (b[2] - b[0]) * 1.3, (b[3] - b[1]) * 1.3))
-                    images[iss.number] = png(self.view.render_region(iss.x, iss.y, span, 420))
-                overview = png(self.view.render_overview(issues, 900))
+            for iss in [i for i in issues if i.state == "nová"][:limit]:
+                span = 20.0
+                if iss.geometry is not None and not iss.geometry.is_empty:
+                    b = iss.geometry.bounds
+                    span = min(80.0, max(span, (b[2] - b[0]) * 1.3, (b[3] - b[1]) * 1.3))
+                images[iss.number] = self._png(self.view.render_region(iss.x, iss.y, span, size))
         finally:
             self.view.set_print_mode(False)
+        return images
+
+    def _export_pdf(self, issues: list[Issue], path: str):
+        from ..export.pdf_report import export_pdf
+        limit = 60
+        images = self._issue_images(issues, limit)
+        overview = None
+        if self.drawing is not None:
+            self.view.set_print_mode(True)
+            try:
+                overview = self._png(self.view.render_overview(issues, 900))
+            finally:
+                self.view.set_print_mode(False)
         drawing_name = Path(self.drawing.source_path or self.drawing.path).name if self.drawing else ""
         export_pdf(issues, path, drawing_name=drawing_name, project_name=self.project.name,
                    rules_count=len(self.project.rules.pravidla), images=images, overview=overview,

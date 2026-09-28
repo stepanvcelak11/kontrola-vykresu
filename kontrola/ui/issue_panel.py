@@ -95,7 +95,8 @@ class IssueModel(QAbstractTableModel):
                 f.setStrikeOut(True)
             return f
         if role == Qt.BackgroundRole and iss.state == "opraveno":
-            return QBrush(QColor(236, 253, 243))
+            from .theme import is_dark
+            return QBrush(QColor(20, 60, 38) if is_dark() else QColor(236, 253, 243))
         if role == Qt.ToolTipRole:
             tip = f"{iss.check_name}: {iss.message}"
             from ..navody import navod
@@ -201,7 +202,7 @@ class IssuePanel(QWidget):
         cards.setSpacing(6)
         self.cards: dict[object, QLabel] = {}
         self.card_caps: dict[object, QLabel] = {}
-        for key, title, color in ((None, "k opravě", "#1F2937"),
+        for key, title, color in ((None, "k opravě", "palette(text)"),
                                   (Severity.CHYBA, "chyby", SEVERITY_COLORS[Severity.CHYBA].name()),
                                   (Severity.VAROVANI, "varování", SEVERITY_COLORS[Severity.VAROVANI].name()),
                                   (Severity.INFO, "info", SEVERITY_COLORS[Severity.INFO].name())):

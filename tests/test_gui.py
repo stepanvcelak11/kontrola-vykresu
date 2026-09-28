@@ -266,3 +266,44 @@ def test_porovnani_verzi_v_okne(window, tmp_path):
     dlg.table.setCurrentCell(0, 0)
     dlg.close()
     assert not w.view._overlay
+
+
+def test_tmavy_rezim_a_aktualizace(window, monkeypatch):
+    from PySide6.QtWidgets import QApplication
+
+    from kontrola import aktualizace
+    from kontrola.ui import theme
+    w = window
+    w.a_dark.setChecked(True)
+    assert theme.is_dark() and "#1E1F22" in QApplication.instance().styleSheet()
+    assert w.settings.value("zobrazeni/tmavy", False, type=bool)
+    w.a_dark.setChecked(False)
+    assert not theme.is_dark() and "#1E1F22" not in QApplication.instance().styleSheet()
+    # nová verze → okno s odkazem ke stažení (síť se v testu nepoužije)
+    shown = []
+    monkeypatch.setattr(aktualizace, "BUILD", 5)
+    monkeypatch.setattr(aktualizace, "fetch_latest", lambda timeout=6.0: 9)
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: shown.append(self.text()))
+    w.check_updates(manual=True)
+    assert w._wait(lambda: bool(shown), 5)
+    assert "č. 9" in shown[0] and aktualizace.DOWNLOAD_URL in shown[0]
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_seznam_k_oprave_pdf(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    out = tmp_path / "k_oprave.pdf"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.No))
+    w.a_exp_todo.trigger()
+    assert out.exists() and out.stat().st_size > 5000
+    import pdfplumber
+    with pdfplumber.open(out) as pdf:
+        text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+    assert "Seznam k opravě" in text and "Jak opravit" in text

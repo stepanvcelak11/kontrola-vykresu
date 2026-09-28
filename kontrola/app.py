@@ -7,7 +7,7 @@ import sys
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
-    from PySide6.QtCore import QLocale, QTranslator, QLibraryInfo
+    from PySide6.QtCore import QLibraryInfo, QLocale, QSettings, QTimer, QTranslator
     from PySide6.QtWidgets import QApplication
 
     from . import APP_NAME
@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     if tr.load(QLocale(QLocale.Czech), "qtbase", "_", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
         app.installTranslator(tr)
     from .ui.theme import apply_theme
-    apply_theme(app)
+    apply_theme(app, QSettings("KontrolaVykresu", "KontrolaVykresu").value("zobrazeni/tmavy", False, type=bool))
     from PySide6.QtGui import QIcon
 
     from .resources import resource_path
@@ -35,8 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     win = MainWindow()
     win.show()
     if not win.settings.value("pruvodce/skryt", False, type=bool):
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(400, win.show_guide)
+        QTimer.singleShot(400, win.show_guide)  # průvodce při prvním spuštění
+    QTimer.singleShot(3000, win.maybe_check_updates)
     for a in argv[1:]:
         if not a.startswith("-"):
             win.open_path(a)

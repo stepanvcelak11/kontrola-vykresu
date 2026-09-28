@@ -37,8 +37,35 @@ _ICONS = {
 }
 
 
-def icon(name: str, color: str = TEXT, size: int = 40) -> QIcon:
+# tmavý režim: každá barva světlého vzhledu má svůj tmavý protějšek (nahrazuje se najednou, bez řetězení)
+DARK_MAP = {
+    "#F3F4F6": "#1E1F22", "#FFFFFF": "#2B2D31", "#D1D5DB": "#43464D", "#1F2937": "#E5E7EB",
+    "#6B7280": "#9CA3AF", "#9CA3AF": "#6B7280", "#2563EB": "#3B82F6", "#1D4ED8": "#2563EB",
+    "#DBEAFE": "#1E3A5F", "#EEF2F7": "#35383F", "#93C5FD": "#3B82F6", "#F9FAFB": "#313338",
+    "#E5E7EB": "#3A3D44", "#EEF0F3": "#383A40", "#374151": "#D1D5DB", "#EFF6FF": "#1E2A3D",
+    "#BFDBFE": "#2F4A73", "#1E3A8A": "#BFDBFE", "#FEF3C7": "#3D3218", "#FCD34D": "#806521",
+    "#78350F": "#FDE68A", "#4B5563": "#C0C4CC", "#C0C4CC": "#5A5E66",
+}
+_dark = False
+
+
+def is_dark() -> bool:
+    return _dark
+
+
+def themed(color: str) -> str:
+    """Barva ze světlého vzhledu převedená na aktuální vzhled."""
+    return DARK_MAP.get(color.upper(), color) if _dark else color
+
+
+def _to_dark(css: str) -> str:
+    import re
+    return re.sub(r"#[0-9A-Fa-f]{6}\b", lambda m: DARK_MAP.get(m.group(0).upper(), m.group(0)), css)
+
+
+def icon(name: str, color: str | None = None, size: int = 40) -> QIcon:
     """Ikona z vestavěné sady (vykreslená z SVG, ostrá i na displejích s vyšším rozlišením)."""
+    color = color or themed(TEXT)
     body = _ICONS.get(name)
     if body is None:
         return QIcon()
@@ -50,7 +77,7 @@ def icon(name: str, color: str = TEXT, size: int = 40) -> QIcon:
            f'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">{body}</svg>')
     renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
     ic = QIcon()
-    for mode, col in ((QIcon.Normal, color), (QIcon.Disabled, "#9CA3AF")):
+    for mode, col in ((QIcon.Normal, color), (QIcon.Disabled, themed("#9CA3AF"))):
         r = renderer if col == color else QSvgRenderer(QByteArray(svg.replace(color, col).encode("utf-8")))
         pm = QPixmap(size, size)
         pm.fill(Qt.transparent)
@@ -153,8 +180,8 @@ def _arrow_files() -> dict[str, str]:
     d.mkdir(exist_ok=True)
     out = {}
     for name, pts in (("dolu", [(2, 5), (8, 11), (14, 5)]), ("nahoru", [(2, 11), (8, 5), (14, 11)])):
-        for state, col in (("", "#4B5563"), ("_off", "#C0C4CC")):
-            f = d / f"sipka_{name}{state}.png"
+        for state, col in (("", themed("#4B5563")), ("_off", themed("#C0C4CC"))):
+            f = d / f"sipka_{name}{state}{'_tmava' if _dark else ''}.png"
             if not f.exists():
                 pm = QPixmap(32, 32)
                 pm.fill(Qt.transparent)
@@ -206,23 +233,25 @@ def fit_headers(table, extra: int = 30) -> None:
             table.setColumnWidth(c, need)
 
 
-def apply_theme(app) -> None:
-    """Nastaví styl Fusion se světlou paletou a vlastním stylesheetem."""
+def apply_theme(app, dark: bool = False) -> None:
+    """Nastaví styl Fusion se světlou (nebo tmavou) paletou a vlastním stylesheetem."""
+    global _dark
+    _dark = dark
     app.setStyle("Fusion")
     pal = QPalette()
-    pal.setColor(QPalette.Window, QColor(BG))
-    pal.setColor(QPalette.Base, QColor(PANEL))
-    pal.setColor(QPalette.AlternateBase, QColor("#F9FAFB"))
-    pal.setColor(QPalette.Text, QColor(TEXT))
-    pal.setColor(QPalette.WindowText, QColor(TEXT))
-    pal.setColor(QPalette.Button, QColor(PANEL))
-    pal.setColor(QPalette.ButtonText, QColor(TEXT))
-    pal.setColor(QPalette.Highlight, QColor(ACCENT))
+    pal.setColor(QPalette.Window, QColor(themed(BG)))
+    pal.setColor(QPalette.Base, QColor(themed(PANEL)))
+    pal.setColor(QPalette.AlternateBase, QColor(themed("#F9FAFB")))
+    pal.setColor(QPalette.Text, QColor(themed(TEXT)))
+    pal.setColor(QPalette.WindowText, QColor(themed(TEXT)))
+    pal.setColor(QPalette.Button, QColor(themed(PANEL)))
+    pal.setColor(QPalette.ButtonText, QColor(themed(TEXT)))
+    pal.setColor(QPalette.Highlight, QColor(themed(ACCENT)))
     pal.setColor(QPalette.HighlightedText, QColor("white"))
-    pal.setColor(QPalette.ToolTipBase, QColor("#111827"))
+    pal.setColor(QPalette.ToolTipBase, QColor(themed("#111827")))
     pal.setColor(QPalette.ToolTipText, QColor("white"))
-    pal.setColor(QPalette.PlaceholderText, QColor("#9CA3AF"))
-    pal.setColor(QPalette.Mid, QColor(MUTED))
+    pal.setColor(QPalette.PlaceholderText, QColor(themed("#9CA3AF")))
+    pal.setColor(QPalette.Mid, QColor(themed(MUTED)))
     app.setPalette(pal)
     f = app.font()
     if f.family() in ("", "Sans Serif", "MS Shell Dlg 2") or f.pointSizeF() < 9.5:
@@ -235,4 +264,4 @@ def apply_theme(app) -> None:
         css = STYLESHEET + _arrow_css(_arrow_files())
     except OSError:  # bez zápisu do dočasné složky zůstanou výchozí šipky
         css = STYLESHEET
-    app.setStyleSheet(css)
+    app.setStyleSheet(_to_dark(css) if dark else css)

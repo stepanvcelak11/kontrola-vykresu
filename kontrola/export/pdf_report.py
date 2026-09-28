@@ -188,3 +188,60 @@ def _image(png: bytes, max_w: float, max_h: float) -> Image:
     w, h = ImageReader(io.BytesIO(png)).getSize()
     s = min(max_w / w, max_h / h)
     return Image(io.BytesIO(png), width=w * s, height=h * s)
+
+
+def export_checklist(issues: list[Issue], path: str | Path, drawing_name: str = "",
+                     images: dict[int, bytes] | None = None):
+    """Seznam k opravě na tisk: otevřené chyby seskupené podle typu, políčko k odškrtnutí, návod, výřez."""
+    font, bold = _font()
+    ss = getSampleStyleSheet()
+    st = {
+        "h1": ParagraphStyle("h1", parent=ss["Title"], fontName=bold, fontSize=16, spaceAfter=4, alignment=TA_LEFT),
+        "h2": ParagraphStyle("h2", parent=ss["Heading2"], fontName=bold, fontSize=12, spaceBefore=8, spaceAfter=3),
+        "p": ParagraphStyle("p", parent=ss["Normal"], fontName=font, fontSize=9, leading=11.5),
+        "hint": ParagraphStyle("n", parent=ss["Normal"], fontName=font, fontSize=8, leading=10,
+                               textColor=colors.HexColor("#1E3A8A")),
+        "box": ParagraphStyle("b", parent=ss["Normal"], fontName=font, fontSize=14, leading=14),
+    }
+    images = images or {}
+    todo = [i for i in issues if i.state == "nová" and i.severity != Severity.INFO]
+    doc = SimpleDocTemplate(str(path), pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm,
+                            topMargin=14 * mm, bottomMargin=14 * mm, title="Seznam k opravě",
+                            author="Kontrola výkresu")
+    story = [Paragraph("Seznam k opravě", st["h1"]),
+             Paragraph(f"{_esc(drawing_name)} · {dt.datetime.now().strftime('%d.%m.%Y %H:%M')} · "
+                       f"k opravě {len(todo)} (chyby {sum(1 for i in todo if i.severity == Severity.CHYBA)}, "
+                       f"varování {sum(1 for i in todo if i.severity == Severity.VAROVANI)}). "
+                       "Opravené odškrtněte ☐ → ☑.", st["p"])]
+    if not todo:
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Nic k opravě – výkres je připravený.", st["p"]))
+    groups: dict[str, list[Issue]] = {}
+    for i in sorted(todo, key=lambda i: (i.severity.rank, i.check_name, i.number)):
+        groups.setdefault(i.check_name, []).append(i)
+    for name, items in groups.items():
+        story.append(Paragraph(f"{_esc(name)} ({len(items)})", st["h2"]))
+        h = navod(items[0])
+        if h:
+            story.append(Paragraph(f"Jak opravit: {_esc(h)}", st["hint"]))
+            story.append(Spacer(1, 3))
+        rows = []
+        for i in items:
+            text = (f"<b>#{i.number}</b> <font color='{SEV_COLORS[i.severity].hexval().replace('0x', '#')}'>"
+                    f"{_esc(i.severity.value)}</font> – {_esc(i.message)}<br/>"
+                    f"<font size=7.5 color='#555555'>vrstva {_esc(i.layer or '–')} · Y {_coord(i.x)} · "
+                    f"X {_coord(i.y)}</font>")
+            hi = navod(i)
+            if hi and hi != h:
+                text += f"<br/><font size=7.5 color='#1E3A8A'>Jak opravit: {_esc(hi)}</font>"
+            if i.note:
+                text += f"<br/><font size=7.5>Poznámka: {_esc(i.note)}</font>"
+            img = _image(images[i.number], 38 * mm, 30 * mm) if i.number in images else ""
+            rows.append([Paragraph("☐", st["box"]), Paragraph(text, st["p"]), img])
+        t = Table(rows, colWidths=[9 * mm, 131 * mm, 42 * mm])
+        t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4)]))
+        story.append(t)
+    doc.build(story)
+    return Path(path)

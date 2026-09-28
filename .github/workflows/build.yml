@@ -31,6 +31,9 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q tests
+      - name: Číslo sestavení do programu (pro kontrolu aktualizací)
+        shell: bash
+        run: printf 'BUILD = %s\nCOMMIT = "%s"\n' "${{ github.run_number }}" "${{ github.sha }}" > kontrola/_build.py
       - run: pyinstaller --noconfirm --clean kontrola_vykresu.spec
       - name: Sestavené .exe zkontroluje ukázkový výkres (CSV, Excel, PDF, DXF)
         shell: pwsh
@@ -83,7 +86,7 @@ jobs:
           tag_name: posledni-verze
           name: Kontrola výkresu – poslední verze
           body: |
-            Automaticky sestaveno z commitu ${{ github.sha }}.
+            Sestavení č. ${{ github.run_number }} – automaticky z commitu ${{ github.sha }}.
             Stáhněte KontrolaVykresu.exe a spusťte (instalace není potřeba).
             Ukázková data: složka ukazky/ ve zdrojových kódech (Source code .zip).
           files: dist/KontrolaVykresu.exe
