@@ -102,6 +102,13 @@ class MainWindow(QMainWindow):
         self.sketch_dock.setWidget(self.sketch)
         self.sketch_dock.setToolTip("Panel lze odpojit do plovoucího okna tlačítkem v jeho záhlaví.")
         self.addDockWidget(Qt.RightDockWidgetArea, self.sketch_dock)
+        from .poradce import PoradcePanel
+        self.poradce = PoradcePanel()
+        self.poradce_dock = QDockWidget("Poradce", self)
+        self.poradce_dock.setObjectName("poradce")
+        self.poradce_dock.setWidget(self.poradce)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.poradce_dock)
+        self.poradce_dock.hide()
         self.sketch_dock.hide()
 
         self._build_status()
@@ -287,6 +294,7 @@ class MainWindow(QMainWindow):
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Rychlé tipy – MicroStation (rovnoběžka, kolmice…)", self.show_tips, "Ctrl+T",
                                    "Jak udělat běžné konstrukce a opravy v MicroStationu"))
+        m_help.addAction(self.poradce_dock.toggleViewAction())
         m_help.addAction(self._act("Klávesové zkratky", self.show_shortcuts, None,
                                    "Přehled klávesových zkratek aplikace"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
@@ -334,6 +342,11 @@ class MainWindow(QMainWindow):
         tb.addAction(self.a_sketch)
         tb.addSeparator()
         tb.addAction(self.a_exp_pdf)
+        a_por = self.poradce_dock.toggleViewAction()
+        a_por.setText("Poradce")
+        a_por.setShortcut(QKeySequence("Ctrl+K"))
+        a_por.setToolTip("Zeptejte se na cokoli – odpověď z návodů aplikace (Ctrl+K, diktování Win+H)")
+        tb.addAction(a_por)
         self.addToolBar(tb)
         self.toolbar = tb
         # hlavní akce je zvýrazněná (bílá ikona na modrém tlačítku)

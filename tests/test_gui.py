@@ -398,3 +398,10 @@ def test_hromadna_kontrola(window, tmp_path):
                        lambda *a: None, lambda: False)
     assert rows[0]["chyby"] > 0 and rows[0]["skore"] is not None
     assert rows[1]["chyba"] and rows[1]["skore"] is None
+
+
+def test_poradce():
+    from kontrola.ui.poradce import answer
+    assert answer("jak udělat kolmici")[0][0].startswith("Kolmice")
+    assert "Směrnic" in answer("proč vrstva 58 není ve směrnici")[0][0]
+    assert answer("xyzzy qwerty") == []
