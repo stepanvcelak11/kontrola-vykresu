@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
         self.sketch_dock.setToolTip("Panel lze odpojit do plovoucího okna tlačítkem v jeho záhlaví.")
         self.addDockWidget(Qt.RightDockWidgetArea, self.sketch_dock)
         from .poradce import PoradcePanel
-        self.poradce = PoradcePanel()
+        self.poradce = PoradcePanel(win=self)
         self.poradce_dock = QDockWidget("Poradce", self)
         self.poradce_dock.setObjectName("poradce")
         self.poradce_dock.setWidget(self.poradce)

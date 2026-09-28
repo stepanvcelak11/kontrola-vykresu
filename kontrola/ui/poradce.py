@@ -69,13 +69,42 @@ def _index():
     return items
 
 
-def answer(question: str, limit: int = 3):
+def _project_items(win) -> list:
+    """Položky z otevřeného projektu: pravidla Směrnice a pokyny z Wordu se zadáním."""
+    out = []
+    p = getattr(win, "project", None) if win is not None else None
+    if p is None:
+        return out
+    for r in p.rules.pravidla[:600]:
+        parts = [f"vrstva <b>{escape(str(r.hladina))}</b>" if r.hladina else "",
+                 f"barva <b>{escape(str(r.barva))}</b>" if r.barva is not None else "",
+                 f"styl <b>{escape(str(r.styl_cary))}</b>" if r.styl_cary else "",
+                 f"tloušťka <b>{escape(str(r.tloustka))}</b>" if r.tloustka is not None else "",
+                 f"buňka <b>{escape(str(r.blok))}</b>" if r.blok else "",
+                 f"písmo <b>{escape(str(r.font))}</b>" if r.font else "",
+                 f"výška textu <b>{r.vyska_textu:g}</b>" if r.vyska_textu else ""]
+        html = "Podle pravidel projektu: " + ", ".join(x for x in parts if x) + "."
+        out.append((r.nazev or r.kod, f"{r.kod} {r.hladina or ''} barva vrstva styl tloustka", html,
+                    "Směrnice (pravidla projektu)"))
+    try:
+        from ..importer.dokument import read_document, requirements
+        for a in p.attachments("dokumenty"):
+            if a.path.suffix.lower() in (".doc", ".docx", ".odt", ".rtf"):
+                for q in requirements(read_document(a.path)):
+                    out.append((f"{q.druh}: {q.hodnota}" if q.hodnota else q.druh, q.druh, escape(q.veta),
+                                f"Zadání – {a.name}"))
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def answer(question: str, limit: int = 3, win=None):
     """Najde nejlepší odpovědi: [(nadpis, html, zdroj)]."""
     q = set(_norm(question))
     if not q:
         return []
     scored = []
-    for title, keys, html, src in _index():
+    for title, keys, html, src in _index() + _project_items(win):
         t_words, k_words = set(_norm(title)), set(_norm(keys))
         body = set(_norm(re.sub(r"<[^>]+>", " ", html)))
         sc = 3 * len(q & t_words) + 2 * len(q & k_words) + 0.5 * len(q & body)
@@ -85,15 +114,56 @@ def answer(question: str, limit: int = 3):
     return [(t, h, s) for _, t, h, s in scored[:limit]]
 
 
+def _special(text: str, win):
+    """Otázky na stav práce a na vybranou chybu – odpověď z aktuálního stavu aplikace."""
+    t = " ".join(_norm(text))
+    if win is None:
+        return None
+    iss = win.issue_panel.current_issue() if hasattr(win, "issue_panel") else None
+    if iss is not None and re.search(r"\b(oprav|tahle|tato|tuhle|vybra|chyba|tohle)", t):
+        from ..navody import navod
+        from .help_topics import TOPICS
+        h = navod(iss) or ""
+        extra = TOPICS.get(iss.check_id, ("", ""))[1]
+        return (f"Vybraná chyba #{iss.number}: {escape(iss.check_name)}",
+                f"<i>{escape(iss.message)}</i><br><b>Jak opravit:</b> {escape(h)}"
+                + (f"<br><br>{extra}" if extra else ""), "Vybraná chyba")
+    if re.search(r"\b(kolik|stav|zbyva|hotov)", t):
+        issues = getattr(win, "issues", []) or []
+        if not issues:
+            return ("Stav", "Výkres zatím nebyl zkontrolován – otevřete ho a stiskněte <b>Zkontrolovat</b> (F5).",
+                    "Stav práce")
+        from ..skore import compute_score
+        sk = compute_score(issues, bool(win.project and win.project.rules.pravidla))
+        todo = [i for i in issues if i.state == "nová" and i.severity.value != "info"]
+        return ("Stav", f"K opravě zbývá <b>{len(todo)}</b> (chyby {sum(1 for i in todo if i.severity.value == 'chyba')}"
+                f", varování {sum(1 for i in todo if i.severity.value == 'varování')}). Skóre <b>{sk.hodnota}</b>/100 "
+                f"– {escape(sk.popis)}.", "Stav práce")
+    if re.search(r"\b(dal|dalsi|zacit|dele|postu)", t):
+        p = win.project
+        if p is not None and not p.rules.pravidla:
+            step = "Nahrajte Směrnici a Word se zadáním do záložky <b>Zadání</b>."
+        elif getattr(win, "drawing", None) is None:
+            step = "Otevřete výkres (DXF uložený z MicroStationu) – tlačítko <b>Otevřít</b>."
+        elif not getattr(win, "issues", None):
+            step = "Spusťte <b>Zkontrolovat</b> (F5)."
+        else:
+            step = ("Procházejte chyby (F8 = další), opravujte je v MicroStationu, uložte DXF a aplikace zkontroluje "
+                    "znovu. Nakonec <b>Připraveno k odevzdání?</b>")
+        return ("Co dál", step, "Stav práce")
+    return None
+
+
 class PoradcePanel(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, win=None):
         super().__init__(parent)
+        self.win = win
         lay = QVBoxLayout(self)
         lay.setContentsMargins(6, 6, 6, 6)
         self.chat = QTextBrowser()
         self.chat.setOpenExternalLinks(False)
-        self.chat.setHtml("<p><b>Poradce</b> – napište otázku, např. <i>jak udělat kolmici</i>, <i>co je "
-                          "přetažená linie</i>, <i>proč vrstva 58 není ve Směrnici</i>.</p>"
+        self.chat.setHtml("<p><b>Poradce</b> – zeptejte se, např. <i>jak udělat kolmici</i>, <i>jaká barva má "
+                          "plot</i>, <i>jak opravit tuhle chybu</i>, <i>kolik mi zbývá</i>, <i>co dál</i>.</p>"
                           "<p style='color:#6B7280'>🎤 Mluvit: klikněte do pole a stiskněte <b>Win+H</b>.</p>")
         lay.addWidget(self.chat, 1)
         row = QHBoxLayout()
@@ -124,7 +194,8 @@ class PoradcePanel(QWidget):
         text = self.q.text().strip()
         if not text:
             return
-        res = answer(text)
+        sp = _special(text, self.win)
+        res = [sp] if sp else answer(text, win=self.win)
         out = f"<p style='text-align:right'><b>Vy:</b> {escape(text)}</p>"
         if not res:
             out += ("<p>Na tohle odpověď v návodech nemám. Zkuste jiná slova, nebo <b>Nápověda → Rychlé tipy</b> "

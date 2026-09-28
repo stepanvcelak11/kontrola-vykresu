@@ -405,3 +405,26 @@ def test_poradce():
     assert answer("jak udělat kolmici")[0][0].startswith("Kolmice")
     assert "Směrnic" in answer("proč vrstva 58 není ve směrnici")[0][0]
     assert answer("xyzzy qwerty") == []
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_poradce_zna_projekt(window):
+    from kontrola.rules import Rule
+    w = window
+    w.project.rules.pravidla.append(Rule(kod="P1", nazev="Plot dřevěný", hladina="PLOTY", barva=93, styl_cary="2.103"))
+    w.poradce.q.setText("jaká barva je plot dřevěný")
+    w.poradce.ask()
+    assert "93" in w.poradce.chat.toPlainText() and "2.103" in w.poradce.chat.toPlainText()
+    w.poradce.q.setText("co dál")
+    w.poradce.ask()
+    assert "Otevřete výkres" in w.poradce.chat.toPlainText()
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.issue_panel.select_issue(w.issues[0].number)
+    w.poradce.q.setText("jak opravit tuhle chybu")
+    w.poradce.ask()
+    assert "Jak opravit" in w.poradce.chat.toPlainText()
+    w.poradce.q.setText("kolik mi zbývá")
+    w.poradce.ask()
+    assert "K opravě zbývá" in w.poradce.chat.toPlainText()
