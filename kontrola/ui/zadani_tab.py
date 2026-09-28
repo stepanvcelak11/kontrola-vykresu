@@ -24,8 +24,8 @@ from .image_viewer import IMAGE_EXT, ImageBrowser, load_pixmap
 from .rules_editor import RulesEditor
 from .table_import import ImportSummaryDialog, TableImportWizard
 
-TABLE_EXT = {".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".tsv", ".pdf"}
-DRAWING_EXT = {".dxf", ".dgn", ".dwg"}
+TABLE_EXT = {".xlsx", ".xlsm", ".xls", ".ods", ".csv", ".txt", ".tsv", ".pdf"}
+DRAWING_EXT = {".dxf", ".dgn", ".dwg", ".vfk"}
 
 
 def _is_point_list(path: str) -> bool:
@@ -35,7 +35,7 @@ def _is_point_list(path: str) -> bool:
         pts = read_point_list(path)
         lines = [ln for ln in Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
                  if ln.strip() and not ln.lstrip().startswith(";")]
-    except OSError:
+    except (OSError, ValueError):
         return False
     return len(pts) >= 2 and len(pts) >= 0.8 * len(lines) and all(abs(p.a) > 1000 for p in pts[:5])
 
@@ -132,7 +132,7 @@ class TablePage(QWidget):
     def _pick(self):
         start = QSettings("KontrolaVykresu", "KontrolaVykresu").value("cesty/podklady", str(Path.home()))
         files, _ = QFileDialog.getOpenFileNames(self, "Tabulka atributů", start,
-                                                "Tabulky (*.xlsx *.xls *.xlsm *.csv *.txt *.pdf);;Vše (*)")
+                                                "Tabulky (*.xlsx *.xls *.xlsm *.ods *.csv *.txt *.pdf);;Vše (*)")
         for f in files:
             QSettings("KontrolaVykresu", "KontrolaVykresu").setValue("cesty/podklady", str(Path(f).parent))
             self.import_file(f)
@@ -911,13 +911,18 @@ class ZadaniTab(QWidget):
             if suf in DRAWING_EXT:
                 self.tabs.setCurrentWidget(self.template_page)
                 self.template_page.set_template(f)
-            elif suf in (".txt", ".crd", ".csv") and _is_point_list(f):
+            elif suf in (".txt", ".crd", ".csv", ".ss", ".xyz", ".sez", ".pts") and _is_point_list(f):
                 self.project.add_attachment("seznamy", f)
                 self.project_changed()
                 self.tabs.setCurrentWidget(self.attachments_page)
                 QMessageBox.information(self, "Seznam souřadnic", f"{Path(f).name} je seznam souřadnic – uložen "
                                         "do Podkladů. Při kontrole se porovnají body, čísla a výšky bodů.")
-            elif suf in (".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".tsv"):
+            elif suf in (".ss", ".crd", ".xyz", ".sez", ".pts"):
+                QMessageBox.information(self, "Seznam souřadnic",
+                                        f"{Path(f).name} není textový seznam souřadnic (nejspíš binární soubor "
+                                        "Kokeše nebo Gromy).\n\nV programu seznam exportujte do textu "
+                                        "(řádky „číslo Y X Z“, např. .txt nebo .csv) a ten sem přetáhněte.")
+            elif suf in (".xlsx", ".xlsm", ".xls", ".ods", ".csv", ".txt", ".tsv"):
                 self.tabs.setCurrentWidget(self.table_page)
                 self.table_page.import_file(f)
             elif suf == ".pdf":

@@ -152,7 +152,7 @@ class VypocetDialog(QDialog):
             stations = read_zap(zap)
             known = [p for f in dane for p in read_point_list(f)]
             student = read_point_list(seznam)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Kontrola výpočtu", f"Soubor nelze načíst: {exc}")
             return
         if not stations:

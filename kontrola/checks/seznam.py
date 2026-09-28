@@ -40,6 +40,9 @@ _LINE = re.compile(rf"^\s*(\S+)[\s;,]+({_NUM})[\s;,]+({_NUM})(?:[\s;,]+({_NUM}))
 def read_point_list(path: str | Path) -> list[ListPoint]:
     """Načte seznam souřadnic (číslo, dvě souřadnice, volitelně výška). Hlavičky a poznámky přeskočí."""
     raw = Path(path).read_bytes()
+    if b"\x00" in raw[:4096]:
+        raise ValueError(f"{Path(path).name} je binární soubor (např. seznam z Kokeše/Gromy) – exportujte ho "
+                         "jako textový seznam „číslo Y X Z“.")
     for enc in ("utf-8-sig", "cp1250", "latin-1"):
         try:
             text = raw.decode(enc)

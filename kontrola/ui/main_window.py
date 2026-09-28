@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, Q
 
 from .. import APP_NAME
 from ..checks.base import Issue, Severity
-from ..io.dgn import DGN_NAVOD
+from ..io.dgn import DGN_NAVOD, JINE_PROGRAMY_NAVOD
 from ..io.dxf_loader import load_drawing
 from ..model import Drawing
 from ..project import PROJECT_EXT, Project, default_projects_dir
@@ -24,7 +24,8 @@ from .settings_dialog import SettingsDialog
 from .worker import BackgroundTask
 from .zadani_tab import ZadaniTab
 
-DRAWING_FILTER = "Výkresy (*.dxf *.dgn *.dwg);;DXF (*.dxf);;DGN (*.dgn);;Všechny soubory (*)"
+DRAWING_FILTER = ("Výkresy (*.dxf *.dgn *.dwg *.vfk);;DXF (*.dxf);;DGN (*.dgn);;VFK – katastr (*.vfk);;"
+                  "Všechny soubory (*)")
 
 
 class MainWindow(QMainWindow):
@@ -258,6 +259,8 @@ class MainWindow(QMainWindow):
         m_help.addAction(self._act("Co znamenají chyby (s obrázky)…", self.show_help, "F1",
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
+        m_help.addAction(self._act("Kokeš, Atlas DMT, AutoCAD a katastr (VFK)",
+                                   lambda: QMessageBox.information(self, "Jiné programy", JINE_PROGRAMY_NAVOD)))
         m_help.addSeparator()
         m_help.addAction(self._act("Nahlásit chybu / složka s logy…", self._open_logs, None,
                                    "Pokud se něco pokazilo: záznam chyb je v této složce"))
@@ -653,7 +656,7 @@ class MainWindow(QMainWindow):
         suffix = Path(path).suffix.lower()
         if suffix == PROJECT_EXT:
             self.open_project(path)
-        elif suffix in (".dxf", ".dgn", ".dwg"):
+        elif suffix in (".dxf", ".dgn", ".dwg", ".vfk"):
             if self.tabs.currentWidget() is self.zadani and \
                     self.zadani.tabs.currentWidget() is self.zadani.template_page:
                 self.zadani.template_page.set_template(path)

@@ -496,4 +496,8 @@ def load_drawing(path: str | Path, progress: ProgressFn | None = None,
         d = read_dxf(dxf, progress)
         d.source_path = str(p)
         return d
-    raise DrawingLoadError(f"Nepodporovaný formát souboru: {p.suffix}. Použijte DXF.")
+    if suffix == ".vfk":
+        from .vfk import read_vfk
+        return read_vfk(p, progress)
+    raise DrawingLoadError(f"Nepodporovaný formát souboru: {p.suffix}. Použijte DXF (z MicroStationu, Kokeše "
+                           "i Atlasu DMT jde výkres uložit/exportovat jako DXF), nebo VFK z katastru.")

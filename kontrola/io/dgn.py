@@ -35,6 +35,24 @@ DGN_NAVOD = (
 )
 
 
+JINE_PROGRAMY_NAVOD = (
+    "Aplikace kontroluje DXF – ten umí uložit většina geodetických programů.\n\n"
+    "KOKEŠ (Gepro):\n"
+    "  • Výkres: v nabídce Soubor najděte export (Export / Uložit jako) a zvolte formát DXF. "
+    "Vrstvy a barvy Kokeše se přenesou do vrstev DXF.\n"
+    "  • Data katastru (VFK): soubor .vfk můžete otevřít přímo – aplikace z něj vykreslí body, hranice "
+    "parcel, budovy a čísla parcel (hodí se jako podklad nebo vzor k porovnání).\n"
+    "  • Seznam souřadnic: exportujte ho jako textový soubor (řádky „číslo Y X Z“) – binární seznam "
+    "(.ss) aplikace neotevře.\n\n"
+    "ATLAS DMT:\n"
+    "  • Kresbu / model exportujte do DXF (nabídka exportu, formát DXF) a DXF přetáhněte do aplikace.\n"
+    "  • Body exportujte jako textový seznam souřadnic.\n\n"
+    "AutoCAD / GstarCAD / BricsCAD: uložte jako DXF (DWG jen s nainstalovaným ODA File Converterem).\n\n"
+    "Pozor: pravidla (vrstvy, barvy, styly) v aplikaci musí odpovídat programu, ve kterém kreslíte – "
+    "u Kokeše nahrajte do Zadání jeho tabulku kódů / Směrnici od učitele."
+)
+
+
 def dgn_version(path: str | Path) -> str | None:
     """Pozná verzi souboru DGN podle hlavičky: „V8“ (MicroStation V8/V8i/CONNECT) nebo „V7“."""
     try:

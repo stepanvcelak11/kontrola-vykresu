@@ -114,7 +114,40 @@ def read_table(path: str | Path, sheet: str | None = None) -> TableData:
         return _read_pdf(p)
     if suf == ".xls":
         return _read_xls(p, sheet)
+    if suf == ".ods":
+        return _read_ods(p, sheet)
     raise ValueError(f"Nepodporovaný formát tabulky: {p.suffix}")
+
+
+def _read_ods(p: Path, sheet: str | None) -> TableData:
+    """Tabulka z LibreOffice / OpenOffice Calc (.ods) – bez dalších knihoven."""
+    import zipfile
+    from xml.etree import ElementTree as ET
+    T = "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}"
+    with zipfile.ZipFile(p) as z:
+        root = ET.fromstring(z.read("content.xml"))
+    tables = list(root.iter(f"{T}table"))
+    if not tables:
+        raise ValueError("V souboru .ods není žádný list.")
+    names = [t.get(f"{T}name") or f"List{i + 1}" for i, t in enumerate(tables)]
+    tab = tables[names.index(sheet)] if sheet in names else tables[0]
+    rows: list[list[str]] = []
+    for tr in tab.iter(f"{T}table-row"):
+        row: list[str] = []
+        for tc in tr:
+            if tc.tag not in (f"{T}table-cell", f"{T}covered-table-cell"):
+                continue
+            rep = min(int(tc.get(f"{T}number-columns-repeated", "1")), 200)
+            val = tc.get("{urn:oasis:names:tc:opendocument:xmlns:office:1.0}value")
+            text = " ".join("".join(t.itertext()) for t in tc) if val is None else val
+            row += [text.strip()] * rep
+        while row and not row[-1]:
+            row.pop()
+        rep_rows = min(int(tr.get(f"{T}number-rows-repeated", "1")), 1 if not row else 50)
+        rows += [list(row) for _ in range(rep_rows)]
+    while rows and not any(rows[-1]):
+        rows.pop()
+    return TableData(str(p), names, names[names.index(sheet)] if sheet in names else names[0], _trim(rows))
 
 
 def _read_xlsx(p: Path, sheet: str | None) -> TableData:
