@@ -395,6 +395,7 @@ class IssuePanel(QWidget):
     def set_issues(self, issues: list[Issue], summary: str = ""):
         prev_hidden = set(self.proxy.hidden_types)
         self.model.set_issues(issues)
+        self._current_changed(QModelIndex(), QModelIndex())  # nový seznam – starý návod a tlačítka pryč
         self._updating = True
         self.types.clear()
         counts = Counter(i.check_name for i in issues)

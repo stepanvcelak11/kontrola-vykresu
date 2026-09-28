@@ -155,6 +155,28 @@ Otevřete ukázkový výkres a stiskněte F5.
 * **Průběh:** malý graf pod kartami ukazuje počet chyb (červeně) a varování (oranžově)
   u posledních kontrol.
 
+### Průvodce, vysvětlení chyb, porovnání verzí a další
+
+* **Průvodce** se ukáže při prvním spuštění (a kdykoli v menu Nápověda → Průvodce): pět krátkých
+  kroků od uložení DXF po odevzdání, s tlačítky, která rovnou otevřou správné místo.
+* **? Co to znamená** (nad seznamem chyb, F1, pravé tlačítko na chybě): vysvětlení typu chyby
+  s obrázkem „chyba / správně“ a postupem opravy v MicroStationu. Jsou tam i pojmy (uzel,
+  tolerance, chyba × varování × info).
+* **Rychlé filtry** nad seznamem: *Vše*, *K opravě* (bez informací), *Topologie* (co hlásí
+  MGEO), *Atributy* (co hlásí GISoft).
+* **Panel Prvek:** klik na čáru, bod, text nebo buňku ve výkresu ukáže její vlastnosti, co
+  o ní říká Směrnice (✓/✗ u vrstvy, barvy, stylu, tloušťky, písma) a chyby u ní.
+* **Kontrola → Porovnat verze výkresu** (Ctrl+D): co se změnilo od předchozí načtené verze
+  (nebo proti jinému DXF) – přidané (zeleně), odebrané (červeně čárkovaně), upravené (oranžově)
+  a prvky se změněnými atributy (fialově). Kliknutím na řádek se výkres přiblíží na změnu.
+* **Soubor → Export → Seznam k opravě na tisk** (Ctrl+P): PDF se zbývajícími chybami
+  seskupenými podle typu, s políčkem k odškrtnutí, návodem a výřezem výkresu.
+* **Zobrazení → Tmavý režim** (volba se pamatuje).
+* **Kontrola aktualizací:** hotový `.exe` se jednou denně podívá na GitHub, jestli není
+  novější sestavení, a nabídne odkaz ke stažení. Zjišťuje se jen číslo poslední verze
+  (veřejná stránka vydání), **nic se neodesílá** – žádné výkresy ani údaje o počítači.
+  Vypnout: Nápověda → Hledat aktualizace při spuštění.
+
 ### Seznam souřadnic a kontrola výpočtu ze zápisníku
 
 * **Seznam souřadnic** (výstup z Gromy, `číslo Y X Z`) přetáhněte do okna nebo přidejte na

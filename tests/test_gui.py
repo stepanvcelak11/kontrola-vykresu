@@ -307,3 +307,16 @@ def test_seznam_k_oprave_pdf(window, tmp_path, monkeypatch):
     with pdfplumber.open(out) as pdf:
         text = "\n".join(p.extract_text() or "" for p in pdf.pages)
     assert "Seznam k opravě" in text and "Jak opravit" in text
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_novy_seznam_skryje_stary_navod(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    p = w.issue_panel
+    p.select_issue(w.issues[0].number)
+    assert p.hint.isVisibleTo(p) and p.b_find.isEnabled()
+    w.set_issues([])
+    assert not p.hint.isVisibleTo(p) and not p.b_find.isEnabled()
