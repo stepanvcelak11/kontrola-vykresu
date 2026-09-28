@@ -82,10 +82,15 @@ class TablePage(QWidget):
         row = QHBoxLayout()
         b = QPushButton("Importovat tabulku…")
         b.clicked.connect(self._pick)
+        b.setProperty("primarni", True)
         b2 = QPushButton("Znovu otevřít průvodce pro vybranou")
         b2.clicked.connect(self._reimport)
+        b3 = QPushButton("Odebrat tabulku a její pravidla")
+        b3.setToolTip("Když jste nahráli špatnou tabulku: odebere ji z projektu i s pravidly, která z ní vznikla.")
+        b3.clicked.connect(self._remove)
         row.addWidget(b)
         row.addWidget(b2)
+        row.addWidget(b3)
         row.addStretch(1)
         lay.addLayout(row)
         lay.addWidget(QLabel("Tabulky v projektu:"))
@@ -126,6 +131,29 @@ class TablePage(QWidget):
             return
         rel = it.data(Qt.UserRole)
         self.run_wizard(rel)
+
+    def _remove(self):
+        it = self.list.currentItem()
+        if it is None:
+            QMessageBox.information(self, "Odebrat tabulku", "Vyberte tabulku v seznamu.")
+            return
+        rel = it.data(Qt.UserRole)
+        p = self.tab.project
+        name = Path(rel).name
+        n = sum(1 for r in p.rules.pravidla
+                if r.zdroj and (r.zdroj == name or r.zdroj.startswith(name + ",")))
+        ans = QMessageBox.question(
+            self, "Odebrat tabulku",
+            f"Odebrat tabulku {name} z projektu?\n\nZ této tabulky vzniklo {n} pravidel.\n"
+            "Ano = odebrat tabulku i její pravidla, Ne = odebrat jen tabulku (pravidla zůstanou).",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+        if ans == QMessageBox.Cancel:
+            return
+        removed = p.remove_table(rel, with_rules=(ans == QMessageBox.Yes))
+        p.meta["posledni_import"] = f"<b>{name}</b> odebrána z projektu, smazáno pravidel: {removed}."
+        self.tab.rules_changed()
+        self.tab.project_changed()
+        self.refresh()
 
     def import_file(self, path: str):
         if Path(path).suffix.lower() not in TABLE_EXT:

@@ -36,6 +36,7 @@ class RulesEditor(QWidget):
         lay = QVBoxLayout(self)
         row = QHBoxLayout()
         for text, slot in (("Přidat pravidlo", self.add_rule), ("Smazat vybraná", self.delete_selected),
+                           ("Smazat všechna", self.delete_all),
                            ("Načíst YAML…", self.load_yaml), ("Uložit do YAML…", self.save_yaml),
                            ("Zobrazit obrázek", self._show_image)):
             b = QPushButton(text)
@@ -203,6 +204,18 @@ class RulesEditor(QWidget):
         for r in rows:
             self.table.removeRow(r)
         self._sync()
+
+    def delete_all(self):
+        if not self.rules.pravidla:
+            return
+        if QMessageBox.question(self, "Pravidla", f"Smazat všech {len(self.rules.pravidla)} pravidel? "
+                                "(Např. po načtení špatného zadání.)") != QMessageBox.Yes:
+            return
+        self.rules.pravidla.clear()
+        self.rules.povolene_hladiny.clear()
+        self.rules.meritko = None
+        self.set_rules(self.rules)
+        self.rulesChanged.emit()
 
     def load_yaml(self):
         p, _ = QFileDialog.getOpenFileName(self, "Načíst pravidla", "", "YAML (*.yaml *.yml)")

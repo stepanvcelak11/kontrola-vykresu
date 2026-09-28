@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar)
@@ -121,7 +121,8 @@ class MainWindow(QMainWindow):
         if checkable:
             a.toggled.connect(slot)
         else:
-            a.triggered.connect(slot)
+            # triggered(bool) by jinak předal „checked“ jako první argument (např. run_checks(after=False))
+            a.triggered.connect(lambda _checked=False, s=slot: s())
         return a
 
     def _build_actions(self):
@@ -192,9 +193,25 @@ class MainWindow(QMainWindow):
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
         m_help.addAction(self._act("O aplikaci", self._about))
 
+        from .theme import icon
+        for a, name in ((self.a_open, "otevrit"), (self.a_check, "zkontrolovat"), (self.a_recheck, "znovu"),
+                        (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
+                        (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
+                        (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf")):
+            a.setIcon(icon(name))
+        self.a_prev.setText("Předchozí")
+        self.a_next.setText("Další")
+        self.a_repair.setIconText("Oprava")
+        self.a_settings.setIconText("Nastavení")
+        self.a_sketch.setIconText("Náčrt")
+        self.a_exp_pdf.setIconText("Protokol PDF")
+        self.a_open.setIconText("Otevřít")
+
         tb = QToolBar("Hlavní panel")
         tb.setObjectName("hlavni_panel")
-        tb.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        tb.setMovable(False)
+        tb.setIconSize(QSize(18, 18))
+        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         tb.addAction(self.a_open)
         tb.addSeparator()
         tb.addAction(self.a_check)
@@ -211,6 +228,13 @@ class MainWindow(QMainWindow):
         tb.addAction(self.a_exp_pdf)
         self.addToolBar(tb)
         self.toolbar = tb
+        # hlavní akce je zvýrazněná (bílá ikona na modrém tlačítku)
+        btn = tb.widgetForAction(self.a_check)
+        if btn is not None:
+            btn.setObjectName("primarni")
+            self.a_check.setIcon(icon("zkontrolovat", "#FFFFFF"))
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
 
     def _restore_geometry(self):
         g = self.settings.value("okno/geometrie")
@@ -399,7 +423,7 @@ class MainWindow(QMainWindow):
             a.setEnabled(False)
             return
         for p in items:
-            self.m_recent.addAction(Path(p).name, lambda p=p: self.open_path(p)).setToolTip(p)
+            self.m_recent.addAction(Path(p).name, lambda _checked=False, p=p: self.open_path(p)).setToolTip(p)
 
     def _load_failed(self, msg: str):
         title = "Výkres nelze otevřít"
@@ -423,11 +447,19 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ kontroly
     def run_checks(self, after=None):
+        if self.task is not None and self.task.is_running():
+            # výkres se ještě načítá / probíhá jiná úloha – kontrola se spustí hned po ní
+            self._queued_check = after if callable(after) else True
+            self.info_label.setText("Kontrola se spustí po dokončení probíhající úlohy…")
+            return
         if self.drawing is None:
             QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres (tlačítko Otevřít výkres "
                                                     "nebo přetažením souboru do okna).")
             return
         if self.task is not None and self.task.is_running():
+            # výkres se ještě načítá / probíhá jiná úloha – kontrola se spustí hned po ní
+            self._queued_check = after if callable(after) else True
+            self.info_label.setText("Kontrola se spustí po dokončení probíhající úlohy…")
             return
         drawing, rules, config = self.drawing, self.project.rules, self.project.config
 
@@ -440,9 +472,9 @@ class MainWindow(QMainWindow):
         if res.cancelled:
             self.info_label.setText("Kontrola byla zrušena.")
             return
-        carry_states(self.project.issue_states(), res.issues, recheck=after is not None)
+        carry_states(self.project.issue_states(), res.issues, recheck=callable(after))
         summary = None
-        if after is not None:
+        if callable(after):
             summary = after(res)
         self.set_issues(res.issues, summary)
         self.project.store_issues(res.issues)
@@ -710,6 +742,7 @@ class MainWindow(QMainWindow):
             self.cancel_btn.setVisible(False)
             self.task = None
             on_done(result)
+            self._run_queued_check()
 
         def fail(msg):
             self.progress.setVisible(False)
@@ -717,11 +750,19 @@ class MainWindow(QMainWindow):
             self.task = None
             self.info_label.setText("")
             (on_fail or (lambda m: QMessageBox.warning(self, APP_NAME, m)))(msg)
+            self._run_queued_check()
 
         self.task.progress.connect(prog)
         self.task.finished.connect(fin)
         self.task.failed.connect(fail)
         self.task.start()
+
+    def _run_queued_check(self):
+        q = getattr(self, "_queued_check", None)
+        if q is None or (self.task is not None and self.task.is_running()):
+            return
+        self._queued_check = None
+        QTimer.singleShot(0, lambda: self.run_checks(q if callable(q) else None))
 
     def _cancel_task(self):
         if self.task is not None:

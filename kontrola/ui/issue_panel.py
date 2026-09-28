@@ -6,8 +6,8 @@ from collections import Counter
 
 from PySide6.QtCore import (QAbstractTableModel, QItemSelectionModel, QModelIndex, QSortFilterProxyModel,
                             Qt, Signal)
-from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
+from PySide6.QtGui import QBrush, QColor, QPainter, QPixmap
+from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, QGroupBox, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
                                QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget)
 
@@ -19,6 +19,27 @@ COLUMNS = ["Č.", "Typ kontroly", "Závažnost", "Popis", "Hladina", "X", "Y", "
 
 def fmt_coord(v: float) -> str:
     return f"{v:,.3f}".replace(",", " ").replace(".", ",")
+
+
+_DOTS: dict = {}
+
+
+def _dot(color: QColor, faded: bool) -> QPixmap:
+    key = (color.name(), faded)
+    if key not in _DOTS:
+        pm = QPixmap(10, 10)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        c = QColor(color)
+        if faded:
+            c.setAlpha(90)
+        p.setBrush(c)
+        p.setPen(Qt.NoPen)
+        p.drawEllipse(1, 1, 8, 8)
+        p.end()
+        _DOTS[key] = pm
+    return _DOTS[key]
 
 
 class IssueModel(QAbstractTableModel):
@@ -65,6 +86,8 @@ class IssueModel(QAbstractTableModel):
             if iss.note:
                 tip += f"\nPoznámka: {iss.note}"
             return tip
+        if role == Qt.DecorationRole and c == 2:
+            return _dot(SEVERITY_COLORS.get(iss.severity), iss.state != "nová")
         if role == Qt.TextAlignmentRole and c in (0, 5, 6):
             return int(Qt.AlignRight | Qt.AlignVCenter)
         return None
@@ -126,7 +149,38 @@ class IssuePanel(QWidget):
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
-        self.summary = QLabel("Zatím neproběhla žádná kontrola.")
+        cards = QHBoxLayout()
+        cards.setSpacing(6)
+        self.cards: dict[object, QLabel] = {}
+        for key, title, color in ((None, "celkem", "#1F2937"),
+                                  (Severity.CHYBA, "chyby", SEVERITY_COLORS[Severity.CHYBA].name()),
+                                  (Severity.VAROVANI, "varování", SEVERITY_COLORS[Severity.VAROVANI].name()),
+                                  (Severity.INFO, "info", SEVERITY_COLORS[Severity.INFO].name())):
+            fr = QFrame()
+            fr.setObjectName("karta")
+            fl_ = QVBoxLayout(fr)
+            fl_.setContentsMargins(10, 6, 10, 6)
+            fl_.setSpacing(0)
+            num = QLabel("–")
+            num.setObjectName("karta_cislo")
+            num.setStyleSheet(f"color: {color};")
+            cap = QLabel(title)
+            cap.setObjectName("karta_popis")
+            fl_.addWidget(num)
+            fl_.addWidget(cap)
+            if key is not None:
+                fr.setToolTip(f"Kliknutím zobrazíte jen: {title}")
+                fr.mousePressEvent = lambda _e, k=key: self._only_severity(k)
+                fr.setCursor(Qt.PointingHandCursor)
+            else:
+                fr.setToolTip("Kliknutím zobrazíte vše")
+                fr.mousePressEvent = lambda _e: self.show_all()
+                fr.setCursor(Qt.PointingHandCursor)
+            self.cards[key] = num
+            cards.addWidget(fr, 1)
+        lay.addLayout(cards)
+        self.summary = QLabel("Zatím neproběhla žádná kontrola. Otevřete výkres a stiskněte Zkontrolovat (F5).")
+        self.summary.setObjectName("souhrn")
         self.summary.setWordWrap(True)
         lay.addWidget(self.summary)
 
@@ -192,11 +246,12 @@ class IssuePanel(QWidget):
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(22)
+        self.table.verticalHeader().setDefaultSectionSize(26)
+        self.table.setShowGrid(False)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(False)
-        for c, w in enumerate((42, 150, 72, 260, 110, 110, 110, 72)):
+        for c, w in enumerate((46, 160, 100, 300, 130, 110, 110, 80)):
             self.table.setColumnWidth(c, w)
         self.table.selectionModel().currentRowChanged.connect(self._current_changed)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -232,6 +287,7 @@ class IssuePanel(QWidget):
         tl.addLayout(nrow)
         split.addWidget(tw)
         split.setSizes([230, 520])
+        self.b_next.setProperty("primarni", True)
 
     # ------------------------------------------------------------ data
     def set_issues(self, issues: list[Issue], summary: str = ""):
@@ -264,12 +320,22 @@ class IssuePanel(QWidget):
         self.layer_combo.setCurrentIndex(max(0, idx))
         self._updating = False
         self.summary.setText(summary or self._default_summary(issues))
+        self.cards[None].setText(str(len(issues)))
+        for sev in Severity:
+            self.cards[sev].setText(str(sev_counts.get(sev, 0)))
         self._filters_changed()
 
     def _default_summary(self, issues: list[Issue]) -> str:
-        c = Counter(i.severity for i in issues)
-        return (f"Nalezeno {len(issues)} problémů: chyb {c.get(Severity.CHYBA, 0)}, "
-                f"varování {c.get(Severity.VAROVANI, 0)}, info {c.get(Severity.INFO, 0)}.")
+        if not issues:
+            return "Zatím žádné nálezy. Otevřete výkres a stiskněte Zkontrolovat (F5)."
+        return "Kliknutím na řádek se výkres přiblíží na chybu. Kliknutím na kartu nahoře vyfiltrujete závažnost."
+
+    def _only_severity(self, sev: Severity):
+        self._updating = True
+        for s, cb in self.sev_boxes.items():
+            cb.setChecked(s == sev)
+        self._updating = False
+        self._filters_changed()
 
     def visible_numbers(self) -> set[int]:
         return {i.number for i in self.model.issues if self.proxy.accepts(i)}

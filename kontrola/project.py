@@ -200,10 +200,23 @@ class Project:
     def remove_attachment(self, rel: str):
         (self.root / rel).unlink(missing_ok=True)
         self.meta.get("obrazky", {}).pop(rel, None)
+        self.meta.get("tabulky", {}).pop(rel, None)
         if self.meta.get("podklad", {}).get("obrazek") == rel:
             self.meta.pop("podklad", None)
         if self.meta.get("vzor") == rel:
             self.meta.pop("vzor", None)
+
+    def remove_table(self, rel: str, with_rules: bool = True) -> int:
+        """Odebere importovanou tabulku z projektu; volitelně i pravidla, která z ní vznikla."""
+        removed = 0
+        if with_rules:
+            name = Path(rel).name
+            keep = [r for r in self.rules.pravidla
+                    if not (r.zdroj and (r.zdroj == name or r.zdroj.startswith(name + ",")))]
+            removed = len(self.rules.pravidla) - len(keep)
+            self.rules.pravidla[:] = keep
+        self.remove_attachment(rel)
+        return removed
 
     def _rename_meta(self, old: str, new: str):
         imgs = self.meta.get("obrazky", {})

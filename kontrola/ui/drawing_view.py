@@ -322,6 +322,36 @@ class DrawingView(QGraphicsView):
             self.setTransform(tr)
             self.centerOn(center)
 
+    def drawForeground(self, painter: QPainter, rect: QRectF):  # noqa: N802
+        """Prázdný výkres: nápověda uprostřed okna."""
+        super().drawForeground(painter, rect)
+        if self.drawing is not None:
+            return
+        painter.save()
+        painter.resetTransform()
+        vr = QRectF(self.viewport().rect())
+        col = QColor(90, 90, 100) if self.light_bg else QColor(150, 155, 170)
+        box = QRectF(0, 0, min(460.0, vr.width() - 40), 150)
+        box.moveCenter(vr.center())
+        pen = QPen(col, 1.5, Qt.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.drawRoundedRect(box, 12, 12)
+        f = QFont(self.font())
+        f.setPointSizeF(f.pointSizeF() * 1.35)
+        f.setBold(True)
+        painter.setFont(f)
+        painter.drawText(box.adjusted(10, 22, -10, -70), Qt.AlignHCenter | Qt.AlignTop,
+                         "Přetáhněte sem výkres (DXF)")
+        f.setPointSizeF(self.font().pointSizeF())
+        f.setBold(False)
+        painter.setFont(f)
+        painter.drawText(box.adjusted(14, 64, -14, -10), Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
+                         "nebo Soubor → Otevřít výkres (Ctrl+O). Pak Zkontrolovat (F5).\n"
+                         "Tabulku atributů od učitele vložte na záložce Zadání.")
+        painter.restore()
+
     # ---------------------------------------------------------------- výkres
     def clear_drawing(self):
         sc = self.scene()
@@ -335,6 +365,7 @@ class DrawingView(QGraphicsView):
             sc.removeItem(self._highlight)
             self._highlight = None
         self.drawing = None
+        self.viewport().update()
 
     def set_drawing(self, drawing: Drawing, prepared: "PreparedDrawing | None" = None):
         """Zobrazí výkres. ``prepared`` lze připravit předem ve vlákně na pozadí (:func:`prepare_drawing`)."""

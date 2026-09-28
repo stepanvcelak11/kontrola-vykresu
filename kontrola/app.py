@@ -20,7 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     tr = QTranslator(app)
     if tr.load(QLocale(QLocale.Czech), "qtbase", "_", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
         app.installTranslator(tr)
-    app.setStyle("Fusion")
+    from .ui.theme import apply_theme
+    apply_theme(app)
     from PySide6.QtGui import QIcon
 
     from .resources import resource_path
