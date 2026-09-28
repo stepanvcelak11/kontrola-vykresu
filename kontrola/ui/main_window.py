@@ -258,6 +258,8 @@ class MainWindow(QMainWindow):
         m_help.addAction(self._act("Průvodce…", self.show_guide, None, "Krok za krokem od zadání k odevzdání"))
         m_help.addAction(self._act("Co znamenají chyby (s obrázky)…", self.show_help, "F1",
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
+        m_help.addAction(self._act("Rychlé tipy – MicroStation (rovnoběžka, kolmice…)", self.show_tips, "Ctrl+T",
+                                   "Jak udělat běžné konstrukce a opravy v MicroStationu"))
         m_help.addAction(self._act("Jak převést DGN na DXF", self._dgn_help))
         m_help.addAction(self._act("Kokeš, Atlas DMT, AutoCAD a katastr (VFK)",
                                    lambda: QMessageBox.information(self, "Jiné programy", JINE_PROGRAMY_NAVOD)))
@@ -1019,6 +1021,10 @@ class MainWindow(QMainWindow):
                                 "Chcete otevřít stránku pro nahlášení chyby na GitHubu? (Soubor chyby.log "
                                 "tam můžete přiložit.)") == QMessageBox.Yes:
             QDesktopServices.openUrl(QUrl(ISSUES_URL))
+
+    def show_tips(self):
+        from .tips import TipsDialog
+        TipsDialog(self).exec()
 
     def show_guide(self):
         from .guide_dialog import GuideDialog

@@ -342,3 +342,14 @@ def test_styl_zdi_kresli_oblouky():
     from kontrola.ui.drawing_view import style_mark_kind
     assert style_mark_kind("2.163", "Ohradni zed, vlastnictvi z jedne strany") == "oblouky"
     assert style_mark_kind("2.103", "Dreveny plot, vlastnictvi z jedne strany") == "carky"
+
+
+def test_rychle_tipy():
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from kontrola.ui.tips import TipsDialog
+    d = TipsDialog()
+    d.search.setText("kolmice")
+    names = [d.list.item(i).text().strip() for i in range(d.list.count()) if d.list.item(i).data(0x0100) is not None]
+    assert names and all("olmice" in n for n in names)
+    assert "Perpendicular" in d.view.toPlainText() or "AccuDraw" in d.view.toPlainText()
