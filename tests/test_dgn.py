@@ -65,3 +65,14 @@ def test_dgn_vlastni_styly_a_meritko():
     y = ROOT / "podklady" / "zadani1-microstation" / "pravidla_zadani1.yaml"
     res = run_checks(d, RuleSet.load(y), Config.load(y), only=["symbologie"])
     assert res.issues == []  # vzorový výkres zadání je v DGN bez chyb symbologie
+
+
+@pytest.mark.skipif(not (Z1_DGN.exists() and HUS_DGN.exists()), reason="data chybí")
+def test_dgn_pismo_a_jedinecna_id():
+    from collections import Counter
+
+    from kontrola.io.dgn_v8 import read_dgn
+    for path, font in ((Z1_DGN, "cs_Working"), (HUS_DGN, "Arial Narrow")):
+        d = read_dgn(path)
+        assert len({f.fid for f in d.features}) == len(d.features)
+        assert Counter(f.font for f in d.features if f.geom_type.value == "text").most_common(1)[0][0] == font

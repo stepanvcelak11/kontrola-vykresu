@@ -20,7 +20,8 @@ Názvy vrstev jsou v ``Dgn^Nm``: záznam ``?? 10 d2 56 01 00 00 00 | délka | ff
 
 Ověřeno na výkresech obou zadání proti DXF exportu z MicroStationu (souřadnice na 1 mm, vrstvy).
 Vlastní styly čar: v ``Dgn^Nm`` je záporné ID stylu (i32) a za ním název v UTF-16 („5.303“).
-Co se nečte: písmo (font) textu, B-spline a 3D tělesa. To aplikace přizná v poznámce ke kontrole.
+Písmo: číslo fontu je u textu na +108; TrueType fonty (od 1024) mají název v ``Dgn^Nm``, fonty
+MicroStationu (RSC) jen číslo (1 = cs_Working). Řez (tučné, kurzíva) se nečte. Nečtou se B-spline a tělesa. To aplikace přizná v poznámce ke kontrole.
 """
 
 from __future__ import annotations
@@ -109,6 +110,24 @@ def _styles(ole) -> dict[int, str]:
     return out
 
 
+# fonty MicroStationu (RSC) nejsou v DGN pojmenované – čísla podle českého pracovního prostředí (protokol GISoft)
+RSC_FONTS = {1: "cs_Working", 159: "cs_Nimbus Sans C I"}
+_FONT = re.compile(rb"([\x00-\xff][\x04-\x07]\x00\x00)([\x02-\x7e])\x00((?:[\x20-\x7e]\x00){1,40})", re.DOTALL)
+
+
+def _fonts(ole) -> dict[int, str]:
+    """TrueType fonty výkresu: číslo (od 1024) a název v UTF-16 z tabulky ``Dgn^Nm``."""
+    out: dict[int, str] = dict(RSC_FONTS)
+    for n in _streams(ole, "Dgn^Nm/"):
+        d = _inflate(ole.openstream(n).read())
+        for m in _FONT.finditer(d):
+            fid, = struct.unpack("<I", m.group(1))
+            name = m.group(3).decode("utf-16-le")
+            if m.group(2)[0] == len(name) * 2 and d[m.start() - 8:m.start() - 1].count(0) >= 6:
+                out.setdefault(fid, name)
+    return out
+
+
 def _uor(ole) -> float:
     try:
         d = _inflate(ole.openstream("Dgn-Md/#000000/Dgn~Mh").read())
@@ -185,6 +204,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
     try:
         levels = _levels(ole)
         styles = _styles(ole)
+        fonts = _fonts(ole)
         uor = _uor(ole)
         data = b"".join(_inflate(ole.openstream(n).read()) for n in _streams(ole, "Dgn-Md/#000000/Dgn^G/"))
     finally:
@@ -322,8 +342,9 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
         elif kind == "text":
             x, y, text, h, wf, rot, just = geo[1:]
             ha, va = _JUST.get(just, (0, 0))
+            font_id, = struct.unpack_from("<I", e, 108)
             add(Point(x, y), GeomType.TEXT, "TEXT", e, text=text, text_height=h, width_factor=wf, rotation=rot,
-                halign=ha, valign=va)
+                halign=ha, valign=va, font=fonts.get(font_id, f"font č. {font_id}"))
         elif kind == "points":
             for p in geo[1]:
                 add(Point(*p), GeomType.BOD, "POINT", e)
@@ -331,8 +352,8 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             progress(min(95, 100 * off // max(1, n)), "Čtu DGN…")
     close_chain()
     close_cell()
-    d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Písmo textů z DGN "
-                      "přečíst nejde, to se nekontroluje.")
+    d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Řez písma (tučné, "
+                      "kurzíva) se z DGN nečte a nekontroluje.")
     if skipped:
         d.warnings.append("Nepřečtené prvky: " + ", ".join(f"typ {k}: {v}×" for k, v in sorted(skipped.items())))
     return d

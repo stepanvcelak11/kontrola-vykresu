@@ -149,7 +149,7 @@ class Symbologie(Check):
                                  f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {r.tloustka})")
             if f.geom_type == GeomType.TEXT and do_text:
                 diffs += _text_diffs(r, f, rs)
-            if f.geom_type == GeomType.TEXT and do_font and r.font and f.attributes.get("ZDROJ") != "DGN" and \
+            if f.geom_type == GeomType.TEXT and do_font and r.font and not f.font.startswith("font č.") and \
                     _norm_font(r.font) not in _norm_font(f.font):  # z DGN se písmo nečte
                 diffs.append(f"font {f.font or '–'} (má být {r.font})")
             if diffs:
@@ -218,7 +218,7 @@ def _text_diffs(r, f: Feature, rs=None) -> list[str]:
         if abs(w - w_exp) > tol(w_exp):
             got, exp = show(w, r.sirka_textu)
             out.append(f"šířka textu {got} (má být {exp})")
-    if (r.tucne is not None or r.kurziva is not None) and f.font:
+    if (r.tucne is not None or r.kurziva is not None) and f.font and f.attributes.get("ZDROJ") != "DGN":
         bold, italic = font_style(f.font)
         if r.tucne is not None and bold != r.tucne:
             out.append("písmo " + ("není tučné" if r.tucne else "je tučné") + f" ({f.font})")
