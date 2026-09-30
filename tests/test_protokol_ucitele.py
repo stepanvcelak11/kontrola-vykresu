@@ -43,3 +43,28 @@ def test_porovnani(make_dxf):
     r15 = next(r for r in rows if r.vrstva == "Vrstva 15")
     assert r15.ucitel == 2 and r15.program == 2
     assert "Program našel stejně 2" in summary
+
+
+def test_predpoved_protokolu_uci_se(make_dxf, tmp_path):
+    from kontrola.config import Config
+    from kontrola.predikce import learn, load_calibration, predict
+    from kontrola.rules import Rule, RuleSet
+    from kontrola.runner import run_checks
+    rs = RuleSet(pravidla=[Rule(kod="a", hladina="7", barva=3)])
+
+    def build(msp, doc):
+        for k in range(2):
+            msp.add_line((0, k), (5, k), dxfattribs={"layer": "Vrstva 15", "color": 1, "lineweight": 0,
+                                                     "linetype": "Continuous"})
+    d = make_dxf(build)
+    res = run_checks(d, rs, Config(), only=["nepovolene_hladiny"])
+    p0 = predict(d, rs, res.issues)
+    assert p0.protokolu == 0 and p0.atributy == 2  # bez zkušenosti = jako program
+    prot = read_teacher_log(LOG)
+    rows, _ = compare_with_teacher(prot, d, rs, res.issues)
+    cal = learn(rows, prot, LOG.read_text(encoding="utf-8"))
+    assert cal["protokolu"] == 1 and cal["hlavicka"]["meritko"] == "1:500"
+    assert load_calibration()["skupiny"]["vrstva"]["ucitel"] == 2 + 86  # vrstva 15 a 46
+    p1 = predict(d, rs, res.issues)
+    assert p1.protokolu == 1 and p1.atributy >= 2
+    assert any("font" in x and "šířka textu" in x for x in p1.pozor)  # učitel našel, program ne

@@ -574,3 +574,15 @@ def test_casova_osa(window, tmp_path, monkeypatch):
     dlg.restore_removed()
     rest = list(ezdxf.readfile(out).modelspace())
     assert len(rest) == 1 and rest[0].dxf.layer == "B"
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_uciteluv_pohled(window):
+    from kontrola.ui.predikce_dialog import PredikceDialog
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    dlg = PredikceDialog(w)
+    assert "Celkem chyb" in dlg.log.toPlainText()
+    assert dlg.pred.protokolu == 0

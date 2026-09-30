@@ -43,3 +43,9 @@ def check(drawing, check_id, rules=None, config=None, **params):
     for n in res.notes:
         assert "selhala" not in n, n
     return res.issues
+
+
+@pytest.fixture(autouse=True)
+def _kalibrace_do_tmp(tmp_path, monkeypatch):
+    """Kalibrace podle protokolů učitele se v testech nesmí zapisovat do dokumentů uživatele."""
+    monkeypatch.setenv("KONTROLA_KALIBRACE", str(tmp_path / "kalibrace.json"))

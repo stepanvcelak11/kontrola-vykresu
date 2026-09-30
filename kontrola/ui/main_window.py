@@ -224,6 +224,9 @@ class MainWindow(QMainWindow):
                                   "Sedí body ve výkresu na seznam souřadnic? (poloha, čísla, výšky, body navíc)")
         self.a_fixguide = self._act("Opravný průvodce (MicroStation)…", self.show_fix_guide, "Ctrl+G",
                                     "Chyby jedna po druhé s přesným postupem a souřadnicemi pro MicroStation")
+        self.a_predikce = self._act("Učitelův pohled – předpověď protokolu…", self.show_prediction, None,
+                                    "Co nejspíš nahlásí učitel (naučeno z jeho dřívějších protokolů) + náhled "
+                                    "protokolu v jeho formátu")
         self.a_timeline = self._act("Časová osa výkresu…", self.show_timeline, "Ctrl+H",
                                     "Všechny uložené verze výkresu: přehrát, porovnat, vytáhnout smazané prvky")
         self.a_spojnice = self._act("Spojnice podle náčrtu…", self.verify_lines, None,
@@ -290,6 +293,7 @@ class MainWindow(QMainWindow):
         m_check.addSeparator()
         m_check.addAction(self.a_fixguide)
         m_check.addAction(self.a_timeline)
+        m_check.addAction(self.a_predikce)
         m_check.addAction(self.a_seznam)
         m_check.addAction(self.a_spojnice)
         m_check.addAction(self.a_batch)
@@ -618,6 +622,13 @@ class MainWindow(QMainWindow):
         except OSError:
             pass
         rows, summary = compare_with_teacher(prot, self.drawing, self.project.rules, self.issues)
+        try:
+            from ..predikce import learn
+            cal = learn(rows, prot, Path(path).read_bytes().decode("cp1250", errors="ignore"))
+            summary += (f" Aplikace se z protokolu učí – zatím zná {cal['protokolu']} protokolů "
+                        "(Kontrola → Učitelův pohled).")
+        except OSError:
+            pass
         ProtokolDialog(rows, summary, prot.topologie, self).exec()
 
     def show_vypocet(self):
@@ -1026,6 +1037,13 @@ class MainWindow(QMainWindow):
         except Exception:  # noqa: BLE001 – časová osa nesmí zastavit kontrolu
             import logging
             logging.getLogger(__name__).exception("Snímek časové osy se nepodařilo uložit")
+
+    def show_prediction(self):
+        from .predikce_dialog import PredikceDialog
+        if self.drawing is None or not getattr(self, "_checked_once", False):
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres a zkontrolujte ho (F5).")
+            return
+        PredikceDialog(self).exec()
 
     def show_timeline(self):
         from .timeline_dialog import TimelineDialog
