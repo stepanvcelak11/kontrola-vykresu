@@ -383,10 +383,12 @@ def test_html_protokol(window, tmp_path, monkeypatch):
     out = tmp_path / "protokol.html"
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
     monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.No))
+    w.project.config.settings("spicka").zapnuto = False
     w.a_exp_html.trigger()
     html = out.read_text(encoding="utf-8")
     assert "data:image/png;base64," in html and '"px": [' in html and "Jak opravit" in html
     assert html.count('"n": ') == len(w.issues)
+    assert "Nespuštěno:" in html and "Špička" in html
 
 
 @pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")

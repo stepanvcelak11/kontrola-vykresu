@@ -23,7 +23,7 @@ _COL = {Severity.CHYBA: "#DC2626", Severity.VAROVANI: "#D97706", Severity.INFO: 
 def export_html(issues: list[Issue], path: str | Path, drawing_name: str = "", project_name: str = "",
                 overview: bytes | None = None, positions: dict[int, tuple[float, float]] | None = None,
                 overview_size: tuple[int, int] | None = None, images: dict[int, bytes] | None = None,
-                has_rules: bool = True) -> Path:
+                has_rules: bool = True, rozsah: str = "") -> Path:
     images = images or {}
     positions = positions or {}
     sk = compute_score(issues, has_rules)
@@ -46,6 +46,7 @@ def export_html(issues: list[Issue], path: str | Path, drawing_name: str = "", p
     html = _TEMPLATE
     for k, v in {
         "__TITLE__": escape(f"Protokol kontroly – {drawing_name}"),
+        "__ROZSAH__": (f'<div class="sub">{escape(rozsah)}</div>' if rozsah else ""),
         "__DRAWING__": escape(drawing_name or "–"), "__PROJECT__": escape(project_name or "–"), "__DATE__": now,
         "__SCORE__": str(sk.hodnota), "__SCORECOL__": sk.barva, "__SCORETXT__": escape(sk.popis),
         "__NCH__": str(cnt[Severity.CHYBA]), "__NVA__": str(cnt[Severity.VAROVANI]),
@@ -91,7 +92,7 @@ margin-top:6px;display:none}.it.sel img{display:block}.done{opacity:.55;text-dec
 footer{color:var(--muted);font-size:12px;padding:0 24px 24px}
 </style></head><body>
 <header><h1>Protokol kontroly výkresu</h1>
-<div class="sub">Výkres <b>__DRAWING__</b> · projekt __PROJECT__ · __DATE__</div></header>
+<div class="sub">Výkres <b>__DRAWING__</b> · projekt __PROJECT__ · __DATE__</div>__ROZSAH__</header>
 <div class="cards">
  <div class="card score"><div class="ring"><i>__SCORE__</i></div><div><b style="font-size:15px;color:__SCORECOL__">__SCORETXT__</b>
  <span>připravenost k odevzdání (orientační)</span></div></div>

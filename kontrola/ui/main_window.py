@@ -1501,7 +1501,7 @@ class MainWindow(QMainWindow):
         images = self._issue_images(issues, 80, 300)
         name = Path(self.drawing.source_path or self.drawing.path).name if self.drawing else ""
         export_html(issues, path, name, self.project.name if self.project else "", overview, pos, size, images,
-                    bool(self.project and self.project.rules.pravidla))
+                    bool(self.project and self.project.rules.pravidla), rozsah=self.scope_text())
 
     def _export_pdf(self, issues: list[Issue], path: str):
         from ..export.pdf_report import export_pdf
@@ -1518,7 +1518,17 @@ class MainWindow(QMainWindow):
         export_pdf(issues, path, drawing_name=drawing_name, project_name=self.project.name,
                    rules_count=len(self.project.rules.pravidla), images=images, overview=overview,
                    notes=getattr(self, "last_notes", []), tolerance=self.project.config.tolerance,
-                   image_limit=limit)
+                   image_limit=limit, rozsah=self.scope_text())
+
+    def scope_text(self) -> str:
+        """Rozsah kontroly do protokolu – jen když neproběhly všechny kontroly."""
+        from ..checks.base import REGISTRY
+        cfg = self.project.config
+        off = [cls.nazev for cid, cls in REGISTRY.items() if not cfg.settings(cid).zapnuto]
+        if not off:
+            return ""
+        shown = ", ".join(off[:12]) + (f" a dalších {len(off) - 12}" if len(off) > 12 else "")
+        return f"Provedeno {len(REGISTRY) - len(off)} z {len(REGISTRY)} kontrol. Nespuštěno: {shown}."
 
     def _feature_info(self, iss: Issue) -> str:
         """Popis prvku, ke kterému chyba patří – aby šel ve výkresu najít."""

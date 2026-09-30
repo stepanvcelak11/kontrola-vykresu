@@ -58,7 +58,8 @@ def _coord(v: float) -> str:
 
 def export_pdf(issues: list[Issue], path: str | Path, drawing_name: str = "", project_name: str = "",
                rules_count: int = 0, images: dict[int, bytes] | None = None, overview: bytes | None = None,
-               notes: list[str] | None = None, tolerance: float | None = None, image_limit: int = 60):
+               notes: list[str] | None = None, tolerance: float | None = None, image_limit: int = 60,
+               rozsah: str = ""):
     font, bold = _font()
     ss = getSampleStyleSheet()
     st = {
@@ -79,6 +80,8 @@ def export_pdf(issues: list[Issue], path: str | Path, drawing_name: str = "", pr
             ["Počet pravidel:", str(rules_count)]]
     if tolerance is not None:
         meta.append(["Tolerance:", f"{fmt_num(tolerance, 4)} m"])
+    if rozsah:
+        meta.append(["Rozsah kontroly:", Paragraph(_esc(rozsah), st["p"])])
     t = Table(meta, colWidths=[35 * mm, 140 * mm])
     t.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), font, 9.5), ("FONT", (0, 0), (0, -1), bold, 9.5),
                            ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
