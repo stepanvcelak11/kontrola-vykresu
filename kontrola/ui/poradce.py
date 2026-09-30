@@ -39,10 +39,6 @@ FAQ = [
     ("Ověřit body podle seznamu souřadnic", "seznam souradnic overit body sedi posunuty chybi cislo vyska",
      "<b>Kontrola → Ověřit seznam souřadnic</b> (Ctrl+J): vyberte seznam (číslo Y X Z). Tabulka ukáže body "
      "chybějící, posunuté, se špatným číslem nebo výškou a body navíc; dvojklik bod přiblíží."),
-    ("Body do výkresu bez importu z Gromy", "body import groma vlozit dxf znacka cislo vyska microstation",
-     "<b>Kontrola → Body ze seznamu do výkresu (DXF)</b>: ze seznamu (nebo z výpočtu ze zápisníku) vznikne DXF "
-     "se značkou, číslem a výškou na vrstvách a písmem podle Směrnice. V MicroStationu ho připojte jako "
-     "referenci a zkopírujte, pak ho ověřte seznamem."),
     ("Co aplikace umí", "co umis umi funkce prehled vsechno nastroje",
      "Přehled všech funkcí s tlačítkem Spustit: <b>Nápověda → Co aplikace umí</b> nebo odkaz na Úvodu."),
     ("MGEO – limit a kontrola ploch", "mgeo gisoft limit blizko plochy definicni bod popis parcela",

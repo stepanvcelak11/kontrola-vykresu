@@ -460,7 +460,7 @@ def test_co_aplikace_umi_a_hodnoty_ze_zadani(window, tmp_path):
     from kontrola.ui.features_dialog import FeaturesDialog
     w = window
     dlg = FeaturesDialog(w)
-    dlg.search.setText("seznamu do dxf")
+    dlg.search.setText("náčrtu plot")
     shown = [c for c, _ in dlg.cards if not c.isHidden()]
     assert len(shown) == 1
     dlg._run("_dokumenty")
@@ -473,3 +473,15 @@ def test_co_aplikace_umi_a_hodnoty_ze_zadani(window, tmp_path):
     pg.apply_settings()
     assert abs(w.project.config.tolerance - 0.005) < 1e-12
     assert pg.b_apply.isHidden()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_spojnice_okno(window, tmp_path):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    w.a_spojnice.trigger()
+    dlg = w._spojnice_dlg
+    assert dlg.isVisible()
+    dlg.run()  # bez seznamu jen upozorní
+    dlg.close()

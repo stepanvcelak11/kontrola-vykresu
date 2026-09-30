@@ -183,12 +183,6 @@ Otevřete ukázkový výkres a stiskněte F5.
   bod po bodu s výkresem – v pořádku / chybí / posunutý / špatné číslo / špatná výška / bod navíc.
   Kartičky s počty, tabulka, dvojklik přiblíží bod, barevné zvýraznění ve výkresu, export do CSV
   a tlačítko *Uložit seznam do projektu* (pak se porovná při každé kontrole).
-* **Kontrola → Body ze seznamu do výkresu (DXF)…**: místo složitého importu z Gromy vytvoří DXF se
-  **značkou bodu**, **číslem** a **výškou** na vrstvách, s barvou, tloušťkou, písmem a výškou textu podle
-  pravidel (Směrnice + Word). Pravidla pro značku / číslo / výšku se najdou sama. Bod je jako
-  v MicroStationu úsečka nulové délky, souřadnice záporně (S-JTSK), číslo vpravo nahoře, výška vpravo dole.
-  V MicroStationu DXF připojte jako referenci a prvky zkopírujte. Stejné tlačítko je i v okně výpočtu
-  ze zápisníku – body jdou rovnou z výpočtu do výkresu. Vytvořený DXF projde kontrolou symbologie bez chyb.
 * **Seznam souřadnic** (výstup z Gromy, `číslo Y X Z`) přetáhněte do okna nebo přidejte na
   Podklady. Kontrola pak najde body, které ve výkresu chybí nebo jsou posunuté, špatná čísla
   bodů a špatné výšky u bodů. Osy a znaménka S-JTSK se poznají samy.

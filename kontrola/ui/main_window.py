@@ -220,8 +220,8 @@ class MainWindow(QMainWindow):
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
         self.a_seznam = self._act("Ověřit seznam souřadnic…", self.verify_list, "Ctrl+J",
                                   "Sedí body ve výkresu na seznam souřadnic? (poloha, čísla, výšky, body navíc)")
-        self.a_body = self._act("Body ze seznamu do výkresu (DXF)…", self.points_to_dxf, None,
-                                "Značky, čísla a výšky bodů na vrstvách podle Směrnice – místo importu z Gromy")
+        self.a_spojnice = self._act("Spojnice podle náčrtu…", self.verify_lines, None,
+                                    "Je nakreslené všechno, co je v náčrtu spojené? (plot 1-2-3…)")
         self.a_batch = self._act("Zkontrolovat více výkresů najednou…", self.batch_check, None,
                                  "Vyberte několik DXF (třeba celou složku) – souhrnná tabulka chyb a skóre")
         self.a_compare = self._act("Porovnat verze výkresu…", self.compare_versions, "Ctrl+D",
@@ -283,7 +283,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_seznam)
-        m_check.addAction(self.a_body)
+        m_check.addAction(self.a_spojnice)
         m_check.addAction(self.a_batch)
         m_check.addAction(self.a_compare)
         m_check.addAction(self.a_vypocet)
@@ -1000,13 +1000,15 @@ class MainWindow(QMainWindow):
         self._seznam_dlg = dlg
         dlg.show()
 
-    def points_to_dxf(self, points=None):
-        from .body_dialog import BodyDialog
-        path = ""
-        if self.project is not None:
-            s = self.project.attachments("seznamy")
-            path = str(s[0].path) if s else ""
-        BodyDialog(self, path, points).exec()
+    def verify_lines(self):
+        from .spojnice_dialog import SpojniceDialog
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
+            return
+        s = self.project.attachments("seznamy") if self.project is not None else []
+        dlg = SpojniceDialog(self, str(s[0].path) if s else "")
+        self._spojnice_dlg = dlg
+        dlg.show()
 
     def batch_check(self):
         start = self.settings.value("cesty/vykres", str(Path.home()))

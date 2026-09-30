@@ -26,12 +26,12 @@ FUNKCE = [
         ("Návod ke každé chybě", "U chyby postup v MicroStationu krok za krokem s obrázkem.", None),
         ("Rychlé tipy – MicroStation", "Rovnoběžka, kolmice, prodloužení, AccuDraw, přichycení…", "_tips"),
     ]),
-    ("Body a souřadnice (místo Gromy)", [
+    ("Body a souřadnice", [
         ("Ověřit seznam souřadnic", "Sedí body ve výkresu na seznam? Chybějící, posunuté, špatné číslo nebo "
          "výška, body navíc – tabulka a přiblížení.", "a_seznam"),
-        ("Body ze seznamu do DXF", "Značka, číslo a výška bodu na vrstvách, barvou a písmem podle Směrnice – "
-         "místo ručního importu z Gromy do MicroStationu.", "a_body"),
-        ("Výpočet ze zápisníku", "Polární metoda a kontrola výpočtu z Gromy; body pak jdou rovnou do DXF.",
+        ("Spojnice podle náčrtu", "Zapíšete, co je v náčrtu spojené (např. plot 1-2-3-4), a aplikace ověří, "
+         "že to ve výkresu máte nakreslené na správné vrstvě.", "a_spojnice"),
+        ("Výpočet ze zápisníku", "Polární metoda a kontrola výpočtu z Gromy s diagnózou rozdílů.",
          "a_vypocet"),
     ]),
     ("Zadání a pravidla", [

@@ -138,3 +138,23 @@ def test_blizke_prvky_a_kontrola_ploch(make_dxf):
     cfg.settings("kontrola_ploch").parametry.update(vrstvy_hranic="HRANICE", vrstvy_popisu="POPIS-PARCEL")
     res = run_checks(d, RuleSet(), cfg, only=["kontrola_ploch"])
     assert [i.message for i in res.issues] == ["Plocha 100 m² nemá popis ani definiční bod"]
+
+
+def test_spojnice_podle_nacrtu(make_dxf, tmp_path):
+    from kontrola.checks.seznam import read_point_list
+    from kontrola.checks.spojnice import parse_spojnice, verify_lines
+    from kontrola.rules import Rule, RuleSet
+
+    def build(msp, doc):
+        for x, y in ((0, 0), (10, 0), (10, 10), (0, 10), (20, 0)):
+            msp.add_point((-x - 1000, -y - 2000), dxfattribs={"layer": "BODY"})
+        msp.add_lwpolyline([(-1000, -2000), (-1010, -2000), (-1010, -2010)], dxfattribs={"layer": "PLOTY"})
+        msp.add_line((-1010, -2010), (-1000, -2010), dxfattribs={"layer": "BUDOVY"})
+    d = make_dxf(build, name="spoj.dxf")
+    f = tmp_path / "sez.txt"
+    f.write_text("1 1000 2000 0\n2 1010 2000 0\n3 1010 2010 0\n4 1000 2010 0\n5 1020 2000 0\n", encoding="utf-8")
+    rs = RuleSet(pravidla=[Rule(kod="P", nazev="Plot", hladina="PLOTY")])
+    text = "plot: 1-2-3-4\n2-5 # chybí\n4 - 77\n"
+    assert [s.body for s in parse_spojnice(text)] == [["1", "2", "3", "4"], ["2", "5"], ["4", "77"]]
+    res = verify_lines(d, read_point_list(f), text, rs)
+    assert [r.stav for r in res] == ["ok", "ok", "vrstva", "chybi", "bod"]
