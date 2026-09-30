@@ -299,3 +299,13 @@ def test_jednotnost_meritka_znacek(make_dxf):
     d = make_dxf(build, name="znacky.dxf")
     msgs = [i.message for i in check(d, "jednotnost_hladiny")]
     assert len(msgs) == 1 and "měřítko značky 2 (ostatní mají 1)" in msgs[0]
+
+
+def test_prvek_jineho_druhu_na_vrstve(make_dxf):
+    def build(msp, doc):
+        for k in range(12):
+            msp.add_line((k * 5, 0), (k * 5 + 3, 0), dxfattribs={"layer": "PLOTY"})
+        msp.add_text("omylem", dxfattribs={"layer": "PLOTY", "height": 1.0, "insert": (0, 10)})
+    d = make_dxf(build, name="druh.dxf")
+    msgs = [i.message for i in check(d, "jednotnost_hladiny")]
+    assert len(msgs) == 1 and "kde jsou jinak jen čáry a plochy (12×)" in msgs[0]

@@ -308,9 +308,17 @@ class JednotnostHladiny(Check):
                 val, cnt = c.most_common(1)[0]
                 if cnt / len(items) >= share and cnt < len(items):
                     dominant[name] = (val, key, {id(f) for f in items})
-            if not dominant:
+            # druh prvku: text / bod mezi samými čarami apod. (nejspíš omylem na špatné vrstvě)
+            kinds = Counter(_kind(f) for f in feats)
+            kval, kcnt = kinds.most_common(1)[0]
+            odd_kind = kval if len(feats) >= 10 and kcnt < len(feats) and kcnt / len(feats) >= 0.9 else None
+            if not dominant and odd_kind is None:
                 continue
             for f in feats:
+                if odd_kind is not None and _kind(f) != odd_kind and not (only_free and ctx.rule_for(f) is not None):
+                    yield ctx.issue(self, f, f"{_what(f)} na vrstvě {layer}, kde jsou jinak jen "
+                                             f"{_KIND_PLURAL[odd_kind]} ({kcnt}×) – není na špatné vrstvě?")
+                    continue
                 if only_free and ctx.rule_for(f) is not None:
                     continue
                 diffs = []
@@ -319,6 +327,19 @@ class JednotnostHladiny(Check):
                         diffs.append(_describe_prop(name, key(f), val, ctx, f))
                 if diffs:
                     yield ctx.issue(self, f, f"{_what(f)} se liší od ostatních na vrstvě {layer}: " + ", ".join(diffs))
+
+
+_KIND_PLURAL = {"text": "texty", "značka": "značky (buňky)", "bod": "body", "čára": "čáry a plochy"}
+
+
+def _kind(f: Feature) -> str:
+    if f.geom_type == GeomType.TEXT:
+        return "text"
+    if f.dxftype == "INSERT":
+        return "značka"
+    if f.geom_type == GeomType.BOD or f.zero_length:
+        return "bod"
+    return "čára"
 
 
 def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:

@@ -395,7 +395,7 @@ hladiny (např. `PARCELY, PLOTY*`).
 | Kontrola (id) | Co hlídá | Výchozí |
 |---|---|---|
 | Atributy prvku (`atributy`) | povinné atributy a povolené hodnoty (číselníky) | chyba |
-| Prvek jiný než ostatní na vrstvě (`jednotnost_hladiny`) | bez pravidel: barva, styl a tloušťka čáry, u textů výška a písmo, u značek měřítko jiné než u většiny na vrstvě | varování |
+| Prvek jiný než ostatní na vrstvě (`jednotnost_hladiny`) | bez pravidel: barva, styl a tloušťka čáry, u textů výška a písmo, u značek měřítko jiné než u většiny na vrstvě; text nebo bod mezi samými čarami (a naopak) | varování |
 | Hladina, barva nebo styl (`symbologie`) | hladina, barva, styl a tloušťka čáry podle kódu | varování |
 | Nepovolená hladina (`nepovolene_hladiny`) | prvek na hladině, která v pravidlech není | chyba |
 | Nekódovaný prvek (`nekodovane`) | prvku nejde přiřadit žádný kód | varování |
