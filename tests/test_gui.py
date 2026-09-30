@@ -586,3 +586,23 @@ def test_uciteluv_pohled(window):
     dlg = PredikceDialog(w)
     assert "Celkem chyb" in dlg.log.toPlainText()
     assert dlg.pred.protokolu == 0
+
+
+def test_microstation_seznam_chyb_a_makro(window, tmp_path):
+    import shutil
+
+    from kontrola.microstation import install_macro
+    w = window
+    f = tmp_path / "Vykres.dxf"
+    shutil.copy(UKAZKA, f)
+    w.a_ms_send.setChecked(True)
+    w.load_drawing_file(f)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and (tmp_path / "Vykres_chyby.txt").exists(), 30)
+    lines = (tmp_path / "Vykres_chyby.txt").read_bytes().decode("cp1250").splitlines()
+    data = [ln.split("\t") for ln in lines if not ln.startswith("#")]
+    assert data and all(len(d) == 5 for d in data)
+    float(data[0][1]), float(data[0][2])  # desetinná tečka pro Val() ve VBA
+    bas = install_macro(tmp_path).read_bytes()
+    assert b"\r\n" in bas and "KV_Dalsi".encode() in bas
+    bas.decode("cp1250")  # VBA editor čte ANSI

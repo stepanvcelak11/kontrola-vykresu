@@ -217,6 +217,11 @@ class MainWindow(QMainWindow):
         self.a_watch = self._act("Hlídat změny výkresu", self._toggle_watch, None,
                                  "Když výkres znovu uložíte (v MicroStationu Uložit jako DXF), aplikace ho sama "
                                  "načte a zkontroluje.", checkable=True)
+        self.a_ms_send = self._act("Posílat chyby do MicroStationu", self._toggle_ms_send, None,
+                                   "Po každé kontrole uloží vedle výkresu <název>_chyby.txt pro makro v MicroStationu",
+                                   checkable=True)
+        self.a_ms_help = self._act("Propojení s MicroStationem (makro)…", self.show_ms_link, None,
+                                   "Chyby jako dočasné kroužky přímo v MicroStationu, F8 = další chyba")
         self.a_ready = self._act("Připraveno k odevzdání?", self.ready_check, None,
                                  "Úplná kontrola jako před odevzdáním (s tolerancemi učitele), semafor, co zbývá "
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
@@ -293,6 +298,8 @@ class MainWindow(QMainWindow):
         m_check.addSeparator()
         m_check.addAction(self.a_fixguide)
         m_check.addAction(self.a_timeline)
+        m_check.addAction(self.a_ms_send)
+        m_check.addAction(self.a_ms_help)
         m_check.addAction(self.a_predikce)
         m_check.addAction(self.a_seznam)
         m_check.addAction(self.a_spojnice)
@@ -328,6 +335,7 @@ class MainWindow(QMainWindow):
                                       "Zjišťuje se jen číslo verze, nic se neodesílá.", checkable=True)
         self.a_autoupdate.blockSignals(True)
         self.a_autoupdate.setChecked(self.settings.value("aktualizace/kontrolovat", True, type=bool))
+        self.a_ms_send.setChecked(self.settings.value("microstation/posilat", False, type=bool))
         self.a_autoupdate.blockSignals(False)
         m_help.addAction(self.a_autoupdate)
         m_help.addAction(self._act("O aplikaci", self._about))
@@ -850,6 +858,7 @@ class MainWindow(QMainWindow):
         self.set_issues(res.issues, summary)
         self.project.store_issues(res.issues)
         self._snapshot(res.issues)
+        self._send_to_ms(res.issues)
         self.project.save()
         if res.notes:
             self.statusBar().showMessage(" | ".join(res.notes[:4]), 20000)
@@ -1037,6 +1046,55 @@ class MainWindow(QMainWindow):
         except Exception:  # noqa: BLE001 – časová osa nesmí zastavit kontrolu
             import logging
             logging.getLogger(__name__).exception("Snímek časové osy se nepodařilo uložit")
+
+    def _toggle_ms_send(self, on: bool):
+        self.settings.setValue("microstation/posilat", bool(on))
+        if on and self.drawing is not None and self.issues:
+            self._send_to_ms(self.issues)
+
+    def _send_to_ms(self, issues):
+        if not self.a_ms_send.isChecked() or self.drawing is None:
+            return
+        try:
+            from ..microstation import write_errors
+            out = write_errors(self.drawing.source_path or self.drawing.path, issues)
+            self.statusBar().showMessage(f"Chyby pro MicroStation: {out.name} (v MicroStationu F6 / vba run KV_Nacist)",
+                                         6000)
+        except OSError as exc:
+            self.statusBar().showMessage(f"Seznam chyb pro MicroStation nejde uložit: {exc}", 8000)
+
+    def show_ms_link(self):
+        from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QTextBrowser, QVBoxLayout
+
+        from ..microstation import NAVOD, install_macro
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Propojení s MicroStationem")
+        dlg.resize(720, 620)
+        lay = QVBoxLayout(dlg)
+        tb = QTextBrowser()
+        tb.setHtml(NAVOD)
+        lay.addWidget(tb, 1)
+        row = QHBoxLayout()
+        b = QPushButton("Uložit makro KontrolaVykresu.bas…")
+        b.setProperty("primarni", True)
+
+        def save():
+            d = QFileDialog.getExistingDirectory(dlg, "Kam uložit makro", str(Path.home()))
+            if d:
+                out = install_macro(d)
+                QMessageBox.information(dlg, "Makro", f"Makro uloženo: {out}\n\nTeď ho importujte ve VBA editoru "
+                                        "MicroStationu (postup v okně).")
+        b.clicked.connect(save)
+        on = QPushButton("Zapnout posílání chyb")
+        on.clicked.connect(lambda: (self.a_ms_send.setChecked(True), self._toggle_ms_send(True)))
+        row.addWidget(b)
+        row.addWidget(on)
+        row.addStretch(1)
+        close = QPushButton("Zavřít")
+        close.clicked.connect(dlg.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+        dlg.exec()
 
     def show_prediction(self):
         from .predikce_dialog import PredikceDialog
