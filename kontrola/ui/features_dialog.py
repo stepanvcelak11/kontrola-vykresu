@@ -21,7 +21,7 @@ FUNKCE = [
          "učitel, vše, jen topologie, vzhled mapy, cizí výkres bez pravidel). Nabídka je i u šipky tlačítka "
          "Zkontrolovat.", "a_vyber"),
         ("Přehled výkresu", "Co je na které vrstvě: počty čar, ploch, bodů, textů a buněk, délky, barvy, styly, "
-         "tloušťky a písmo; vrstvy s nejednotným vzhledem žlutě. Pro cizí výkres ideální začátek.", "a_prehled"),
+         "tloušťky a písmo; vrstvy s nejednotným vzhledem označené ⚠. Pro cizí výkres ideální začátek.", "a_prehled"),
         ("Obecná kontrola geometrie", "Na jakýkoli výkres: zbytečné lomové body, špičky (čára se vrací), "
          "nepatrné a úzké plochy, překryv čar, nečitelně malý text.", "a_vyber"),
         ("Kartografická kontrola", "Popisy přes sebe, popis přeškrtnutý čarou, číslo bodu daleko od bodu, "

@@ -125,7 +125,8 @@ class VyberKontrol(QDialog):
                 if found.get(cid):
                     badge = QLabel(f"minule {found[cid]}×")
                     badge.setToolTip("Počet míst, která kontrola našla při posledním spuštění")
-                    badge.setStyleSheet("color:#B45309; font-weight:600;")
+                    from .theme import themed
+                    badge.setStyleSheet(f"color:{themed('#B45309')}; font-weight:600;")
                     badge.setMinimumWidth(badge.sizeHint().width())
                     row.addWidget(badge)
                     widgets.append(badge)

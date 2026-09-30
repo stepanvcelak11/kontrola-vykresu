@@ -384,7 +384,7 @@ i výkres z jiného předmětu. Výběr se uloží do projektu.
 
 **Kontrola → Přehled výkresu** (Ctrl+Shift+P) ukáže, co je na které vrstvě: počty čar, ploch,
 bodů, textů a buněk, celkovou délku a plochu, barvy, styly, tloušťky a písmo. Vrstvy, kde prvky
-nemají jednotný vzhled, jsou žlutě; dvojklik vrstvu ukáže samotnou. U cizího výkresu je to
+nemají jednotný vzhled, mají u hodnoty ⚠; dvojklik vrstvu ukáže samotnou. U cizího výkresu je to
 nejlepší začátek.
 
 Topologické kontroly mají parametr **Jen hladiny**, který kontrolu omezí na vybrané

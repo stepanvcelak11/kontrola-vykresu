@@ -30,7 +30,7 @@ class PrehledDialog(QDialog):
         n_nejed = sum(1 for v in rows if not v.jednotna)
         head = QLabel(f"<h2 style='margin:0'>Přehled výkresu</h2>{len(d.features)} prvků ve {len(rows)} vrstvách · "
                       f"rozsah {ext} · {souradnicovy_system(d)}"
-                      + (f" · <b>{n_nejed} vrstev nemá jednotný vzhled</b> (žlutě)" if n_nejed else ""))
+                      + (f" · <b>{n_nejed} vrstev nemá jednotný vzhled</b> (⚠)" if n_nejed else ""))
         head.setWordWrap(True)
         lay.addWidget(head)
         t = self.table = QTableWidget(len(rows), len(COLS))
@@ -40,7 +40,10 @@ class PrehledDialog(QDialog):
         t.setSelectionBehavior(QAbstractItemView.SelectRows)
         t.setSelectionMode(QAbstractItemView.SingleSelection)
         t.setAlternatingRowColors(True)
-        warn = QColor(255, 243, 205)
+        from .theme import themed
+        warn = QColor(themed("#B45309"))
+        bold = t.font()
+        bold.setBold(True)
         for r, v in enumerate(rows):
             pis = popis_counter(v.pisma, 2)
             if v.vysky:
@@ -57,8 +60,11 @@ class PrehledDialog(QDialog):
                 else:
                     it.setText(str(val))
                     it.setToolTip(str(val))
-                if not v.jednotna and c in (9, 10, 11):
-                    it.setBackground(warn)
+                multi = {9: v.barvy, 10: v.styly, 11: v.tloustky}.get(c)
+                if multi is not None and len(multi) > 1:
+                    it.setText("⚠ " + it.text())
+                    it.setForeground(warn)
+                    it.setFont(bold)
                 if c == 9 and v.rgb:
                     it.setIcon(_swatch(v.rgb.most_common(1)[0][0]))
                 t.setItem(r, c, it)
@@ -77,7 +83,7 @@ class PrehledDialog(QDialog):
         t.setColumnWidth(8, 104)
         t.doubleClicked.connect(lambda _i: self.only_layer())
         lay.addWidget(t, 1)
-        note = QLabel("Dvojklik na vrstvu ji ukáže samotnou. Žlutě = na vrstvě jsou prvky s různou barvou, stylem "
+        note = QLabel("Dvojklik na vrstvu ji ukáže samotnou. ⚠ = na vrstvě jsou prvky s různou barvou, stylem "
                       "nebo tloušťkou (to hlídá kontrola „Prvek jiný než ostatní na vrstvě“).")
         note.setObjectName("karta_popis")
         note.setWordWrap(True)
