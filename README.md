@@ -23,11 +23,12 @@ od učitele nebo ze vzorového výkresu.
 5. [Kontroly](#kontroly)
 6. [Zadání: tabulka atributů, náčrty, vzor, podklady](#zadání-tabulka-atributů-náčrty-vzor-podklady)
 7. [Pravidla a konfigurace v YAML](#pravidla-a-konfigurace-v-yaml)
-8. [Výstupy](#výstupy)
-9. [Příkazová řádka](#příkazová-řádka)
-10. [Sestavení .exe](#sestavení-exe)
-11. [Pro vývojáře: struktura a přidání kontroly](#pro-vývojáře-struktura-a-přidání-kontroly)
-12. [Známá omezení](#známá-omezení)
+8. [Přesnost kontrol](#přesnost-kontrol)
+9. [Výstupy](#výstupy)
+10. [Příkazová řádka](#příkazová-řádka)
+11. [Sestavení .exe](#sestavení-exe)
+12. [Pro vývojáře: struktura a přidání kontroly](#pro-vývojáře-struktura-a-přidání-kontroly)
+13. [Známá omezení](#známá-omezení)
 
 ---
 
@@ -692,6 +693,28 @@ Pokud učitel uvádí čísla barev z AutoCADu, přepněte „Čísla barev v pr
 Tloušťky MicroStationu (wt 0–31) se v DXF ověřit nedají. Uvádějte je v mm, nebo je nechte prázdné.
 
 ---
+
+## Přesnost kontrol
+
+Přesnost se měří **vkládáním známých chyb** do skutečných výkresů ze zadání (Zadání 1 a Husovice):
+do čistého výkresu se vloží jedna chyba a sleduje se, jestli ji správná kontrola najde na správném
+místě a co se nahlásí navíc. Výsledky (20 opakování na každý druh chyby):
+
+| Vložená chyba | Zadání 1 | Husovice |
+|---|---|---|
+| nedotažení 5 mm, přetažení 10 mm, volný konec 40 cm | 100 % | 100 % |
+| duplicita, křížení bez uzlu, překryv úseku, samoprotnutí | 100 % | 100 % |
+| krátká čára, nulová délka, lomový bod 5 mm od čáry, špička | 100 % | 100 % |
+| špatná barva / tloušťka / vrstva | 100 % | 100 % |
+| zatoulaný prvek, prázdný text | 100 % | 100 % |
+| přepsané číslo bodu (duplicitní číslo) | 100 % | 100 % |
+| text vzhůru nohama, jiná výška textu, výška s 1 des. místem | 100 % | 100 % |
+| číslo bodu odsunuté o 3 m | 80 % | 100 % |
+| smazané číslo bodu | 90 % do 2 m | 100 % |
+
+Zbylé případy jsou v hustém shluku bodů, kde ani podle polohy nejde poznat, ke kterému bodu
+číslo patří (se seznamem souřadnic to hlídá kontrola Seznam souřadnic). Zmenšená verze měření
+běží jako test `tests/test_presnost.py` při každém sestavení, aby se záchyt nezhoršil.
 
 ## Srovnání s MGEO
 
