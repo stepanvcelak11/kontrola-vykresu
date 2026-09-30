@@ -15,7 +15,12 @@ FUNKCE = [
          "a_check"),
         ("Kontrola ploch (MGEO)", "Z hranic sestaví plochy a hlídá, že každá má jeden popis / definiční bod "
          "a čísla se neopakují. Zapíná se v Nastavení kontrol.", "a_settings"),
-        ("Hlídat změny výkresu", "Po uložení v MicroStationu se výkres sám znovu zkontroluje.", "a_watch"),
+        ("Hlídat změny výkresu", "Po uložení v MicroStationu se výkres sám znovu zkontroluje – i přímo DGN "
+         "(Ctrl+S v MicroStationu), bez ukládání do DXF.", "a_watch"),
+        ("Kartografická kontrola", "Popisy přes sebe, popis přeškrtnutý čarou, číslo bodu daleko od bodu, "
+         "popis vzhůru nohama – to, co učitel vidí okem na mapě.", "a_check"),
+        ("Otevřít DGN přímo", "Výkres z MicroStationu V8i / CONNECT se čte přímo z DGN (experimentálně): "
+         "vrstvy, přesné barvy, tloušťky a styly, texty, buňky, oblouky.", "a_open"),
         ("Připraveno k odevzdání?", "Souhrn: co ještě chybí, skóre a co opravit jako první.", "a_ready"),
         ("Hromadná kontrola", "Celá složka výkresů najednou s přehledovou tabulkou.", "a_batch"),
     ]),
@@ -27,6 +32,8 @@ FUNKCE = [
          "posunout vrchol, o kolik, souřadnice cíle a key-in ke zkopírování. Opravujete sami v DGN; "
          "opravný list jde i vytisknout.", "a_fixguide"),
         ("Návod ke každé chybě", "U chyby postup v MicroStationu krok za krokem s obrázkem.", None),
+        ("Chyby přímo v MicroStationu", "Makro pro MicroStation ukáže chyby jako dočasné kroužky (do DGN se "
+         "neukládají), F8 skočí na další chybu.", "a_ms_help"),
         ("Rychlé tipy – MicroStation", "Rovnoběžka, kolmice, prodloužení, AccuDraw, přichycení…", "_tips"),
     ]),
     ("Body a souřadnice", [
@@ -47,6 +54,12 @@ FUNKCE = [
         ("Náčrt vedle výkresu", "Fotka náčrtu nebo PDF vzor vedle kresby, i s georeferencí.", "a_sketch"),
     ]),
     ("Porovnání a protokoly", [
+        ("Časová osa výkresu", "Každá zkontrolovaná verze se uloží: přehrát vznik výkresu, kde přibyly "
+         "chyby, porovnat s dneškem, vytáhnout omylem smazané prvky.", "a_timeline"),
+        ("Učitelův pohled", "Předpověď protokolu od učitele – aplikace se učí z jeho dřívějších protokolů – "
+         "a náhled protokolu v jeho formátu.", "a_predikce"),
+        ("Náhled tisku v měřítku", "Mapa do PDF přesně v měřítku 1:500 / 1:1000 s tloušťkami čar jako na "
+         "tisku.", "a_print_preview"),
         ("Porovnat verze výkresu", "Co se změnilo mezi dvěma verzemi (přidáno, smazáno, posunuto).", "a_compare"),
         ("Porovnat s protokolem učitele", "Načte .log z MGEO / GISoft a ukáže, co učitel hlásil a jak na tom "
          "jste teď.", "a_teacher"),

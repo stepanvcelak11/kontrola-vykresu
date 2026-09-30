@@ -510,6 +510,50 @@ místo vypíše k ruční opravě. Výkres s kresbou v referenci umí také. Ov�
 geometrie se posune nejvýš o toleranci (0,018 m). Podle zadání se automaticky opravený výkres
 neuznává – slouží k tomu, abyste viděli, co opravit v MicroStationu.
 
+### Chyby přímo v MicroStationu (makro)
+
+Kontrola → **Propojení s MicroStationem**: aplikace uloží makro **KontrolaVykresu.bas** (VBA, V8i
+i CONNECT) a po zapnutí **Posílat chyby do MicroStationu** zapisuje po každé kontrole vedle výkresu
+`<název>_chyby.txt`. V MicroStationu makro (`vba run KV_Nacist`, na F6) ukáže chyby jako **dočasné
+kroužky** – do DGN se neukládají a výkres nijak nemění – a `KV_Dalsi` / `KV_Predchozi` (F8 / F7)
+přiblíží další chybu s textem ve stavovém řádku. Postup instalace je v okně. Makro jsem nemohl
+vyzkoušet v MicroStationu – kdyby hlásilo chybu, pošlete její text.
+
+### DGN přímo, bez převodu (experimentálně)
+
+DGN z MicroStationu V8 / V8i / CONNECT aplikace přečte sama – vlastní čtečka formátu (OLE + zlib):
+úsečky, lomené čáry, tvary, složené řetězce, oblouky a elipsy (2D i 3D), texty (obsah, výška, natočení,
+zarovnání), buňky (název, poloha, natočení), body, názvy vrstev a **přesná symbologie z DGN** (číslo
+barvy, tloušťka 0–31, styl, „dle vrstvy“). Na výkresu Husovice sedí s DXF exportem z MicroStationu počty
+všech typů prvků, vrstvy, texty i souřadnice (99–100 % vrcholů do 2 cm, oblouky jsou lomené čáry).
+Nečte se písmo textu (font) a název vlastního stylu čáry (je v knihovně stylů, ne v DGN) – ty se u DGN
+nekontrolují. Když je vedle DGN novější stejnojmenný DXF, použije se DXF. S **Hlídat změny výkresu** pak
+stačí v MicroStationu Ctrl+S.
+
+### Časová osa výkresu (Ctrl+H)
+
+Při každé kontrole změněného výkresu se do projektu uloží komprimovaná verze (posledních 60, max. 300 MB;
+první verze zůstává). Okno **Časová osa** ukáže všechny verze (čas, počet prvků, změna, chyby, skóre –
+červeně, kde chyby přibyly), náhled každé verze, **přehrání** vzniku výkresu, porovnání vybrané verze
+s aktuálním výkresem, **vytažení smazaných prvků** do DXF (zkopírujete je zpět v MicroStationu) a uložení
+libovolné verze.
+
+### Učitelův pohled – předpověď protokolu
+
+Při každém **Porovnat s protokolem učitele** se aplikace učí, které chyby učitel hlásí (podle kombinací
+chybných atributů, společně pro všechny projekty). **Kontrola → Učitelův pohled** pak odhadne, co nahlásí
+u aktuálního výkresu: skupiny, které hlásí jako program, skupiny, které (zatím) nehlásí, a upozornění, kde
+učitel dřív našel víc než program. Záložka **Náhled protokolu** ukáže protokol ve formátu GISoft, jaký
+dostanete od učitele. Bez porovnaného protokolu je odhad stejný jako výsledek kontroly.
+
+### Kartografická kontrola a náhled tisku
+
+Skupina **Kartografie** (rychlý filtr nad seznamem chyb): **popisy přes sebe** (podle velikosti písma,
+pracovní drobné popisy se s tiskovými nesrovnávají), **popis přeškrtnutý čarou**, **číslo bodu daleko od
+bodu** (vrstvy s čísly bodů se poznají samy) a **popis vzhůru nohama**. **Soubor → Export → Náhled tisku
+v měřítku (PDF)**: mapa přesně v měřítku (1 mm = M/1000 m) na bílém papíře s tloušťkami čar jako na
+tisku – vytiskněte na 100 %.
+
 ### Opravný průvodce pro MicroStation (Ctrl+G)
 
 Kontrola → **Opravný průvodce**: chyby k opravě jedna po druhé, seřazené podle polohy (od levého horního
@@ -624,6 +668,7 @@ Tloušťky MicroStationu (wt 0–31) se v DXF ověřit nedají. Uvádějte je v 
 | … volné konce | Visící konec linie |
 | … krátké a bodové linie (0,090 m) | Krátká linie nebo úsek (0,090 m), Prvek nulové délky |
 | … blízké body | Body téměř na sobě |
+| Čtení DGN | Vlastní čtení DGN V8 (experimentálně) nebo DXF |
 | Topologické čištění – Limit (vzdálenost prvků) | Prvky příliš blízko (Limit 0,01 m) |
 | Kontrola ploch (hranice + definiční body) | Kontrola ploch: plocha bez popisu, více čísel, duplicitní čísla |
 | Kontrola a oprava duplicitních prvků | Duplicitní prvek (i body, texty, buňky) |
@@ -752,8 +797,8 @@ průběhu a jdou zrušit.
 
 ## Známá omezení
 
-* DGN jde otevřít jen přes ODA File Converter, a to jen pokud ho jeho verze umí převést.
-  Jinak je potřeba uložit DXF z MicroStationu.
+* DGN V8 se čte vlastní čtečkou experimentálně (bez písma textů a názvů vlastních stylů čar);
+  starší DGN V7 jen přes DXF z MicroStationu nebo ODA File Converter.
 * Oblouky a kružnice se pro kontroly nahrazují lomenou čarou s odchylkou 5 mm.
   Souřadnice Z se ignorují.
 * Kružnice (CIRCLE) se považuje za bodový prvek (značku) se středem v kružnici.

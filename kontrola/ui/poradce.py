@@ -48,6 +48,19 @@ FAQ = [
     ("Porovnat s PDF od učitele", "pdf vzor porovnat kresba chybi cara ucitel",
      "<b>Zadání → Vzor</b>: nahrajte PDF z MicroStationu a klikněte <b>Porovnat</b>. PDF se samo umístí na "
      "výkres podle popisů a ukáže čáry, které vám chybí nebo přebývají."),
+    ("Chyby přímo v MicroStationu", "microstation makro vba kruzky dalsi chyba f8 propojeni",
+     "<b>Kontrola → Propojení s MicroStationem</b>: uložte makro, importujte ho ve VBA editoru a zapněte "
+     "<b>Posílat chyby do MicroStationu</b>. V MicroStationu pak F6 načte chyby (dočasné kroužky, do DGN se "
+     "neukládají) a F8 skočí na další."),
+    ("Otevřít DGN bez převodu", "dgn otevrit primo bez dxf prevod",
+     "DGN z MicroStationu V8i / CONNECT otevřete přímo – aplikace ho umí číst sama (experimentálně). Když je "
+     "vedle stejnojmenný novější DXF, použije ho. S hlídáním změn stačí v MicroStationu Ctrl+S."),
+    ("Časová osa výkresu", "casova osa historie verze smazal omylem vratit prehrat",
+     "<b>Kontrola → Časová osa výkresu</b> (Ctrl+H): každá kontrolovaná verze, přehrání, kde přibyly chyby, "
+     "porovnání a vytažení smazaných prvků do DXF."),
+    ("Co nahlásí učitel", "ucitel protokol predpoved nahlasi odhad",
+     "<b>Kontrola → Učitelův pohled</b>: odhad protokolu od učitele. Čím víc jeho protokolů porovnáte "
+     "(Porovnat s protokolem učitele), tím je odhad přesnější."),
     ("Co aplikace umí", "co umis umi funkce prehled vsechno nastroje",
      "Přehled všech funkcí s tlačítkem Spustit: <b>Nápověda → Co aplikace umí</b> nebo odkaz na Úvodu."),
     ("MGEO – limit a kontrola ploch", "mgeo gisoft limit blizko plochy definicni bod popis parcela",
