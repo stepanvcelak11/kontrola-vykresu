@@ -224,6 +224,8 @@ class MainWindow(QMainWindow):
                                   "Sedí body ve výkresu na seznam souřadnic? (poloha, čísla, výšky, body navíc)")
         self.a_fixguide = self._act("Opravný průvodce (MicroStation)…", self.show_fix_guide, "Ctrl+G",
                                     "Chyby jedna po druhé s přesným postupem a souřadnicemi pro MicroStation")
+        self.a_timeline = self._act("Časová osa výkresu…", self.show_timeline, "Ctrl+H",
+                                    "Všechny uložené verze výkresu: přehrát, porovnat, vytáhnout smazané prvky")
         self.a_spojnice = self._act("Spojnice podle náčrtu…", self.verify_lines, None,
                                     "Je nakreslené všechno, co je v náčrtu spojené? (plot 1-2-3…)")
         self.a_batch = self._act("Zkontrolovat více výkresů najednou…", self.batch_check, None,
@@ -287,6 +289,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_fixguide)
+        m_check.addAction(self.a_timeline)
         m_check.addAction(self.a_seznam)
         m_check.addAction(self.a_spojnice)
         m_check.addAction(self.a_batch)
@@ -835,6 +838,7 @@ class MainWindow(QMainWindow):
         self._checked_once = True
         self.set_issues(res.issues, summary)
         self.project.store_issues(res.issues)
+        self._snapshot(res.issues)
         self.project.save()
         if res.notes:
             self.statusBar().showMessage(" | ".join(res.notes[:4]), 20000)
@@ -1004,6 +1008,28 @@ class MainWindow(QMainWindow):
         dlg = SeznamDialog(self, path)
         self._seznam_dlg = dlg
         dlg.show()
+
+    def _snapshot(self, issues):
+        """Snímek výkresu do časové osy (jen když se od minula změnil)."""
+        if self.drawing is None or getattr(self, "_region", None):
+            return
+        try:
+            from ..casova_osa import snapshot
+            from ..checks.base import Severity
+            from ..skore import compute_score
+            open_ = [i for i in issues if i.state == "nová"]
+            snapshot(self.project, self.drawing.path, {
+                "prvku": len(self.drawing.features),
+                "chyby": sum(1 for i in open_ if i.severity == Severity.CHYBA),
+                "varovani": sum(1 for i in open_ if i.severity == Severity.VAROVANI),
+                "skore": compute_score(issues, bool(self.project.rules.pravidla)).hodnota})
+        except Exception:  # noqa: BLE001 – časová osa nesmí zastavit kontrolu
+            import logging
+            logging.getLogger(__name__).exception("Snímek časové osy se nepodařilo uložit")
+
+    def show_timeline(self):
+        from .timeline_dialog import TimelineDialog
+        TimelineDialog(self).exec()
 
     def print_preview(self, path: str | None = None, meritko: int | None = None):
         if self.drawing is None:

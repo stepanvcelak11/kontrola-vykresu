@@ -539,3 +539,38 @@ def test_nahled_tisku_v_meritku(window, tmp_path):
         # šířka papíru v bodech PDF = (kresba v m × 2 mm/m + 20 mm okraje) / 25,4 × 72
         assert abs(pg.width - (rect.width() * 2 + 20) / 25.4 * 72) < 2
         assert "1:500" in (pg.extract_text() or "")
+
+
+def test_casova_osa(window, tmp_path, monkeypatch):
+    import ezdxf
+    from PySide6.QtWidgets import QFileDialog
+
+    from kontrola.casova_osa import snapshots
+    from kontrola.ui.timeline_dialog import TimelineDialog
+    w = window
+    f = tmp_path / "moje.dxf"
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    msp.add_line((0, 0), (10, 0), dxfattribs={"layer": "A"})
+    keep = msp.add_line((0, 5), (10, 5), dxfattribs={"layer": "B"})
+    doc.saveas(f)
+    w.load_drawing_file(f)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    w.a_check.trigger()  # beze změny → žádná nová verze
+    assert w._wait(lambda: _idle(w), 30)
+    assert len(snapshots(w.project)) == 1
+    msp.delete_entity(keep)
+    doc.saveas(f)
+    w.load_drawing_file(f)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(snapshots(w.project)) == 2, 30)
+    dlg = TimelineDialog(w)
+    assert dlg.table.rowCount() == 2 and dlg.table.item(1, 2).text() == "-1"
+    dlg.table.selectRow(0)
+    assert dlg.preview.pixmap() is not None and not dlg.preview.pixmap().isNull()
+    out = tmp_path / "smazane.dxf"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    dlg.restore_removed()
+    rest = list(ezdxf.readfile(out).modelspace())
+    assert len(rest) == 1 and rest[0].dxf.layer == "B"
