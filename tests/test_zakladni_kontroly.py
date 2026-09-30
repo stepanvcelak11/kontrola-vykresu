@@ -229,3 +229,40 @@ def test_prekryv_linii(make_dxf):
     d = make_dxf(build, name="prekryv2.dxf")
     iss = check(d, "prekryv_linii")
     assert len(iss) == 1 and "2 m" in iss[0].message.replace(",000", "") and abs(iss[0].x - 5) < 1e-6
+
+
+def test_obecne_kontroly_geometrie(make_dxf):
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (5, 0), (10, 0)], dxfattribs={"layer": "A"})  # zbytečný bod v (5, 0)
+        msp.add_lwpolyline([(0, 10), (5, 10), (0, 10.3)], dxfattribs={"layer": "A"})  # špička
+        msp.add_lwpolyline([(20, 0), (20.1, 0), (20.1, 0.1), (20, 0.1)], close=True,
+                           dxfattribs={"layer": "B"})  # 0,01 m²
+        msp.add_lwpolyline([(30, 0), (40, 0), (40, 0.01), (30, 0.01)], close=True,
+                           dxfattribs={"layer": "B"})  # úzká štěrbina
+        msp.add_circle((50, 0), 0.1, dxfattribs={"layer": "B"})  # značka – ne plocha
+    d = make_dxf(build, name="geom.dxf")
+    assert [(i.x, i.y) for i in check(d, "zbytecne_lomove_body")] == [(5.0, 0.0)]
+    assert len(check(d, "spicka")) == 1
+    msgs = sorted(i.message for i in check(d, "nepatrna_plocha"))
+    assert len(msgs) == 2 and msgs[0].startswith("Nepatrná") and "úzká" in msgs[1]
+
+
+def test_zatoulany_prvek_prazdny_text_rozdelena_cara(make_dxf):
+    def build(msp, doc):
+        for k in range(20):
+            msp.add_line((k, 0), (k, 5), dxfattribs={"layer": "A"})
+        msp.add_line((5000, 5000), (5001, 5000), dxfattribs={"layer": "A"})  # omylem daleko
+        msp.add_text(" ", dxfattribs={"layer": "T", "height": 1.0, "insert": (3, 3)})
+        msp.add_line((0, 20), (5, 20), dxfattribs={"layer": "C"})
+        msp.add_line((5, 20), (10, 20), dxfattribs={"layer": "C"})  # navazuje rovně – rozdělená čára
+        msp.add_line((0, 30), (5, 30), dxfattribs={"layer": "C"})
+        msp.add_line((5, 30), (10, 32), dxfattribs={"layer": "C"})  # lom – v pořádku
+    d = make_dxf(build, name="obecne.dxf")
+    z = check(d, "zatoulany_prvek")
+    assert len(z) == 1 and z[0].x > 4000
+    assert [i.message for i in check(d, "prazdny_text")] == ["Prázdný text (bez znaků)"]
+    from kontrola.config import Config
+    cfg = Config()
+    cfg.settings("rozdelena_cara").zapnuto = True  # ve výchozím stavu vypnutá
+    r = check(d, "rozdelena_cara", config=cfg)
+    assert [(i.x, i.y) for i in r] == [(5.0, 20.0)]

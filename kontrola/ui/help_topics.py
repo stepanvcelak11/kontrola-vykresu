@@ -208,6 +208,36 @@ TOPICS: dict[str, tuple[str, str]] = {
         "MGEO hlídá, aby dva prvky, které se nedotýkají, nebyly blíž než <b>Limit</b> (obvykle 1 cm). Lomový bod "
         "čáry 3 mm vedle jiné čáry je skoro jistě chyba – měl na ní ležet.<br><br><b>Oprava:</b> vrchol přesuňte "
         "s přichycením na čáru (Nearest), nebo ho odsuňte dál."),
+    "zbytecne_lomove_body": (
+        "Zbytečné lomové body",
+        "Lomový bod na rovné čáře, na který nic nenavazuje. Nevadí, ale zbytečně zatěžuje výkres a při "
+        "editaci se na něm snadno udělá chyba.<br><br><b>Oprava:</b> Odstranit vrchol (Delete Vertex)."),
+    "spicka": (
+        "Špička",
+        "Čára se v lomovém bodě otočí skoro o 180° a vede zpět po sobě – omylem kliknutý bod nebo „zub“ po "
+        "úpravě vrcholu. Na výkrese ji často není vidět.<br><br><b>Oprava:</b> Odstranit vrchol (Delete Vertex) "
+        "na konci špičky."),
+    "nepatrna_plocha": (
+        "Nepatrná nebo úzká plocha",
+        "Uzavřená plocha s nepatrnou výměrou nebo štěrbina – zbytek po editaci.<br><br><b>Oprava:</b> plochu "
+        "smažte, nebo upravte hranice tak, aby sousední plochy navazovaly přesně."),
+    "zatoulany_prvek": (
+        "Zatoulaný prvek daleko od kresby",
+        "Prvek leží daleko od ostatní kresby – omylem kliknutý bod, prvek v počátku souřadnic nebo kopie mimo "
+        "mapu. Kvůli němu je „Zobrazit vše“ skoro prázdné.<br><br><b>Oprava:</b> přibližte si chybu, prvek "
+        "vyberte a smažte, nebo ho přesuňte na správné místo."),
+    "prazdny_text": (
+        "Prázdný nebo neviditelný text",
+        "Text bez znaků nebo s nulovou výškou – na výkrese není vidět, ale je v souboru.<br><br><b>Oprava:</b> "
+        "text smažte (výběr ohradou), nebo doplňte obsah a výšku."),
+    "rozdelena_cara": (
+        "Zbytečně rozdělená čára",
+        "Dvě stejné čáry navazují v přímém směru a v místě napojení nic není – mohla by to být jedna.<br><br>"
+        "<b>Oprava:</b> nepovinné; čáry lze spojit (Vytvořit složený řetězec / Spojit prvky)."),
+    "maly_text": (
+        "Nečitelně malý text",
+        "Text je po vytištění v měřítku výkresu menší než zadaná mez a nepůjde přečíst.<br><br><b>Oprava:</b> "
+        "zvětšete výšku textu podle Směrnice (Změnit atributy textu)."),
     "prekryv_linii": (
         "Překrývající se čáry",
         "Kus čáry leží na jiné čáře – úsek je nakreslený dvakrát (často po kopírování nebo když se čára kreslí "

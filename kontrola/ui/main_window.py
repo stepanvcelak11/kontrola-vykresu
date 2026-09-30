@@ -6,8 +6,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar)
+from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMenu, QMessageBox,
+                               QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar, QToolButton)
 
 from .. import APP_NAME
 from ..checks.base import Issue, Severity
@@ -178,6 +178,8 @@ class MainWindow(QMainWindow):
                                 checkable=True)
         self.a_quit = self._act("Konec", self.close, "Ctrl+Q")
         self.a_check = self._act("Zkontrolovat", self.run_checks, "F5", "Spustit zapnuté kontroly")
+        self.a_vyber = self._act("Co zkontrolovat…", self.show_check_selection, "Ctrl+Shift+K",
+                                 "Zaškrtnout, které kontroly se mají spustit (i hotové sady: jako učitel, vše…)")
         self.a_recheck = self._act("Zkontrolovat znovu", self.recheck, "Ctrl+F5",
                                    "Znovu načíst výkres ze souboru, zkontrolovat a porovnat počet chyb")
         self.a_repair = self._act("Automatická oprava…", self.repair, "Ctrl+R",
@@ -296,6 +298,7 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.sketch_dock.toggleViewAction())
         m_check = self.menuBar().addMenu("&Kontrola")
         m_check.addAction(self.a_check)
+        m_check.addAction(self.a_vyber)
         m_check.addAction(self.a_recheck)
         m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
@@ -391,6 +394,8 @@ class MainWindow(QMainWindow):
         # hlavní akce je zvýrazněná (bílá ikona na modrém tlačítku)
         btn = tb.widgetForAction(self.a_check)
         if btn is not None:
+            btn.setMenu(self._check_menu())
+            btn.setPopupMode(QToolButton.MenuButtonPopup)
             btn.setObjectName("primarni")
             btn.style().unpolish(btn)
             btn.style().polish(btn)
@@ -1127,6 +1132,32 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres a zkontrolujte ho (F5).")
             return
         PredikceDialog(self).exec()
+
+    def _check_menu(self) -> QMenu:
+        from .vyber_kontrol import PRESETY
+        m = QMenu(self)
+        m.addAction(self.a_vyber)
+        m.addSeparator()
+        for name, tip, _p in PRESETY:
+            a = m.addAction(f"Zkontrolovat: {name}")
+            a.setToolTip(tip)
+            a.triggered.connect(lambda _c=False, n=name: self.run_preset(n))
+        m.setToolTipsVisible(True)
+        return m
+
+    def run_preset(self, name: str):
+        from .vyber_kontrol import apply_preset_to
+        apply_preset_to(self.project.config, name)
+        self.project.save()
+        self.statusBar().showMessage(f"Sada kontrol: {name}", 5000)
+        if self.drawing is not None:
+            self.a_check.trigger()
+
+    def show_check_selection(self):
+        from .vyber_kontrol import VyberKontrol
+        dlg = VyberKontrol(self)
+        if dlg.exec() and dlg.run_now and self.drawing is not None:
+            self.a_check.trigger()
 
     def show_timeline(self):
         from .timeline_dialog import TimelineDialog

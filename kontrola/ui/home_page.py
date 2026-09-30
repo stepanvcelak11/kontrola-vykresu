@@ -212,7 +212,8 @@ class HomePage(QScrollArea):
         tl.addWidget(lab)
         grid = QGridLayout()
         grid.setSpacing(8)
-        items = [("Opravný průvodce", win.show_fix_guide, "oprava"),
+        items = [("Co zkontrolovat", win.show_check_selection, "zkontrolovat"),
+                 ("Opravný průvodce", win.show_fix_guide, "oprava"),
                  ("Ověřit seznam souřadnic", win.verify_list, "seznam"),
                  ("Spojnice podle náčrtu", win.verify_lines, "nacrt"),
                  ("Kontrola výpočtu (Groma)", win.show_vypocet, "zkontrolovat"),

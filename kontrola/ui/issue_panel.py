@@ -172,7 +172,8 @@ QUICK_FILTERS = ((None, "Vše", "Zobrazit všechny nálezy"),
                  ("Topologie", "Topologie", "Jen topologické chyby – napojení, křížení, duplicity (kontrola MGEO)"),
                  ("Atributy", "Atributy", "Jen atributy – vrstva, barva, styl, písmo (kontrola GISoft)"),
                  ("Kartografie", "Kartografie", "Jak mapa vypadá: popisy přes sebe, přes čáry, vzhůru nohama, "
-                                                "čísla daleko od bodů"))
+                                                "čísla daleko od bodů"),
+                 ("Geometrie", "Geometrie", "Zbytečné lomové body, špičky, nepatrné a úzké plochy"))
 
 
 class IssueFilter(QSortFilterProxyModel):

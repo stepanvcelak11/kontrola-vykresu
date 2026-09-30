@@ -17,6 +17,11 @@ FUNKCE = [
          "a čísla se neopakují. Zapíná se v Nastavení kontrol.", "a_settings"),
         ("Hlídat změny výkresu", "Po uložení v MicroStationu se výkres sám znovu zkontroluje – i přímo DGN "
          "(Ctrl+S v MicroStationu), bez ukládání do DXF.", "a_watch"),
+        ("Co zkontrolovat", "Zaškrtnete, co se má na výkrese kontrolovat, nebo zvolíte hotovou sadu (jako "
+         "učitel, vše, jen topologie, vzhled mapy, cizí výkres bez pravidel). Nabídka je i u šipky tlačítka "
+         "Zkontrolovat.", "a_vyber"),
+        ("Obecná kontrola geometrie", "Na jakýkoli výkres: zbytečné lomové body, špičky (čára se vrací), "
+         "nepatrné a úzké plochy, překryv čar, nečitelně malý text.", "a_vyber"),
         ("Kartografická kontrola", "Popisy přes sebe, popis přeškrtnutý čarou, číslo bodu daleko od bodu, "
          "popis vzhůru nohama – to, co učitel vidí okem na mapě.", "a_check"),
         ("Otevřít DGN přímo", "Výkres z MicroStationu V8i / CONNECT se čte přímo z DGN (experimentálně): "

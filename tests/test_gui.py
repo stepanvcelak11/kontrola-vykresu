@@ -607,3 +607,31 @@ def test_microstation_seznam_chyb_a_makro(window, tmp_path):
     bas = install_macro(tmp_path).read_bytes()
     assert b"\r\n" in bas and "KV_Dalsi".encode() in bas
     bas.decode("cp1250")  # VBA editor čte ANSI
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_co_zkontrolovat(window, monkeypatch):
+    from kontrola.checks.base import REGISTRY
+    from kontrola.ui import vyber_kontrol
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    dlg = vyber_kontrol.VyberKontrol(w)
+    assert set(dlg.boxes) == set(REGISTRY)
+    dlg.apply_preset(next(p for n, _t, p in vyber_kontrol.PRESETY if n == "Jen topologie"))
+    assert all(cb.isChecked() == (REGISTRY[c].skupina == "Topologie") for c, cb in dlg.boxes.items())
+    dlg.group_boxes["Geometrie"].click()
+    assert dlg.boxes["spicka"].isChecked() and dlg.group_boxes["Geometrie"].isChecked()
+    dlg.save_and_run()
+    assert dlg.run_now and w.project.config.settings("spicka").zapnuto
+    assert not w.project.config.settings("symbologie").zapnuto
+    # rychlá sada z nabídky u tlačítka Zkontrolovat spustí kontrolu jen vybraných
+    w.issues = []
+    w.run_preset("Jen atributy")
+    assert w._wait(lambda: _idle(w) and w.issues, 60)
+    assert {i.check_id for i in w.issues} <= {c for c, k in REGISTRY.items() if k.skupina == "Atributy"}
+    from PySide6.QtWidgets import QToolBar
+    tb = w.findChild(QToolBar, "hlavni_panel")
+    assert tb.widgetForAction(w.a_check).menu() is not None
+    w.run_preset("Jako učitel")
+    assert w._wait(lambda: _idle(w), 60)

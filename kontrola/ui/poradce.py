@@ -42,6 +42,11 @@ FAQ = [
     ("Jak opravit chyby v MicroStationu krok za krokem", "opravit postup pruvodce microstation souradnice keyin",
      "<b>Kontrola → Opravný průvodce</b> (Ctrl+G): chyby jedna po druhé, seřazené podle polohy, s přesným "
      "postupem, souřadnicemi cíle a key-inem ke zkopírování. Opravujete sami v DGN, výkres zůstane váš."),
+    ("Vybrat, co se má kontrolovat", "vybrat co kontrolovat zaskrtnout sada vse jen topologie atributy cizi "
+     "vykres bez pravidel geometrie",
+     "<b>Kontrola → Co zkontrolovat…</b> (Ctrl+Shift+K) nebo šipka u tlačítka <b>Zkontrolovat</b>: zaškrtněte "
+     "jednotlivé kontroly nebo zvolte sadu – <i>Jako učitel</i>, <i>Vše, co jde</i>, <i>Jen topologie</i>, "
+     "<i>Vzhled mapy</i> nebo <i>Cizí výkres (bez pravidel)</i> pro výkres bez Směrnice."),
     ("Spojnice podle náčrtu", "nacrt spojnice spojene body plot nakresleno chybi cara",
      "<b>Kontrola → Spojnice podle náčrtu</b>: napište např. <i>plot: 1-2-3-4</i> a aplikace ověří, že tyto "
      "čáry ve výkresu máte (a na správné vrstvě)."),

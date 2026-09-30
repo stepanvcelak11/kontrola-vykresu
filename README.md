@@ -351,6 +351,7 @@ Obecné nastavení:
 | Visící konec linie (`visici_konce`) | konec linie, u kterého v toleranci není jiná linie (dangle) | varování |
 | Chybějící napojení (`chybejici_napojeni`) | konec linie je od jiné linie blíž než tolerance, ale není napojen | chyba |
 | Duplicitní prvek (`duplicity`) | stejná geometrie dvakrát (i s opačným směrem), dva body na stejném místě | chyba |
+| Překrývající se čáry (`prekryv_linii`) | kus čáry leží na jiné čáře (částečný překryv, ne celá duplicita) | chyba |
 | Samoprotnutí (`samoprotnuti`) | linie nebo polygon protíná sám sebe | chyba |
 | Průsečík bez uzlu (`pruseciky_bez_uzlu`) | křížení linií nebo T-napojení bez lomového bodu | chyba |
 | Prvek nulové délky (`nulova_delka`) | nulová délka nebo plocha, prázdný text, nulový poloměr | chyba |
@@ -360,6 +361,26 @@ Obecné nastavení:
 | Body téměř na sobě (`body_blizko`) | dva body blíž než tolerance, ale ne totožné | varování |
 | Prvky příliš blízko – Limit (`blizke_prvky`) | lomový bod čáry leží blíž než Limit (0,01 m) u jiné čáry, ale nedotýká se jí (jako Limit v MGEO) | varování |
 | Kontrola ploch (`kontrola_ploch`) | z hraničních čar sestaví plochy (jako MGEO): plocha bez popisu / definičního bodu, více čísel v jedné ploše, stejné číslo ve dvou plochách. Vrstvy se poznají samy. | vypnuto |
+
+### Geometrie a vzhled (na jakýkoli výkres, bez pravidel)
+
+| Kontrola (id) | Co hlídá | Výchozí |
+|---|---|---|
+| Zbytečné lomové body (`zbytecne_lomove_body`) | lomový bod na rovné čáře, na který nic nenavazuje | info |
+| Špička (`spicka`) | čára se v lomovém bodě vrací zpět (úhel pod 10°) | varování |
+| Nepatrná nebo úzká plocha (`nepatrna_plocha`) | plocha pod 0,05 m² nebo průměrná šířka pod 0,02 m | varování |
+| Zatoulaný prvek (`zatoulany_prvek`) | prvek nebo malá skupinka daleko od ostatní kresby (např. v počátku souřadnic) | varování |
+| Prázdný text (`prazdny_text`) | text bez znaků nebo s nulovou výškou | varování |
+| Zbytečně rozdělená čára (`rozdelena_cara`) | dvě stejné čáry navazují v přímém směru a v napojení nic není | vypnuto |
+| Nečitelně malý text (`maly_text`) | výška písma na papíře v měřítku výkresu pod 1 mm | vypnuto |
+
+### Co zkontrolovat (Ctrl+Shift+K)
+
+**Kontrola → Co zkontrolovat…** (nebo šipka u tlačítka **Zkontrolovat**) ukáže všechny
+kontroly po skupinách k zaškrtnutí. Hotové sady: *Jako učitel* (MGEO + GISoft),
+*Vše, co jde*, *Jen topologie*, *Jen atributy*, *Vzhled mapy* a *Cizí výkres (bez
+pravidel)* – ta zapne všechno, co nepotřebuje Směrnici, takže jde zkontrolovat
+i výkres z jiného předmětu. Výběr se uloží do projektu.
 
 Topologické kontroly mají parametr **Jen hladiny**, který kontrolu omezí na vybrané
 hladiny (např. `PARCELY, PLOTY*`).

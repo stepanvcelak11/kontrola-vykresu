@@ -40,6 +40,14 @@ _ATTR = {
                           "hodnoty a použijte Změnit atributy prvku (Change Element Attributes).",
     "blizke_prvky": "Lomový bod leží pár milimetrů od jiné čáry. Buď ho na čáru přichyťte (Upravit prvek + "
                     "přichycení Nearest / Intersection), nebo ho odsuňte – čáry se mají přesně dotýkat.",
+    "zbytecne_lomove_body": "Odstraňte vrchol nástrojem Odstranit vrchol (Delete Vertex).",
+    "spicka": "Odstraňte vrchol na konci špičky (Delete Vertex), nebo ho přesuňte na správné místo.",
+    "nepatrna_plocha": "Plochu smažte, nebo upravte hranice, aby sousední plochy navazovaly přesně (přichycení).",
+    "zatoulany_prvek": "Přibližte chybu, prvek vyberte a smažte (Smazat), nebo ho přesuňte na správné místo "
+                       "(Přesunout). Pak Zobrazit vše (Fit View) ukáže celou kresbu.",
+    "prazdny_text": "Text smažte (Smazat – výběr ohradou, protože není vidět), nebo doplňte obsah a výšku.",
+    "rozdelena_cara": "Nepovinné – čáry lze spojit (Vytvořit složený řetězec / Spojit prvky), jinak nevadí.",
+    "maly_text": "Zvětšete výšku textu podle Směrnice (Změnit atributy prvku / Upravit text).",
     "prekryv_linii": "Kus čáry leží na jiné čáře. Přebytečnou čáru smažte, nebo ji zkraťte k navazujícímu bodu "
                      "(Částečné smazání – Partial Delete, Oříznout k prvku). Tab/Reset přepíná mezi prvky na sobě.",
     "popisy_pres_sebe": "Přesuňte jeden z popisů vedle (Přesunout – Move), aby se nepřekrývaly.",
