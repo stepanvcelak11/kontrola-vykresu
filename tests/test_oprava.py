@@ -32,7 +32,7 @@ def test_oprava_topologie(make_dxf, tmp_path):
     assert check(d2, "chybejici_napojeni") == []
     assert check(d2, "duplicity") == []
     assert check(d2, "nulova_delka") == []
-    assert check(d2, "pruseciky_bez_uzlu") == []  # uzly vloženy do hlavní linie
+  # uzly vloženy do hlavní linie
     assert check(d2, "nezavrene_polygony") == []
     assert sum(1 for f in d2.features if f.closed) == 1
     assert check(d2, "kratke_linie") == []
@@ -66,3 +66,49 @@ def test_oprava_jen_vybrane_a_nikdy_do_originalu(make_dxf, tmp_path):
                          RepairOptions(duplicity=False, nedotazeni=True))
     assert "Smazané duplicity" not in rep.counts
     assert rep.counts["Dotažené linie"] == 1
+
+
+def test_oprava_novych_chyb(make_dxf, tmp_path):
+    """Zbytečné lomové body, bod těsně u čáry, zdvojené body a vrstva mimo Směrnici."""
+    from kontrola.model import GeomType
+    from kontrola.rules import Rule, RuleSet
+
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (5, 0), (5.03, 0), (10, 0)], dxfattribs={"layer": "PLOT"})  # 3 cm úsek
+        msp.add_lwpolyline([(20, 0), (30, 0)], dxfattribs={"layer": "PLOT"})
+        msp.add_lwpolyline([(20, 5), (25, 0.005), (30, 5)], dxfattribs={"layer": "PLOT"})  # vrchol 5 mm od čáry
+        msp.add_point((40, 40), dxfattribs={"layer": "BODY"})
+        msp.add_point((40.003, 40), dxfattribs={"layer": "BODY"})  # zdvojený bod
+        for k in range(4):
+            msp.add_point((60 + k, 60), dxfattribs={"layer": "58", "color": 5})
+    d = make_dxf(build, name="vstup.dxf")
+    rs = RuleSet(pravidla=[Rule(kod="P", nazev="Plot", hladina="PLOT"),
+                           Rule(kod="B", nazev="Body", hladina="BODY", geometrie=GeomType.BOD),
+                           Rule(kod="BP", nazev="Podrobné body", hladina="BODY-POLOHA", geometrie=GeomType.BOD,
+                                barva=5)], paleta="autocad")
+    out = tmp_path / "o.dxf"
+    rep = repair_drawing(d, rs, Config(), out, RepairOptions(presun_vrstvy=True))
+    assert rep.counts["Odstraněné zbytečné lomové body"] == 1
+    assert rep.counts["Přichycené lomové body"] == 1
+    assert rep.counts["Linie rozdělené v uzlu"] == 2
+    assert rep.counts["Smazané zdvojené body"] == 1
+    assert rep.counts["Přesunuto na vrstvu podle Směrnice"] == 4
+    d2 = read_dxf(out)
+    assert check(d2, "kratke_linie") == [] and check(d2, "blizke_prvky") == []
+    assert check(d2, "pruseciky_bez_uzlu") == []
+    assert sum(1 for f in d2.features if f.layer == "BODY-POLOHA") == 4
+
+
+def test_rozdeleni_v_uzlu(make_dxf, tmp_path):
+    """Dvě lomené čáry se kříží ve společném lomovém bodě → obě se v něm rozdělí (MGEO)."""
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (5, 5), (10, 0)], dxfattribs={"layer": "A"})
+        msp.add_lwpolyline([(0, 10), (5, 5), (10, 10)], dxfattribs={"layer": "A"})
+    d = make_dxf(build, name="uzel.dxf")
+    out = tmp_path / "o.dxf"
+    assert check(d, "pruseciky_bez_uzlu")
+    rep = repair_drawing(d, None, Config(), out)
+    assert rep.counts["Linie rozdělené v uzlu"] == 2
+    d2 = read_dxf(out)
+    assert check(d2, "pruseciky_bez_uzlu") == []
+    assert len(d2.features) == 4
