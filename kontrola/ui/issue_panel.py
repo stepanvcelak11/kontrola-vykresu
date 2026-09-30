@@ -132,7 +132,9 @@ def check_group(check_id: str) -> str:
 QUICK_FILTERS = ((None, "Vše", "Zobrazit všechny nálezy"),
                  ("chyby", "K opravě", "Jen chyby a varování (bez informací)"),
                  ("Topologie", "Topologie", "Jen topologické chyby – napojení, křížení, duplicity (kontrola MGEO)"),
-                 ("Atributy", "Atributy", "Jen atributy – vrstva, barva, styl, písmo (kontrola GISoft)"))
+                 ("Atributy", "Atributy", "Jen atributy – vrstva, barva, styl, písmo (kontrola GISoft)"),
+                 ("Kartografie", "Kartografie", "Jak mapa vypadá: popisy přes sebe, přes čáry, vzhůru nohama, "
+                                                "čísla daleko od bodů"))
 
 
 class IssueFilter(QSortFilterProxyModel):

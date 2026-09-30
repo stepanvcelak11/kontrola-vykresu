@@ -173,3 +173,23 @@ def test_opravny_postup_presne_souradnice(make_dxf):
     assert ("Souřadnice cíle (vložte do AccuDraw / zadání bodu)", "XY=5.000,0.000") in k.keyins
     assert any("6,0 mm" in s for s in k.postup)
     assert poradi(iss) == iss
+
+
+def test_kartograficke_kontroly(make_dxf):
+    def build(msp, doc):
+        msp.add_text("12", dxfattribs={"layer": "T", "height": 1.0, "insert": (0, 0)})
+        msp.add_text("13", dxfattribs={"layer": "T", "height": 1.0, "insert": (0.3, 0.2)})  # přes sebe
+        msp.add_text("POPIS", dxfattribs={"layer": "T", "height": 1.0, "insert": (20, 0), "rotation": 180})
+        msp.add_line((29, 20.5), (40, 20.5), dxfattribs={"layer": "L"})
+        msp.add_text("ULICE", dxfattribs={"layer": "T", "height": 1.0, "insert": (30, 20)})  # čára přes text
+        for k in range(4):
+            msp.add_point((100 + 10 * k, 0), dxfattribs={"layer": "BODY"})
+            msp.add_text(str(k + 1), dxfattribs={"layer": "CISLA", "height": 0.5, "insert": (100.5 + 10 * k, 0.5)})
+        msp.add_point((200, 0), dxfattribs={"layer": "BODY"})
+        msp.add_text("9", dxfattribs={"layer": "CISLA", "height": 0.5, "insert": (160, 30)})  # daleko
+    d = make_dxf(build, name="karto.dxf")
+    assert len(check(d, "popisy_pres_sebe")) == 1
+    assert [i.message for i in check(d, "popis_vzhuru_nohama")] == ["Popis „POPIS“ je vzhůru nohama (natočení 180°)"]
+    assert any("ULICE" in i.message for i in check(d, "popis_pres_caru"))
+    far = check(d, "cislo_bodu_daleko")
+    assert len(far) == 1 and "Číslo bodu 9" in far[0].message

@@ -205,6 +205,8 @@ class MainWindow(QMainWindow):
                                     "Jeden soubor pro prohlížeč: přehledka s kroužky, filtr, návody a výřezy")
         self.a_exp_dxf = self._act("DXF s vrstvou KONTROLA_CHYBY…", lambda: self.export("dxf"))
         self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
+        self.a_print_preview = self._act("Náhled tisku v měřítku (PDF)…", self.print_preview, None,
+                                         "Mapa do PDF přesně v měřítku (1:500…) s tloušťkami čar jako na tisku")
         self.a_wip = self._act("Rozpracovaný výkres", self._toggle_wip, None,
                                "Výkres ještě není hotový: nehlásit volné konce, neuzavřené plochy, mezery mezi "
                                "plochami a chybějící popisy. Nakreslené prvky se kontrolují dál. Před odevzdáním "
@@ -248,7 +250,7 @@ class MainWindow(QMainWindow):
         m_file.addSeparator()
         m_exp = m_file.addMenu("Export")
         for a in (self.a_exp_html, self.a_exp_pdf, self.a_exp_todo, self.a_exp_csv, self.a_exp_xlsx, self.a_exp_dxf,
-                  self.a_exp_log):
+                  self.a_exp_log, self.a_print_preview):
             m_exp.addAction(a)
         m_file.addSeparator()
         m_file.addAction(self.a_quit)
@@ -1002,6 +1004,24 @@ class MainWindow(QMainWindow):
         dlg = SeznamDialog(self, path)
         self._seznam_dlg = dlg
         dlg.show()
+
+    def print_preview(self, path: str | None = None, meritko: int | None = None):
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
+            return
+        if meritko is None:
+            default = (self.project.rules.meritko if self.project is not None else None) or 500
+            meritko, ok = QInputDialog.getInt(self, "Náhled tisku", "Měřítko 1:", int(default), 50, 100000, 50)
+            if not ok:
+                return
+        if path is None:
+            path, _ = QFileDialog.getSaveFileName(self, "Náhled tisku", str(Path(self.drawing.path).with_name(
+                Path(self.drawing.path).stem + f"_tisk_1-{meritko}.pdf")), "PDF (*.pdf)")
+            if not path:
+                return
+        w, h = self.view.render_print_pdf(path, meritko, Path(self.drawing.path).name)
+        self.statusBar().showMessage(f"Náhled tisku 1:{meritko} uložen ({w:.0f} × {h:.0f} mm): {path}", 8000)
+        return path
 
     def show_fix_guide(self):
         from .pruvodce_opravou import PruvodceOpravou

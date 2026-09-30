@@ -945,6 +945,52 @@ class DrawingView(QGraphicsView):
         IssueMarker.show_labels = labels
         return QPixmap.fromImage(img), pos
 
+    def render_print_pdf(self, path: str, meritko: int, title: str = "") -> tuple[float, float]:
+        """Náhled tisku: výkres do PDF v měřítku 1:meritko (1 mm na papíře = meritko/1000 m), bílý papír,
+        tloušťky čar jako na tisku (1 px = 0,1 mm). Vrací rozměr papíru v mm."""
+        from PySide6.QtCore import QMarginsF, QSizeF
+        from PySide6.QtGui import QFont, QPageLayout, QPageSize, QPdfWriter
+        rect = self._content_rect if not self._content_rect.isEmpty() else self.scene().itemsBoundingRect()
+        k = 1000.0 / meritko  # mm papíru na 1 m výkresu
+        margin, head = 10.0, 12.0
+        w_mm = rect.width() * k + 2 * margin
+        h_mm = rect.height() * k + 2 * margin + head
+        writer = QPdfWriter(path)
+        writer.setResolution(254)  # 10 bodů na mm
+        writer.setPageLayout(QPageLayout(QPageSize(QSizeF(w_mm, h_mm), QPageSize.Millimeter), QPageLayout.Portrait,
+                                         QMarginsF(0, 0, 0, 0)))
+        self.set_print_mode(True)
+        hidden = [m for m in self.markers.values() if m.isVisible()]
+        for m in hidden:
+            m.setVisible(False)
+        overlay = [it for it in getattr(self, "_overlay", []) if it.isVisible()]
+        for it in overlay:
+            it.setVisible(False)
+        painter = QPainter(writer)
+        painter.setRenderHint(QPainter.Antialiasing)
+        px = 10.0
+        target = QRectF(margin * px, (margin + head) * px, rect.width() * k * px, rect.height() * k * px)
+        self.scene().render(painter, target, rect, Qt.IgnoreAspectRatio)
+        painter.setPen(QPen(QColor(0, 0, 0), 3))
+        painter.drawRect(target)
+        f = QFont("Arial")
+        f.setPixelSize(int(4 * px))
+        painter.setFont(f)
+        painter.drawText(QPointF(margin * px, (margin + 5) * px),
+                         f"Náhled tisku 1:{meritko}  –  {title}".rstrip(" –"))
+        f.setPixelSize(int(2.6 * px))
+        painter.setFont(f)
+        painter.drawText(QPointF(margin * px, (margin + 9.5) * px),
+                         f"papír {w_mm:.0f} × {h_mm:.0f} mm, kresba {rect.width():.1f} × {rect.height():.1f} m. "
+                         "Vytiskněte na 100 % (bez přizpůsobení stránce) – měřítko pak odpovídá.")
+        painter.end()
+        for m in hidden:
+            m.setVisible(True)
+        for it in overlay:
+            it.setVisible(True)
+        self.set_print_mode(False)
+        return w_mm, h_mm
+
     def set_print_mode(self, on: bool):
         """Dočasně přestaví barvy výkresu pro tisk na bílé pozadí (a zpět)."""
         if self.drawing is None:

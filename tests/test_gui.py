@@ -525,3 +525,17 @@ def test_opravny_pruvodce(window, tmp_path, monkeypatch):
     dlg.save_list()
     assert out.read_text(encoding="utf-8").count("class='k'") == n
     dlg.close()
+
+
+def test_nahled_tisku_v_meritku(window, tmp_path):
+    w = window
+    w.load_drawing_file(Z1 / "Vcelak_13_navic.dxf")
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    out = w.print_preview(str(tmp_path / "tisk.pdf"), 500)
+    import pdfplumber
+    with pdfplumber.open(out) as pdf:
+        pg = pdf.pages[0]
+        rect = w.view._content_rect
+        # šířka papíru v bodech PDF = (kresba v m × 2 mm/m + 20 mm okraje) / 25,4 × 72
+        assert abs(pg.width - (rect.width() * 2 + 20) / 25.4 * 72) < 2
+        assert "1:500" in (pg.extract_text() or "")

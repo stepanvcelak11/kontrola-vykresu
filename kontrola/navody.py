@@ -40,6 +40,11 @@ _ATTR = {
                           "hodnoty a použijte Změnit atributy prvku (Change Element Attributes).",
     "blizke_prvky": "Lomový bod leží pár milimetrů od jiné čáry. Buď ho na čáru přichyťte (Upravit prvek + "
                     "přichycení Nearest / Intersection), nebo ho odsuňte – čáry se mají přesně dotýkat.",
+    "popisy_pres_sebe": "Přesuňte jeden z popisů vedle (Přesunout – Move), aby se nepřekrývaly.",
+    "popis_pres_caru": "Posuňte popis vedle čáry, nebo ho natočte podél ní (Přesunout / Otočit).",
+    "cislo_bodu_daleko": "Přesuňte číslo hned k bodu (vpravo nahoru). Pokud se posunul bod, vraťte ho na "
+                         "souřadnice ze seznamu (Ověřit seznam souřadnic).",
+    "popis_vzhuru_nohama": "Otočte text o 180° (Otočit – Rotate), aby se četl zdola nebo zprava.",
     "kontrola_ploch": "Doplňte do plochy popis / definiční bod (číslo parcely, značku druhu pozemku) na vrstvu "
                       "popisů, nebo smažte přebytečný. Plocha musí být z hranic uzavřená.",
     "nepovolene_hladiny": "Celá vrstva není ve Směrnici. Všechny její prvky najednou: Správce vrstev (Level "

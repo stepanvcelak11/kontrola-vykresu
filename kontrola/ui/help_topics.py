@@ -208,6 +208,23 @@ TOPICS: dict[str, tuple[str, str]] = {
         "MGEO hlídá, aby dva prvky, které se nedotýkají, nebyly blíž než <b>Limit</b> (obvykle 1 cm). Lomový bod "
         "čáry 3 mm vedle jiné čáry je skoro jistě chyba – měl na ní ležet.<br><br><b>Oprava:</b> vrchol přesuňte "
         "s přichycením na čáru (Nearest), nebo ho odsuňte dál."),
+    "popisy_pres_sebe": (
+        "Popisy přes sebe",
+        "Dva texty se na mapě překrývají a nejdou přečíst. Aplikace to počítá z velikosti písma, takže to sedí "
+        "i s tiskem.<br><br><b>Oprava:</b> Přesunout (Move) jeden z popisů kousek vedle."),
+    "popis_pres_caru": (
+        "Popis přeškrtnutý čarou",
+        "Přes text vede čára. Na mapě se popisy kladou vedle kresby, ne přes ni.<br><br><b>Oprava:</b> popis "
+        "posuňte, případně natočte podél čáry."),
+    "cislo_bodu_daleko": (
+        "Číslo bodu daleko od bodu",
+        "Číslo bodu je daleko od značky bodu – nejspíš se po posunu bodu nebo textu rozpojily.<br><br>"
+        "<b>Oprava:</b> číslo přesuňte hned k bodu (vpravo nahoru), nebo zkontrolujte, že bod je na správném místě "
+        "(Ověřit seznam souřadnic)."),
+    "popis_vzhuru_nohama": (
+        "Popis vzhůru nohama",
+        "Text natočený mezi 90° a 270° se čte vzhůru nohama. Popisy se otáčejí tak, aby se četly zdola nebo "
+        "zprava.<br><br><b>Oprava:</b> Otočit (Rotate) o 180°, nebo v Atributech textu změnit natočení."),
     "kontrola_ploch": (
         "Kontrola ploch",
         "Z hraničních čar se sestaví plochy (parcely, druhy pozemků) a hlídá se, že každá má <b>právě jeden</b> popis "
