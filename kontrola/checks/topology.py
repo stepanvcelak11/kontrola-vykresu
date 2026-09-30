@@ -404,6 +404,8 @@ class Duplicity(Check):
             msg = f"Duplicitní {what} ({len(fs)}×)"
             if key[0] == "text":
                 msg = f"Duplicitní text „{(first.text or '')[:20]}“ ({len(fs)}×)"
+            elif first.dxftype == "INSERT":
+                msg = f"Duplicitní značka (buňka) {first.block_name or ''} ({len(fs)}×)".replace("  ", " ")
             yield ctx.issue(self, fs, msg, geometry=first.geometry)
 
 
@@ -815,12 +817,20 @@ class MezeryPolygonu(Check):
             ctx.progress(gi / max(1, len(groups)))
             if len(items) < 2:
                 continue
-            union = shapely.union_all([g for _, g in items])
+            geoms_arr = np.array([g for _, g in items], dtype=object)
+            union = shapely.union_all(geoms_arr)
             gaps = []
             if w > 0:
-                closed = union.buffer(w / 2, join_style="mitre", mitre_limit=5).buffer(
-                    -w / 2, join_style="mitre", mitre_limit=5)
-                gaps += list(getattr(closed.difference(union), "geoms", [closed.difference(union)]))
+                # štěrbina může vzniknout jen mezi polygony, které mají souseda blíž než w – osamocené
+                # (např. jednotlivé budovy) se do drahého „uzavření“ bufferem vůbec nedávají
+                ta, tb = shapely.STRtree(geoms_arr).query(geoms_arr, predicate="dwithin", distance=w)
+                near_idx = np.unique(np.concatenate([ta[ta != tb], tb[ta != tb]]))
+                if len(near_idx):
+                    part = shapely.union_all(geoms_arr[near_idx])
+                    closed = part.buffer(w / 2, join_style="mitre", mitre_limit=5).buffer(
+                        -w / 2, join_style="mitre", mitre_limit=5)
+                    diff = closed.difference(part)
+                    gaps += list(getattr(diff, "geoms", [diff]))
             polys = getattr(union, "geoms", [union])
             for p in polys:
                 for ring in getattr(p, "interiors", []):

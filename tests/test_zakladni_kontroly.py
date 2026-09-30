@@ -287,3 +287,15 @@ def test_jednotnost_vysky_pisma(make_dxf):
     d = make_dxf(build, name="vysky.dxf")
     msgs = [i.message for i in check(d, "jednotnost_hladiny")]
     assert len(msgs) == 1 and "výška písma 2,5 m (ostatní mají 1,5 m)" in msgs[0]
+
+
+def test_jednotnost_meritka_znacek(make_dxf):
+    def build(msp, doc):
+        blk = doc.blocks.new("STROM")
+        blk.add_circle((0, 0), 0.5)
+        for k in range(6):
+            msp.add_blockref("STROM", (k * 5, 0), dxfattribs={"layer": "STROMY"})
+        msp.add_blockref("STROM", (40, 0), dxfattribs={"layer": "STROMY", "xscale": 2, "yscale": 2})
+    d = make_dxf(build, name="znacky.dxf")
+    msgs = [i.message for i in check(d, "jednotnost_hladiny")]
+    assert len(msgs) == 1 and "měřítko značky 2 (ostatní mají 1)" in msgs[0]
