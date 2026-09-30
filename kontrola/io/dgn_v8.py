@@ -19,8 +19,8 @@ Názvy vrstev jsou v ``Dgn^Nm``: záznam ``?? 10 d2 56 01 00 00 00 | délka | ff
 ``ff fe`` + UTF-16), ID vrstvy je u32 208 B před touto hlavičkou. Texty a názvy buněk mají stejnou hlavičku.
 
 Ověřeno na výkresech obou zadání proti DXF exportu z MicroStationu (souřadnice na 1 mm, vrstvy).
-Co se nečte: písmo (font) textu, název vlastního stylu čáry (je v knihovně stylů, ne v DGN),
-B-spline a 3D tělesa. To aplikace přizná v poznámce ke kontrole.
+Vlastní styly čar: v ``Dgn^Nm`` je záporné ID stylu (i32) a za ním název v UTF-16 („5.303“).
+Co se nečte: písmo (font) textu, B-spline a 3D tělesa. To aplikace přizná v poznámce ke kontrole.
 """
 
 from __future__ import annotations
@@ -93,6 +93,22 @@ def _levels(ole) -> dict[int, str]:
     return out
 
 
+_STYLE = re.compile(rb"([\x00-\xff][\x00-\xff]\xff\xff)((?:[\x20-\x7e]\x00){1,40})\x00\x00", re.DOTALL)
+
+
+def _styles(ole) -> dict[int, str]:
+    """Názvy vlastních stylů čar: záporné ID stylu (i32) a hned za ním název v UTF-16 („5.303“)."""
+    out: dict[int, str] = {}
+    for n in _streams(ole, "Dgn^Nm/"):
+        d = _inflate(ole.openstream(n).read())
+        for m in _STYLE.finditer(d):
+            sid, = struct.unpack("<i", m.group(1))
+            name = m.group(2).decode("utf-16-le")
+            if -1_000_000 < sid < 0 and re.search(r"\d", name) and d[m.start() - 4:m.start()] == b"\0\0\0\0":
+                out.setdefault(sid, name)
+    return out
+
+
 def _uor(ole) -> float:
     try:
         d = _inflate(ole.openstream("Dgn-Md/#000000/Dgn~Mh").read())
@@ -136,6 +152,25 @@ def _quat_xy(w, x, y, z):
     return (1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * y - w * z), 1 - 2 * (x * x + z * z))
 
 
+def _style_scale(e: bytes) -> float:
+    """Měřítko stylu čáry z připojených dat (linkage 0x79F9 „modifikátory stylu“, bit 0 = měřítko)."""
+    attr, = struct.unpack_from("<I", e, 12)
+    o = 4 + attr * 2
+    while o + 4 <= len(e):
+        hdr, lid = struct.unpack_from("<HH", e, o)
+        ln = ((hdr & 0xFF) + 1) * 2
+        if ln <= 4:
+            break
+        if lid == 0x79F9 and o + 16 <= len(e):
+            flags, = struct.unpack_from("<I", e, o + 4)
+            if flags & 1:
+                v, = struct.unpack_from("<d", e, o + 8)
+                if 0 < v < 1e6:
+                    return v
+        o += ln
+    return 1.0
+
+
 def _angle_from_quat(w, x, y, z) -> float:
     r00, _, r10, _ = _quat_xy(w, x, y, z)
     return math.atan2(r10, r00)
@@ -149,6 +184,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
     ole = olefile.OleFileIO(str(path))
     try:
         levels = _levels(ole)
+        styles = _styles(ole)
         uor = _uor(ole)
         data = b"".join(_inflate(ole.openstream(n).read()) for n in _streams(ole, "Dgn-Md/#000000/Dgn^G/"))
     finally:
@@ -175,7 +211,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
         if style == 0x7FFFFFFF:
             bylevel.add("styl")
         rgb = MICROSTATION_COLORS.get(color, (200, 200, 200))
-        lt = str(style) if 0 <= style <= 7 else ("0" if "styl" in bylevel else "VLASTNI_STYL")
+        lt = str(style) if 0 <= style <= 7 else ("0" if "styl" in bylevel else styles.get(style, "VLASTNI_STYL"))
         attrs = {"ZDROJ": "DGN", "MS_STYL": str(style)}
         if "barva" not in bylevel:
             attrs["MS_BARVA"] = str(color)
@@ -189,6 +225,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             verts = [tuple(c[:2]) for c in geom.coords]
         f = Feature(fid=fid, dxftype=dxftype, geom_type=gtype, geometry=geom, layer=layer, color_aci=None,
                     color_rgb=rgb, linetype=lt, lineweight=0.0, handle=f"DGN{fid}", vertices=verts,
+                    ltscale=_style_scale(e) if style < 0 else 1.0,
                     attributes=attrs, bylayer=frozenset(bylevel), **kw)
         d.features.append(f)
         info = d.layers.setdefault(layer, LayerInfo(name=layer, color_aci=None, color_rgb=rgb))
@@ -294,8 +331,8 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             progress(min(95, 100 * off // max(1, n)), "Čtu DGN…")
     close_chain()
     close_cell()
-    d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Písmo textů a název "
-                      "vlastního stylu čáry z DGN přečíst nejde, ty se nekontrolují.")
+    d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Písmo textů z DGN "
+                      "přečíst nejde, to se nekontroluje.")
     if skipped:
         d.warnings.append("Nepřečtené prvky: " + ", ".join(f"typ {k}: {v}×" for k, v in sorted(skipped.items())))
     return d

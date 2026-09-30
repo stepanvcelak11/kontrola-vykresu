@@ -48,3 +48,20 @@ def test_dgn_2d_zadani1_a_otevreni(tmp_path):
     cells = [x for x in d.features if x.dxftype == "INSERT"]
     assert cells and all(x.layer != "Vrstva 0" for x in cells) and cells[0].block_name == "6.01A"
     assert all("MS_BARVA" in x.attributes or x.bylayer for x in d.features)
+
+
+@pytest.mark.skipif(not Z1_DGN.exists(), reason="data chybí")
+def test_dgn_vlastni_styly_a_meritko():
+    from collections import Counter
+
+    from kontrola.config import Config
+    from kontrola.io.dgn_v8 import read_dgn
+    from kontrola.rules import RuleSet
+    from kontrola.runner import run_checks
+    d = read_dgn(Z1_DGN)
+    styles = Counter(f.linetype for f in d.features if f.geom_type.value in ("linie", "polygon"))
+    assert styles["2.163"] and styles["5.303"] and styles["2.103"]  # v DXF jsou všechny „Continuous“
+    assert {round(f.ltscale, 3) for f in d.features if f.linetype == "2.103"} == {0.5}
+    y = ROOT / "podklady" / "zadani1-microstation" / "pravidla_zadani1.yaml"
+    res = run_checks(d, RuleSet.load(y), Config.load(y), only=["symbologie"])
+    assert res.issues == []  # vzorový výkres zadání je v DGN bez chyb symbologie

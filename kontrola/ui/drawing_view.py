@@ -957,6 +957,8 @@ class DrawingView(QGraphicsView):
         h_mm = rect.height() * k + 2 * margin + head
         writer = QPdfWriter(path)
         writer.setResolution(254)  # 10 bodů na mm
+        writer.setTitle(f"Náhled tisku 1:{meritko} – {title}".rstrip(" –"))
+        writer.setCreator("Kontrola výkresu")
         writer.setPageLayout(QPageLayout(QPageSize(QSizeF(w_mm, h_mm), QPageSize.Millimeter), QPageLayout.Portrait,
                                          QMarginsF(0, 0, 0, 0)))
         self.set_print_mode(True)
