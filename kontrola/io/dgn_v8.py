@@ -15,8 +15,8 @@ komprimovaných zlib (16 B hlavička + data). Každý prvek::
     +56 u32   barva (0–255, index tabulky color.tbl)
     +108 …    geometrie v jednotkách UOR (souřadnice / UOR = metry); 2D = x,y, 3D = x,y,z
 
-Názvy vrstev jsou v ``Dgn^Nm``: záznam ``13 10 d2 56 01 00 00 00 | délka | ff fe 01 00 | název``,
-ID vrstvy je u32 před ``ff ff ff ff 06 00`` za názvem, zmenšené o 1. Texty: ``0b 10 d2 56 …``.
+Názvy vrstev jsou v ``Dgn^Nm``: záznam ``?? 10 d2 56 01 00 00 00 | délka | ff fe 01 00 | název`` (nebo
+``ff fe`` + UTF-16), ID vrstvy je u32 208 B před touto hlavičkou. Texty a názvy buněk mají stejnou hlavičku.
 
 Ověřeno na výkresech obou zadání proti DXF exportu z MicroStationu (souřadnice na 1 mm, vrstvy).
 Co se nečte: písmo (font) textu, název vlastního stylu čáry (je v knihovně stylů, ne v DGN),
@@ -83,10 +83,12 @@ def _levels(ole) -> dict[int, str]:
                 name, end = _marked(d, m.start())
             except struct.error:
                 continue
+            if not name or m.start() < 208:
+                continue
+            # ID vrstvy je 208 B před názvem (záznam vrstvy končí jejím názvem)
+            lid, = struct.unpack_from("<I", d, m.start() - 208)
             tail = d[end:end + 160]
-            j = tail.find(b"\xff\xff\xff\xff\x06\x00")
-            if 4 <= j and name:
-                lid = struct.unpack_from("<I", tail, j - 4)[0] - 1
+            if 0 < lid < 1_000_000 and tail.find(b"\xff\xff\xff\xff\x06\x00") >= 0:
                 out.setdefault(lid, name)
     return out
 
@@ -127,8 +129,11 @@ def _cell_name(e: bytes) -> str | None:
 
 
 def _quat_xy(w, x, y, z):
-    """Horní 2×2 část rotační matice z kvaternionu (w, x, y, z) – průmět do půdorysu (i zrcadlení)."""
-    return (1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * y + w * z), 1 - 2 * (x * x + z * z))
+    """Horní 2×2 část rotační matice z kvaternionu (w, x, y, z) – průmět do půdorysu (i zrcadlení).
+
+    DGN ukládá kvaternion inverzní rotace, proto je matice transponovaná (ověřeno na obloucích
+    v nakloněné rovině: koncové body sedí s DXF exportem MicroStationu na 0,0 mm)."""
+    return (1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * y - w * z), 1 - 2 * (x * x + z * z))
 
 
 def _angle_from_quat(w, x, y, z) -> float:

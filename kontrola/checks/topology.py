@@ -577,7 +577,7 @@ class NulovaDelka(Check):
             if f.zero_length:
                 r = ctx.rule_for(f)
                 intended = (r is not None and r.geometrie == GeomType.BOD) \
-                    or (r is None and f.layer in point_layers)
+                    or ((r is None or r.geometrie is None) and f.layer in point_layers)
                 if not intended:
                     yield ctx.issue(self, f, "Linie nulové délky")
                 continue
