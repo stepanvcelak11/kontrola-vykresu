@@ -235,6 +235,97 @@ class DuplicitniCisloBodu(Check):
                                                    f"je {fmt_m(near.geometry.distance(g))} odsud", at=(g.x, g.y))
 
 
+def _max_matching(pairs: list[tuple[float, int, int]]) -> dict[int, int]:
+    """Největší párování čísel a míst (Kuhnův algoritmus; kandidáti od nejbližšího). Vrací {číslo: místo}."""
+    cand: dict[int, list[int]] = {}
+    for _d, ti, pl in sorted(pairs):
+        lst = cand.setdefault(ti, [])
+        if pl not in lst:
+            lst.append(pl)
+    match_place: dict[int, int] = {}
+
+    def augment(ti: int, seen: set[int]) -> bool:
+        stack = [(ti, iter(cand.get(ti, ())))]
+        path: list[tuple[int, int]] = []
+        while stack:
+            t, it = stack[-1]
+            for pl in it:
+                if pl in seen:
+                    continue
+                seen.add(pl)
+                path.append((t, pl))
+                other = match_place.get(pl)
+                if other is None:
+                    for tt, pp in path:  # přepárování podél nalezené cesty
+                        match_place[pp] = tt
+                    return True
+                stack.append((other, iter(cand.get(other, ()))))
+                break
+            else:
+                stack.pop()
+                if path:
+                    path.pop()
+        return False
+
+    for ti in cand:
+        augment(ti, set())
+    return {t: pl for pl, t in match_place.items()}
+
+
+@register
+class BodBezCisla(Check):
+    id = "bod_bez_cisla"
+    nazev = "Bod bez čísla"
+    skupina = "Kartografie"
+    popis = ("Na vrstvě, kde mají body u sebe číslo, jeden bod číslo nemá – zapomenutý nebo smazaný popis, "
+             "případně bod navíc.")
+    vychozi_zavaznost = Severity.VAROVANI
+    parametry = [Param("min_podil", "Vrstva musí mít čísla aspoň u [%] bodů", "float", 90.0),
+                 Param("vzdalenost", "Číslo do [× výška písma] od bodu", "float", 3.0)]
+
+    def run(self, ctx: CheckContext):
+        share = float(ctx.param("min_podil", 90.0)) / 100.0
+        k = float(ctx.param("vzdalenost", 3.0))
+        pts = [f for f in ctx.features() if f.geom_type == GeomType.BOD and f.dxftype != "TEXT"
+               and f.geometry is not None and f.geometry.geom_type == "Point"]
+        texts = [f for f in ctx.features() if f.geom_type == GeomType.TEXT and f.text
+                 and re.fullmatch(r"\d{1,6}", f.text.strip()) and f.geometry is not None]
+        if len(pts) < 10 or not texts:
+            return
+        # čísla a místa bodů se spárují jedna k jedné (nejdřív nejbližší dvojice); body na stejném místě
+        # z více vrstev (poloha, info, značka) jsou jedno místo. Místo bez čísla = bod bez čísla.
+        place_of: dict[tuple[int, int], int] = {}
+        pidx = []
+        for p in pts:
+            key = (round(p.geometry.x * 100), round(p.geometry.y * 100))
+            pidx.append(place_of.setdefault(key, len(place_of)))
+        ptree = shapely.STRtree(np.array([p.geometry for p in pts], dtype=object))
+        pairs = []
+        for ti, t in enumerate(texts):
+            box = text_box(t) or t.geometry
+            r = k * _h(t)
+            for j in ptree.query(box, predicate="dwithin", distance=r):
+                pairs.append((box.distance(pts[int(j)].geometry), ti, pidx[int(j)]))
+        owned_places = set(_max_matching(pairs).values())
+        owned = {j for j in range(len(pts)) if pidx[j] in owned_places}
+        reported: set[int] = set()
+        by_layer: dict[str, list] = {}
+        for j, p in enumerate(pts):
+            by_layer.setdefault(p.layer, []).append((j, p))
+        for layer, items in by_layer.items():
+            if len(items) < 10:
+                continue
+            ps = [p for _, p in items]
+            has = [j in owned for j, _ in items]
+            n = sum(has)
+            if n == len(ps) or n < share * len(ps):
+                continue
+            for (j, p), ok in zip(items, has):
+                if not ok and pidx[j] not in reported:
+                    reported.add(pidx[j])
+                    yield ctx.issue(self, p, f"Bod na vrstvě {layer} nemá číslo (ostatní body ho mají, {n}×)")
+
+
 @register
 class PopisVzhuruNohama(Check):
     id = "popis_vzhuru_nohama"

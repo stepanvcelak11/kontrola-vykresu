@@ -371,6 +371,7 @@ Obecné nastavení:
 | Nepatrná nebo úzká plocha (`nepatrna_plocha`) | plocha pod 0,05 m² nebo průměrná šířka pod 0,02 m | varování |
 | Zatoulaný prvek (`zatoulany_prvek`) | prvek nebo malá skupinka daleko od ostatní kresby (např. v počátku souřadnic) | varování |
 | Zbytečně rozdělená čára (`rozdelena_cara`) | dvě stejné čáry navazují v přímém směru a v napojení nic není | vypnuto |
+| Bod bez čísla (`bod_bez_cisla`) | na vrstvě, kde mají body čísla (aspoň 90 %), jeden bod číslo nemá | varování |
 | Stejné číslo bodu dvakrát (`duplicitni_cislo_bodu`) | stejné číslo bodu (popis nebo atribut CISLO) na dvou místech výkresu | chyba |
 | Nejednotný formát popisů (`format_popisu`) | na vrstvě s číselnými popisy má popis jiný tvar (např. 245.3 místo 245.37, čárka místo tečky) | varování |
 | Nečitelně malý text (`maly_text`) | výška písma na papíře v měřítku výkresu pod 1 mm | vypnuto |

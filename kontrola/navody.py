@@ -45,6 +45,8 @@ _ATTR = {
     "nepatrna_plocha": "Plochu smažte, nebo upravte hranice, aby sousední plochy navazovaly přesně (přichycení).",
     "zatoulany_prvek": "Přibližte chybu, prvek vyberte a smažte (Smazat), nebo ho přesuňte na správné místo "
                        "(Přesunout). Pak Zobrazit vše (Fit View) ukáže celou kresbu.",
+    "bod_bez_cisla": "Doplňte číslo bodu podle seznamu souřadnic (Umístit text – Place Text) ve stejném "
+                     "stylu jako ostatní čísla, nebo bod navíc smažte.",
     "duplicitni_cislo_bodu": "Podle seznamu souřadnic zjistěte, který bod je správně; číslo opravte (Upravit text) "
                              "nebo přebytečný bod smažte.",
     "format_popisu": "Upravte text do stejného tvaru jako ostatní popisy na vrstvě (Upravit text – Edit Text), "

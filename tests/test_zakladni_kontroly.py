@@ -329,3 +329,14 @@ def test_duplicitni_cislo_bodu(make_dxf):
     d = make_dxf(build, name="cisla.dxf")
     msgs = [i.message for i in check(d, "duplicitni_cislo_bodu")]
     assert msgs == ["Číslo bodu 102 je ve výkresu 2× – další je 30 m odsud"] * 2
+
+
+def test_bod_bez_cisla(make_dxf):
+    def build(msp, doc):
+        for k in range(12):
+            msp.add_point((k * 10, 0), dxfattribs={"layer": "BODY"})
+            if k != 5:
+                msp.add_text(str(100 + k), dxfattribs={"layer": "CISLA", "height": 0.5, "insert": (k * 10 + 0.3, 0.3)})
+    d = make_dxf(build, name="bezcisla.dxf")
+    iss = check(d, "bod_bez_cisla")
+    assert [(i.x, i.y) for i in iss] == [(50.0, 0.0)] and "nemá číslo" in iss[0].message
