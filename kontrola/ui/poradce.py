@@ -42,6 +42,9 @@ FAQ = [
     ("Jak opravit chyby v MicroStationu krok za krokem", "opravit postup pruvodce microstation souradnice keyin",
      "<b>Kontrola → Opravný průvodce</b> (Ctrl+G): chyby jedna po druhé, seřazené podle polohy, s přesným "
      "postupem, souřadnicemi cíle a key-inem ke zkopírování. Opravujete sami v DGN, výkres zůstane váš."),
+    ("Co je ve výkresu (přehled vrstev)", "prehled vrstvy pocet prvku barvy styly tloustky pismo cizi vykres",
+     "<b>Kontrola → Přehled výkresu</b> (Ctrl+Shift+P): tabulka vrstev s počty čar, ploch, bodů, textů a "
+     "buněk, délkami, barvami, styly, tloušťkami a písmem. Žlutě vrstvy s nejednotným vzhledem."),
     ("Otevřít data z GIS (Shapefile, GeoJSON)", "gis qgis arcgis shapefile shp geojson dbf vrstvy",
      "<b>Otevřít výkres</b> a vyberte .shp (s .dbf vedle) nebo .geojson. Vrstva se vezme z atributu "
      "LAYER / VRSTVA, jinak z názvu souboru. Pak <b>Co zkontrolovat → Cizí výkres (bez pravidel)</b>."),

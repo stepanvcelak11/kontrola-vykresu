@@ -10,6 +10,7 @@ from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
                                QMessageBox, QProgressBar, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
+from ..checks.base import REGISTRY
 from .worker import BackgroundTask
 
 COLS = ["Výkres", "Prvků", "Chyby", "Varování", "Info", "Skóre", "Nejčastější chyba"]
@@ -51,7 +52,9 @@ class BatchDialog(QDialog):
         self.setWindowTitle("Hromadná kontrola výkresů")
         self.resize(980, 520)
         lay = QVBoxLayout(self)
-        self.info = QLabel(f"Kontroluji {len(files)} výkresů s pravidly a nastavením aktuálního projektu…")
+        n_on = sum(1 for c in REGISTRY if win.project.config.settings(c).zapnuto)
+        self.info = QLabel(f"Kontroluji {len(files)} výkresů s pravidly aktuálního projektu a {n_on} vybranými "
+                           "kontrolami (výběr mění Kontrola → Co zkontrolovat…)…")
         self.info.setWordWrap(True)
         lay.addWidget(self.info)
         self.bar = QProgressBar()
