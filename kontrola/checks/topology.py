@@ -158,8 +158,8 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
         lengths = shapely.length(an.geoms)
         ks, parts = [], []
         for k in range(len(an.points)):
-            if an.nearest[k] <= ctx.precision or an.self_touch[k]:
-                continue
+            if an.self_touch[k]:
+                continue  # (konec ležící na jiné čáře se zkoumá také – může po ní zajíždět)
             f = an.feats[an.owner[k]]
             L = float(lengths[an.owner[k]])
             if L <= ctx.precision:
@@ -185,7 +185,21 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
             for a_, g_ in zip(pi[keep], gi[keep]):
                 k = ks[int(a_)]
                 part = parts[int(a_)]
-                for p in _points_of(_safe_intersection(part, an.geoms[g_])):
+                inter = _safe_intersection(part, an.geoms[g_])
+                cands = list(_points_of(inter))
+                # konec linie zajíždí po navazující čáře (společný úsek) – přetah je délka překryvu
+                end_pt = an.pgeoms[k]
+                for piece in getattr(inter, "geoms", [inter]):
+                    if piece.geom_type == "LineString" and piece.length > ctx.precision and \
+                            piece.distance(end_pt) <= ctx.precision:
+                        a, b = piece.coords[0][:2], piece.coords[-1][:2]
+                        far = a if Point(a).distance(end_pt) > Point(b).distance(end_pt) else b
+                        og = an.geoms[g_]
+                        oc = list(og.coords) if og.geom_type == "LineString" else []
+                        # jen když na konci překryvu navazující čára končí (ne duplicitní čáry na sobě)
+                        if oc and min(math.dist(far, oc[0][:2]), math.dist(far, oc[-1][:2])) <= ctx.precision:
+                            cands.append(far)
+                for p in cands:
                     along = part.project(Point(p))
                     dist = (part.length - along) if an.is_end[k] else along
                     if dist <= ctx.precision:
@@ -196,6 +210,15 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
             for k, best in best_by.items():
                 if an.pgeoms[k].distance(Point(best[1])) > ctx.precision:
                     out[k] = best
+            # překryv dvou konců (každý zajíždí po druhém) je jedno přetažení – hlásit jednou
+            ends = {k: an.pgeoms[k] for k in out}
+            for k in sorted(out):
+                if k not in out:
+                    continue
+                p = Point(out[k][1])
+                for k2 in [k2 for k2 in out if k2 != k and ends[k2].distance(p) <= ctx.precision
+                           and Point(out[k2][1]).distance(ends[k]) <= ctx.precision]:
+                    del out[k2]
     ctx._cache[key] = out
     return out
 
@@ -376,6 +399,57 @@ class Duplicity(Check):
             yield ctx.issue(self, fs, msg, geometry=first.geometry)
 
 
+@register
+class PrekryvLinii(Check):
+    id = "prekryv_linii"
+    nazev = "Překrývající se čáry"
+    skupina = "Topologie"
+    popis = ("Část jedné čáry leží na jiné čáře (společný úsek) – typicky kus čáry nakreslený dvakrát nebo "
+             "čára vedená po jiné. MGEO takový úsek hlásí; celé stejné čáry hlásí kontrola duplicit, krátké "
+             "zajetí konce po navazující čáře kontrola přetažení.")
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [
+        Param("stejna_hladina", "Jen čáry na stejné vrstvě", "bool", True,
+              "Hranice budovy a parcely se mohou legitimně krýt – výchozí se porovnávají jen čáry na stejné vrstvě."),
+        LAYERS_PARAM,
+    ]
+
+    def run(self, ctx: CheckContext):
+        same_layer = bool(ctx.param("stejna_hladina", True))
+        feats = [f for f in ctx.linear() if f.geom_type == GeomType.LINIE]
+        if len(feats) < 2:
+            return
+        geoms = np.array([f.geometry for f in feats], dtype=object)
+        tree = shapely.STRtree(geoms)
+        eps = max(ctx.precision, 1e-4)  # 0,1 mm – průnik čar v jedné přímce je numericky citlivý
+        a, b = tree.query(geoms, predicate="dwithin", distance=eps)
+        m = a < b
+        a, b = a[m], b[m]
+        if same_layer:
+            keep = np.array([feats[i].layer == feats[j].layer for i, j in zip(a, b)], dtype=bool)
+            a, b = a[keep], b[keep]
+        if not len(a):
+            return
+        min_len = max(_max_overshoot(ctx), ctx.tolerance * 2)
+        # společný úsek = část kratší čáry v pásu ±0,1 mm kolem delší (průnik linie s linií by vrátil jen bod)
+        short_first = shapely.length(geoms[a]) <= shapely.length(geoms[b])
+        s_idx = np.where(short_first, a, b)
+        l_idx = np.where(short_first, b, a)
+        inters = shapely.intersection(geoms[s_idx], shapely.buffer(geoms[l_idx], eps, cap_style="flat"))
+        for i, j, g in zip(a, b, inters):
+            parts = [p for p in getattr(g, "geoms", [g]) if p.geom_type in ("LineString", "MultiLineString")]
+            length = sum(p.length for p in parts)
+            if length <= min_len:
+                continue
+            gi, gj = geoms[i], geoms[j]
+            if gi.hausdorff_distance(gj) <= eps * 10:
+                continue  # celá duplicita – hlásí kontrola duplicit
+            part = max(parts, key=lambda p: p.length)
+            mid = part.interpolate(0.5, normalized=True)
+            yield ctx.issue(self, [feats[i], feats[j]], f"Čáry se překrývají v délce {fmt_m(length)}",
+                            at=(mid.x, mid.y), geometry=part)
+
+
 _COORD_RE = re.compile(r"\[\s*([-+\d.eE]+)\s+([-+\d.eE]+)")
 
 
@@ -445,7 +519,10 @@ class Samoprotnuti(Check):
         segs = shapely.linestrings(np.stack([c[:-1], c[1:]], axis=1))
         tree = shapely.STRtree(segs)
         a, b = tree.query(segs, predicate="intersects")
-        mask = (b > a + 1) & ~((a == 0) & (b == n - 1) & (np.allclose(c[0], c[-1])))
+        # uzavřená čára: první a poslední úsek se v počátku dotýkají legitimně (absolutní tolerance –
+        # relativní by u souřadnic S-JTSK dala ~10 m a samoprotnutí mezi nimi by se ztratilo)
+        closed_ring = bool(np.hypot(*(c[0] - c[-1])) <= 1e-9)
+        mask = (b > a + 1) & ~((a == 0) & (b == n - 1) & closed_ring)
         pts: list[tuple[float, float]] = []
         seen = set()
         for i, j in zip(a[mask], b[mask]):

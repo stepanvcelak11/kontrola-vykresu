@@ -288,9 +288,11 @@ class JednotnostHladiny(Check):
                 continue
             lin = [f for f in feats if f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.dxftype != "HATCH"]
             props = {
-                "barva": ([f for f in feats if f.dxftype != "HATCH"], lambda f: tuple(f.color_rgb)),
+                # u výkresu čteného přímo z DGN jsou přesná čísla barvy a tloušťky MicroStationu
+                "barva": ([f for f in feats if f.dxftype != "HATCH"],
+                          lambda f: f.attributes.get("MS_BARVA") or tuple(f.color_rgb)),
                 "styl": (lin, lambda f: (f.linetype or "CONTINUOUS").upper()),
-                "tloušťka": (lin, lambda f: round(f.lineweight, 2)),
+                "tloušťka": (lin, lambda f: f.attributes.get("MS_TLOUSTKA") or round(f.lineweight, 2)),
             }
             dominant = {}
             for name, (items, key) in props.items():
@@ -318,6 +320,8 @@ def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
         rs = ctx.rules
 
         def col(rgb):
+            if isinstance(rgb, str):  # číslo barvy přímo z DGN
+                return rgb
             from ..rules import nearest_ms_index
             if rs.paleta == "microstation":
                 idx = nearest_ms_index(rgb, rs.barevna_tabulka)
@@ -326,6 +330,8 @@ def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
             return "#%02X%02X%02X" % rgb
         return f"barva {col(got)} (ostatní mají {col(expected)})"
     if name == "tloušťka":
+        if isinstance(got, str) or isinstance(expected, str):  # tloušťka MicroStationu z DGN (0–31)
+            return f"tloušťka {got} (ostatní mají {expected})"
         return f"tloušťka {fmt_num(got, 2)} mm (ostatní mají {fmt_num(expected, 2)} mm)"
     return f"styl {got} (ostatní mají {expected})"
 

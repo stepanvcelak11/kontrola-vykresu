@@ -193,3 +193,39 @@ def test_kartograficke_kontroly(make_dxf):
     assert any("ULICE" in i.message for i in check(d, "popis_pres_caru"))
     far = check(d, "cislo_bodu_daleko")
     assert len(far) == 1 and "Číslo bodu 9" in far[0].message
+
+
+def test_samoprotnuti_v_sjtsk(make_dxf):
+    """Křížení prvního a posledního úseku při souřadnicích S-JTSK (dřív ztracené relativní tolerancí)."""
+    x, y = -595987.939, -1158227.477
+
+    def build(msp, doc):
+        msp.add_lwpolyline([(x, y), (x + 2, y + 2), (x + 2, y), (x, y + 2)], dxfattribs={"layer": "A"})
+    d = make_dxf(build, name="smycka.dxf")
+    iss = check(d, "samoprotnuti")
+    assert len(iss) == 1 and abs(iss[0].x - (x + 1)) < 1e-6
+
+
+def test_pretazeni_prekryvem_s_navazujici_carou(make_dxf):
+    """Konec čáry zajede 1 cm po navazující čáře (v přímém směru) – MGEO to hlásí jako přetažení."""
+    def build(msp, doc):
+        msp.add_line((0, 0), (10.01, 0), dxfattribs={"layer": "A"})  # přesah 1 cm po navazující
+        msp.add_line((10, 0), (20, 0), dxfattribs={"layer": "A"})
+        msp.add_line((0, 0), (0, 5), dxfattribs={"layer": "A"})
+        msp.add_line((20, 0), (20, 5), dxfattribs={"layer": "A"})
+    d = make_dxf(build, name="prekryv.dxf")
+    iss = [i for i in check(d, "chybejici_napojeni") if "Přetažená" in i.message]
+    assert len(iss) == 1 and abs(iss[0].x - 10.01) < 1e-6
+
+
+def test_prekryv_linii(make_dxf):
+    def build(msp, doc):
+        msp.add_line((0, 0), (10, 0), dxfattribs={"layer": "A"})
+        msp.add_line((4, 0), (6, 0), dxfattribs={"layer": "A"})  # kus čáry nakreslený podruhé
+        msp.add_line((0, 5), (10, 5), dxfattribs={"layer": "A"})
+        msp.add_line((0, 5), (10, 5), dxfattribs={"layer": "A"})  # celá duplicita – ne překryv
+        msp.add_line((20, 0), (30, 0), dxfattribs={"layer": "B"})
+        msp.add_line((24, 0), (26, 0), dxfattribs={"layer": "C"})  # jiná vrstva – legitimní
+    d = make_dxf(build, name="prekryv2.dxf")
+    iss = check(d, "prekryv_linii")
+    assert len(iss) == 1 and "2 m" in iss[0].message.replace(",000", "") and abs(iss[0].x - 5) < 1e-6

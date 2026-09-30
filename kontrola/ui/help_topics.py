@@ -208,6 +208,11 @@ TOPICS: dict[str, tuple[str, str]] = {
         "MGEO hlídá, aby dva prvky, které se nedotýkají, nebyly blíž než <b>Limit</b> (obvykle 1 cm). Lomový bod "
         "čáry 3 mm vedle jiné čáry je skoro jistě chyba – měl na ní ležet.<br><br><b>Oprava:</b> vrchol přesuňte "
         "s přichycením na čáru (Nearest), nebo ho odsuňte dál."),
+    "prekryv_linii": (
+        "Překrývající se čáry",
+        "Kus čáry leží na jiné čáře – úsek je nakreslený dvakrát (často po kopírování nebo když se čára kreslí "
+        "znovu přes starou). Ve výkresu to není vidět, ale MGEO to hlásí.<br><br><b>Oprava:</b> přebytečnou "
+        "čáru (nebo její část) smažte, případně ji zkraťte k navazujícímu bodu (Částečné smazání / Oříznout)."),
     "popisy_pres_sebe": (
         "Popisy přes sebe",
         "Dva texty se na mapě překrývají a nejdou přečíst. Aplikace to počítá z velikosti písma, takže to sedí "
