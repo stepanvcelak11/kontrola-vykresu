@@ -76,3 +76,11 @@ def test_geojson(tmp_path):
     d = load_drawing(p)
     assert [f.layer for f in d.features] == ["Cesty", "Cesty", "data"]
     assert d.features[2].attributes["cislo"] == "5" and not d.warnings
+
+
+def test_upozorneni_na_milimetry(tmp_path):
+    p = tmp_path / "mm.geojson"
+    p.write_text(json.dumps({"type": "LineString", "coordinates": [[-600000000, -1150000000],
+                                                                   [-600010000, -1150000000]]}), "utf-8")
+    d = load_drawing(p)
+    assert any("milimetrech" in w for w in d.warnings)

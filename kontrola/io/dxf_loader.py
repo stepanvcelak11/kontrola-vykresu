@@ -479,7 +479,30 @@ def dgn_native_ok(p: Path, oda_path: str | None) -> bool:
 
 def load_drawing(path: str | Path, progress: ProgressFn | None = None,
                  oda_path: str | None = None) -> Drawing:
-    """Načte DXF, případně DGN/DWG přes ODA File Converter."""
+    """Načte výkres (DXF, DGN/DWG, VFK, SHP, GeoJSON) a upozorní na podezřelé jednotky."""
+    d = _load_drawing(path, progress, oda_path)
+    w = units_warning(d)
+    if w and w not in d.warnings:
+        d.warnings.append(w)
+    return d
+
+
+def units_warning(d: Drawing) -> str | None:
+    """Výkres v milimetrech / centimetrech místo metrů (souřadnice S-JTSK ×1000 nebo ×100)."""
+    b = d.bounds()
+    if b is None:
+        return None
+    ax = max(abs(b[0]), abs(b[2]))
+    ay = max(abs(b[1]), abs(b[3]))
+    for k, unit in ((1000, "milimetrech"), (100, "centimetrech")):
+        if 430000 * k <= ax <= 905000 * k and 935000 * k <= ay <= 1230000 * k:
+            return (f"Souřadnice vypadají jako S-JTSK v {unit} (×{k}) – tolerance a délky v metrech nebudou sedět. "
+                    "Zkontrolujte jednotky výkresu (v MicroStationu Pracovní jednotky, v DXF $INSUNITS).")
+    return None
+
+
+def _load_drawing(path: str | Path, progress: ProgressFn | None = None,
+                  oda_path: str | None = None) -> Drawing:
     p = Path(path)
     suffix = p.suffix.lower()
     if suffix == ".dxf":

@@ -64,6 +64,9 @@ def souradnicovy_system(d: Drawing) -> str:
         return "S-JTSK (záporné souřadnice, jako MicroStation)"
     if 430000 <= x0 and x1 <= 905000 and 935000 <= y0 and y1 <= 1230000:
         return "S-JTSK (kladné souřadnice Y, X)"
+    from .io.dxf_loader import units_warning
+    if units_warning(d):
+        return "S-JTSK, ale nejspíš v milimetrech / centimetrech – zkontrolujte jednotky!"
     if -180 <= x0 and x1 <= 180 and -90 <= y0 and y1 <= 90:
         return "zeměpisné souřadnice (stupně) nebo místní malá soustava"
     return "místní / neznámá soustava"
