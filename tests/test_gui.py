@@ -454,3 +454,22 @@ def test_overit_seznam_souradnic(window, tmp_path):
     assert d.card_labels["posunuty"].text() == "1" and d.card_labels["chybi"].text() == "1"
     d.table.cellDoubleClicked.emit(0, 0)
     d.close()
+
+
+def test_co_aplikace_umi_a_hodnoty_ze_zadani(window, tmp_path):
+    from kontrola.ui.features_dialog import FeaturesDialog
+    w = window
+    dlg = FeaturesDialog(w)
+    dlg.search.setText("seznamu do dxf")
+    shown = [c for c, _ in dlg.cards if not c.isHidden()]
+    assert len(shown) == 1
+    dlg._run("_dokumenty")
+    assert w.zadani.tabs.currentWidget() is w.zadani.documents_page
+    f = tmp_path / "zadani.txt"
+    f.write_text("Kresbu vyhotovte v měřítku 1:500. Tolerance začištění je 5 mm.", encoding="utf-8")
+    pg = w.zadani.documents_page
+    pg.add_file(str(f), ask=False)
+    assert "1:500" in pg.settings_info.text() and not pg.b_apply.isHidden()
+    pg.apply_settings()
+    assert abs(w.project.config.tolerance - 0.005) < 1e-12
+    assert pg.b_apply.isHidden()

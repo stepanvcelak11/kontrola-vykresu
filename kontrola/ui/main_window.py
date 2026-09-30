@@ -295,6 +295,7 @@ class MainWindow(QMainWindow):
         m_check.addSeparator()
         m_check.addAction(self.a_settings)
         m_help = self.menuBar().addMenu("&Nápověda")
+        m_help.addAction(self._act("Co aplikace umí…", self.show_features, None, "Přehled všech funkcí"))
         m_help.addAction(self._act("Průvodce…", self.show_guide, None, "Krok za krokem od zadání k odevzdání"))
         m_help.addAction(self._act("Co znamenají chyby (s obrázky)…", self.show_help, "F1",
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
@@ -1149,6 +1150,10 @@ class MainWindow(QMainWindow):
             seen.add((t, sc))
             html.append(f"<tr><td style='padding:3px 16px 3px 0'>{t}</td><td><b>{sc}</b></td></tr>")
         QMessageBox.information(self, "Klávesové zkratky", "<table>" + "".join(html) + "</table>")
+
+    def show_features(self):
+        from .features_dialog import FeaturesDialog
+        FeaturesDialog(self).exec()
 
     def show_tips(self):
         from .tips import TipsDialog

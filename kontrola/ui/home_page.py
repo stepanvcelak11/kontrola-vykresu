@@ -189,17 +189,24 @@ class HomePage(QScrollArea):
         tl.addWidget(lab)
         grid = QGridLayout()
         grid.setSpacing(8)
-        items = [("Ověřit seznam souřadnic", win.verify_list), ("Body ze seznamu do DXF", win.points_to_dxf), ("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
+        items = [("Ověřit seznam souřadnic", win.verify_list), ("Body ze seznamu do DXF", win.points_to_dxf),
+                 ("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
                  ("Rychlé tipy MicroStation", win.show_tips), ("Co znamenají chyby", win.show_help),
                  ("Seznam k opravě (PDF)", lambda: win.export("todo")), ("Protokol od učitele", win.compare_teacher),
                  ("Hromadná kontrola", win.batch_check), ("Protokol HTML", lambda: win.export("html")),
                  ("Průvodce", win.show_guide), ("Nastavení kontrol", win.edit_settings)]
+        all_b = QPushButton("Co všechno aplikace umí →")
+        all_b.setFlat(True)
+        all_b.setCursor(Qt.PointingHandCursor)
+        all_b.setStyleSheet("color:#2563EB; text-align:right;")
+        all_b.clicked.connect(win.show_features)
         for k, (text, slot) in enumerate(items):
             b = QPushButton(text)
             b.setMinimumHeight(34)
             b.clicked.connect(lambda _c=False, s=slot: s())
             grid.addWidget(b, k // 2, k % 2)
         tl.addLayout(grid)
+        tl.addWidget(all_b, 0, Qt.AlignRight)
         tl.addStretch(1)
         bottom.addWidget(tools, 2)
         lay.addLayout(bottom, 1)

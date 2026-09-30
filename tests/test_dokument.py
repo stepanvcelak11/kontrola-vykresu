@@ -96,3 +96,15 @@ def test_body_do_dxf_projdou_kontrolou(tmp_path):
         assert res.issues == [], [i.message for i in res.issues[:3]]
         r, best, found = verify_points(d, pts)
         assert Counter(x.stav for x in r) == Counter({"ok": len(pts)})
+
+
+def test_hodnoty_ze_zadani_do_nastaveni(tmp_path):
+    from kontrola.importer.dokument import document_settings
+    f = tmp_path / "zadani.txt"
+    f.write_text("Kresbu vyhotovte v měřítku 1:500. Písmo: font Arial Narrow. Tolerance začištění je 5 mm.\n"
+                 "Třída přesnosti uxy = 0,14 m. Odevzdejte ve formátu DGN.", encoding="utf-8")
+    s = document_settings(read_document(f))
+    assert s["meritko"] == 500
+    assert s["pismo"] == "Arial Narrow"
+    assert abs(s["tolerance"][0] - 0.005) < 1e-12
+    assert s["format"] == "DGN"

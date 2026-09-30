@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QGroupBox, QHBoxL
                                QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSplitter, QTableWidget,
                                QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
 
-from ..importer.dokument import DOC_EXT, layer_rules, looks_like_rules_table, read_document, requirements
+from ..importer.dokument import DOC_EXT, document_settings, layer_rules, looks_like_rules_table, read_document, requirements
 
 
 def doc_rule_source(name: str, zdroj: str | None) -> bool:
@@ -57,6 +57,16 @@ class DocumentsPage(QWidget):
         right = QSplitter(Qt.Vertical)
         g1 = QGroupBox("Požadavky a pokyny nalezené v dokumentu")
         l1 = QVBoxLayout(g1)
+        srow = QHBoxLayout()
+        self.settings_info = QLabel()
+        self.settings_info.setWordWrap(True)
+        self.settings_info.setTextFormat(Qt.RichText)
+        srow.addWidget(self.settings_info, 1)
+        self.b_apply = QPushButton("Použít v nastavení")
+        self.b_apply.setToolTip("Toleranci ze zadání nastaví pro kontrolu (nedotažení, body blízko…).")
+        self.b_apply.clicked.connect(self.apply_settings)
+        srow.addWidget(self.b_apply)
+        l1.addLayout(srow)
         self.req = QTableWidget(0, 3)
         self.req.setHorizontalHeaderLabels(["Co", "Hodnota", "Věta ze zadání"])
         self.req.verticalHeader().setVisible(False)
@@ -126,6 +136,8 @@ class DocumentsPage(QWidget):
             self.text.setHtml("<p style='color:#6B7280'>Zatím žádný dokument. Přidejte zadání od učitele "
                               "(Word nebo PDF).</p>")
             self.rules_state.clear()
+            self.settings_info.clear()
+            self.b_apply.hide()
             self._buttons()
             return
         path = self.tab.project.root / it.data(Qt.UserRole)
@@ -152,10 +164,52 @@ class DocumentsPage(QWidget):
                     "" if rule.tloustka is None else f"{rule.tloustka:g}", font)
             for c, v in enumerate(vals):
                 self.lay_table.setItem(r, c, QTableWidgetItem(v))
+        self._show_settings()
         html = "".join(f"<p>{escape(p)}</p>" for p in self.doc.odstavce)
         self.text.setHtml(html or "<p>(dokument neobsahuje text)</p>")
         self._update_state()
         self._buttons()
+
+    def _show_settings(self):
+        """Hodnoty ze zadání porovnané s projektem: měřítko, písmo, tolerance, formát."""
+        p = self.tab.project
+        self.found = document_settings(self.doc) if self.doc else {}
+        ok, bad = "<span style='color:#16A34A'>✓</span>", "<span style='color:#B45309'>⚠</span>"
+        parts = []
+        sc = self.found.get("meritko")
+        if sc:
+            m = p.rules.meritko
+            parts.append(f"měřítko 1:{sc} " + (ok if m == sc else
+                         f"{bad} pravidla počítají písmo v 1:{m}" if m else "(pravidla ho neurčují)"))
+        font = self.found.get("pismo")
+        if font:
+            used = any(r.font and font.lower() in r.font.lower() for r in p.rules.pravidla)
+            parts.append(f"písmo {escape(font)} " + (ok if used else f"{bad} v pravidlech není"))
+        tol = self.found.get("tolerance")
+        if tol:
+            cur = p.config.tolerance
+            parts.append(f"tolerance {tol[0] * 1000:g} mm " + (ok if abs(cur - tol[0]) < 1e-9 else
+                         f"{bad} v nastavení je {cur * 1000:g} mm"))
+        if self.found.get("format"):
+            parts.append(f"odevzdat jako {escape(self.found['format'])}")
+        self.settings_info.setText("<b>Pro kontrolu:</b> " + " · ".join(parts) if parts else
+                                   "<span style='color:#6B7280'>Měřítko, písmo ani toleranci dokument "
+                                   "neuvádí.</span>")
+        self.b_apply.setVisible(bool(tol) and abs(p.config.tolerance - tol[0]) >= 1e-9)
+
+    def apply_settings(self):
+        tol = getattr(self, "found", {}).get("tolerance")
+        if not tol:
+            return
+        p = self.tab.project
+        if QMessageBox.question(self, "Použít v nastavení",
+                                f"Zadání uvádí: „{tol[1]}“\n\nNastavit toleranci kontroly na {tol[0] * 1000:g} mm "
+                                f"(teď {p.config.tolerance * 1000:g} mm)?") != QMessageBox.Yes:
+            return
+        p.config.tolerance = tol[0]
+        self.tab.project_changed()
+        self.tab.rulesChanged.emit()
+        self._show_settings()
 
     def _present(self) -> list:
         name = self.doc.path.name if self.doc else ""

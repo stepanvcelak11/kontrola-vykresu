@@ -243,6 +243,41 @@ def requirements(doc: Dokument, limit: int = 60) -> list[Pozadavek]:
     return out
 
 
+def _metres(v: str) -> float | None:
+    m = re.match(r"(\d+(?:[.,]\d+)?)\s*(mm|cm|m)\b", v.strip())
+    if not m:
+        return None
+    return _num(m.group(1)) * {"mm": 0.001, "cm": 0.01, "m": 1.0}[m.group(2)]
+
+
+def document_settings(doc: Dokument) -> dict:
+    """Hodnoty ze zadání, které jdou použít v nastavení kontroly: měřítko kresby, tolerance, písmo, formát."""
+    out: dict = {}
+    text = "\n".join(doc.odstavce)
+    sc = _scale(_SCALE_DST, text)
+    reqs = requirements(doc, limit=400)
+    if sc is None:
+        scales = [int(q.hodnota[2:]) for q in reqs if q.druh == "Měřítko" and q.hodnota[2:].isdigit()]
+        scales = [x for x in scales if 50 <= x <= 100000]
+        if scales:
+            sc = max(set(scales), key=scales.count)
+    if sc:
+        out["meritko"] = sc
+    for q in reqs:
+        if q.druh == "Tolerance" and "tolerance" not in out:
+            m = _metres(q.hodnota)
+            low = q.veta.lower()
+            if any(w in low for w in ("uxy", "tříd", "tríd", "kód kvality", "střední")):
+                continue  # přesnost mapování, ne tolerance kresby
+            if m is not None and 0.0001 <= m <= 0.5:
+                out["tolerance"] = (m, q.veta)
+        elif q.druh == "Písmo" and "pismo" not in out:
+            out["pismo"] = q.hodnota
+        elif q.druh == "Formát odevzdání" and "format" not in out:
+            out["format"] = q.hodnota.upper()
+    return out
+
+
 def looks_like_rules_table(rows: list[list[str]]) -> bool:
     """Tabulka ve Wordu, ze které jdou udělat pravidla (má sloupec vrstva/level a barva/styl/písmo)."""
     if len(rows) < 2:
