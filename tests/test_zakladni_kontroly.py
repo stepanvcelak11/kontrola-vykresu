@@ -319,3 +319,13 @@ def test_pretazeni_po_hrane_za_roh(make_dxf):
     d = make_dxf(build, name="roh.dxf")
     msgs = [i.message for i in check(d, "chybejici_napojeni")]
     assert any("Přetažená linie o 0,01" in m for m in msgs), msgs
+
+
+def test_duplicitni_cislo_bodu(make_dxf):
+    def build(msp, doc):
+        for k, n in enumerate(["101", "102", "103", "104", "102"]):
+            msp.add_point((k * 10, 0), dxfattribs={"layer": "BODY"})
+            msp.add_text(n, dxfattribs={"layer": "CISLA", "height": 0.5, "insert": (k * 10 + 0.3, 0.3)})
+    d = make_dxf(build, name="cisla.dxf")
+    msgs = [i.message for i in check(d, "duplicitni_cislo_bodu")]
+    assert msgs == ["Číslo bodu 102 je ve výkresu 2× – další je 30 m odsud"] * 2

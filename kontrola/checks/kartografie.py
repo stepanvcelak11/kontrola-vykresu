@@ -174,6 +174,67 @@ class CisloBoduDaleko(Check):
                                 at=(t.geometry.x, t.geometry.y))
 
 
+_CISLO_KEYS = ("CISLO", "CISLO_BODU", "CB", "C_BODU", "BOD", "NUMBER", "POINT_NO")
+
+
+@register
+class DuplicitniCisloBodu(Check):
+    id = "duplicitni_cislo_bodu"
+    nazev = "Stejné číslo bodu dvakrát"
+    skupina = "Kartografie"
+    popis = ("Stejné číslo bodu je ve výkresu na dvou různých místech – překlep v čísle, zkopírovaný popis nebo "
+             "bod vložený dvakrát jinam. Čísla se berou z popisů u bodů i z atributu bodu (CISLO).")
+    vychozi_zavaznost = Severity.CHYBA
+    parametry = [Param("min_vzdalenost", "Hlásit, když jsou od sebe dál než [m]", "float", 0.5)]
+
+    def run(self, ctx: CheckContext):
+        dmin = float(ctx.param("min_vzdalenost", 0.5))
+        pts = [f for f in ctx.features() if f.geom_type == GeomType.BOD and f.dxftype != "TEXT"
+               and f.geometry is not None and f.geometry.geom_type == "Point"]
+        found: dict[str, list] = {}
+        # 1) atribut čísla u bodů
+        for f in pts:
+            up = {k.upper(): v for k, v in f.attributes.items()}
+            num = next((str(up[k]).strip() for k in _CISLO_KEYS if str(up.get(k) or "").strip()), None)
+            if num:
+                found.setdefault(num, []).append(f)
+        # 2) popisy na vrstvách čísel bodů (čísla převážně hned u bodů)
+        if len(pts) >= 3 and not found:
+            texts = [f for f in ctx.features() if f.geom_type == GeomType.TEXT and f.text
+                     and re.fullmatch(r"\d{1,6}", f.text.strip()) and f.geometry is not None]
+            if texts:
+                tree = shapely.STRtree(np.array([p.geometry for p in pts], dtype=object))
+                by_layer: dict[str, list] = {}
+                for t in texts:
+                    by_layer.setdefault(t.layer, []).append(t)
+                for ts in by_layer.values():
+                    near = sum(1 for t in ts
+                               if t.geometry.distance(pts[tree.nearest(t.geometry)].geometry) <= 3 * _h(t))
+                    if len(ts) >= 3 and near >= 0.6 * len(ts):
+                        for t in ts:
+                            found.setdefault(t.text.strip(), []).append(t)
+        for num, fs in found.items():
+            if len(fs) < 2:
+                continue
+            # skupiny výskytů (výskyty blíž než dmin jsou jedno místo)
+            places: list[list] = []
+            for f in fs:
+                for pl in places:
+                    if pl[0].geometry.distance(f.geometry) <= dmin:
+                        pl.append(f)
+                        break
+                else:
+                    places.append([f])
+            if len(places) < 2:
+                continue
+            for pl in places:
+                g = pl[0].geometry
+                others = [o[0] for o in places if o is not pl]
+                near = min(others, key=lambda o: o.geometry.distance(g))
+                yield ctx.issue(self, pl + others, f"Číslo bodu {num} je ve výkresu {len(places)}× – další "
+                                                   f"je {fmt_m(near.geometry.distance(g))} odsud", at=(g.x, g.y))
+
+
 @register
 class PopisVzhuruNohama(Check):
     id = "popis_vzhuru_nohama"

@@ -226,6 +226,11 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Prvek leží daleko od ostatní kresby – omylem kliknutý bod, prvek v počátku souřadnic nebo kopie mimo "
         "mapu. Kvůli němu je „Zobrazit vše“ skoro prázdné.<br><br><b>Oprava:</b> přibližte si chybu, prvek "
         "vyberte a smažte, nebo ho přesuňte na správné místo."),
+    "duplicitni_cislo_bodu": (
+        "Stejné číslo bodu dvakrát",
+        "Stejné číslo bodu je ve výkresu na dvou místech – překlep, zkopírovaný popis nebo bod vložený dvakrát."
+        "<br><br><b>Oprava:</b> podle seznamu souřadnic zjistěte, který bod je správně, a číslo opravte "
+        "(Upravit text) nebo přebytečný bod smažte."),
     "format_popisu": (
         "Nejednotný formát popisů na vrstvě",
         "Většina popisů na vrstvě má stejný tvar (např. výšky 245.37), tento se liší – jiný počet desetinných "
