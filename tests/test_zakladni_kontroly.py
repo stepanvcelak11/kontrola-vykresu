@@ -266,3 +266,24 @@ def test_zatoulany_prvek_prazdny_text_rozdelena_cara(make_dxf):
     cfg.settings("rozdelena_cara").zapnuto = True  # ve výchozím stavu vypnutá
     r = check(d, "rozdelena_cara", config=cfg)
     assert [(i.x, i.y) for i in r] == [(5.0, 20.0)]
+
+
+def test_format_popisu(make_dxf):
+    def build(msp, doc):
+        for k, t in enumerate(["245.37", "245.12", "246.00", "244.9", "247.55", "245,80", "243.01", "242.10", "241.33", "240.08"]):
+            msp.add_text(t, dxfattribs={"layer": "VYSKY", "height": 1.0, "insert": (k * 5, 0)})
+        for k, t in enumerate(["č.p. 12", "č.p. 12a", "č.p. 7", "č.p. 150", "č.p. 3"]):
+            msp.add_text(t, dxfattribs={"layer": "CP", "height": 1.0, "insert": (k * 5, 10)})
+    d = make_dxf(build, name="popisy.dxf")
+    msgs = sorted(i.message for i in check(d, "format_popisu"))
+    assert len(msgs) == 2 and "„244.9“" in msgs[0] and "„245,80“" in msgs[1]
+
+
+def test_jednotnost_vysky_pisma(make_dxf):
+    def build(msp, doc):
+        for k in range(6):
+            msp.add_text(str(100 + k), dxfattribs={"layer": "CISLA", "height": 1.5, "insert": (k * 5, 0)})
+        msp.add_text("106", dxfattribs={"layer": "CISLA", "height": 2.5, "insert": (40, 0)})
+    d = make_dxf(build, name="vysky.dxf")
+    msgs = [i.message for i in check(d, "jednotnost_hladiny")]
+    assert len(msgs) == 1 and "výška písma 2,5 m (ostatní mají 1,5 m)" in msgs[0]

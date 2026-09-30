@@ -45,6 +45,8 @@ _ATTR = {
     "nepatrna_plocha": "Plochu smažte, nebo upravte hranice, aby sousední plochy navazovaly přesně (přichycení).",
     "zatoulany_prvek": "Přibližte chybu, prvek vyberte a smažte (Smazat), nebo ho přesuňte na správné místo "
                        "(Přesunout). Pak Zobrazit vše (Fit View) ukáže celou kresbu.",
+    "format_popisu": "Upravte text do stejného tvaru jako ostatní popisy na vrstvě (Upravit text – Edit Text), "
+                     "např. výšku na 2 desetinná místa s tečkou.",
     "rozdelena_cara": "Nepovinné – čáry lze spojit (Vytvořit složený řetězec / Spojit prvky), jinak nevadí.",
     "maly_text": "Zvětšete výšku textu podle Směrnice (Změnit atributy prvku / Upravit text).",
     "prekryv_linii": "Kus čáry leží na jiné čáře. Přebytečnou čáru smažte, nebo ji zkraťte k navazujícímu bodu "

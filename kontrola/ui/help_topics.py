@@ -226,6 +226,11 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Prvek leží daleko od ostatní kresby – omylem kliknutý bod, prvek v počátku souřadnic nebo kopie mimo "
         "mapu. Kvůli němu je „Zobrazit vše“ skoro prázdné.<br><br><b>Oprava:</b> přibližte si chybu, prvek "
         "vyberte a smažte, nebo ho přesuňte na správné místo."),
+    "format_popisu": (
+        "Nejednotný formát popisů na vrstvě",
+        "Většina popisů na vrstvě má stejný tvar (např. výšky 245.37), tento se liší – jiný počet desetinných "
+        "míst, čárka místo tečky, písmeno navíc.<br><br><b>Oprava:</b> upravte text do stejného tvaru jako "
+        "ostatní (Upravit text)."),
     "rozdelena_cara": (
         "Zbytečně rozdělená čára",
         "Dvě stejné čáry navazují v přímém směru a v místě napojení nic není – mohla by to být jedna.<br><br>"

@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import math
+import re
+from collections import Counter
 
 import numpy as np
 import shapely
@@ -245,3 +247,46 @@ class RozdelenaCara(Check):
             if ptree is not None and len(ptree.query(shapely.points(p), predicate="dwithin", distance=0.01)):
                 continue  # v místě napojení je bod (měřený bod, značka) – rozdělení je v pořádku
             yield ctx.issue(self, [fa, fb], "Čára je zbytečně rozdělená na dvě (navazují v přímém směru)", at=p)
+
+
+_NUM = re.compile(r"(\d+)([.,])(\d+)|\d+(?:[^\W\d_]\b)?")  # „12a“ (orientační číslo) = celé číslo
+
+
+def _vzor_popisu(text: str) -> str:
+    """Tvar popisu: číslice celé části sloučené, desetinná místa počítaná („245.37“ → „9.99“, „12a“ → „9a“)."""
+    def num(m):
+        if m.group(2):
+            return "9" + m.group(2) + "9" * len(m.group(3))
+        return "9"
+    s = _NUM.sub(num, text.strip())
+    return re.sub(r"[^\W\d_]+", "a", s)
+
+
+@register
+class FormatPopisu(Check):
+    id = "format_popisu"
+    nazev = "Nejednotný formát popisů na vrstvě"
+    skupina = "Kartografie"
+    popis = ("Na vrstvě s číselnými popisy (výšky, čísla bodů) má popis jiný tvar než ostatní – např. výška "
+             "s jedním desetinným místem místo dvou, desetinná čárka místo tečky nebo písmeno navíc.")
+    vychozi_zavaznost = Severity.VAROVANI
+    parametry = [Param("podil", "Většinový tvar musí mít aspoň [%] popisů", "float", 80.0)]
+
+    def run(self, ctx: CheckContext):
+        share = float(ctx.param("podil", 80.0)) / 100.0
+        by_layer: dict[str, list] = {}
+        for f in ctx.features():
+            if f.geom_type == GeomType.TEXT and (f.text or "").strip():
+                by_layer.setdefault(f.layer, []).append(f)
+        for layer, feats in by_layer.items():
+            if len(feats) < 5:
+                continue
+            pats = Counter(_vzor_popisu(f.text) for f in feats)
+            main, n = pats.most_common(1)[0]
+            if "9" not in main or n < share * len(feats) or len(pats) == 1:
+                continue
+            example = next(f.text.strip() for f in feats if _vzor_popisu(f.text) == main)
+            for f in feats:
+                if _vzor_popisu(f.text) != main:
+                    yield ctx.issue(self, f, f"Popis „{f.text.strip()[:20]}“ má jiný tvar než ostatní na vrstvě "
+                                             f"(obvykle např. „{example[:20]}“)")

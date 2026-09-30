@@ -371,6 +371,7 @@ Obecné nastavení:
 | Nepatrná nebo úzká plocha (`nepatrna_plocha`) | plocha pod 0,05 m² nebo průměrná šířka pod 0,02 m | varování |
 | Zatoulaný prvek (`zatoulany_prvek`) | prvek nebo malá skupinka daleko od ostatní kresby (např. v počátku souřadnic) | varování |
 | Zbytečně rozdělená čára (`rozdelena_cara`) | dvě stejné čáry navazují v přímém směru a v napojení nic není | vypnuto |
+| Nejednotný formát popisů (`format_popisu`) | na vrstvě s číselnými popisy má popis jiný tvar (např. 245.3 místo 245.37, čárka místo tečky) | varování |
 | Nečitelně malý text (`maly_text`) | výška písma na papíře v měřítku výkresu pod 1 mm | vypnuto |
 
 ### Co zkontrolovat (Ctrl+Shift+K)
@@ -394,6 +395,7 @@ hladiny (např. `PARCELY, PLOTY*`).
 | Kontrola (id) | Co hlídá | Výchozí |
 |---|---|---|
 | Atributy prvku (`atributy`) | povinné atributy a povolené hodnoty (číselníky) | chyba |
+| Prvek jiný než ostatní na vrstvě (`jednotnost_hladiny`) | bez pravidel: barva, styl a tloušťka čáry, u textů výška a písmo jiné než u většiny na vrstvě | varování |
 | Hladina, barva nebo styl (`symbologie`) | hladina, barva, styl a tloušťka čáry podle kódu | varování |
 | Nepovolená hladina (`nepovolene_hladiny`) | prvek na hladině, která v pravidlech není | chyba |
 | Nekódovaný prvek (`nekodovane`) | prvku nejde přiřadit žádný kód | varování |

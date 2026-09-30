@@ -265,7 +265,7 @@ class JednotnostHladiny(Check):
     skupina = "Atributy"
     popis = ("Funguje i bez tabulky od učitele: na každé vrstvě zjistí převažující barvu, styl a tloušťku "
              "čáry a nahlásí prvky, které se od většiny liší (např. omylem přebarvená linie nebo prvek "
-             "nakreslený jiným stylem). Texty a buňky se porovnávají jen barvou.")
+             "nakreslený jiným stylem). Texty navíc výškou a písmem, buňky jen barvou.")
     vychozi_zavaznost = Severity.VAROVANI
     parametry = [
         Param("min_prvku", "Jen vrstvy s aspoň N prvky", "int", 5),
@@ -287,12 +287,16 @@ class JednotnostHladiny(Check):
             if len(feats) < min_n:
                 continue
             lin = [f for f in feats if f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.dxftype != "HATCH"]
+            txt = [f for f in feats if f.geom_type == GeomType.TEXT and f.dxftype in ("TEXT", "MTEXT")
+                   and (f.text or "").strip() and f.text_height > 0]
             props = {
                 # u výkresu čteného přímo z DGN jsou přesná čísla barvy a tloušťky MicroStationu
                 "barva": ([f for f in feats if f.dxftype != "HATCH"],
                           lambda f: f.attributes.get("MS_BARVA") or tuple(f.color_rgb)),
                 "styl": (lin, lambda f: (f.linetype or "CONTINUOUS").upper()),
                 "tloušťka": (lin, lambda f: f.attributes.get("MS_TLOUSTKA") or round(f.lineweight, 2)),
+                "výška písma": (txt, lambda f: round(f.text_height, 3)),
+                "písmo": ([f for f in txt if f.font], lambda f: f.font),
             }
             dominant = {}
             for name, (items, key) in props.items():
@@ -333,6 +337,10 @@ def _describe_prop(name, got, expected, ctx: CheckContext, f: Feature) -> str:
         if isinstance(got, str) or isinstance(expected, str):  # tloušťka MicroStationu z DGN (0–31)
             return f"tloušťka {got} (ostatní mají {expected})"
         return f"tloušťka {fmt_num(got, 2)} mm (ostatní mají {fmt_num(expected, 2)} mm)"
+    if name == "výška písma":
+        return f"výška písma {fmt_num(got, 3)} m (ostatní mají {fmt_num(expected, 3)} m)"
+    if name == "písmo":
+        return f"písmo {got} (ostatní mají {expected})"
     return f"styl {got} (ostatní mají {expected})"
 
 
