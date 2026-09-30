@@ -218,6 +218,8 @@ class MainWindow(QMainWindow):
         self.a_ready = self._act("Připraveno k odevzdání?", self.ready_check, None,
                                  "Úplná kontrola jako před odevzdáním (s tolerancemi učitele), semafor, co zbývá "
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
+        self.a_seznam = self._act("Ověřit seznam souřadnic…", self.verify_list, "Ctrl+J",
+                                  "Sedí body ve výkresu na seznam souřadnic? (poloha, čísla, výšky, body navíc)")
         self.a_batch = self._act("Zkontrolovat více výkresů najednou…", self.batch_check, None,
                                  "Vyberte několik DXF (třeba celou složku) – souhrnná tabulka chyb a skóre")
         self.a_compare = self._act("Porovnat verze výkresu…", self.compare_versions, "Ctrl+D",
@@ -278,6 +280,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
+        m_check.addAction(self.a_seznam)
         m_check.addAction(self.a_batch)
         m_check.addAction(self.a_compare)
         m_check.addAction(self.a_vypocet)
@@ -979,6 +982,19 @@ class MainWindow(QMainWindow):
         self.view.set_background_image(load_pixmap(path), float(bg.get("x", 0)), float(bg.get("y", 0)),
                                        float(bg.get("meritko", 0.1)), float(bg.get("rotace", 0)),
                                        float(bg.get("pruhlednost", 0.5)))
+
+    def verify_list(self):
+        from .seznam_dialog import SeznamDialog
+        path = ""
+        if self.project is not None:
+            s = self.project.attachments("seznamy")
+            path = str(s[0].path) if s else ""
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres – seznam se porovná s jeho body.")
+            return
+        dlg = SeznamDialog(self, path)
+        self._seznam_dlg = dlg
+        dlg.show()
 
     def batch_check(self):
         start = self.settings.value("cesty/vykres", str(Path.home()))

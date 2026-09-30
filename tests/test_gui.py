@@ -428,3 +428,29 @@ def test_poradce_zna_projekt(window):
     w.poradce.q.setText("kolik mi zbývá")
     w.poradce.ask()
     assert "K opravě zbývá" in w.poradce.chat.toPlainText()
+
+
+GEOGRAF = Path(__file__).resolve().parents[1] / "geograf V1.dxf"
+BODY13 = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "Body13_tr.txt"
+
+
+@pytest.mark.skipif(not (GEOGRAF.exists() and BODY13.exists()), reason="data chybí")
+def test_overit_seznam_souradnic(window, tmp_path):
+    w = window
+    w.load_drawing_file(GEOGRAF)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    from kontrola.ui.seznam_dialog import SeznamDialog
+    d = SeznamDialog(w, str(BODY13))
+    assert d.card_labels["ok"].text() == "86" and "Všech 86" in d.summary.text()
+    # seznam s chybami: jeden bod posunutý, jeden navíc, jedno číslo jinak
+    lines = BODY13.read_text().splitlines()
+    parts = lines[0].split()
+    lines[0] = f"{parts[0]} {float(parts[1]) + 0.2:.2f} {parts[2]} {parts[3]}"
+    lines.append("1000139999 565400.00 1187900.00 0.00")
+    bad = tmp_path / "body.txt"
+    bad.write_text("\n".join(lines))
+    d.path.setText(str(bad))
+    d.run()
+    assert d.card_labels["posunuty"].text() == "1" and d.card_labels["chybi"].text() == "1"
+    d.table.cellDoubleClicked.emit(0, 0)
+    d.close()

@@ -189,7 +189,7 @@ class HomePage(QScrollArea):
         tl.addWidget(lab)
         grid = QGridLayout()
         grid.setSpacing(8)
-        items = [("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
+        items = [("Ověřit seznam souřadnic", win.verify_list), ("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
                  ("Rychlé tipy MicroStation", win.show_tips), ("Co znamenají chyby", win.show_help),
                  ("Seznam k opravě (PDF)", lambda: win.export("todo")), ("Protokol od učitele", win.compare_teacher),
                  ("Hromadná kontrola", win.batch_check), ("Protokol HTML", lambda: win.export("html")),

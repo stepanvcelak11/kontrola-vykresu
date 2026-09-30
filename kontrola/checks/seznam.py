@@ -91,6 +91,118 @@ _TRANSFORMS = {
 }
 
 
+@dataclass
+class BodVysledek:
+    """Výsledek ověření jednoho bodu ze seznamu (nebo bodu ve výkresu navíc)."""
+    cislo: str
+    stav: str  # ok | chybi | posunuty | cislo | vyska | navic
+    x: float
+    y: float
+    odchylka: float | None = None
+    poznamka: str = ""
+    feature: object = None
+    z: float | None = None
+
+
+STAVY = {"ok": "✓ v pořádku", "chybi": "chybí ve výkresu", "posunuty": "posunutý", "cislo": "špatné číslo",
+         "vyska": "špatná výška", "navic": "navíc (není v seznamu)"}
+
+
+def verify_points(drawing, pts: list[ListPoint], tol: float = 0.01, far: float = 0.5, radius: float = 3.0,
+                  do_num: bool = True, do_h: bool = True, features=None):
+    """Ověří seznam souřadnic proti výkresu. Vrací (výsledky, použité natočení os, nalezeno)."""
+    feats_all = list(features if features is not None else drawing.features)
+    feats = [f for f in feats_all if f.geom_type == GeomType.BOD and f.dxftype != "TEXT" and f.geometry is not None]
+    if not feats or not pts:
+        return [], None, 0
+    geoms = np.array([f.geometry for f in feats], dtype=object)
+    tree = shapely.STRtree(geoms)
+    best, best_n = None, -1
+    sample = pts[:: max(1, len(pts) // 60)]
+    for name, tr_ in _TRANSFORMS.items():
+        q = [Point(*tr_(p.a, p.b)) for p in sample]
+        hit, _ = tree.query(np.array(q, dtype=object), predicate="dwithin", distance=far)
+        n = len(set(hit.tolist())) if len(hit) else 0
+        if n > best_n:
+            best, best_n = name, n
+    if best_n <= 0:
+        return [], None, 0
+    tr = _TRANSFORMS[best]
+    texts = [f for f in feats_all if f.geom_type == GeomType.TEXT and f.text]
+    num_texts = [t for t in texts if re.fullmatch(r"\d+(?:-\d+)?", t.text.strip())]
+    h_texts = [t for t in texts if re.fullmatch(r"\d+[.,]\d{1,3}", t.text.strip())]
+    num_tree = shapely.STRtree(np.array([t.geometry for t in num_texts], dtype=object)) if num_texts else None
+    h_tree = shapely.STRtree(np.array([t.geometry for t in h_texts], dtype=object)) if h_texts else None
+    have_z = any(p.z not in (None, 0.0) for p in pts)
+    do_num = do_num and num_tree is not None
+    do_h = do_h and have_z and h_tree is not None
+    lp = np.array([Point(*tr(p.a, p.b)) for p in pts], dtype=object)
+    lp_tree = shapely.STRtree(lp)
+    owner: dict[int, list] = {}
+    h_owner: dict[int, list] = {}
+    for texts_, own in ((num_texts if do_num else [], owner), (h_texts if do_h else [], h_owner)):
+        for t in texts_:
+            j = lp_tree.nearest(t.geometry)
+            if j is not None and t.geometry.distance(lp[j]) <= min(radius, 1.5):
+                own.setdefault(int(j), []).append(t)
+    out: list[BodVysledek] = []
+    used: set[int] = set()
+    found = 0
+    for i, p in enumerate(pts):
+        x, y = tr(p.a, p.b)
+        here = Point(x, y)
+        idx = tree.query(here, predicate="dwithin", distance=far)
+        names = short_numbers(p.cislo)
+        label = min(names, key=len)
+        if len(idx) == 0:
+            out.append(BodVysledek(label, "chybi", x, y, None, "bod ze seznamu ve výkresu není", None, p.z))
+            continue
+        j_best = min(idx, key=lambda j: here.distance(geoms[j]))
+        d = here.distance(geoms[j_best])
+        nearest = feats[j_best]
+        used.add(int(j_best))
+        if d > tol:
+            out.append(BodVysledek(label, "posunuty", x, y, d, f"posun o {fmt_m(d)}", nearest, p.z))
+            continue
+        found += 1
+        res = BodVysledek(label, "ok", x, y, d, "", nearest, p.z)
+        if do_num:
+            near = [num_texts[j] for j in num_tree.query(here, predicate="dwithin", distance=radius)]
+            if not any(t.text.strip() in names for t in near):
+                mine = owner.get(i, [])
+                if mine:
+                    t = min(mine, key=lambda t: here.distance(t.geometry))
+                    res = BodVysledek(label, "cislo", x, y, d, f"ve výkresu „{t.text.strip()}“, v seznamu {label}",
+                                      t, p.z)
+        if res.stav == "ok" and do_h and p.z not in (None, 0.0):
+            def ok(t):
+                v = t.text.strip().replace(",", ".")
+                dec = len(v.split(".")[1])
+                return abs(round(p.z, dec) - float(v)) <= 10 ** -dec / 2
+            near = [h_texts[j] for j in h_tree.query(here, predicate="dwithin", distance=radius)]
+            mine = [t for t in h_owner.get(i, []) if abs(float(t.text.replace(",", ".")) - p.z) < 5]
+            if mine and not any(ok(t) for t in near):
+                t = min(mine, key=lambda t: here.distance(t.geometry))
+                val = float(t.text.replace(",", "."))
+                dec = len(t.text.strip().replace(",", ".").split(".")[1])
+                res = BodVysledek(label, "vyska", x, y, d, f"ve výkresu {fmt_num(val, dec)}, v seznamu "
+                                  f"{fmt_num(round(p.z, dec), dec)}", t, p.z)
+        out.append(res)
+    # body ve výkresu navíc – jen na vrstvách, kde leží body ze seznamu (ne stromy, značky…)
+    from collections import Counter
+    layer_hits = Counter(feats[j].layer for j in used)
+    layer_all = Counter(f.layer for f in feats)
+    point_layers = {lay for lay, n in layer_hits.items() if n >= max(2, 0.5 * layer_all[lay])}
+    for j, f in enumerate(feats):
+        if j in used or f.layer not in point_layers:
+            continue
+        if len(lp_tree.query(f.geometry, predicate="dwithin", distance=far)):
+            continue
+        out.append(BodVysledek("?", "navic", f.geometry.x, f.geometry.y, None,
+                               f"bod na vrstvě {f.layer} není v seznamu", f))
+    return out, best, found
+
+
 @register
 class SeznamSouradnic(Check):
     id = "seznam_souradnic"
@@ -118,90 +230,23 @@ class SeznamSouradnic(Check):
         if not pts:
             ctx.notes.append(f"seznam souřadnic {Path(path).name} neobsahuje žádné body.")
             return
-        feats = [f for f in ctx.features() if f.geom_type == GeomType.BOD and f.dxftype != "TEXT"]
-        if not feats:
-            return
-        tol = float(ctx.param("tolerance_polohy", 0.01))
-        far = float(ctx.param("hledat_do", 0.5))
-        radius = float(ctx.param("okruh_popisu", 1.0))
-        geoms = np.array([f.geometry for f in feats], dtype=object)
-        tree = shapely.STRtree(geoms)
-
-        # které natočení os sedí nejlépe
-        best, best_n = None, -1
-        sample = pts[:: max(1, len(pts) // 60)]
-        for name, tr in _TRANSFORMS.items():
-            q = [Point(*tr(p.a, p.b)) for p in sample]
-            _, hit = tree.query(np.array(q, dtype=object), predicate="dwithin", distance=far)
-            n = len(set(_.tolist())) if len(_) else 0
-            if n > best_n:
-                best, best_n = name, n
-        if best_n <= 0:
+        res, best, found = verify_points(
+            ctx.drawing, pts, float(ctx.param("tolerance_polohy", 0.01)), float(ctx.param("hledat_do", 0.5)),
+            float(ctx.param("okruh_popisu", 3.0)), bool(ctx.param("kontrolovat_cisla", True)),
+            bool(ctx.param("kontrolovat_vysky", True)), features=ctx.features())
+        if best is None:
             ctx.notes.append(f"seznam souřadnic {Path(path).name}: žádný bod ze seznamu neleží ve výkresu – "
                              "je to seznam k tomuto výkresu?")
             return
-        tr = _TRANSFORMS[best]
-
-        texts = [f for f in ctx.features() if f.geom_type == GeomType.TEXT and f.text]
-        num_texts = [t for t in texts if re.fullmatch(r"\d+(?:-\d+)?", t.text.strip())]
-        h_texts = [t for t in texts if re.fullmatch(r"\d+[.,]\d{1,3}", t.text.strip())]
-        num_tree = shapely.STRtree(np.array([t.geometry for t in num_texts], dtype=object)) if num_texts else None
-        h_tree = shapely.STRtree(np.array([t.geometry for t in h_texts], dtype=object)) if h_texts else None
-        have_z = any(p.z not in (None, 0.0) for p in pts)
-        do_num = bool(ctx.param("kontrolovat_cisla", True)) and num_tree is not None
-        do_h = bool(ctx.param("kontrolovat_vysky", True)) and have_z and h_tree is not None
-
-        # každý text s číslem patří k nejbližšímu bodu ze seznamu (u hustých bodů je popis blíž sousedovi)
-        lp = np.array([Point(*tr(p.a, p.b)) for p in pts], dtype=object)
-        lp_tree = shapely.STRtree(lp)
-        owner: dict[int, list] = {}
-        h_owner: dict[int, list] = {}
-        for texts_, own in ((num_texts if do_num else [], owner), (h_texts if do_h else [], h_owner)):
-            for t in texts_:
-                j = lp_tree.nearest(t.geometry)
-                if j is not None and t.geometry.distance(lp[j]) <= min(radius, 1.5):
-                    own.setdefault(int(j), []).append(t)
-
-        found = 0
-        for i, p in enumerate(pts):
-            if i % 200 == 0:
-                ctx.progress(i / len(pts))
-            x, y = tr(p.a, p.b)
-            here = Point(x, y)
-            idx = tree.query(here, predicate="dwithin", distance=far)
-            names = short_numbers(p.cislo)
-            label = min(names, key=len)
-            if len(idx) == 0:
-                yield ctx.issue(self, None, f"Bod č. {label} ze seznamu ve výkresu chybí", at=(x, y))
-                continue
-            d = min(here.distance(geoms[j]) for j in idx)
-            nearest = feats[min(idx, key=lambda j: here.distance(geoms[j]))]
-            if d > tol:
-                yield ctx.issue(self, nearest, f"Bod č. {label} je posunutý o {fmt_m(d)} proti seznamu",
-                                at=(x, y), geometry=LineString([here, nearest.geometry]))
-                continue
-            found += 1
-            if do_num:
-                near = [num_texts[j] for j in num_tree.query(here, predicate="dwithin", distance=radius)]
-                if not any(t.text.strip() in names for t in near):
-                    mine = owner.get(i, [])
-                    if mine:
-                        t = min(mine, key=lambda t: here.distance(t.geometry))
-                        yield ctx.issue(self, t, f"Číslo bodu: ve výkresu „{t.text.strip()}“, v seznamu {label}",
-                                        at=(x, y))
-            if do_h and p.z not in (None, 0.0):
-                def ok(t):
-                    v = t.text.strip().replace(",", ".")
-                    dec = len(v.split(".")[1])
-                    return abs(round(p.z, dec) - float(v)) <= 10 ** -dec / 2
-                near = [h_texts[j] for j in h_tree.query(here, predicate="dwithin", distance=radius)]
-                mine = [t for t in h_owner.get(i, []) if abs(float(t.text.replace(",", ".")) - p.z) < 5]
-                if mine and not any(ok(t) for t in near):
-                    t = min(mine, key=lambda t: here.distance(t.geometry))
-                    val = float(t.text.replace(",", "."))
-                    dec = len(t.text.strip().replace(",", ".").split(".")[1])
-                    if True:
-                        yield ctx.issue(self, t, f"Výška bodu č. {label}: ve výkresu {fmt_num(val, dec)}, "
-                                                 f"v seznamu {fmt_num(round(p.z, dec), dec)}", at=(x, y))
+        for r in res:
+            if r.stav == "chybi":
+                yield ctx.issue(self, None, f"Bod č. {r.cislo} ze seznamu ve výkresu chybí", at=(r.x, r.y))
+            elif r.stav == "posunuty":
+                yield ctx.issue(self, r.feature, f"Bod č. {r.cislo} je posunutý o {fmt_m(r.odchylka)} proti seznamu",
+                                at=(r.x, r.y), geometry=LineString([Point(r.x, r.y), r.feature.geometry]))
+            elif r.stav == "cislo":
+                yield ctx.issue(self, r.feature, f"Číslo bodu: {r.poznamka}", at=(r.x, r.y))
+            elif r.stav == "vyska":
+                yield ctx.issue(self, r.feature, f"Výška bodu č. {r.cislo}: {r.poznamka}", at=(r.x, r.y))
         ctx.notes.append(f"seznam {Path(path).name}: {len(pts)} bodů, ve výkresu nalezeno {found} "
                          f"(souřadnice {best}).")
