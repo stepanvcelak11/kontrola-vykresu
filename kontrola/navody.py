@@ -114,6 +114,8 @@ def navod(iss: Issue) -> str:
             return "Text s číslem bodu nesouhlasí se seznamem – opravte text (Upravit text – Edit Text)."
         if "výška" in low:
             return "Výškový popis nesouhlasí se seznamem – opravte text (Upravit text – Edit Text)."
+        return ("Porovnejte bod se seznamem souřadnic (Kontrola → Ověřit seznam souřadnic) a opravte polohu, "
+                "číslo nebo výšku podle seznamu.")
     if cid in _ATTR:
         return _ATTR[cid]
     return ""
