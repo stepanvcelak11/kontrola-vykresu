@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 import re
 from collections import Counter
 
-from PySide6.QtWidgets import (QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                               QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QCheckBox, QDialog, QFrame, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+                               QMenu, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from ..checks.base import REGISTRY
 
@@ -72,6 +72,10 @@ class VyberKontrol(QDialog):
         self.search.textChanged.connect(self._filter)
         prow.addWidget(self.search)
         lay.addLayout(prow)
+        self.my_row = QHBoxLayout()
+        self.my_row.setSpacing(6)
+        lay.addLayout(self.my_row)
+        self._fill_my_sets()
         found = Counter(i.check_id for i in (getattr(win, "issues", None) or []))
         self.rows: dict[str, list[QWidget]] = {}
         self.cards: dict[str, QFrame] = {}
@@ -142,6 +146,11 @@ class VyberKontrol(QDialog):
         brow = QHBoxLayout()
         brow.addWidget(self.count)
         brow.addStretch(1)
+        b_set = QPushButton("Uložit jako sadu…")
+        b_set.setToolTip("Uloží zaškrtnuté kontroly pod vlastním jménem – sada pak bude i v nabídce u tlačítka "
+                         "Zkontrolovat a v ostatních projektech")
+        b_set.clicked.connect(self.save_as_set)
+        brow.addWidget(b_set)
         b_save = QPushButton("Uložit výběr")
         b_save.clicked.connect(self.save)
         b_run = QPushButton("Zkontrolovat vybrané (F5)")
@@ -156,6 +165,43 @@ class VyberKontrol(QDialog):
         for cb in self.boxes.values():
             cb.toggled.connect(self._update_count)
         self._update_count()
+
+    def _fill_my_sets(self):
+        while self.my_row.count():
+            it = self.my_row.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        sady = vlastni_sady(self.win.settings)
+        if not sady:
+            return
+        lab = QLabel("Moje sady:")
+        lab.setObjectName("karta_popis")
+        self.my_row.addWidget(lab)
+        for name, ids in sady.items():
+            b = QPushButton(name)
+            b.setObjectName("rychly_filtr")
+            b.setToolTip(f"{len(ids)} kontrol · pravým tlačítkem smazat")
+            b.clicked.connect(lambda _c=False, ids=ids: self.apply_preset(lambda cid, _cls: cid in ids))
+            b.setContextMenuPolicy(Qt.CustomContextMenu)
+            b.customContextMenuRequested.connect(lambda _p, n=name, btn=b: self._set_menu(n, btn))
+            self.my_row.addWidget(b)
+        self.my_row.addStretch(1)
+
+    def _set_menu(self, name: str, btn: QPushButton):
+        m = QMenu(self)
+        m.addAction(f"Smazat sadu „{name}“", lambda: (smaz_sadu(self.win.settings, name), self._fill_my_sets()))
+        m.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def save_as_set(self, name: str | None = None):
+        if not name:
+            name, ok = QInputDialog.getText(self, "Uložit sadu kontrol", "Název sady (např. Rychlá topologie):")
+            if not ok:
+                return
+        name = (name or "").strip()
+        if not name or name in {n for n, _t, _p in PRESETY}:
+            return
+        uloz_sadu(self.win.settings, name, [cid for cid, cb in self.boxes.items() if cb.isChecked()])
+        self._fill_my_sets()
 
     def _filter(self, text: str):
         t = text.strip().lower()
@@ -204,8 +250,37 @@ class VyberKontrol(QDialog):
         self.save()
 
 
-def apply_preset_to(config, name: str) -> None:
-    """Nastaví zapnuté kontroly podle hotové sady (pro rychlé menu u tlačítka Zkontrolovat)."""
-    pred = next(p for n, _t, p in PRESETY if n == name)
+def vlastni_sady(settings) -> dict[str, list[str]]:
+    """Sady kontrol uložené uživatelem (napříč projekty, v nastavení aplikace)."""
+    import json
+    try:
+        data = json.loads(settings.value("vyber/sady", "{}") or "{}")
+        return {str(k): [str(c) for c in v] for k, v in data.items() if isinstance(v, list)}
+    except (ValueError, TypeError, AttributeError):
+        return {}
+
+
+def uloz_sadu(settings, name: str, ids: list[str]) -> None:
+    import json
+    sady = vlastni_sady(settings)
+    sady[name] = list(ids)
+    settings.setValue("vyber/sady", json.dumps(sady, ensure_ascii=False))
+
+
+def smaz_sadu(settings, name: str) -> None:
+    import json
+    sady = vlastni_sady(settings)
+    sady.pop(name, None)
+    settings.setValue("vyber/sady", json.dumps(sady, ensure_ascii=False))
+
+
+def apply_preset_to(config, name: str, settings=None) -> None:
+    """Nastaví zapnuté kontroly podle hotové nebo vlastní sady (pro rychlé menu u tlačítka Zkontrolovat)."""
+    pred = next((p for n, _t, p in PRESETY if n == name), None)
+    if pred is None and settings is not None:
+        ids = set(vlastni_sady(settings).get(name, []))
+        pred = lambda cid, _cls: cid in ids  # noqa: E731
+    if pred is None:
+        raise KeyError(name)
     for cid, cls in REGISTRY.items():
         config.settings(cid).zapnuto = bool(pred(cid, cls))

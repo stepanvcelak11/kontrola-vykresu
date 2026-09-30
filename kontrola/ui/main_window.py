@@ -1142,20 +1142,32 @@ class MainWindow(QMainWindow):
         PredikceDialog(self).exec()
 
     def _check_menu(self) -> QMenu:
-        from .vyber_kontrol import PRESETY
         m = QMenu(self)
+        m.aboutToShow.connect(lambda: self._fill_check_menu(m))
+        m.setToolTipsVisible(True)
+        self._fill_check_menu(m)
+        return m
+
+    def _fill_check_menu(self, m: QMenu):
+        from .vyber_kontrol import PRESETY, vlastni_sady
+        m.clear()
         m.addAction(self.a_vyber)
         m.addSeparator()
         for name, tip, _p in PRESETY:
             a = m.addAction(f"Zkontrolovat: {name}")
             a.setToolTip(tip)
             a.triggered.connect(lambda _c=False, n=name: self.run_preset(n))
-        m.setToolTipsVisible(True)
-        return m
+        sady = vlastni_sady(self.settings)
+        if sady:
+            m.addSeparator()
+            for name, ids in sady.items():
+                a = m.addAction(f"Moje sada: {name}")
+                a.setToolTip(f"{len(ids)} kontrol")
+                a.triggered.connect(lambda _c=False, n=name: self.run_preset(n))
 
     def run_preset(self, name: str):
         from .vyber_kontrol import apply_preset_to
-        apply_preset_to(self.project.config, name)
+        apply_preset_to(self.project.config, name, self.settings)
         self.project.save()
         self.statusBar().showMessage(f"Sada kontrol: {name}", 5000)
         if self.drawing is not None:

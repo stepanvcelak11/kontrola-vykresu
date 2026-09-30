@@ -380,7 +380,9 @@ Obecné nastavení:
 kontroly po skupinách k zaškrtnutí. Hotové sady: *Jako učitel* (MGEO + GISoft),
 *Vše, co jde*, *Jen topologie*, *Jen atributy*, *Vzhled mapy* a *Cizí výkres (bez
 pravidel)* – ta zapne všechno, co nepotřebuje Směrnici, takže jde zkontrolovat
-i výkres z jiného předmětu. Výběr se uloží do projektu.
+i výkres z jiného předmětu. Výběr se uloží do projektu. Vlastní výběr jde uložit jako **sadu**
+(„Uložit jako sadu…“) – objeví se pod „Moje sady“ a v nabídce u tlačítka Zkontrolovat ve všech
+projektech; pravým tlačítkem na sadu ji smažete.
 
 **Kontrola → Přehled výkresu** (Ctrl+Shift+P) ukáže, co je na které vrstvě: počty čar, ploch,
 bodů, textů a buněk, celkovou délku a plochu, barvy, styly, tloušťky a písmo. Vrstvy, kde prvky

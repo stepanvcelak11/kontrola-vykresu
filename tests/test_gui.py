@@ -641,7 +641,22 @@ def test_co_zkontrolovat(window, monkeypatch):
     assert dlg2.cards["Atributy"].isHidden() and not dlg2.cards["Geometrie"].isHidden()
     dlg2.search.clear()
     assert not dlg2.boxes["symbologie"].isHidden()
+    # vlastní sada: uložit, použít z nabídky tlačítka Zkontrolovat
+    for cid, cb in dlg2.boxes.items():
+        cb.setChecked(cid in ("spicka", "duplicity"))
+    dlg2.save_as_set("Moje rychlá")
     dlg2.reject()
+    assert vyber_kontrol.vlastni_sady(w.settings)["Moje rychlá"] == ["duplicity", "spicka"] or \
+        sorted(vyber_kontrol.vlastni_sady(w.settings)["Moje rychlá"]) == ["duplicity", "spicka"]
+    menu = tb.widgetForAction(w.a_check).menu()
+    menu.aboutToShow.emit()
+    act = next(a for a in menu.actions() if a.text() == "Moje sada: Moje rychlá")
+    act.trigger()
+    assert w._wait(lambda: _idle(w), 60)
+    on = {c for c in REGISTRY if w.project.config.settings(c).zapnuto}
+    assert on == {"spicka", "duplicity"}
+    vyber_kontrol.smaz_sadu(w.settings, "Moje rychlá")
+    assert "Moje rychlá" not in vyber_kontrol.vlastni_sady(w.settings)
 
 
 def test_gis_vykres_v_okne(window, tmp_path, monkeypatch):
