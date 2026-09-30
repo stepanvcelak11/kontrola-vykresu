@@ -90,7 +90,11 @@ class VypocetDialog(QDialog):
         self.b_coords.setEnabled(False)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
-        for b in (self.b_run, self.b_save, self.b_coords):
+        self.b_dxf = QPushButton("Body do výkresu (DXF)…")
+        self.b_dxf.setToolTip("Vypočtené body rovnou do DXF se značkami, čísly a výškami podle Směrnice")
+        self.b_dxf.clicked.connect(self._to_dxf)
+        self.b_dxf.setEnabled(False)
+        for b in (self.b_run, self.b_save, self.b_coords, self.b_dxf):
             brow.addWidget(b)
         brow.addWidget(self.summary, 1)
         lay.addLayout(brow)
@@ -201,6 +205,7 @@ class VypocetDialog(QDialog):
                                  "všechny rozdíly v povolené toleranci.")
         self.b_save.setEnabled(True)
         self.b_coords.setEnabled(bool(res.body))
+        self.b_dxf.setEnabled(bool(res.body) and hasattr(self.parent(), "points_to_dxf"))
 
     def _fill_checks(self, res, diag):
         red, green = QColor(185, 28, 28), QColor(21, 128, 61)
@@ -256,6 +261,13 @@ class VypocetDialog(QDialog):
                         f_.setBold(True)
                         it.setFont(f_)
                 self.table.setItem(i, c, it)
+
+    def _to_dxf(self):
+        from ..checks.seznam import ListPoint
+        if self.result is None:
+            return
+        pts = [ListPoint(b.bod, b.y, b.x, b.z) for b in self.result.body if not b.kontrolni]
+        self.parent().points_to_dxf(pts)
 
     def save_report(self):
         p, _ = QFileDialog.getSaveFileName(self, "Uložit protokol", "kontrola_vypoctu.txt", "Text (*.txt)")

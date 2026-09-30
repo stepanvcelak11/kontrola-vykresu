@@ -70,3 +70,29 @@ def test_vykres_geograf_s_wordem():
     after = run_checks(d, rs, Config.load(y)).issues
     assert not [i for i in after if i.check_id == "nepovolene_hladiny"]
     assert not [i for i in after if i.check_id == "visici_konce" and i.severity == Severity.CHYBA]
+
+
+def test_body_do_dxf_projdou_kontrolou(tmp_path):
+    from collections import Counter
+
+    from kontrola.checks.seznam import read_point_list, verify_points
+    from kontrola.config import Config
+    from kontrola.export.body_dxf import export_points_dxf, guess_rules
+    from kontrola.io.dxf_loader import load_drawing
+    from kontrola.rules import RuleSet
+    from kontrola.runner import run_checks
+    root = Path(__file__).resolve().parents[1] / "podklady"
+    for y, lst in (("zadani1-microstation/pravidla_zadani1.yaml", "zadani1-microstation/Body13_tr.txt"),
+                   ("zadani2-husovice/pravidla_zadani2.yaml", "zadani2-husovice/Husovice_Včelák_seznam.txt")):
+        rs = RuleSet.load(root / y)
+        g = guess_rules(rs)
+        assert all(g.values()), g
+        pts = read_point_list(root / lst)
+        out = tmp_path / "body.dxf"
+        export_points_dxf(pts, rs, out)
+        d = load_drawing(out)
+        res = run_checks(d, rs, Config.load(root / y),
+                         only=["symbologie", "nepovolene_hladiny", "atribut_dle_vrstvy", "typ_geometrie"])
+        assert res.issues == [], [i.message for i in res.issues[:3]]
+        r, best, found = verify_points(d, pts)
+        assert Counter(x.stav for x in r) == Counter({"ok": len(pts)})
