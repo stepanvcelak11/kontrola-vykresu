@@ -526,8 +526,9 @@ DGN z MicroStationu V8 / V8i / CONNECT aplikace přečte sama – vlastní čte�
 zarovnání), buňky (název, poloha, natočení), body, názvy vrstev a **přesná symbologie z DGN** (číslo
 barvy, tloušťka 0–31, styl, „dle vrstvy“). Na výkresu Husovice sedí s DXF exportem z MicroStationu počty
 všech typů prvků, vrstvy, texty i souřadnice (99–100 % vrcholů do 2 cm, oblouky jsou lomené čáry).
-Nečte se písmo textu (font) a název vlastního stylu čáry (je v knihovně stylů, ne v DGN) – ty se u DGN
-nekontrolují. Když je vedle DGN novější stejnojmenný DXF, použije se DXF. S **Hlídat změny výkresu** pak
+Čte se i **název vlastního stylu čáry** (5.303, 2.163…) s jeho **měřítkem** a **písmo** textů (TrueType
+podle tabulky fontů ve výkresu, font MicroStationu č. 1 = cs_Working) – v DGN jde tedy ověřit i styl
+zábradlí, který DXF export uloží jako Continuous. Nečte se řez písma (tučné, kurzíva), B-spline a tělesa. Když je vedle DGN novější stejnojmenný DXF, použije se DXF. S **Hlídat změny výkresu** pak
 stačí v MicroStationu Ctrl+S.
 
 ### Časová osa výkresu (Ctrl+H)
@@ -797,7 +798,7 @@ průběhu a jdou zrušit.
 
 ## Známá omezení
 
-* DGN V8 se čte vlastní čtečkou experimentálně (bez písma textů a názvů vlastních stylů čar);
+* DGN V8 se čte vlastní čtečkou experimentálně (bez řezu písma a B-spline);
   starší DGN V7 jen přes DXF z MicroStationu nebo ODA File Converter.
 * Oblouky a kružnice se pro kontroly nahrazují lomenou čarou s odchylkou 5 mm.
   Souřadnice Z se ignorují.
