@@ -115,3 +115,26 @@ def test_konec_vedouci_ven_z_roztrepene_kresby_je_okraj(make_dxf):
     assert by_pt[(60, 50)].severity == Severity.INFO
     inner = by_pt[(30, 50)]
     assert inner.severity != Severity.INFO and "0,3 m daleko" in inner.message
+
+
+def test_blizke_prvky_a_kontrola_ploch(make_dxf):
+    from kontrola.config import Config
+    from kontrola.rules import RuleSet
+    from kontrola.runner import run_checks
+
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (10, 0)], dxfattribs={"layer": "HRANICE"})
+        msp.add_lwpolyline([(0, 5), (5, 0.004), (10, 5)], dxfattribs={"layer": "PLOT"})  # vrchol 4 mm od čáry
+        msp.add_lwpolyline([(20, 0), (30, 0), (30, 10), (20, 10), (20, 0)], dxfattribs={"layer": "HRANICE"})
+        msp.add_lwpolyline([(40, 0), (50, 0), (50, 10), (40, 10), (40, 0)], dxfattribs={"layer": "HRANICE"})
+        msp.add_text("12", dxfattribs={"layer": "POPIS-PARCEL", "insert": (25, 5), "height": 1})
+    d = make_dxf(build)
+    iss = check(d, "blizke_prvky")
+    assert len(iss) == 1 and "4 mm" in iss[0].message
+    cfg = Config()
+    cfg.ensure_defaults()
+    assert not cfg.settings("kontrola_ploch").zapnuto  # ve výchozím stavu vypnutá
+    cfg.settings("kontrola_ploch").zapnuto = True
+    cfg.settings("kontrola_ploch").parametry.update(vrstvy_hranic="HRANICE", vrstvy_popisu="POPIS-PARCEL")
+    res = run_checks(d, RuleSet(), cfg, only=["kontrola_ploch"])
+    assert [i.message for i in res.issues] == ["Plocha 100 m² nemá popis ani definiční bod"]

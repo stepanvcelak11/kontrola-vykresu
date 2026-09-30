@@ -203,6 +203,17 @@ TOPICS: dict[str, tuple[str, str]] = {
     "atributy": (
         "Atributy prvku",
         "Kontrola doplňkových atributů (dat) prvku podle pravidel projektu."),
+    "blizke_prvky": (
+        "Prvky příliš blízko (Limit)",
+        "MGEO hlídá, aby dva prvky, které se nedotýkají, nebyly blíž než <b>Limit</b> (obvykle 1 cm). Lomový bod "
+        "čáry 3 mm vedle jiné čáry je skoro jistě chyba – měl na ní ležet.<br><br><b>Oprava:</b> vrchol přesuňte "
+        "s přichycením na čáru (Nearest), nebo ho odsuňte dál."),
+    "kontrola_ploch": (
+        "Kontrola ploch",
+        "Z hraničních čar se sestaví plochy (parcely, druhy pozemků) a hlídá se, že každá má <b>právě jeden</b> popis "
+        "nebo definiční bod a že stejné číslo není ve dvou plochách. Kontrola je ve výchozím stavu vypnutá – zapněte "
+        "ji v Nastavení kontrol, když zadání plochy vyžaduje.<br><br><b>Oprava:</b> doplňte chybějící číslo / značku, "
+        "smažte přebytečné, uzavřete hranici plochy."),
     "_uzel": (
         "Pojem: uzel a tolerance",
         "<b>Uzel</b> je místo, kde se čáry setkávají – mají tam společný koncový bod. <b>Tolerance</b> "

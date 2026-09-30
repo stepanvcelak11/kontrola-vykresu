@@ -38,6 +38,10 @@ _ATTR = {
     "atribut_dle_vrstvy": "Barva, styl nebo tloušťka je nastavená „Dle vrstvy“ (ByLevel), což zadání "
                           "nepovoluje. Vyberte prvek, v Atributech prvku (Element Attributes) nastavte konkrétní "
                           "hodnoty a použijte Změnit atributy prvku (Change Element Attributes).",
+    "blizke_prvky": "Lomový bod leží pár milimetrů od jiné čáry. Buď ho na čáru přichyťte (Upravit prvek + "
+                    "přichycení Nearest / Intersection), nebo ho odsuňte – čáry se mají přesně dotýkat.",
+    "kontrola_ploch": "Doplňte do plochy popis / definiční bod (číslo parcely, značku druhu pozemku) na vrstvu "
+                      "popisů, nebo smažte přebytečný. Plocha musí být z hranic uzavřená.",
     "nepovolene_hladiny": "Celá vrstva není ve Směrnici. Všechny její prvky najednou: Správce vrstev (Level "
                           "Manager) → pravým na vrstvu → Vybrat prvky (nebo Výběr podle atributů), pak Změnit "
                           "atributy prvku → Vrstva = správná vrstva ze Směrnice a klik do výkresu. Pomocné prvky, "

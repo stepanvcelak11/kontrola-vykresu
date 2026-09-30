@@ -147,6 +147,7 @@ class Check(ABC):
     vychozi_zavaznost: Severity = Severity.CHYBA
     parametry: list[Param] = []
     potrebuje_pravidla: bool = False
+    vychozi_zapnuto: bool = True  # False = kontrolu si uživatel zapne v Nastavení
 
     @abstractmethod
     def run(self, ctx: "CheckContext") -> Iterable[Issue]:

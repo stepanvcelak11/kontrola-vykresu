@@ -62,7 +62,7 @@ class Config:
             inst = cls()
             cs = self.kontroly.get(cid)
             if cs is None:
-                cs = CheckSettings(True, inst.vychozi_zavaznost, {})
+                cs = CheckSettings(getattr(inst, "vychozi_zapnuto", True), inst.vychozi_zavaznost, {})
                 self.kontroly[cid] = cs
             for k, v in inst.default_params().items():
                 cs.parametry.setdefault(k, v)
