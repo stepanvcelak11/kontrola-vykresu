@@ -354,7 +354,7 @@ Obecné nastavení:
 | Překrývající se čáry (`prekryv_linii`) | kus čáry leží na jiné čáře (částečný překryv, ne celá duplicita) | chyba |
 | Samoprotnutí (`samoprotnuti`) | linie nebo polygon protíná sám sebe | chyba |
 | Průsečík bez uzlu (`pruseciky_bez_uzlu`) | křížení linií nebo T-napojení bez lomového bodu | chyba |
-| Prvek nulové délky (`nulova_delka`) | nulová délka nebo plocha, prázdný text, nulový poloměr | chyba |
+| Prvek nulové délky (`nulova_delka`) | nulová délka nebo plocha, prázdný text nebo text s nulovou výškou, nulový poloměr | chyba |
 | Překryv polygonů (`prekryvy_polygonu`) | polygony na stejné hladině se překrývají | chyba |
 | Mezera mezi polygony (`mezery_polygonu`) | úzká štěrbina nebo malá díra mezi polygony | varování |
 | Prvek mimo rozsah (`mimo_rozsah`) | prvek mimo zadaný obdélník nebo mimo území ČR v S-JTSK | chyba |
@@ -370,7 +370,6 @@ Obecné nastavení:
 | Špička (`spicka`) | čára se v lomovém bodě vrací zpět (úhel pod 10°) | varování |
 | Nepatrná nebo úzká plocha (`nepatrna_plocha`) | plocha pod 0,05 m² nebo průměrná šířka pod 0,02 m | varování |
 | Zatoulaný prvek (`zatoulany_prvek`) | prvek nebo malá skupinka daleko od ostatní kresby (např. v počátku souřadnic) | varování |
-| Prázdný text (`prazdny_text`) | text bez znaků nebo s nulovou výškou | varování |
 | Zbytečně rozdělená čára (`rozdelena_cara`) | dvě stejné čáry navazují v přímém směru a v napojení nic není | vypnuto |
 | Nečitelně malý text (`maly_text`) | výška písma na papíře v měřítku výkresu pod 1 mm | vypnuto |
 
@@ -381,6 +380,11 @@ kontroly po skupinách k zaškrtnutí. Hotové sady: *Jako učitel* (MGEO + GISo
 *Vše, co jde*, *Jen topologie*, *Jen atributy*, *Vzhled mapy* a *Cizí výkres (bez
 pravidel)* – ta zapne všechno, co nepotřebuje Směrnici, takže jde zkontrolovat
 i výkres z jiného předmětu. Výběr se uloží do projektu.
+
+**Kontrola → Přehled výkresu** (Ctrl+Shift+P) ukáže, co je na které vrstvě: počty čar, ploch,
+bodů, textů a buněk, celkovou délku a plochu, barvy, styly, tloušťky a písmo. Vrstvy, kde prvky
+nemají jednotný vzhled, jsou žlutě; dvojklik vrstvu ukáže samotnou. U cizího výkresu je to
+nejlepší začátek.
 
 Topologické kontroly mají parametr **Jen hladiny**, který kontrolu omezí na vybrané
 hladiny (např. `PARCELY, PLOTY*`).
@@ -511,10 +515,14 @@ Okno *Kontrola → Kontrola výpočtu souřadnic* má záložky:
 * **Mapa odchylek** – stanoviska a body, šipky = zvětšený rozdíl vašeho bodu,
 * **Postup výpočtu** – koeficient, výšky stanovisek, orientační posuny.
 
-### Kokeš, Atlas DMT, katastr (VFK), LibreOffice
+### Kokeš, Atlas DMT, katastr (VFK), GIS (SHP, GeoJSON), LibreOffice
 
 * **VFK** (výměnný formát katastru, s daty pracuje např. Kokeš) jde otevřít jako výkres: body, hranice
   parcel, budovy, vnitřní kresba a čísla parcel (v souřadnicích jako výkres z MicroStationu).
+* **GIS data** – **Shapefile** (.shp + .dbf) a **GeoJSON** z QGISu, ArcGISu nebo Geoportálu jdou otevřít
+  jako výkres. Vrstva se vezme z atributu LAYER / VRSTVA / HLADINA, jinak z názvu souboru; atributy
+  z .dbf jsou u prvků. Fungují topologické, geometrické i kartografické kontroly (sada *Cizí výkres*).
+  Data mají být v metrech (S-JTSK), ne ve stupních WGS-84. Automatická oprava je jen pro DXF.
 * Kresbu z **Kokeše**, **Atlasu DMT** i **AutoCADu** exportujte do DXF (Nápověda → Kokeš, Atlas DMT…).
 * Tabulky atributů lze nahrát i jako **.ods** (LibreOffice / OpenOffice Calc).
 * Binární seznam souřadnic (Kokeš .ss, Groma .crd) aplikace pozná a poradí export do textu.

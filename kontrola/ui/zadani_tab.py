@@ -25,7 +25,7 @@ from .rules_editor import RulesEditor
 from .table_import import ImportSummaryDialog, TableImportWizard
 
 TABLE_EXT = {".xlsx", ".xlsm", ".xls", ".ods", ".csv", ".txt", ".tsv", ".pdf"}
-DRAWING_EXT = {".dxf", ".dgn", ".dwg", ".vfk"}
+DRAWING_EXT = {".dxf", ".dgn", ".dwg", ".vfk", ".shp", ".geojson"}
 
 
 def _is_point_list(path: str) -> bool:

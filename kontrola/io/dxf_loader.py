@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import re
+import struct
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -516,5 +517,12 @@ def load_drawing(path: str | Path, progress: ProgressFn | None = None,
     if suffix == ".vfk":
         from .vfk import read_vfk
         return read_vfk(p, progress)
+    if suffix in (".shp", ".geojson", ".json"):
+        from .gis import GisError, read_geojson, read_shapefile
+        try:
+            return (read_shapefile if suffix == ".shp" else read_geojson)(p, progress)
+        except (GisError, OSError, struct.error) as e:
+            raise DrawingLoadError(str(e)) from e
     raise DrawingLoadError(f"Nepodporovaný formát souboru: {p.suffix}. Použijte DXF (z MicroStationu, Kokeše "
-                           "i Atlasu DMT jde výkres uložit/exportovat jako DXF), nebo VFK z katastru.")
+                           "i Atlasu DMT jde výkres uložit/exportovat jako DXF), VFK z katastru, nebo "
+                           "Shapefile / GeoJSON z GIS.")

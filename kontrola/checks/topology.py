@@ -185,19 +185,27 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
             for a_, g_ in zip(pi[keep], gi[keep]):
                 k = ks[int(a_)]
                 part = parts[int(a_)]
-                inter = _safe_intersection(part, an.geoms[g_])
-                cands = list(_points_of(inter))
-                # konec linie zajíždí po navazující čáře (společný úsek) – přetah je délka překryvu
+                og = an.geoms[g_]
                 end_pt = an.pgeoms[k]
+                eps = max(ctx.precision, 1e-4)
+                if og.distance(end_pt) <= eps and og.distance(Point(part.coords[0])) <= eps and \
+                        og.distance(Point(part.coords[-1])) <= eps:
+                    # koncový kus leží celý na druhé čáře (překryv) – průsečíky z nepřesnosti výpočtu
+                    # nejsou přetažení; společný úsek se vezme z obálky druhé čáry
+                    inter = _safe_intersection(part, og.buffer(eps, cap_style="flat"))
+                    cands = []
+                else:
+                    inter = _safe_intersection(part, og)
+                    cands = list(_points_of(inter))
+                # konec linie zajíždí po navazující čáře (společný úsek) – přetah je délka překryvu
                 for piece in getattr(inter, "geoms", [inter]):
                     if piece.geom_type == "LineString" and piece.length > ctx.precision and \
                             piece.distance(end_pt) <= ctx.precision:
                         a, b = piece.coords[0][:2], piece.coords[-1][:2]
                         far = a if Point(a).distance(end_pt) > Point(b).distance(end_pt) else b
-                        og = an.geoms[g_]
                         oc = list(og.coords) if og.geom_type == "LineString" else []
                         # jen když na konci překryvu navazující čára končí (ne duplicitní čáry na sobě)
-                        if oc and min(math.dist(far, oc[0][:2]), math.dist(far, oc[-1][:2])) <= ctx.precision:
+                        if oc and min(math.dist(far, oc[0][:2]), math.dist(far, oc[-1][:2])) <= eps:
                             cands.append(far)
                 for p in cands:
                     along = part.project(Point(p))
@@ -606,10 +614,25 @@ class PrusecikyBezUzlu(Check):
             keep_b.append(b[s:s + step][m])
         a = np.concatenate(keep_a) if keep_a else a[:0]
         b = np.concatenate(keep_b) if keep_b else b[:0]
+        ov_eps = max(ctx.precision, 1e-4)
+
+        def overlapping(i: int, j: int, p) -> bool:
+            """Leží čáry u bodu po sobě (překryv)? To hlásí kontrola překryvu, ne průsečík."""
+            r = 0.05
+            try:
+                near = geoms[i].intersection(Point(p).buffer(r))
+                on = near.intersection(geoms[j].buffer(ov_eps, cap_style="flat"))
+            except shapely.errors.GEOSException:
+                return False
+            return on.length >= 0.4 * r
+
         for i, j, inter in zip(a, b, inters):
             for p in _points_of(inter):
                 vi, vj = has_vertex(i, p), has_vertex(j, p)
                 key = (round(p[0], 3), round(p[1], 3))
+                if key not in seen and overlapping(i, j, p):
+                    seen.add(key)
+                    continue
                 if vi and vj:
                     # MGEO-styl: linie mají být v uzlu rozdělené (končit v něm), ne jen mít lomový bod
                     # (T-spojení, kde jedna linie v uzlu končí, se podle zadání dělit nemusí)
@@ -636,7 +659,7 @@ class NulovaDelka(Check):
     id = "nulova_delka"
     nazev = "Prvek nulové délky"
     skupina = "Topologie"
-    popis = "Linie nulové délky, polygon s nulovou plochou, kružnice s nulovým poloměrem, prázdný text."
+    popis = "Linie nulové délky, polygon s nulovou plochou, kružnice s nulovým poloměrem, prázdný text nebo text s nulovou výškou."
     vychozi_zavaznost = Severity.CHYBA
     parametry = [LAYERS_PARAM]
 
@@ -668,6 +691,8 @@ class NulovaDelka(Check):
             elif f.geom_type == GeomType.TEXT:
                 if not (f.text or "").strip():
                     yield ctx.issue(self, f, "Prázdný text")
+                elif f.dxftype in ("TEXT", "MTEXT") and f.text_height <= 0:
+                    yield ctx.issue(self, f, f"Text „{f.text.strip()[:20]}“ má nulovou výšku (není vidět)")
             elif f.dxftype == "CIRCLE" and f.radius <= eps:
                 yield ctx.issue(self, f, "Kružnice s nulovým poloměrem")
             elif f.dxftype == "INSERT" and (abs(f.scale[0]) <= 1e-12 or abs(f.scale[1]) <= 1e-12):

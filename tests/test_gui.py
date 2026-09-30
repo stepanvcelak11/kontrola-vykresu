@@ -635,3 +635,65 @@ def test_co_zkontrolovat(window, monkeypatch):
     assert tb.widgetForAction(w.a_check).menu() is not None
     w.run_preset("Jako učitel")
     assert w._wait(lambda: _idle(w), 60)
+
+
+def test_gis_vykres_v_okne(window, tmp_path, monkeypatch):
+    import json
+    from PySide6.QtWidgets import QMessageBox
+    p = tmp_path / "gis.geojson"
+    p.write_text(json.dumps({"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"layer": "Cesty"},
+         "geometry": {"type": "LineString", "coordinates": [[-600000, -1150000], [-600010, -1150000]]}},
+        {"type": "Feature", "properties": {"layer": "Cesty"},
+         "geometry": {"type": "LineString", "coordinates": [[-600010.005, -1150000], [-600010.005, -1150010]]}},
+        {"type": "Feature", "properties": {"layer": "Budovy"},
+         "geometry": {"type": "Polygon", "coordinates": [[[-600000, -1150020], [-599990, -1150020],
+                                                          [-599990, -1150030], [-600000, -1150020]]]}}]}), "utf-8")
+    w = window
+    w.open_path(str(p))
+    assert w._wait(lambda: _idle(w) and w.drawing is not None and w.drawing.path == str(p), 30)
+    w.run_checks()
+    assert w._wait(lambda: _idle(w) and w.issues, 60)
+    assert any(i.check_id == "chybejici_napojeni" for i in w.issues)
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: shown.append(a[2]))
+    w.repair()  # oprava umí jen DXF – jen vysvětlí
+    assert shown and "jen výkres DXF" in shown[0]
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_prehled_vykresu(window):
+    from PySide6.QtCore import Qt
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    w.a_prehled.trigger()
+    dlg = w._prehled_dlg
+    t = dlg.table
+    assert t.rowCount() == len({f.layer for f in w.drawing.features})
+    assert sum(int(t.item(r, 1).text()) for r in range(t.rowCount())) == len(w.drawing.features)
+    t.selectRow(0)
+    name = dlg.selected_layer()
+    dlg.only_layer()
+    lst = w.layers.list
+    on = [lst.item(i).data(Qt.UserRole) for i in range(lst.count()) if lst.item(i).checkState() == Qt.Checked]
+    assert on == [name]
+    dlg._show_layers(None)
+    dlg.copy()
+    dlg.close()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_uvod_bez_pravidel_nabidne_cizi_vykres(window):
+    w = window
+    assert not w.project.rules.pravidla
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    w.home.refresh()
+    assert "bez pravidel" in w.home.next_btn.text()
+    w.home._next_action()
+    assert w._wait(lambda: _idle(w) and w.issues, 60)
+    assert not w.project.config.settings("symbologie").zapnuto
+    assert w.project.config.settings("spicka").zapnuto
+    w.home.refresh()
+    assert "Zadání" in w.home.next_btn.text()

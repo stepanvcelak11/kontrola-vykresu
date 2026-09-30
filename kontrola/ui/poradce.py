@@ -42,6 +42,9 @@ FAQ = [
     ("Jak opravit chyby v MicroStationu krok za krokem", "opravit postup pruvodce microstation souradnice keyin",
      "<b>Kontrola → Opravný průvodce</b> (Ctrl+G): chyby jedna po druhé, seřazené podle polohy, s přesným "
      "postupem, souřadnicemi cíle a key-inem ke zkopírování. Opravujete sami v DGN, výkres zůstane váš."),
+    ("Otevřít data z GIS (Shapefile, GeoJSON)", "gis qgis arcgis shapefile shp geojson dbf vrstvy",
+     "<b>Otevřít výkres</b> a vyberte .shp (s .dbf vedle) nebo .geojson. Vrstva se vezme z atributu "
+     "LAYER / VRSTVA, jinak z názvu souboru. Pak <b>Co zkontrolovat → Cizí výkres (bez pravidel)</b>."),
     ("Vybrat, co se má kontrolovat", "vybrat co kontrolovat zaskrtnout sada vse jen topologie atributy cizi "
      "vykres bez pravidel geometrie",
      "<b>Kontrola → Co zkontrolovat…</b> (Ctrl+Shift+K) nebo šipka u tlačítka <b>Zkontrolovat</b>: zaškrtněte "

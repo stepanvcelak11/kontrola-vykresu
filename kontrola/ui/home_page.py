@@ -213,6 +213,7 @@ class HomePage(QScrollArea):
         grid = QGridLayout()
         grid.setSpacing(8)
         items = [("Co zkontrolovat", win.show_check_selection, "zkontrolovat"),
+                 ("Přehled výkresu", win.show_overview, "seznam"),
                  ("Opravný průvodce", win.show_fix_guide, "oprava"),
                  ("Ověřit seznam souřadnic", win.verify_list, "seznam"),
                  ("Spojnice podle náčrtu", win.verify_lines, "nacrt"),
@@ -356,9 +357,21 @@ class HomePage(QScrollArea):
         self.c_ode.status.setText(f"Odevzdáno {od} z {MAX_ODEVZDANI}.<br>Před odevzdáním spusťte úplnou "
                                   "kontrolu s tolerancemi učitele.")
         self.c_ode.set_state(True if od else None)
-        if not n_rules:
+        if not n_rules and d is not None and not checked:
+            txt, btn, act = ("Výkres je načtený, ale chybí pravidla (Směrnice). Zkontrolujte ho sadou „Cizí výkres“ "
+                             "– topologie, geometrie a vzhled mapy fungují i bez pravidel.",
+                             "Zkontrolovat bez pravidel",
+                             lambda: (win.tabs.setCurrentWidget(win.split),
+                                      win.run_preset("Cizí výkres (bez pravidel)")))
+        elif not n_rules and d is None:
             txt, btn, act = ("Nahrajte zadání – Směrnici (Excel/PDF) a Word od učitele. Z nich vzniknou pravidla "
-                             "kontroly.", "Otevřít Zadání", lambda: win.tabs.setCurrentWidget(win.zadani))
+                             "kontroly. Nebo rovnou otevřete jakýkoli výkres a zkontrolujte ho bez pravidel.",
+                             "Otevřít Zadání", lambda: win.tabs.setCurrentWidget(win.zadani))
+        elif not n_rules:
+            todo = sum(1 for i in issues if i.state == "nová" and i.severity.value != "info")
+            txt, btn, act = (f"Zkontrolováno bez pravidel – k opravě {todo} míst. Pro kontrolu vrstev, barev a stylů "
+                             "nahrajte Směrnici v záložce Zadání.", "Otevřít Zadání",
+                             lambda: win.tabs.setCurrentWidget(win.zadani))
         elif d is None:
             txt, btn, act = ("Otevřete svůj výkres – DXF uložený z MicroStationu, nebo rovnou DGN.",
                              "Otevřít výkres…", win.open_dialog)

@@ -226,10 +226,6 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Prvek leží daleko od ostatní kresby – omylem kliknutý bod, prvek v počátku souřadnic nebo kopie mimo "
         "mapu. Kvůli němu je „Zobrazit vše“ skoro prázdné.<br><br><b>Oprava:</b> přibližte si chybu, prvek "
         "vyberte a smažte, nebo ho přesuňte na správné místo."),
-    "prazdny_text": (
-        "Prázdný nebo neviditelný text",
-        "Text bez znaků nebo s nulovou výškou – na výkrese není vidět, ale je v souboru.<br><br><b>Oprava:</b> "
-        "text smažte (výběr ohradou), nebo doplňte obsah a výšku."),
     "rozdelena_cara": (
         "Zbytečně rozdělená čára",
         "Dvě stejné čáry navazují v přímém směru a v místě napojení nic není – mohla by to být jedna.<br><br>"

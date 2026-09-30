@@ -24,8 +24,8 @@ from .settings_dialog import SettingsDialog
 from .worker import BackgroundTask
 from .zadani_tab import ZadaniTab
 
-DRAWING_FILTER = ("Výkresy (*.dxf *.dgn *.dwg *.vfk);;DXF (*.dxf);;DGN (*.dgn);;VFK – katastr (*.vfk);;"
-                  "Všechny soubory (*)")
+DRAWING_FILTER = ("Výkresy (*.dxf *.dgn *.dwg *.vfk *.shp *.geojson);;DXF (*.dxf);;DGN (*.dgn);;"
+                  "VFK – katastr (*.vfk);;GIS – Shapefile, GeoJSON (*.shp *.geojson *.json);;Všechny soubory (*)")
 
 
 class MainWindow(QMainWindow):
@@ -238,6 +238,8 @@ class MainWindow(QMainWindow):
         self.a_predikce = self._act("Učitelův pohled – předpověď protokolu…", self.show_prediction, None,
                                     "Co nejspíš nahlásí učitel (naučeno z jeho dřívějších protokolů) + náhled "
                                     "protokolu v jeho formátu")
+        self.a_prehled = self._act("Přehled výkresu…", self.show_overview, "Ctrl+Shift+P",
+                                   "Co je na které vrstvě: počty prvků, barvy, styly, tloušťky, písmo, délky")
         self.a_timeline = self._act("Časová osa výkresu…", self.show_timeline, "Ctrl+H",
                                     "Všechny uložené verze výkresu: přehrát, porovnat, vytáhnout smazané prvky")
         self.a_spojnice = self._act("Spojnice podle náčrtu…", self.verify_lines, None,
@@ -299,6 +301,7 @@ class MainWindow(QMainWindow):
         m_check = self.menuBar().addMenu("&Kontrola")
         m_check.addAction(self.a_check)
         m_check.addAction(self.a_vyber)
+        m_check.addAction(self.a_prehled)
         m_check.addAction(self.a_recheck)
         m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
@@ -764,7 +767,7 @@ class MainWindow(QMainWindow):
         suffix = Path(path).suffix.lower()
         if suffix == PROJECT_EXT:
             self.open_project(path)
-        elif suffix in (".dxf", ".dgn", ".dwg", ".vfk"):
+        elif suffix in (".dxf", ".dgn", ".dwg", ".vfk", ".shp", ".geojson"):
             if self.tabs.currentWidget() is self.zadani and \
                     self.zadani.tabs.currentWidget() is self.zadani.template_page:
                 self.zadani.template_page.set_template(path)
@@ -941,6 +944,11 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
             return
         if self.task is not None and self.task.is_running():
+            return
+        if Path(self.drawing.path).suffix.lower() != ".dxf":
+            QMessageBox.information(self, APP_NAME, "Automatická oprava umí upravit jen výkres DXF. Tento výkres "
+                                                    f"({Path(self.drawing.path).suffix}) opravte ve svém programu – "
+                                                    "pomůže Opravný průvodce (Ctrl+G).")
             return
         from ..repair import repair_drawing
         from .repair_dialog import RepairDialog
@@ -1153,6 +1161,14 @@ class MainWindow(QMainWindow):
         if self.drawing is not None:
             self.a_check.trigger()
 
+    def show_overview(self):
+        from .prehled_dialog import PrehledDialog
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres.")
+            return
+        self._prehled_dlg = PrehledDialog(self)
+        self._prehled_dlg.show()
+
     def show_check_selection(self):
         from .vyber_kontrol import VyberKontrol
         dlg = VyberKontrol(self)
@@ -1203,7 +1219,7 @@ class MainWindow(QMainWindow):
     def batch_check(self):
         start = self.settings.value("cesty/vykres", str(Path.home()))
         files, _ = QFileDialog.getOpenFileNames(self, "Výkresy ke kontrole", start,
-                                                "Výkresy (*.dxf *.vfk);;Všechny soubory (*)")
+                                                DRAWING_FILTER)
         if not files:
             return
         from .batch_dialog import BatchDialog

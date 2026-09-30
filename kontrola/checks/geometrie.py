@@ -200,25 +200,6 @@ class ZatoulanyPrvek(Check):
 
 
 @register
-class PrazdnyText(Check):
-    id = "prazdny_text"
-    nazev = "Prázdný nebo neviditelný text"
-    skupina = "Kartografie"
-    popis = ("Text bez obsahu (jen mezery) nebo s nulovou výškou – na výkrese není vidět, ale v souboru je "
-             "a počítá se do prvků vrstvy.")
-    vychozi_zavaznost = Severity.VAROVANI
-
-    def run(self, ctx: CheckContext):
-        for f in ctx.features():
-            if f.geom_type != GeomType.TEXT or f.dxftype not in ("TEXT", "MTEXT"):
-                continue
-            if not (f.text or "").strip():
-                yield ctx.issue(self, f, "Prázdný text (bez znaků)")
-            elif f.text_height <= 0:
-                yield ctx.issue(self, f, f"Text „{f.text.strip()[:20]}“ má nulovou výšku")
-
-
-@register
 class RozdelenaCara(Check):
     id = "rozdelena_cara"
     nazev = "Zbytečně rozdělená čára"

@@ -20,10 +20,14 @@ FUNKCE = [
         ("Co zkontrolovat", "Zaškrtnete, co se má na výkrese kontrolovat, nebo zvolíte hotovou sadu (jako "
          "učitel, vše, jen topologie, vzhled mapy, cizí výkres bez pravidel). Nabídka je i u šipky tlačítka "
          "Zkontrolovat.", "a_vyber"),
+        ("Přehled výkresu", "Co je na které vrstvě: počty čar, ploch, bodů, textů a buněk, délky, barvy, styly, "
+         "tloušťky a písmo; vrstvy s nejednotným vzhledem žlutě. Pro cizí výkres ideální začátek.", "a_prehled"),
         ("Obecná kontrola geometrie", "Na jakýkoli výkres: zbytečné lomové body, špičky (čára se vrací), "
          "nepatrné a úzké plochy, překryv čar, nečitelně malý text.", "a_vyber"),
         ("Kartografická kontrola", "Popisy přes sebe, popis přeškrtnutý čarou, číslo bodu daleko od bodu, "
          "popis vzhůru nohama – to, co učitel vidí okem na mapě.", "a_check"),
+        ("GIS data (Shapefile, GeoJSON)", "Data z QGISu / ArcGISu se otevřou jako výkres – vrstvy podle "
+         "atributu, atributy z .dbf; kontroly topologie a geometrie jako u výkresu.", "a_open"),
         ("Otevřít DGN přímo", "Výkres z MicroStationu V8i / CONNECT se čte přímo z DGN (experimentálně): "
          "vrstvy, přesné barvy, tloušťky a styly, texty, buňky, oblouky.", "a_open"),
         ("Připraveno k odevzdání?", "Souhrn: co ještě chybí, skóre a co opravit jako první.", "a_ready"),

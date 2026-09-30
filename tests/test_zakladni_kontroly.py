@@ -260,7 +260,7 @@ def test_zatoulany_prvek_prazdny_text_rozdelena_cara(make_dxf):
     d = make_dxf(build, name="obecne.dxf")
     z = check(d, "zatoulany_prvek")
     assert len(z) == 1 and z[0].x > 4000
-    assert [i.message for i in check(d, "prazdny_text")] == ["Prázdný text (bez znaků)"]
+    assert [i.message for i in check(d, "nulova_delka")] == ["Prázdný text"]
     from kontrola.config import Config
     cfg = Config()
     cfg.settings("rozdelena_cara").zapnuto = True  # ve výchozím stavu vypnutá
