@@ -270,8 +270,9 @@ class JednotnostHladiny(Check):
     parametry = [
         Param("min_prvku", "Jen vrstvy s aspoň N prvky", "int", 5),
         Param("min_podil", "Převažující hodnota musí mít podíl aspoň [%]", "float", 70.0),
-        Param("jen_bez_pravidla", "Jen prvky bez pravidla", "bool", True,
-              "Prvky s pravidlem kontroluje přesněji kontrola „Vrstva, barva nebo styl“."),
+        Param("jen_bez_pravidla", "Jen vlastnosti, které pravidlo nepředepisuje", "bool", True,
+              "Barvu, styl, tloušťku či písmo předepsané pravidlem kontroluje přesněji kontrola „Symbologie“; "
+              "tady se porovná jen to, co pravidlo nechává volné."),
     ]
 
     def run(self, ctx: CheckContext):
@@ -319,16 +320,20 @@ class JednotnostHladiny(Check):
                     yield ctx.issue(self, f, f"{_what(f)} na vrstvě {layer}, kde jsou jinak jen "
                                              f"{_KIND_PLURAL[odd_kind]} ({kcnt}×) – není na špatné vrstvě?")
                     continue
-                if only_free and ctx.rule_for(f) is not None:
-                    continue
                 diffs = []
+                r = ctx.rule_for(f) if only_free else None
                 for name, (val, key, members) in dominant.items():
+                    if r is not None and getattr(r, _RULE_FIELD.get(name, ""), None) not in (None, ""):
+                        continue  # tuto vlastnost předepisuje pravidlo – hlídá ji kontrola Symbologie
                     if id(f) in members and key(f) != val:
                         diffs.append(_describe_prop(name, key(f), val, ctx, f))
                 if diffs:
                     yield ctx.issue(self, f, f"{_what(f)} se liší od ostatních na vrstvě {layer}: " + ", ".join(diffs))
 
 
+# vlastnost → pole pravidla; předepisuje-li ji pravidlo, porovnává ji kontrola Symbologie
+_RULE_FIELD = {"barva": "barva", "styl": "styl_cary", "tloušťka": "tloustka", "výška písma": "vyska_textu",
+               "písmo": "font"}
 _KIND_PLURAL = {"text": "texty", "značka": "značky (buňky)", "bod": "body", "čára": "čáry a plochy"}
 
 
