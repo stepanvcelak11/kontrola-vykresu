@@ -470,6 +470,12 @@ def read_dxf(path: str | Path, progress: ProgressFn | None = None) -> Drawing:
     return _Loader(doc, path, progress).run()
 
 
+def dgn_native_ok(p: Path, oda_path: str | None) -> bool:
+    """Číst DGN vlastní čtečkou? Ano u DGN V8, když není ODA File Converter (ten převede i písmo a styly)."""
+    from .dgn import dgn_version, find_oda_converter
+    return dgn_version(p) == "V8" and find_oda_converter(oda_path) is None
+
+
 def load_drawing(path: str | Path, progress: ProgressFn | None = None,
                  oda_path: str | None = None) -> Drawing:
     """Načte DXF, případně DGN/DWG přes ODA File Converter."""
@@ -481,6 +487,17 @@ def load_drawing(path: str | Path, progress: ProgressFn | None = None,
         from .dgn import convert_to_dxf
         # DXF se stejným názvem vedle DGN (uložený z MicroStationu / dávkovým převodem)
         sibling = next((s for s in (p.with_suffix(".dxf"), p.with_suffix(".DXF")) if s.is_file()), None)
+        if suffix == ".dgn" and (sibling is None or sibling.stat().st_mtime + 1 < p.stat().st_mtime) \
+                and dgn_native_ok(p, oda_path):
+            # DGN V8 bez DXF (nebo DXF je starší) – vlastní čtení DGN, bez převodu
+            from .dgn_v8 import DgnError, read_dgn
+            try:
+                d = read_dgn(p, progress)
+                if sibling is not None:
+                    d.warnings.insert(0, f"{sibling.name} je starší než {p.name} – kontroluje se přímo DGN.")
+                return d
+            except DgnError:
+                pass
         if sibling is not None:
             d = read_dxf(sibling, progress)
             d.source_path = str(sibling)

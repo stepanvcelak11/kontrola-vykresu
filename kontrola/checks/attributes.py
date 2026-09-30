@@ -9,7 +9,8 @@ import numpy as np
 import shapely
 
 from ..model import Feature, GeomType
-from ..rules import color_known, color_matches, font_style, layer_matches, layer_number, linetype_matches
+from ..rules import (color_known, color_matches, font_style, layer_matches, layer_number, linetype_matches,
+                     weight_values)
 from .base import Check, CheckContext, Param, Severity, fmt_num, register
 
 
@@ -97,7 +98,7 @@ class Symbologie(Check):
             if r.hladina and not r.matches_layer(f.layer):
                 diffs.append(f"vrstva {f.layer} (má být {r.hladina})")
             if do_color and r.barva is not None:
-                if not color_known(r.barva, pal, table):
+                if not color_known(r.barva, pal, table) and "MS_BARVA" not in f.attributes:
                     unknown_colors.add(r.barva)
                 elif not color_matches(r.barva, f, pal, table):
                     got = rs.describe_feature_color(f)
@@ -108,7 +109,11 @@ class Symbologie(Check):
                     diffs.append(f"barva {got} (má být {r.barva})")
             linear = f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
             unexported = False
-            if do_style and r.styl_cary and linear and not linetype_matches(r.styl_cary, f.linetype):
+            if do_style and r.styl_cary and linear and f.linetype == "VLASTNI_STYL":
+                # DGN: vlastní styl čáry – jeho název je v knihovně stylů, ne ve výkresu
+                if not re.search(r"\d+\.\d+", str(r.styl_cary)):
+                    diffs.append(f"styl vlastní (id {f.attributes.get('MS_STYL')}) (má být {r.styl_cary})")
+            elif do_style and r.styl_cary and linear and not linetype_matches(r.styl_cary, f.linetype):
                 if _custom_style_not_exported(r.styl_cary, f, ctx.drawing.linetypes):
                     unexported = True
                 else:
@@ -127,7 +132,13 @@ class Symbologie(Check):
                 iss.severity = Severity.VAROVANI
                 yield iss
                 continue
-            if do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT:
+            if do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT and \
+                    f.attributes.get("MS_TLOUSTKA") is not None:
+                wants = [int(w) for w in weight_values(r.tloustka) if float(w).is_integer() and 0 <= w <= 31]
+                got = int(f.attributes["MS_TLOUSTKA"])
+                if wants and got not in wants:
+                    diffs.append(f"tloušťka {got} (má být {' nebo '.join(map(str, wants))})")
+            elif do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT:
                 # tloušťka MicroStationu (wt 0–31) se v DXF ověří přes převodní tabulku na mm
                 expected, unknown = rs.expected_weights(r)
                 ms_weights.update(unknown)
@@ -138,8 +149,8 @@ class Symbologie(Check):
                                  f"tloušťka {fmt_num(f.lineweight, 2)} mm (má být {r.tloustka})")
             if f.geom_type == GeomType.TEXT and do_text:
                 diffs += _text_diffs(r, f, rs)
-            if f.geom_type == GeomType.TEXT and do_font and r.font and \
-                    _norm_font(r.font) not in _norm_font(f.font):
+            if f.geom_type == GeomType.TEXT and do_font and r.font and f.attributes.get("ZDROJ") != "DGN" and \
+                    _norm_font(r.font) not in _norm_font(f.font):  # z DGN se písmo nečte
                 diffs.append(f"font {f.font or '–'} (má být {r.font})")
             if diffs:
                 yield ctx.issue(self, f, f"{_what(f)} (pravidlo „{r.nazev or r.kod}“): " + ", ".join(diffs))

@@ -821,6 +821,9 @@ def color_matches(expected: int | str, f: Feature, palette: str = "microstation"
     alts = _color_alts(expected)
     if len(alts) > 1:
         return any(color_matches(c, f, palette, table) for c in alts)
+    ms = f.attributes.get("MS_BARVA") if f.attributes else None
+    if ms is not None and palette == "microstation" and isinstance(expected, int):
+        return int(ms) == expected  # výkres čtený přímo z DGN: přesné číslo barvy
     if isinstance(expected, int) and palette == "autocad" and f.color_aci is not None:
         if expected == f.color_aci:
             return True
