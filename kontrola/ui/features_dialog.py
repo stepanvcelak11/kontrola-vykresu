@@ -23,7 +23,9 @@ FUNKCE = [
         ("Přehled výkresu", "Co je na které vrstvě: počty čar, ploch, bodů, textů a buněk, délky, barvy, styly, "
          "tloušťky a písmo; vrstvy s nejednotným vzhledem označené ⚠. Pro cizí výkres ideální začátek.", "a_prehled"),
         ("Obecná kontrola geometrie", "Na jakýkoli výkres: zbytečné lomové body, špičky (čára se vrací), "
-         "nepatrné a úzké plochy, překryv čar, nečitelně malý text.", "a_vyber"),
+         "nepatrné a úzké plochy, překryv čar, zatoulané prvky, nečitelně malý text.", "a_vyber"),
+        ("Čísla bodů a popisy", "Stejné číslo bodu dvakrát, bod bez čísla, číslo daleko od bodu, popisy "
+         "jiného tvaru (245.3 místo 245.37), text nebo bod na špatné vrstvě.", "a_vyber"),
         ("Kartografická kontrola", "Popisy přes sebe, popis přeškrtnutý čarou, číslo bodu daleko od bodu, "
          "popis vzhůru nohama – to, co učitel vidí okem na mapě.", "a_check"),
         ("GIS data (Shapefile, GeoJSON)", "Data z QGISu / ArcGISu se otevřou jako výkres – vrstvy podle "
