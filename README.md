@@ -186,6 +186,11 @@ Otevřete ukázkový výkres a stiskněte F5.
 * **Seznam souřadnic** (výstup z Gromy, `číslo Y X Z`) přetáhněte do okna nebo přidejte na
   Podklady. Kontrola pak najde body, které ve výkresu chybí nebo jsou posunuté, špatná čísla
   bodů a špatné výšky u bodů. Osy a znaménka S-JTSK se poznají samy.
+* **Kontrola → Spojnice podle náčrtu…**: zapíšete, co je v náčrtu spojené (jeden řádek = jedna čára,
+  např. `plot: 1-2-3-4`, `budova 10-11-12-13-10`), a aplikace podle seznamu souřadnic ověří, že každý úsek
+  máte ve výkresu nakreslený – *nakresleno / chybí / jiná vrstva / nakresleno jinak (oblouk, lomená)*.
+  Slovo před čísly (plot, budova…) se porovná s názvy pravidel a hlídá se i vrstva. Do výkresu se nic
+  nevkládá, kreslíte sami. Zápis se uloží do projektu.
 * **Kontrola → Kontrola výpočtu souřadnic (zápisník)…**: zadejte zápisník z totální stanice
   (formát Gromy `.zap`), dané body (stanoviska, orientace a nivelační bod – např.
   `gnss_husovice.txt` a body z ČÚZK, viz `podklady/zadani2-husovice/dane_body.txt`) a svůj
@@ -504,6 +509,25 @@ mimo Směrnici** na vrstvu, kam podle barvy a typu patří. Uzly do **T-napojen�
 místo vypíše k ruční opravě. Výkres s kresbou v referenci umí také. Ověřeno na výkresech obou zadání:
 geometrie se posune nejvýš o toleranci (0,018 m). Podle zadání se automaticky opravený výkres
 neuznává – slouží k tomu, abyste viděli, co opravit v MicroStationu.
+
+### Opravný průvodce pro MicroStation (Ctrl+G)
+
+Kontrola → **Opravný průvodce**: chyby k opravě jedna po druhé, seřazené podle polohy (od levého horního
+rohu vždy k nejbližší další – v MicroStationu se nepřeskakuje po mapě). U každé chyby je přesný postup
+s čísly: který konec čáry, o kolik chybí nebo přečnívá, **souřadnice cíle** (lomový bod sousední čáry,
+průsečík, bod ze seznamu) a **key-iny** ke zkopírování (`WINDOW CENTER;XY=…`, `XY=…` pro AccuDraw).
+Tlačítka *Opraveno – další*, *Přeskočit*, *Ignorovat*; okno zůstává nahoře vedle MicroStationu.
+**Opravný list (HTML)** dá všechny kroky na jednu stránku k vytištění. Opravujete ručně v DGN, takže
+výkres zůstane váš.
+
+### Porovnání s PDF od učitele (kresba)
+
+Zadání → **Vzor**: PDF uložené z MicroStationu (vektorové, ne sken) → *Porovnat s kontrolovaným
+výkresem*. Kromě popisů se teď porovná i **kresba**: PDF se samo umístí do souřadnic výkresu (popisy, které
+jsou v PDF i ve výkresu jen jednou, dají shodné body; pak se umístění zpřesní přiložením čar), a ukáže
+**čáry, které ve výkresu chybí** (červeně čárkovaně) a **čáry navíc** (modře). Dvojklik na řádek přiblíží
+místo. Na zadání 1 najde schválně smazanou čáru s přesností pod 1 m; přesnost umístění (typicky 20–40 cm)
+je v tabulce. Slouží jen ke kontrole – nic se nepřenáší.
 
 ### Když se něco pokazí
 
