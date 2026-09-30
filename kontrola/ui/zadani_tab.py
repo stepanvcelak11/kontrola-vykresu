@@ -424,7 +424,8 @@ class TemplatePage(QWidget):
         lay = QVBoxLayout(self)
         intro = QLabel("<b>Vzor od učitele</b>: <b>DXF/DGN</b> – načtou se vrstvy, barvy, styly a buňky, lze z něj "
                        "vytvořit pravidla a porovnat výkres. <b>PDF</b> – porovnají se popisy (čísla parcel, bodů, "
-                       "č.p.) a vzor lze vložit pod výkres. <b>JPG/PNG</b> (náčrt, sken) – slouží jako podklad "
+                       "č.p.) i kresba (PDF se samo umístí na výkres a ukáže chybějící čáry) a vzor lze vložit "
+                       "pod výkres. <b>JPG/PNG</b> (náčrt, sken) – slouží jako podklad "
                        "pod výkresem k vizuálnímu porovnání.")
         intro.setWordWrap(True)
         lay.addWidget(intro)
@@ -473,6 +474,8 @@ class TemplatePage(QWidget):
         self.diff.setAlternatingRowColors(True)
         for c, wd in enumerate((120, 200, 160, 190)):
             self.diff.setColumnWidth(c, wd)
+        self.diff.cellDoubleClicked.connect(self._diff_go)
+        self._diff_geoms: dict[int, object] = {}
         split.addWidget(self.diff)
         lay.addWidget(split, 1)
 
@@ -605,6 +608,8 @@ class TemplatePage(QWidget):
             from ..importer.pdf_vzor import compare_labels
             missing, extra = compare_labels(self.pdf_labels, d)
             self.diff.setRowCount(0)
+            self._diff_geoms = {}
+            geo = self._compare_pdf_geometry(d)
             for lab in missing:
                 self._diff_row(["Popis", lab, "ano", "–", "Popis ze vzoru ve výkresu chybí"])
             for lab in extra:
@@ -612,7 +617,7 @@ class TemplatePage(QWidget):
             self.diff.resizeColumnsToContents()
             fit_headers(self.diff)
             self.status.setText(f"Popisy: chybí {len(missing)}, navíc {len(extra)} "
-                                f"(ze {len(self.pdf_labels)} ve vzoru)")
+                                f"(ze {len(self.pdf_labels)} ve vzoru) · Kresba: {geo}")
             return
         if self.info is None:
             QMessageBox.information(self, "Vzor", "Nejdřív načtěte vzor.")
@@ -633,6 +638,52 @@ class TemplatePage(QWidget):
             QMessageBox.information(self, "Porovnání", "Vrstvy, barvy, styly i buňky odpovídají vzoru.")
         else:
             self.status.setText(f"Porovnání: {len(diffs)} rozdílů")
+
+    def _compare_pdf_geometry(self, d) -> str:
+        """Kresba z vektorového PDF: umístí PDF na výkres a najde chybějící / přebývající čáry."""
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QApplication
+
+        from ..importer.pdf_geometrie import compare_pdf, fmt, point_on
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            res = compare_pdf(self.tab.project.root / self._loaded_rel, d)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not res.ok:
+            self._diff_row(["Kresba", "–", "", "", res.zprava])
+            return "nelze porovnat"
+        self._diff_row(["Kresba", "umístění PDF", f"{res.shod_popisu} shodných popisů", f"přesnost {fmt(res.presnost)}",
+                        res.zprava])
+        for g in res.chybi:
+            c = point_on(g)
+            self._diff_geoms[self.diff.rowCount()] = g
+            self._diff_row(["Kresba", f"čára {g.length:.1f} m", "ano", "chybí",
+                            f"Ve vzoru je čára, ve výkresu ne (u {c.x:.2f}, {c.y:.2f}) – dvojklik ukáže místo"])
+        for f, g in res.navic:
+            c = point_on(g)
+            self._diff_geoms[self.diff.rowCount()] = g
+            self._diff_row(["Kresba", f"{f.dxftype} ({f.layer})", "není", f"{g.length:.1f} m",
+                            f"Čára ve výkresu, která ve vzoru není (u {c.x:.2f}, {c.y:.2f})"])
+        win = self.window()
+        if hasattr(win, "view"):
+            from types import SimpleNamespace
+
+            from ..model import GeomType
+            items = [(SimpleNamespace(geom_type=GeomType.LINIE, geometry=g), QColor("#DC2626"), True) for g in res.chybi]
+            items += [(SimpleNamespace(geom_type=GeomType.LINIE, geometry=g), QColor("#2563EB"), False)
+                      for _, g in res.navic]
+            win.view.set_overlay(items)
+        return f"chybí {len(res.chybi)}, navíc {len(res.navic)} ({res.pokryti_pdf * 100:.0f} % vzoru nakresleno)"
+
+    def _diff_go(self, row, _col):
+        g = self._diff_geoms.get(row)
+        win = self.window()
+        if g is None or not hasattr(win, "view"):
+            return
+        c = g.centroid
+        win.tabs.setCurrentWidget(win.split)
+        win.view.zoom_to(c.x, c.y, max(10.0, g.length * 1.3))
 
     def _diff_row(self, vals: list[str]):
         r = self.diff.rowCount()

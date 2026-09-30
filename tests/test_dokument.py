@@ -82,3 +82,25 @@ def test_hodnoty_ze_zadani_do_nastaveni(tmp_path):
     assert s["pismo"] == "Arial Narrow"
     assert abs(s["tolerance"][0] - 0.005) < 1e-12
     assert s["format"] == "DGN"
+
+
+NAHLED = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "Vcelak_13_a0_t0 - nahled.pdf"
+VCELAK = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "Vcelak_13_navic.dxf"
+
+
+@pytest.mark.skipif(not (NAHLED.exists() and VCELAK.exists()), reason="data chybí")
+def test_pdf_vzor_najde_chybejici_caru(tmp_path):
+    import ezdxf
+
+    from kontrola.importer.pdf_geometrie import compare_pdf
+    from kontrola.io.dxf_loader import load_drawing
+    r = compare_pdf(NAHLED, load_drawing(VCELAK))
+    assert r.ok and not r.chybi and r.shod_popisu >= 3 and r.presnost < 0.5
+    doc = ezdxf.readfile(VCELAK)
+    msp = doc.modelspace()
+    e = max(msp.query("LINE"), key=lambda e: e.dxf.start.distance(e.dxf.end))
+    mid = (e.dxf.start + e.dxf.end) / 2
+    msp.delete_entity(e)
+    doc.saveas(tmp_path / "bez.dxf")
+    r = compare_pdf(NAHLED, load_drawing(tmp_path / "bez.dxf"))
+    assert len(r.chybi) == 1 and r.chybi[0].distance(__import__("shapely").Point(mid.x, mid.y)) < 1.0

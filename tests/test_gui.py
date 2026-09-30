@@ -485,3 +485,19 @@ def test_spojnice_okno(window, tmp_path):
     assert dlg.isVisible()
     dlg.run()  # bez seznamu jen upozorní
     dlg.close()
+
+
+Z1 = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation"
+
+
+@pytest.mark.skipif(not (Z1 / "Vcelak_13_a0_t0 - nahled.pdf").exists(), reason="data chybí")
+def test_vzor_pdf_porovna_kresbu(window):
+    w = window
+    w.load_drawing_file(Z1 / "Vcelak_13_navic.dxf")
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    pg = w.zadani.template_page
+    pg.set_template(str(Z1 / "Vcelak_13_a0_t0 - nahled.pdf"))
+    pg.compare()
+    rows = [pg.diff.item(r, 1).text() for r in range(pg.diff.rowCount()) if pg.diff.item(r, 0).text() == "Kresba"]
+    assert "umístění PDF" in rows
+    assert "Kresba" in pg.status.text()
