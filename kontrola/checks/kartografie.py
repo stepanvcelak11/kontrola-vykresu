@@ -125,7 +125,8 @@ class CisloBoduDaleko(Check):
     popis = ("Číslo bodu (text z číslic) je daleko od nejbližšího bodu, takže není jasné, ke kterému bodu patří – "
              "často po posunu bodu nebo textu. Číslo má být hned u značky bodu.")
     vychozi_zavaznost = Severity.VAROVANI
-    parametry = [Param("max_vzdalenost", "Nejvýš [× výška písma]", "float", 4.0),
+    parametry = [Param("max_vzdalenost", "Nejvýš [× výška písma] (mez se zpřísní podle ostatních čísel)",
+                       "float", 4.0),
                  Param("vrstvy_cisel", "Vrstvy čísel bodů (prázdné = poznat samo)", "layers", "")]
 
     def run(self, ctx: CheckContext):
@@ -156,11 +157,19 @@ class CisloBoduDaleko(Check):
             return
         tree = shapely.STRtree(np.array([p.geometry for p in pts], dtype=object))
         k = float(ctx.param("max_vzdalenost", 4.0))
+        dist = {}
         for t in texts:
             box = text_box(t) or t.geometry
             j = tree.nearest(box)
-            d = box.distance(pts[j].geometry)
-            if d > k * _h(t):
+            dist[id(t)] = (j, box.distance(pts[j].geometry))
+        # mez podle toho, jak daleko jsou čísla ve výkresu obvykle (90 % na vrstvě ×4), aspoň 2× výška písma
+        limit: dict[str, float] = {}
+        for lay in {t.layer for t in texts}:
+            r = [dist[id(t)][1] / _h(t) for t in texts if t.layer == lay]
+            limit[lay] = min(k, max(2.0, 4.0 * float(np.percentile(r, 90)))) if len(r) >= 5 else k
+        for t in texts:
+            j, d = dist[id(t)]
+            if d > limit[t.layer] * _h(t):
                 yield ctx.issue(self, [t, pts[j]], f"Číslo bodu {t.text.strip()} je {fmt_m(d)} od nejbližšího bodu",
                                 at=(t.geometry.x, t.geometry.y))
 
