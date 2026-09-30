@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QDialog, QHBoxLa
 from ..checks.base import fmt_num
 from ..prehled import popis_counter, prehled, souradnicovy_system
 
-COLS = ["Vrstva", "Prvků", "Čáry", "Plochy", "Body", "Texty", "Buňky", "Délka [m]", "Plocha [m²]", "Barva",
+COLS = ["Vrstva", "Prvků", "Chyb", "Čáry", "Plochy", "Body", "Texty", "Buňky", "Délka [m]", "Plocha [m²]", "Barva",
         "Styl čáry", "Tloušťka", "Písmo / výška"]
 
 
@@ -44,15 +44,22 @@ class PrehledDialog(QDialog):
         warn = QColor(themed("#B45309"))
         bold = t.font()
         bold.setBold(True)
+        from collections import Counter as _Counter
+        chyb = _Counter(i.layer for i in (getattr(win, "issues", None) or []) if i.state == "nová")
+        C_BARVA, C_STYL, C_TL = COLS.index("Barva"), COLS.index("Styl čáry"), COLS.index("Tloušťka")
         for r, v in enumerate(rows):
             pis = popis_counter(v.pisma, 2)
             if v.vysky:
                 pis += (" · " if pis else "") + popis_counter(_vysky(v.vysky), 2)
-            vals = [v.nazev, v.celkem, v.linie, v.plochy, v.body, v.texty, v.bunky,
+            vals = [v.nazev, v.celkem, chyb.get(v.nazev, 0), v.linie, v.plochy, v.body, v.texty, v.bunky,
                     fmt_num(v.delka, 1) if v.delka else "", fmt_num(v.plocha, 1) if v.plocha else "",
                     popis_counter(v.barvy), popis_counter(v.styly), popis_counter(v.tloustky), pis]
             for c, val in enumerate(vals):
                 it = QTableWidgetItem()
+                if c == 2 and val:
+                    it.setForeground(QColor(themed("#DC2626")))
+                    it.setFont(bold)
+                    it.setToolTip("Počet neopravených problémů na vrstvě z poslední kontroly")
                 if isinstance(val, int):
                     if val or c == 1:
                         it.setData(Qt.DisplayRole, val)
@@ -60,12 +67,12 @@ class PrehledDialog(QDialog):
                 else:
                     it.setText(str(val))
                     it.setToolTip(str(val))
-                multi = {9: v.barvy, 10: v.styly, 11: v.tloustky}.get(c)
+                multi = {C_BARVA: v.barvy, C_STYL: v.styly, C_TL: v.tloustky}.get(c)
                 if multi is not None and len(multi) > 1:
                     it.setText("⚠ " + it.text())
                     it.setForeground(warn)
                     it.setFont(bold)
-                if c == 9 and v.rgb:
+                if c == C_BARVA and v.rgb:
                     it.setIcon(_swatch(v.rgb.most_common(1)[0][0]))
                 t.setItem(r, c, it)
         t.setSortingEnabled(True)
@@ -77,10 +84,10 @@ class PrehledDialog(QDialog):
         for c in range(COLS.index("Plocha [m²]") + 1):
             hh.setSectionResizeMode(c, QHeaderView.Interactive)
         t.setColumnWidth(0, min(max(t.columnWidth(0), 160), 300))
-        for c in range(1, 7):
+        for c in range(1, COLS.index("Délka [m]")):
             t.setColumnWidth(c, 68)
-        t.setColumnWidth(7, 92)
-        t.setColumnWidth(8, 104)
+        t.setColumnWidth(COLS.index("Délka [m]"), 92)
+        t.setColumnWidth(COLS.index("Plocha [m²]"), 104)
         t.doubleClicked.connect(lambda _i: self.only_layer())
         lay.addWidget(t, 1)
         note = QLabel("Dvojklik na vrstvu ji ukáže samotnou. ⚠ = na vrstvě jsou prvky s různou barvou, stylem "

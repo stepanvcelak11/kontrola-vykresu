@@ -696,6 +696,7 @@ def test_prehled_vykresu(window):
     t = dlg.table
     assert t.rowCount() == len({f.layer for f in w.drawing.features})
     assert sum(int(t.item(r, 1).text()) for r in range(t.rowCount())) == len(w.drawing.features)
+    assert t.horizontalHeaderItem(2).text() == "Chyb"
     t.selectRow(0)
     name = dlg.selected_layer()
     dlg.only_layer()
