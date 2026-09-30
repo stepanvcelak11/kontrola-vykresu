@@ -158,3 +158,18 @@ def test_spojnice_podle_nacrtu(make_dxf, tmp_path):
     assert [s.body for s in parse_spojnice(text)] == [["1", "2", "3", "4"], ["2", "5"], ["4", "77"]]
     res = verify_lines(d, read_point_list(f), text, rs)
     assert [r.stav for r in res] == ["ok", "ok", "vrstva", "chybi", "bod"]
+
+
+def test_opravny_postup_presne_souradnice(make_dxf):
+    from kontrola.opravny_postup import krok, poradi
+
+    def build(msp, doc):
+        msp.add_line((0, 0), (10, 0), dxfattribs={"layer": "A"})
+        msp.add_line((5, 0.006), (5, 5), dxfattribs={"layer": "B"})  # nedotažení 6 mm
+    d = make_dxf(build, name="postup.dxf")
+    iss = [i for i in check(d, "chybejici_napojeni")]
+    assert iss
+    k = krok(iss[0], d)
+    assert ("Souřadnice cíle (vložte do AccuDraw / zadání bodu)", "XY=5.000,0.000") in k.keyins
+    assert any("6,0 mm" in s for s in k.postup)
+    assert poradi(iss) == iss

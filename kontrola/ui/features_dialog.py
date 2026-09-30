@@ -23,6 +23,9 @@ FUNKCE = [
         ("Automatická oprava", "Do nového souboru: smaže duplicity a nulové délky, dotáhne a zkrátí čáry, vloží "
          "uzly, rozdělí čáry v uzlu, uzavře plochy, odstraní zbytečné lomové body, přichytí body těsně u čáry, "
          "smaže zdvojené body, přesune prvky na správnou vrstvu. Originál zůstane beze změny.", "a_repair"),
+        ("Opravný průvodce (MicroStation)", "Chyby jedna po druhé, seřazené podle polohy: přesně odkud kam "
+         "posunout vrchol, o kolik, souřadnice cíle a key-in ke zkopírování. Opravujete sami v DGN; "
+         "opravný list jde i vytisknout.", "a_fixguide"),
         ("Návod ke každé chybě", "U chyby postup v MicroStationu krok za krokem s obrázkem.", None),
         ("Rychlé tipy – MicroStation", "Rovnoběžka, kolmice, prodloužení, AccuDraw, přichycení…", "_tips"),
     ]),
@@ -39,6 +42,8 @@ FUNKCE = [
          "(vrstvy, barvy, tloušťky, písmo).", "_zadani"),
         ("Pokyny ze Wordu / PDF", "Požadavky („musí / nesmí“), měřítko, písmo, tolerance – s tlačítkem "
          "„Použít v nastavení“.", "_dokumenty"),
+        ("Porovnat s PDF od učitele", "Vektorové PDF z MicroStationu se samo umístí na výkres podle popisů a "
+         "ukáže čáry, které vám chybí nebo přebývají (Zadání → Vzor → Porovnat).", "_vzor"),
         ("Náčrt vedle výkresu", "Fotka náčrtu nebo PDF vzor vedle kresby, i s georeferencí.", "a_sketch"),
     ]),
     ("Porovnání a protokoly", [
@@ -131,6 +136,8 @@ class FeaturesDialog(QDialog):
             "_tips": w.show_tips, "_guide": w.show_guide, "_shortcuts": w.show_shortcuts,
             "_poradce": lambda: (w.poradce_dock.show(), w.poradce_dock.raise_()),
             "_zadani": lambda: w.tabs.setCurrentWidget(w.zadani),
+            "_vzor": lambda: (w.tabs.setCurrentWidget(w.zadani),
+                              w.zadani.tabs.setCurrentWidget(w.zadani.template_page)),
             "_dokumenty": lambda: (w.tabs.setCurrentWidget(w.zadani),
                                    w.zadani.tabs.setCurrentWidget(w.zadani.documents_page)),
         }

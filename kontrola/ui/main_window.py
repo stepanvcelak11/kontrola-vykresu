@@ -220,6 +220,8 @@ class MainWindow(QMainWindow):
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
         self.a_seznam = self._act("Ověřit seznam souřadnic…", self.verify_list, "Ctrl+J",
                                   "Sedí body ve výkresu na seznam souřadnic? (poloha, čísla, výšky, body navíc)")
+        self.a_fixguide = self._act("Opravný průvodce (MicroStation)…", self.show_fix_guide, "Ctrl+G",
+                                    "Chyby jedna po druhé s přesným postupem a souřadnicemi pro MicroStation")
         self.a_spojnice = self._act("Spojnice podle náčrtu…", self.verify_lines, None,
                                     "Je nakreslené všechno, co je v náčrtu spojené? (plot 1-2-3…)")
         self.a_batch = self._act("Zkontrolovat více výkresů najednou…", self.batch_check, None,
@@ -282,6 +284,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_ready)
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
+        m_check.addAction(self.a_fixguide)
         m_check.addAction(self.a_seznam)
         m_check.addAction(self.a_spojnice)
         m_check.addAction(self.a_batch)
@@ -998,6 +1001,15 @@ class MainWindow(QMainWindow):
             return
         dlg = SeznamDialog(self, path)
         self._seznam_dlg = dlg
+        dlg.show()
+
+    def show_fix_guide(self):
+        from .pruvodce_opravou import PruvodceOpravou
+        if self.drawing is None or not self.issues:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete výkres a zkontrolujte ho (F5).")
+            return
+        dlg = PruvodceOpravou(self)
+        self._fix_dlg = dlg
         dlg.show()
 
     def verify_lines(self):

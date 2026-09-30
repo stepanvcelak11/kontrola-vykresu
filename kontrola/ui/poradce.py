@@ -39,6 +39,15 @@ FAQ = [
     ("Ověřit body podle seznamu souřadnic", "seznam souradnic overit body sedi posunuty chybi cislo vyska",
      "<b>Kontrola → Ověřit seznam souřadnic</b> (Ctrl+J): vyberte seznam (číslo Y X Z). Tabulka ukáže body "
      "chybějící, posunuté, se špatným číslem nebo výškou a body navíc; dvojklik bod přiblíží."),
+    ("Jak opravit chyby v MicroStationu krok za krokem", "opravit postup pruvodce microstation souradnice keyin",
+     "<b>Kontrola → Opravný průvodce</b> (Ctrl+G): chyby jedna po druhé, seřazené podle polohy, s přesným "
+     "postupem, souřadnicemi cíle a key-inem ke zkopírování. Opravujete sami v DGN, výkres zůstane váš."),
+    ("Spojnice podle náčrtu", "nacrt spojnice spojene body plot nakresleno chybi cara",
+     "<b>Kontrola → Spojnice podle náčrtu</b>: napište např. <i>plot: 1-2-3-4</i> a aplikace ověří, že tyto "
+     "čáry ve výkresu máte (a na správné vrstvě)."),
+    ("Porovnat s PDF od učitele", "pdf vzor porovnat kresba chybi cara ucitel",
+     "<b>Zadání → Vzor</b>: nahrajte PDF z MicroStationu a klikněte <b>Porovnat</b>. PDF se samo umístí na "
+     "výkres podle popisů a ukáže čáry, které vám chybí nebo přebývají."),
     ("Co aplikace umí", "co umis umi funkce prehled vsechno nastroje",
      "Přehled všech funkcí s tlačítkem Spustit: <b>Nápověda → Co aplikace umí</b> nebo odkaz na Úvodu."),
     ("MGEO – limit a kontrola ploch", "mgeo gisoft limit blizko plochy definicni bod popis parcela",

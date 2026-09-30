@@ -191,7 +191,8 @@ class HomePage(QScrollArea):
         grid.setSpacing(8)
         items = [("Ověřit seznam souřadnic", win.verify_list), ("Spojnice podle náčrtu", win.verify_lines),
                  ("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
-                 ("Rychlé tipy MicroStation", win.show_tips), ("Co znamenají chyby", win.show_help),
+                 ("Opravný průvodce", win.show_fix_guide),
+                 ("Rychlé tipy MicroStation", win.show_tips),
                  ("Seznam k opravě (PDF)", lambda: win.export("todo")), ("Protokol od učitele", win.compare_teacher),
                  ("Hromadná kontrola", win.batch_check), ("Protokol HTML", lambda: win.export("html")),
                  ("Průvodce", win.show_guide), ("Nastavení kontrol", win.edit_settings)]

@@ -501,3 +501,27 @@ def test_vzor_pdf_porovna_kresbu(window):
     rows = [pg.diff.item(r, 1).text() for r in range(pg.diff.rowCount()) if pg.diff.item(r, 0).text() == "Kresba"]
     assert "umístění PDF" in rows
     assert "Kresba" in pg.status.text()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_opravny_pruvodce(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication, QFileDialog
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.a_fixguide.trigger()
+    dlg = w._fix_dlg
+    n = len(dlg.items)
+    assert n > 0 and "XY=" in dlg.body.toHtml()
+    first = dlg.items[0]
+    dlg.b_done.click()
+    assert first.state == "opraveno" and dlg.i == 1
+    from PySide6.QtCore import QUrl
+    dlg._copy_link(QUrl("copy:XY=1.000,2.000"))
+    assert QApplication.clipboard().text() == "XY=1.000,2.000"
+    out = tmp_path / "list.html"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+    dlg.save_list()
+    assert out.read_text(encoding="utf-8").count("class='k'") == n
+    dlg.close()
