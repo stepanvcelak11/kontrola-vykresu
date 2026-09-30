@@ -169,7 +169,7 @@ class IssueMarker(QGraphicsItem):
         rect = QRectF(-r, -r, 2 * r, 2 * r)
         if IssueMarker.show_labels and self.label_on:
             rect = rect.united(QRectF(self.RADIUS + 2, -self.RADIUS - self._label_h,
-                                      self._label_w + 4, self._label_h + 4))
+                                      self._label_w + 10, self._label_h + 6))
         return rect
 
     def shape(self) -> QPainterPath:
@@ -186,7 +186,7 @@ class IssueMarker(QGraphicsItem):
 
     def label_rect(self) -> QRectF:
         r = self.RADIUS
-        return QRectF(r + 4, -r - self._label_h + 2, self._label_w, self._label_h)
+        return QRectF(r + 4, -r - self._label_h + 2, self._label_w + 6, self._label_h)
 
     def set_highlighted(self, on: bool):
         if on != self.highlighted:
@@ -222,14 +222,20 @@ class IssueMarker(QGraphicsItem):
             painter.drawLine(QPointF(-3, 0), QPointF(3, 0))
             painter.drawLine(QPointF(0, -3), QPointF(0, 3))
         if IssueMarker.show_labels and self.label_on and state == "nová":
-            rect = QRectF(r + 4, -r - self._label_h + 2, self._label_w, self._label_h)
-            bg = QColor(255, 255, 255, 225)
-            painter.setPen(QPen(c, 1))
-            painter.setBrush(bg)
-            painter.drawRoundedRect(rect, 3, 3)
+            rect = QRectF(r + 4, -r - self._label_h + 2, self._label_w + 6, self._label_h)
+            shadow = QColor(0, 0, 0, 40)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(shadow)
+            painter.drawRoundedRect(rect.translated(0, 1.5), 5, 5)
+            painter.setBrush(QColor(255, 255, 255, 240))
+            painter.setPen(QPen(QColor(c.red(), c.green(), c.blue(), 150), 1))
+            painter.drawRoundedRect(rect, 5, 5)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(c)
+            painter.drawRoundedRect(QRectF(rect.left() + 1.5, rect.top() + 3, 3, rect.height() - 6), 1.5, 1.5)
             painter.setFont(self._font)
-            painter.setPen(QColor(20, 20, 20))
-            painter.drawText(rect, Qt.AlignCenter, self._label)
+            painter.setPen(QColor(17, 24, 39))
+            painter.drawText(rect.adjusted(7, 0, 0, 0), Qt.AlignVCenter | Qt.AlignLeft, self._label)
 
 
 class PathBuilder:
@@ -434,6 +440,8 @@ class DrawingView(QGraphicsView):
             self._declutter_timer.timeout.connect(self._declutter)
         self._declutter_timer.start()
 
+    MAX_LABELS = 30  # víc popisků najednou už nejde přečíst – další ukáže přiblížení
+
     def _declutter(self):
         """Popisky kroužků se nesmí překrývat: přednost mají závažnější chyby, ostatní ukáže přiblížení."""
         self._last_view = self._view_state()
@@ -443,19 +451,28 @@ class DrawingView(QGraphicsView):
         vr = QRectF(self.viewport().rect()).adjusted(-50, -50, 50, 50)
         items = [m for m in self.markers.values() if m.isVisible()]
         items.sort(key=lambda m: (m.issue.state != "nová", m.issue.severity.rank, m.issue.number))
+        pos = {id(m): self.mapFromScene(m.scenePos()) for m in items}
+        # popisek nesmí zakrýt žádný kroužek (ani méně závažné chyby) – jinak se výkres slije
+        # (závažnější chyby mají přednost: popisek chyby smí překrýt kroužek méně závažného nálezu)
+        circles = [(id(m), m.issue.severity.rank,
+                    QRectF(p.x() - m.RADIUS - 2, p.y() - m.RADIUS - 2, 2 * m.RADIUS + 4, 2 * m.RADIUS + 4))
+                   for m in items for p in (pos[id(m)],) if vr.contains(QPointF(p))]
+        shown = 0
         for m in items:
-            p = self.mapFromScene(m.scenePos())
+            p = pos[id(m)]
             if not vr.contains(QPointF(p)):
                 m.set_label_on(False)
                 continue
             lr = m.label_rect().translated(p.x(), p.y())
-            circle = QRectF(p.x() - m.RADIUS, p.y() - m.RADIUS, 2 * m.RADIUS, 2 * m.RADIUS)
             ok = (m.issue.state == "nová" and m.issue.severity != Severity.INFO  # info jen kroužek + tooltip
-                  and not any(lr.intersects(o) for o in placed))
+                  and shown < self.MAX_LABELS
+                  and not any(lr.intersects(o) for o in placed)
+                  and not any(k != id(m) and rank <= m.issue.severity.rank and lr.intersects(c)
+                              for k, rank, c in circles))
             m.set_label_on(ok or m.highlighted)
-            placed.append(circle)
             if ok:
                 placed.append(lr)
+                shown += 1
 
     def drawForeground(self, painter: QPainter, rect: QRectF):  # noqa: N802
         """Prázdný výkres: nápověda uprostřed okna."""

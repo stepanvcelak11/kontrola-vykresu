@@ -9,7 +9,8 @@ from PySide6.QtCore import (QAbstractTableModel, QItemSelectionModel, QModelInde
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, QGroupBox, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
-                               QPushButton, QSplitter, QTableView, QVBoxLayout, QWidget)
+                               QPushButton, QSplitter, QStyle, QStyledItemDelegate, QTableView, QVBoxLayout,
+                               QWidget)
 
 from ..checks.base import ISSUE_STATES, Issue, Severity, fmt_num
 from .drawing_view import SEVERITY_COLORS
@@ -43,6 +44,43 @@ def _dot(color: QColor, faded: bool) -> QPixmap:
         p.end()
         _DOTS[key] = pm
     return _DOTS[key]
+
+
+class BadgeDelegate(QStyledItemDelegate):
+    """Závažnost a stav jako barevný štítek (pilulka) – na první pohled čitelné."""
+
+    def paint(self, painter, option, index):
+        opt = option
+        self.initStyleOption(opt, index)
+        text = opt.text
+        opt.text = ""
+        opt.icon = type(opt.icon)()
+        style = opt.widget.style() if opt.widget else None
+        if style is not None:
+            style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        brush = index.data(Qt.ForegroundRole)
+        col = brush.color() if isinstance(brush, QBrush) else QColor(107, 114, 128)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        f = QFont(opt.font)
+        f.setBold(True)
+        f.setPointSizeF(max(7.5, f.pointSizeF() - 0.8))
+        painter.setFont(f)
+        fm = painter.fontMetrics()
+        w = min(opt.rect.width() - 8, fm.horizontalAdvance(text) + 18)
+        h = fm.height() + 4
+        r = opt.rect.adjusted(4, 0, 0, 0)
+        r.setWidth(w)
+        r.setTop(opt.rect.center().y() - h // 2)
+        r.setHeight(h)
+        bg = QColor(col)
+        bg.setAlpha(34)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(bg)
+        painter.drawRoundedRect(r, h / 2, h / 2)
+        painter.setPen(col)
+        painter.drawText(r, Qt.AlignCenter, text)
+        painter.restore()
 
 
 class IssueModel(QAbstractTableModel):
@@ -262,11 +300,20 @@ class IssuePanel(QWidget):
             self.quick[key] = b
             qrow.addWidget(b)
         qrow.addStretch(1)
+        self.b_filter = QPushButton("Filtr ▾")
+        self.b_filter.setCheckable(True)
+        self.b_filter.setToolTip("Podrobný filtr: typy kontrol, závažnost, vrstva, skrytí opravených")
+        qrow.addWidget(self.b_filter)
         self.b_help = QPushButton("? Co to znamená")
         self.b_help.setToolTip("Vysvětlení vybraného typu chyby s obrázkem (a dalších pojmů)")
         self.b_help.clicked.connect(self.explain)
         qrow.addWidget(self.b_help)
         lay.addLayout(qrow)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("🔍  Hledat v popisu, vrstvě, čísle chyby…")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._filters_changed)
+        lay.addWidget(self.search)
 
         split = QSplitter(Qt.Vertical)
         lay.addWidget(split, 1)
@@ -311,12 +358,11 @@ class IssuePanel(QWidget):
         self.hide_done = QCheckBox("Skrýt opravené a ignorované")
         self.hide_done.toggled.connect(self._filters_changed)
         fl.addWidget(self.hide_done)
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Hledat v popisu, vrstvě, čísle chyby…")
-        self.search.setClearButtonEnabled(True)
-        self.search.textChanged.connect(self._filters_changed)
-        fl.addWidget(self.search)
         split.addWidget(fbox)
+        self.fbox = fbox
+        fbox.setVisible(False)  # rychlé filtry a hledání stačí; podrobný filtr na tlačítko „Filtr“
+        self.b_filter.toggled.connect(lambda on: (fbox.setVisible(on),
+                                                  self.b_filter.setText("Filtr ▴" if on else "Filtr ▾")))
 
         # ---- tabulka
         tw = QWidget()
@@ -330,7 +376,10 @@ class IssuePanel(QWidget):
         self.table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
-        self.table.verticalHeader().setDefaultSectionSize(26)
+        self.table.verticalHeader().setDefaultSectionSize(30)
+        self._badges = BadgeDelegate(self.table)
+        self.table.setItemDelegateForColumn(C_SEV, self._badges)
+        self.table.setItemDelegateForColumn(C_STATE, self._badges)
         self.table.setShowGrid(False)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)

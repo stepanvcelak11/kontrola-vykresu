@@ -48,7 +48,10 @@ class DropArea(QFrame):
         self.setAcceptDrops(True)
         self.setFrameShape(QFrame.StyledPanel)
         self.setMinimumHeight(70)
-        self.setStyleSheet("DropArea { border: 2px dashed palette(mid); border-radius: 6px; }")
+        from .theme import themed
+        self.setStyleSheet(f"DropArea {{ border: 2px dashed {themed('#93C5FD')}; border-radius: 12px; "
+                           f"background: {themed('#EFF6FF')}; }} QLabel {{ color: {themed('#1D4ED8')}; "
+                           "font-weight: 600; background: transparent; }")
         lay = QVBoxLayout(self)
         lab = QLabel(text)
         lab.setAlignment(Qt.AlignCenter)

@@ -72,6 +72,8 @@ class MainWindow(QMainWindow):
         self.zadani.georefRequested.connect(self.start_georef)
 
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("hlavni_zalozky")
+        self.tabs.setDocumentMode(True)
         self.tabs.addTab(self.split, "Výkres a chyby")
         self.tabs.addTab(self.zadani, "Zadání")
         self.tabs.currentChanged.connect(self._tab_changed)
@@ -118,6 +120,8 @@ class MainWindow(QMainWindow):
         self.home.openRecent.connect(self.open_path)
         self.tabs.insertTab(0, self.home, "Úvod")
         self.tabs.setCurrentWidget(self.home)
+        self.tabs.setIconSize(QSize(18, 18))
+        self._apply_icons()
         self._init_watch()
         self._restore_geometry()
         if project is not None:
@@ -370,12 +374,20 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
         tb.addAction(self.a_exp_pdf)
         a_por = self.poradce_dock.toggleViewAction()
+        self.a_poradce = a_por
         a_por.setText("Poradce")
         a_por.setShortcut(QKeySequence("Ctrl+K"))
         a_por.setToolTip("Zeptejte se na cokoli – odpověď z návodů aplikace (Ctrl+K, diktování Win+H)")
         tb.addAction(a_por)
         self.addToolBar(tb)
         self.toolbar = tb
+        # méně časté přepínače jen jako ikona (text je v tooltipu) – lišta se vejde i na menší monitor
+        for a in (self.a_wip, self.a_region, self.a_fit, self.a_labels, self.a_sketch):
+            b = tb.widgetForAction(a)
+            if b is not None:
+                b.setToolButtonStyle(Qt.ToolButtonIconOnly)
+                b.setToolTip(a.text().replace("&", "") + (f" – {a.toolTip()}" if a.toolTip() and
+                                                            a.toolTip() != a.text() else ""))
         # hlavní akce je zvýrazněná (bílá ikona na modrém tlačítku)
         btn = tb.widgetForAction(self.a_check)
         if btn is not None:
@@ -385,13 +397,24 @@ class MainWindow(QMainWindow):
         self._apply_icons()
 
     def _apply_icons(self):
-        from .theme import icon
+        from .theme import icon, themed
         for a, name in ((self.a_open, "otevrit"), (self.a_check, "zkontrolovat"), (self.a_recheck, "znovu"),
                         (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
                         (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
                         (self.a_sketch, "nacrt"), (self.a_exp_pdf, "pdf"), (self.a_wip, "rozpracovany"),
-                        (self.a_region, "vyrez"), (self.a_ready, "odevzdat")):
-            a.setIcon(icon(name))
+                        (self.a_region, "vyrez"), (self.a_ready, "odevzdat"), (self.a_seznam, "seznam"),
+                        (self.a_timeline, "casova_osa"), (self.a_print_preview, "tisk"),
+                        (getattr(self, "a_poradce", None), "poradce")):
+            if a is not None:
+                a.setIcon(icon(name))
+        if getattr(self, "tabs", None) is not None:
+            for i in range(self.tabs.count()):
+                w = self.tabs.widget(i)
+                name = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else \
+                    "zadani" if w is self.zadani else None
+                if name:
+                    self.tabs.setTabIcon(i, icon(name, themed("#2563EB") if i == self.tabs.currentIndex()
+                                                 else themed("#6B7280")))
         if getattr(self, "toolbar", None) is not None:
             self.a_check.setIcon(icon("zkontrolovat", "#FFFFFF"))  # bílá ikona na modrém tlačítku
 
@@ -645,6 +668,8 @@ class MainWindow(QMainWindow):
 
     def _tab_changed(self, index: int):
         """Panel vrstev patří k výkresu – na záložce Zadání jen zabírá místo."""
+        if hasattr(self, "toolbar"):
+            self._apply_icons()  # ikona vybrané záložky v barvě zvýraznění
         if not hasattr(self, "layers_dock"):
             return
         on_drawing = self.tabs.widget(index) is self.split

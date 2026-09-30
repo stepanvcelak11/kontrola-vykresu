@@ -90,6 +90,7 @@ class StepCard(QFrame):
         col = {True: "#16A34A", False: "#2563EB", None: "#9CA3AF"}[done]
         self.badge.setText("✓" if done else str(self.number))
         self.badge.setStyleSheet(f"background:{col}; color:white; border-radius:15px; font-weight:700;")
+        self.setStyleSheet(f"QFrame#karta {{ border-top: 3px solid {col}; }}")
 
 
 class HomePage(QScrollArea):
@@ -106,7 +107,11 @@ class HomePage(QScrollArea):
         lay = QVBoxLayout(inner)
         lay.setContentsMargins(28, 22, 28, 22)
         lay.setSpacing(18)
-        head = QHBoxLayout()
+        hero = QFrame()
+        hero.setObjectName("hero")
+        head = QHBoxLayout(hero)
+        head.setContentsMargins(22, 18, 22, 18)
+        head.setSpacing(16)
         logo = QLabel()
         try:
             from ..resources import resource_path
@@ -124,7 +129,25 @@ class HomePage(QScrollArea):
         tbox.addWidget(self.title)
         tbox.addWidget(self.subtitle)
         head.addLayout(tbox, 1)
-        lay.addLayout(head)
+        nbox = QVBoxLayout()
+        nbox.setSpacing(6)
+        cap = QLabel("DALŠÍ KROK")
+        cap.setStyleSheet("color:#BFDBFE; font-size:8pt; font-weight:800; letter-spacing:1px;")
+        self.next_step = QLabel()
+        self.next_step.setWordWrap(True)
+        self.next_step.setMaximumWidth(420)
+        self.next_step.setStyleSheet("font-size:10.5pt; font-weight:500;")
+        self.next_btn = QPushButton()
+        self.next_btn.setCursor(Qt.PointingHandCursor)
+        self.next_btn.setStyleSheet("QPushButton { background: white; color: #1D4ED8; border: none; border-radius: 8px;"
+                                    " padding: 7px 16px; font-weight: 700; } QPushButton:hover { background: #EFF6FF; }")
+        self.next_btn.clicked.connect(lambda: self._next_action() if self._next_action else None)
+        self._next_action = None
+        nbox.addWidget(cap)
+        nbox.addWidget(self.next_step)
+        nbox.addWidget(self.next_btn, 0, Qt.AlignLeft)
+        head.addLayout(nbox)
+        lay.addWidget(hero)
 
         steps = QHBoxLayout()
         steps.setSpacing(14)
@@ -189,21 +212,31 @@ class HomePage(QScrollArea):
         tl.addWidget(lab)
         grid = QGridLayout()
         grid.setSpacing(8)
-        items = [("Ověřit seznam souřadnic", win.verify_list), ("Spojnice podle náčrtu", win.verify_lines),
-                 ("Kontrola výpočtu (Groma)", win.show_vypocet), ("Porovnat verze výkresu", win.compare_versions),
-                 ("Opravný průvodce", win.show_fix_guide),
-                 ("Rychlé tipy MicroStation", win.show_tips),
-                 ("Seznam k opravě (PDF)", lambda: win.export("todo")), ("Protokol od učitele", win.compare_teacher),
-                 ("Hromadná kontrola", win.batch_check), ("Protokol HTML", lambda: win.export("html")),
-                 ("Průvodce", win.show_guide), ("Nastavení kontrol", win.edit_settings)]
+        items = [("Opravný průvodce", win.show_fix_guide, "oprava"),
+                 ("Ověřit seznam souřadnic", win.verify_list, "seznam"),
+                 ("Spojnice podle náčrtu", win.verify_lines, "nacrt"),
+                 ("Kontrola výpočtu (Groma)", win.show_vypocet, "zkontrolovat"),
+                 ("Časová osa výkresu", win.show_timeline, "casova_osa"),
+                 ("Porovnat verze výkresu", win.compare_versions, "znovu"),
+                 ("Učitelův pohled", win.show_prediction, "odevzdat"),
+                 ("Protokol od učitele", win.compare_teacher, "pdf"),
+                 ("Seznam k opravě (PDF)", lambda: win.export("todo"), "pdf"),
+                 ("Náhled tisku v měřítku", win.print_preview, "tisk"),
+                 ("Hromadná kontrola", win.batch_check, "seznam"),
+                 ("Rychlé tipy MicroStation", win.show_tips, "poradce")]
         all_b = QPushButton("Co všechno aplikace umí →")
         all_b.setFlat(True)
         all_b.setCursor(Qt.PointingHandCursor)
         all_b.setStyleSheet("color:#2563EB; text-align:right;")
         all_b.clicked.connect(win.show_features)
-        for k, (text, slot) in enumerate(items):
+        from .theme import icon
+        for k, (text, slot, ic) in enumerate(items):
             b = QPushButton(text)
-            b.setMinimumHeight(34)
+            b.setObjectName("nastroj")
+            b.setIcon(icon(ic, "#2563EB"))
+            b.setIconSize(QSize(18, 18))
+            b.setCursor(Qt.PointingHandCursor)
+            b.setMinimumHeight(36)
             b.clicked.connect(lambda _c=False, s=slot: s())
             grid.addWidget(b, k // 2, k % 2)
         tl.addLayout(grid)
@@ -322,6 +355,26 @@ class HomePage(QScrollArea):
         self.c_ode.status.setText(f"Odevzdáno {od} z {MAX_ODEVZDANI}.<br>Před odevzdáním spusťte úplnou "
                                   "kontrolu s tolerancemi učitele.")
         self.c_ode.set_state(True if od else None)
+        if not n_rules:
+            txt, btn, act = ("Nahrajte zadání – Směrnici (Excel/PDF) a Word od učitele. Z nich vzniknou pravidla "
+                             "kontroly.", "Otevřít Zadání", lambda: win.tabs.setCurrentWidget(win.zadani))
+        elif d is None:
+            txt, btn, act = ("Otevřete svůj výkres – DXF uložený z MicroStationu, nebo rovnou DGN.",
+                             "Otevřít výkres…", win.open_dialog)
+        elif not checked:
+            txt, btn, act = ("Výkres je načtený. Spusťte kontrolu.", "Zkontrolovat (F5)",
+                             lambda: (win.tabs.setCurrentWidget(win.split), win.a_check.trigger()))
+        else:
+            todo = sum(1 for i in issues if i.state == "nová" and i.severity.value != "info")
+            if todo:
+                txt, btn, act = (f"Zbývá opravit {todo} míst. Opravný průvodce vás provede jedno po druhém.",
+                                 "Opravný průvodce", win.show_fix_guide)
+            else:
+                txt, btn, act = ("Vše opraveno. Zkontrolujte připravenost a odevzdejte.", "Připraveno k odevzdání?",
+                                 win.ready_check)
+        self.next_step.setText(txt)
+        self.next_btn.setText(btn + "  →")
+        self._next_action = act
         self._fill_projects()
         self.recent.clear()
         items = win.settings.value("cesty/posledni_vykresy", []) or []
