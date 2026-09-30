@@ -653,6 +653,9 @@ class RuleSet:
 
     def describe_feature_color(self, f: Feature) -> str:
         """Barva prvku v soustavě pravidel (číslo MicroStationu, jinak ACI/RGB)."""
+        ms = f.attributes.get("MS_BARVA")
+        if ms not in (None, ""):
+            return str(ms)  # přesné číslo barvy z DGN
         if self.paleta == "microstation":
             if not has_true_color(f):
                 idx = ms_index_for_aci(f.color_aci, self.barevna_tabulka)

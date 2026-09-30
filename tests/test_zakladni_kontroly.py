@@ -309,3 +309,13 @@ def test_prvek_jineho_druhu_na_vrstve(make_dxf):
     d = make_dxf(build, name="druh.dxf")
     msgs = [i.message for i in check(d, "jednotnost_hladiny")]
     assert len(msgs) == 1 and "kde jsou jinak jen čáry a plochy (12×)" in msgs[0]
+
+
+def test_pretazeni_po_hrane_za_roh(make_dxf):
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (20, 0), (20, 20), (0, 20)], dxfattribs={"layer": "BUDOVY"})
+        # plot navazuje na roh budovy, ale začíná o 1 cm dál – po hraně budovy
+        msp.add_lwpolyline([(20, 19.99), (20, 35), (40, 35)], dxfattribs={"layer": "PLOTY"})
+    d = make_dxf(build, name="roh.dxf")
+    msgs = [i.message for i in check(d, "chybejici_napojeni")]
+    assert any("Přetažená linie o 0,01" in m for m in msgs), msgs

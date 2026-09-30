@@ -190,14 +190,15 @@ class ZatoulanyPrvek(Check):
         sizes = [sum(len(cells[c]) for c in g) for g in groups]
         main = max(range(len(groups)), key=sizes.__getitem__)
         small = max(3, n // 100)
-        main_geom = shapely.union_all([shapely.box(c[0] * lim, c[1] * lim, (c[0] + 1) * lim, (c[1] + 1) * lim)
-                                       for c in groups[main]])
+        main_geoms = np.array([feats[i].geometry for c in groups[main] for i in cells[c]], dtype=object)
+        main_tree = shapely.STRtree(main_geoms)
         for k, g in enumerate(groups):
             if k == main or sizes[k] > small:
                 continue
             for c in g:
                 for i in cells[c]:
-                    d = main_geom.distance(feats[i].geometry)
+                    g_i = feats[i].geometry
+                    d = float(g_i.distance(main_geoms[main_tree.nearest(g_i)]))
                     yield ctx.issue(self, feats[i], f"Prvek je daleko od ostatní kresby (asi {fmt_num(d, 0)} m)")
 
 

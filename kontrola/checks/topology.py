@@ -204,8 +204,11 @@ def _overshoots(ctx: CheckContext, an: _EndpointAnalysis) -> dict[int, tuple[flo
                         a, b = piece.coords[0][:2], piece.coords[-1][:2]
                         far = a if Point(a).distance(end_pt) > Point(b).distance(end_pt) else b
                         oc = list(og.coords) if og.geom_type == "LineString" else []
-                        # jen když na konci překryvu navazující čára končí (ne duplicitní čáry na sobě)
-                        if oc and min(math.dist(far, oc[0][:2]), math.dist(far, oc[-1][:2])) <= eps:
+                        # jen když překryv končí v konci nebo lomu druhé čáry (roh) dřív než sledovaný
+                        # koncový kus – ne duplicitní čáry po celé délce
+                        if oc and (min(math.dist(far, oc[0][:2]), math.dist(far, oc[-1][:2])) <= eps or (
+                                piece.length < part.length - eps
+                                and min(math.dist(far, c[:2]) for c in oc) <= eps)):
                             cands.append(far)
                 for p in cands:
                     along = part.project(Point(p))
