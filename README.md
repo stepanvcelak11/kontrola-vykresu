@@ -179,6 +179,16 @@ Otevřete ukázkový výkres a stiskněte F5.
 
 ### Seznam souřadnic a kontrola výpočtu ze zápisníku
 
+* **Kontrola → Ověřit seznam souřadnic… (Ctrl+J)**: vyberte seznam (`číslo Y X Z`) a aplikace porovná
+  bod po bodu s výkresem – v pořádku / chybí / posunutý / špatné číslo / špatná výška / bod navíc.
+  Kartičky s počty, tabulka, dvojklik přiblíží bod, barevné zvýraznění ve výkresu, export do CSV
+  a tlačítko *Uložit seznam do projektu* (pak se porovná při každé kontrole).
+* **Kontrola → Body ze seznamu do výkresu (DXF)…**: místo složitého importu z Gromy vytvoří DXF se
+  **značkou bodu**, **číslem** a **výškou** na vrstvách, s barvou, tloušťkou, písmem a výškou textu podle
+  pravidel (Směrnice + Word). Pravidla pro značku / číslo / výšku se najdou sama. Bod je jako
+  v MicroStationu úsečka nulové délky, souřadnice záporně (S-JTSK), číslo vpravo nahoře, výška vpravo dole.
+  V MicroStationu DXF připojte jako referenci a prvky zkopírujte. Stejné tlačítko je i v okně výpočtu
+  ze zápisníku – body jdou rovnou z výpočtu do výkresu. Vytvořený DXF projde kontrolou symbologie bez chyb.
 * **Seznam souřadnic** (výstup z Gromy, `číslo Y X Z`) přetáhněte do okna nebo přidejte na
   Podklady. Kontrola pak najde body, které ve výkresu chybí nebo jsou posunuté, špatná čísla
   bodů a špatné výšky u bodů. Osy a znaménka S-JTSK se poznají samy.
@@ -349,6 +359,8 @@ Obecné nastavení:
 | Mezera mezi polygony (`mezery_polygonu`) | úzká štěrbina nebo malá díra mezi polygony | varování |
 | Prvek mimo rozsah (`mimo_rozsah`) | prvek mimo zadaný obdélník nebo mimo území ČR v S-JTSK | chyba |
 | Body téměř na sobě (`body_blizko`) | dva body blíž než tolerance, ale ne totožné | varování |
+| Prvky příliš blízko – Limit (`blizke_prvky`) | lomový bod čáry leží blíž než Limit (0,01 m) u jiné čáry, ale nedotýká se jí (jako Limit v MGEO) | varování |
+| Kontrola ploch (`kontrola_ploch`) | z hraničních čar sestaví plochy (jako MGEO): plocha bez popisu / definičního bodu, více čísel v jedné ploše, stejné číslo ve dvou plochách. Vrstvy se poznají samy. | vypnuto |
 
 Topologické kontroly mají parametr **Jen hladiny**, který kontrolu omezí na vybrané
 hladiny (např. `PARCELY, PLOTY*`).
@@ -454,6 +466,8 @@ Postup:
 
 * **Úvod** (první záložka): čtyři kroky – zadání a pravidla → výkres → kontrola → odevzdání – s tím, co je
   hotové, naposledy otevřené výkresy a nástroje na jedno kliknutí.
+* **Co aplikace umí** (Nápověda, odkaz na Úvodu): přehled všech funkcí po skupinách s vyhledáváním
+  a tlačítkem *Spustit* u každé.
 * **Skóre připravenosti** 0–100 (u karet chyb a na Úvodu): srážky za chyby topologie, atributů a varování.
   Je orientační, není to známka – 100 = nic k opravě.
 * **Rychlé tipy – MicroStation** (Nápověda, Ctrl+T): rovnoběžka, kolmice z bodu i v bodě (AccuDraw),
@@ -489,7 +503,10 @@ Okno *Kontrola → Kontrola výpočtu souřadnic* má záložky:
 
 Oprava (Kontrola → Oprava) vytvoří **nový** DXF, originál nemění. Dotáhne nedotažené a zkrátí přetažené
 čáry (do tolerance), smaže duplicity a nulové délky, uzavře téměř uzavřené plochy a rozdělí čáry
-v křížení. Uzly do **T-napojení** nevkládá (učitel je nevyžaduje) a **nevytvoří krátký úsek** – takové
+v křížení. Nově také: **rozdělí čáry v uzlu**, kde se kříží ve společném lomovém bodě (jako MGEO),
+**odstraní zbytečné lomové body** (zdvojené a úseky kratší než min. délka), **přichytí lomový bod**,
+který leží těsně (pod Limitem) u jiné čáry, **smaže zdvojené body** a volitelně **přesune prvky z vrstvy
+mimo Směrnici** na vrstvu, kam podle barvy a typu patří. Uzly do **T-napojení** nevkládá (učitel je nevyžaduje) a **nevytvoří krátký úsek** – takové
 místo vypíše k ruční opravě. Výkres s kresbou v referenci umí také. Ověřeno na výkresech obou zadání:
 geometrie se posune nejvýš o toleranci (0,018 m). Podle zadání se automaticky opravený výkres
 neuznává – slouží k tomu, abyste viděli, co opravit v MicroStationu.
@@ -511,7 +528,10 @@ stránka **Pokyny ze zadání**. Aplikace z dokumentu vytáhne:
   přidat do pravidel. Výšky písma se přepočtou z měřítka, pro které platí, na měřítko kresby.
   Bez toho by se body na vrstvách 58/59/60 v zadání 1 hlásily jako „vrstva není ve Směrnici“,
   protože v Excelu se Směrnicí nejsou;
-* **tabulky** s vrstvami a barvami, které jde importovat jako tabulku atributů.
+* **tabulky** s vrstvami a barvami, které jde importovat jako tabulku atributů;
+* **hodnoty pro kontrolu** – měřítko kresby, písmo, tolerance a formát odevzdání porovnané s projektem
+  (✓ / ⚠). Toleranci jde tlačítkem **Použít v nastavení** rovnou nastavit. Přesnost mapování (uxy, třída
+  přesnosti) se za toleranci kresby nepovažuje. Funguje i s PDF, pokud obsahuje text (ne sken).
 
 Nenalezené vrstvy a počet pokynů ukáže i okno *Připraveno k odevzdání?*. Odebráním dokumentu se
 odeberou i pravidla, která z něj vznikla.
@@ -586,6 +606,8 @@ Tloušťky MicroStationu (wt 0–31) se v DXF ověřit nedají. Uvádějte je v 
 | … volné konce | Visící konec linie |
 | … krátké a bodové linie (0,090 m) | Krátká linie nebo úsek (0,090 m), Prvek nulové délky |
 | … blízké body | Body téměř na sobě |
+| Topologické čištění – Limit (vzdálenost prvků) | Prvky příliš blízko (Limit 0,01 m) |
+| Kontrola ploch (hranice + definiční body) | Kontrola ploch: plocha bez popisu, více čísel, duplicitní čísla |
 | Kontrola a oprava duplicitních prvků | Duplicitní prvek (i body, texty, buňky) |
 | Kontrola a změna symbologie | Hladina, barva nebo styl; Nepovolená hladina; Nekódovaný prvek |
 | Plocha má právě jeden definiční bod | Popis (text) prvku: chybí popis / více popisů v ploše / popis mimo plochu |
@@ -598,6 +620,9 @@ vždy do nového souboru. Opraví:
 * duplicity a linie nulové délky,
 * nedotažené a přetažené linie do tolerance,
 * chybějící uzly (lomené čáry dostanou nový vrchol, úsečky se rozdělí),
+* čáry nerozdělené v uzlu (rozdělí se na dvě),
+* zbytečné lomové body a lomové body těsně u jiné čáry (přichytí se),
+* zdvojené body, prvky na vrstvě mimo Směrnici (volitelně),
 * téměř uzavřené polygony,
 * volitelně symbologii podle pravidel.
 
