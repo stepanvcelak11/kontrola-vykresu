@@ -635,6 +635,13 @@ def test_co_zkontrolovat(window, monkeypatch):
     assert tb.widgetForAction(w.a_check).menu() is not None
     w.run_preset("Jako učitel")
     assert w._wait(lambda: _idle(w), 60)
+    dlg2 = vyber_kontrol.VyberKontrol(w)
+    dlg2.search.setText("špička")
+    assert not dlg2.boxes["spicka"].isHidden() and dlg2.boxes["symbologie"].isHidden()
+    assert dlg2.cards["Atributy"].isHidden() and not dlg2.cards["Geometrie"].isHidden()
+    dlg2.search.clear()
+    assert not dlg2.boxes["symbologie"].isHidden()
+    dlg2.reject()
 
 
 def test_gis_vykres_v_okne(window, tmp_path, monkeypatch):

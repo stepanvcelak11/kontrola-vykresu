@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-                               QVBoxLayout, QWidget)
+import re
+from collections import Counter
+
+from PySide6.QtWidgets import (QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+                               QScrollArea, QVBoxLayout, QWidget)
 
 from ..checks.base import REGISTRY
 
@@ -33,6 +36,13 @@ PRESETY = [
 ]
 
 
+def _first_sentence(text: str, limit: int = 120) -> str:
+    """První věta popisu (tečka za zkratkou jako „např.“ větu nekončí), zkrácená na ``limit`` znaků."""
+    m = re.search(r"(?<!např)(?<!tzv)(?<!č)\.\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ])", text)
+    first = text[:m.start() + 1] if m else text
+    return first if len(first) <= limit else first[:limit].rsplit(" ", 1)[0] + "…"
+
+
 class VyberKontrol(QDialog):
     def __init__(self, win):
         super().__init__(win)
@@ -55,11 +65,21 @@ class VyberKontrol(QDialog):
             b.clicked.connect(lambda _c=False, p=pred: self.apply_preset(p))
             prow.addWidget(b)
         prow.addStretch(1)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Hledat kontrolu…")
+        self.search.setClearButtonEnabled(True)
+        self.search.setMaximumWidth(220)
+        self.search.textChanged.connect(self._filter)
+        prow.addWidget(self.search)
         lay.addLayout(prow)
+        found = Counter(i.check_id for i in (getattr(win, "issues", None) or []))
+        self.rows: dict[str, list[QWidget]] = {}
+        self.cards: dict[str, QFrame] = {}
         has_rules = bool(win.project.rules.pravidla)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         body = QWidget()
         bl = QVBoxLayout(body)
         self.boxes: dict[str, QCheckBox] = {}
@@ -81,6 +101,7 @@ class VyberKontrol(QDialog):
             gh.addWidget(g)
             d = QLabel(desc)
             d.setObjectName("karta_popis")
+            d.setWordWrap(True)
             gh.addWidget(d, 1)
             cl.addLayout(gh)
             for cid in ids:
@@ -93,14 +114,24 @@ class VyberKontrol(QDialog):
                 cb.toggled.connect(lambda _on, k=key: self._sync_group(k))
                 self.boxes[cid] = cb
                 row.addWidget(cb)
-                note = cls.popis.split(". ")[0][:110] + ("…" if len(cls.popis) > 110 else "")
+                note = _first_sentence(cls.popis)
                 if getattr(cls, "potrebuje_pravidla", False) and not has_rules:
                     note = "⚠ potřebuje pravidla (Směrnici) – zatím nejsou načtena. " + note
                 nl = QLabel(note)
                 nl.setObjectName("karta_popis")
                 nl.setWordWrap(True)
                 row.addWidget(nl, 1)
+                widgets = [cb, nl]
+                if found.get(cid):
+                    badge = QLabel(f"minule {found[cid]}×")
+                    badge.setToolTip("Počet míst, která kontrola našla při posledním spuštění")
+                    badge.setStyleSheet("color:#B45309; font-weight:600;")
+                    badge.setMinimumWidth(badge.sizeHint().width())
+                    row.addWidget(badge)
+                    widgets.append(badge)
+                self.rows[cid] = widgets
                 cl.addLayout(row)
+            self.cards[key] = card
             bl.addWidget(card)
             self._sync_group(key)
         bl.addStretch(1)
@@ -124,6 +155,20 @@ class VyberKontrol(QDialog):
         for cb in self.boxes.values():
             cb.toggled.connect(self._update_count)
         self._update_count()
+
+    def _filter(self, text: str):
+        t = text.strip().lower()
+        for key, card in self.cards.items():
+            any_visible = False
+            for cid, widgets in self.rows.items():
+                cls = REGISTRY[cid]
+                if cls.skupina != key:
+                    continue
+                vis = not t or t in cls.nazev.lower() or t in cls.popis.lower() or t in cid
+                for w in widgets:
+                    w.setVisible(vis)
+                any_visible |= vis
+            card.setVisible(any_visible)
 
     def _set_group(self, key: str, on: bool):
         for cid, cb in self.boxes.items():
