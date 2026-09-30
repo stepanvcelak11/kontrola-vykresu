@@ -603,6 +603,7 @@ def test_microstation_seznam_chyb_a_makro(window, tmp_path):
     data = [ln.split("\t") for ln in lines if not ln.startswith("#")]
     assert data and all(len(d) == 5 for d in data)
     float(data[0][1]), float(data[0][2])  # desetinná tečka pro Val() ve VBA
+    w.a_ms_send.setChecked(False)  # nastavení se ukládá – další testy nesmí zapisovat vedle ukázek
     bas = install_macro(tmp_path).read_bytes()
     assert b"\r\n" in bas and "KV_Dalsi".encode() in bas
     bas.decode("cp1250")  # VBA editor čte ANSI
