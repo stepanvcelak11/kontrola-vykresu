@@ -340,3 +340,18 @@ def test_bod_bez_cisla(make_dxf):
     d = make_dxf(build, name="bezcisla.dxf")
     iss = check(d, "bod_bez_cisla")
     assert [(i.x, i.y) for i in iss] == [(50.0, 0.0)] and "nemá číslo" in iss[0].message
+
+
+def test_bez_pravidel_pomocne_vrstvy_se_netopologizuji(make_dxf):
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (50, 0), (50, 50), (0, 50)], close=True, dxfattribs={"layer": "BUDOVY"})
+        for k in range(15):  # oměrné míry – krátké čáry s volnými konci
+            msp.add_line((k * 3, 60), (k * 3 + 1.2, 60), dxfattribs={"layer": "KOTY"})
+        msp.add_line((100, 0), (110, 0), dxfattribs={"layer": "PLOT"})
+    d = make_dxf(build, name="koty.dxf")
+    from kontrola.config import Config
+    from kontrola.rules import RuleSet
+    from kontrola.runner import run_checks
+    res = run_checks(d, RuleSet(), Config(), only=["visici_konce"])
+    assert {i.layer for i in res.issues} == {"PLOT"}
+    assert any("KOTY" in n and "pomocné" in n for n in res.notes)

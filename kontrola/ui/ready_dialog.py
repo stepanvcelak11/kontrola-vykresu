@@ -42,6 +42,8 @@ class HistoryChart(QWidget):
     def set_data(self, data: list[dict]):
         self.data = list(data or [])[-30:]
         self.setToolTip(self._tip())
+        if self.compact:
+            self.setVisible(len(self.data) >= 2)  # jeden sloupec nic neříká
         self.update()
 
     def _tip(self) -> str:
@@ -55,6 +57,19 @@ class HistoryChart(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(4, 4, -4, -4 if self.compact else -18)
+        if self.compact and len(self.data) >= 2:
+            # vpravo slovně trend: chyby a varování od první do poslední kontroly
+            first, last = self.data[0], self.data[-1]
+            txt = (f"Průběh: chyby {first['chyby']} → {last['chyby']}, "
+                   f"varování {first['varovani']} → {last['varovani']}")
+            f = QFont(self.font())
+            f.setPointSizeF(max(7.5, f.pointSizeF() - 1))
+            p.setFont(f)
+            better = last["chyby"] + last["varovani"] <= first["chyby"] + first["varovani"]
+            p.setPen(QColor(22, 163, 74) if better else QColor(220, 38, 38))
+            tw = p.fontMetrics().horizontalAdvance(txt) + 8
+            p.drawText(QRectF(r.right() - tw, r.top(), tw, r.height()), Qt.AlignRight | Qt.AlignVCenter, txt)
+            r.setRight(r.right() - tw - 8)
         if not self.data:
             p.setPen(QColor(150, 150, 155))
             p.drawText(self.rect(), Qt.AlignCenter, "Průběh chyb se zobrazí po několika kontrolách.")

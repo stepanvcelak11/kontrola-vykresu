@@ -255,6 +255,15 @@ class CheckContext:
                     extra.append(f)
                     continue  # vstupy, šrafy – samy se nekontrolují, ale jiné čáry se na ně napojují
                 out.append(f)
+            if not self.rules.pravidla and not self.layer_filter():
+                out, aux = _split_auxiliary_layers(out, self.tolerance)
+                if aux:
+                    extra += [f for lay in aux.values() for f in lay]
+                    note = ("Bez pravidel se jako pomocné (kóty, šrafy, odkazové čáry) nekontrolují vrstvy: "
+                            + ", ".join(sorted(aux)) + " – lze změnit pravidly nebo parametrem Jen hladiny.")
+                    glob = self._cache.setdefault("_obecne_poznamky", [])
+                    if note not in glob:
+                        glob.append(note)
             self._cache[key] = out
             self._cache["linear_extra|" + key] = extra
         return self._cache[key]
@@ -397,3 +406,39 @@ def endpoints(f: Feature) -> Iterator[tuple[float, float]]:
         yield coords[0][:2]
         if len(coords) > 1:
             yield coords[-1][:2]
+
+
+def _split_auxiliary_layers(feats: list[Feature], tol: float) -> tuple[list[Feature], dict[str, list[Feature]]]:
+    """Bez pravidel: vrstvy krátkých čar s převážně volnými konci (kóty, oměrné míry, šrafy) jsou pomocné.
+
+    Vrstva aspoň s 10 otevřenými čarami, medián délky do 2 m a aspoň polovina konců bez návaznosti.
+    """
+    by_layer: dict[str, list[Feature]] = {}
+    for f in feats:
+        by_layer.setdefault(f.layer, []).append(f)
+    cand = {lay: fs for lay, fs in by_layer.items()
+            if sum(1 for f in fs if f.geom_type == GeomType.LINIE and not f.closed) >= 10}
+    if not cand:
+        return feats, {}
+    geoms = np.array([f.geometry for f in feats], dtype=object)
+    tree = shapely.STRtree(geoms)
+    eps = max(tol, 1e-6)
+    aux: dict[str, list[Feature]] = {}
+    for lay, fs in cand.items():
+        opened = [f for f in fs if f.geom_type == GeomType.LINIE and not f.closed]
+        lengths = sorted(f.geometry.length for f in opened)
+        if lengths[len(lengths) // 2] > 2.0:
+            continue
+        dangling = total = 0
+        for f in opened:
+            c = f.geometry.coords
+            for p in (c[0], c[-1]):
+                total += 1
+                hits = [j for j in tree.query(shapely.points(p[:2]), predicate="dwithin", distance=eps)
+                        if geoms[j] is not f.geometry]
+                dangling += not hits
+        if total and dangling >= 0.5 * total:
+            aux[lay] = fs
+    if not aux:
+        return feats, {}
+    return [f for f in feats if f.layer not in aux], aux

@@ -72,6 +72,7 @@ def run_checks(drawing: Drawing, rules: RuleSet | None, config: Config,
             result.notes.append(f"{check.nazev}: kontrola selhala ({exc}).")
         result.durations[cid] = time.perf_counter() - t0
         result.notes.extend(f"{check.nazev}: {m}" for m in ctx.notes)
+    result.notes[:0] = shared_cache.get("_obecne_poznamky", [])
     result.issues.sort(key=lambda s: (s.severity.rank, s.check_name, s.y, s.x))
     for k, iss in enumerate(result.issues, start=1):
         iss.number = k
