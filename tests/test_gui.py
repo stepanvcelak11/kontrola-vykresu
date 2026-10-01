@@ -1723,7 +1723,7 @@ def test_cad_vlastnosti_prvku_hledani(window):
     ln = next(e for e in c.prostor if e.dxftype() == "LINE")
     d = c.vlastnosti_prvku(ln, modal=False)
     d.pole["end"].setText("6 8")
-    d.pole["color"].setText("1")
+    d.pole["ms_barva"].setText("3")  # barva MicroStationu 3 = červená → ACI 1
     d.pouzit()
     n = next(e for e in c.prostor if e.dxftype() == "LINE")
     assert n.dxf.end.isclose((6, 8, 0)) and n.dxf.color == 1
@@ -1736,3 +1736,30 @@ def test_cad_vlastnosti_prvku_hledani(window):
     c.vyber = [next(e for e in c.prostor if e.dxftype() == "LINE")]
     c.proved("podobné")
     assert len(c.vyber) == 1
+
+
+def test_cad_pojmenovani_jako_microstation(window):
+    from kontrola.cad import symbologie as S
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    # key-in z taháku atributů nastaví aktivní atributy
+    c.proved("lv=5;co=94;lc=2;wt=2")
+    assert c.kresleni.vrstva == "5" and c.kresleni.barva == S.ms_na_aci(94)
+    assert c.kresleni.typ_cary == "DGN Style 2" and c.kresleni.tloustka == 30
+    assert c.aktivni.text() == "Hladina 5 · Barva 94 · Styl 2 · Tloušťka 2"
+    for t in ("u", "x=0 y=0", "@10,0", ""):
+        c.zadej(t)
+    ln = next(e for e in c.prostor if e.dxftype() == "LINE")
+    assert S.popis_prvku(ln, znama_barva=c.kresleni.ms_barvy_prvku[ln.dxf.handle]) == \
+        "hladina 5 · barva 94 · styl 2 · tloušťka 2"
+    # vlastnosti prvku v pojmech MicroStationu
+    d = c.vlastnosti_prvku(ln, modal=False)
+    assert d.pole["ms_barva"].text() == "94" and d.pole["ms_styl"].text() == "2" and d.pole["ms_tl"].text() == "2"
+    d.pole["ms_barva"].setText("3")
+    d.pole["ms_styl"].setText("0")
+    d.pouzit()
+    ln = next(e for e in c.prostor if e.dxftype() == "LINE")
+    assert S.aci_na_ms(ln.dxf.color) == 3 and ln.dxf.linetype == "CONTINUOUS"
+    c.proved("co=300")
+    assert "0–255" in c.historie.toPlainText()

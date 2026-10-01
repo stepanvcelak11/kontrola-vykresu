@@ -11,6 +11,7 @@ kliknutím nebo z příkazového řádku – stejně jako v MicroStationu / Auto
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -259,7 +260,8 @@ class CadPage(QWidget):
         "mirror": "zrcadli", "of": "rovnoběžka", "offset": "rovnoběžka", "rovnobezka": "rovnoběžka",
         "tr": "ořež", "trim": "ořež", "orez": "ořež", "ex": "prodluž", "extend": "prodluž",
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
-        "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva",
+        "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
+        "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
         "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "pr": "vlastnosti", "props": "vlastnosti",
         "podobne": "podobné", "similar": "podobné", "find": "najdi", "nahrad": "nahraď", "replace": "nahraď", "plot": "tisk", "print": "tisk",
@@ -410,6 +412,10 @@ class CadPage(QWidget):
         self.krok.setSuffix(" g")
         self.krok.setToolTip("Krok polárního režimu v gonech")
         crow.addWidget(self.krok)
+        self.aktivni = QLabel("")
+        self.aktivni.setObjectName("cad_aktivni")
+        self.aktivni.setToolTip("Aktivní atributy pro nové prvky (jako v MicroStationu)")
+        crow.addWidget(self.aktivni)
         self.coords = QLabel("Y –  X –")
         self.coords.setMinimumWidth(320)
         crow.addWidget(self.coords)
@@ -493,6 +499,7 @@ class CadPage(QWidget):
         self._napln_modely()
         self.view.zoom_all()
         self._aktualizuj_tlacitka()
+        self.aktivni_atributy()
 
     # ------------------------------------------------------------ zadání → předvolby
     def _pravidla(self):
@@ -557,6 +564,7 @@ class CadPage(QWidget):
         if p.vyska:
             self.vyska_textu = p.vyska
         self.predvolba_info.setText(p.popis())
+        self.aktivni_atributy()
         self.predvolba_info.setToolTip("\n".join([p.popis()] + p.poznamky))
         self.vypis(f"Kreslím: {p.nazev} – {p.popis()}" + ("".join(f"\n  ⚠ {x}" for x in p.poznamky)))
         if self._gen is None and not self._prikaz:
@@ -642,6 +650,7 @@ class CadPage(QWidget):
     def _vrstva_zmenena(self, name: str):
         if self.kresleni is not None and name:
             self.kresleni.vrstva = name
+            self.aktivni_atributy()
 
     def _titulek(self):
         if self.dok is None:
@@ -1212,8 +1221,55 @@ class CadPage(QWidget):
         self.vyzva.setText("Příkaz:")
 
     # ------------------------------------------------------------ příkazy
+    _KEYIN = re.compile(r"^\s*(lv|co|lc|wt|th|tw|ac)\s*=\s*([^;]*)$", re.I)
+
+    def _keyiny(self, t: str) -> bool:
+        """Key-iny MicroStationu „lv=5;co=94;lc=0;wt=0“ (i z taháku atributů), „th=0.75“, „ac=3.13“."""
+        casti = [c for c in t.split(";") if c.strip()]
+        if not casti or not all(self._KEYIN.match(c) for c in casti):
+            return False
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete výkres nebo začněte nový.")
+            return True
+        vyber, self.vyber = self.vyber, []  # key-in nastavuje aktivní atributy (jako MicroStation), ne výběr
+        try:
+            for c in casti:
+                k, v = (x.strip() for x in self._KEYIN.match(c).groups())
+                k = k.lower()
+                if k == "lv":
+                    self._vrstva(v)
+                elif k == "co":
+                    self._barva(v)
+                elif k == "lc":
+                    self._styl_tloustka("styl", v)
+                elif k == "wt":
+                    self._styl_tloustka("tloušťka", v)
+                elif k in ("th", "tw"):
+                    try:
+                        h = float(v.replace(",", "."))
+                        if h <= 0:
+                            raise ValueError
+                    except ValueError:
+                        self.vypis(f"{k}= musí být kladné číslo.")
+                        continue
+                    if k == "th":
+                        self.vyska_textu = h
+                        self.kresleni.vyska_textu = h
+                    else:
+                        self.kresleni.sirka_faktor = h / max(self.vyska_textu, 1e-9)
+                elif k == "ac":
+                    self._aktivni_bunka = v
+                    self.vypis(f"Aktivní buňka {v} (vložení příkazem „vlož“).")
+        finally:
+            self.vyber = vyber
+        self.aktivni_atributy()
+        return True
+
     def proved(self, t: str):
         """Příkaz nebo souřadnice z příkazového řádku."""
+        if self._keyiny(t):
+            self.vypis(f"> {t}")
+            return
         parts = t.strip().split(maxsplit=1)
         slovo = parts[0].lower() if parts else ""
         arg = parts[1] if len(parts) > 1 else ""
@@ -1325,6 +1381,8 @@ class CadPage(QWidget):
             self._vrstva(arg)
         elif cmd == "barva":
             self._barva(arg)
+        elif cmd in ("styl", "tloušťka"):
+            self._styl_tloustka(cmd, arg)
         elif cmd == "info":
             self._info()
         elif cmd == "výměra":
@@ -1351,16 +1409,33 @@ class CadPage(QWidget):
             self.vypis(f"{len(nove)} prvků přesunuto do vrstvy {name}.")
         else:
             self.kresleni.vrstva = name
-            self.vypis(f"Aktuální vrstva: {name}")
+            self.vypis(f"Aktivní hladina: {name}")
+            self.aktivni_atributy()
         self._napln_vrstvy()
 
+    def aktivni_atributy(self) -> str:
+        from ..cad import symbologie as S
+        k = self.kresleni
+        if k is None:
+            return ""
+        rs = self._pravidla()
+        b = k.ms_barva if k.ms_barva is not None and k.barva != 256 else S.aci_na_ms(k.barva, rs)
+        w = S.lw_na_wt(k.tloustka, rs)
+        t = (f"Hladina {k.vrstva} · Barva {b if b is not None else 'dle hl.'} · Styl {S.typ_na_styl(k.typ_cary)}"
+             f" · Tloušťka {w if w is not None else 'dle hl.'}")
+        self.aktivni.setText(t)
+        return t
+
     def _barva(self, arg: str):
+        """Barva jako v MicroStationu (0–255, prázdné/„dle“ = dle hladiny) – pro nové prvky i výběr."""
+        from ..cad import symbologie as S
         try:
-            c = int(arg)
-            if not 0 <= c <= 256:
-                raise ValueError
+            if arg.strip().lower() in ("dle", "dle hladiny", "bylevel"):
+                c = 256
+            else:
+                c = S.ms_na_aci(int(arg), self._pravidla())
         except ValueError:
-            self.vypis("Barva je číslo 0–256 (256 = podle vrstvy, 1 červená, 2 žlutá, 3 zelená, 5 modrá, 7 bílá).")
+            self.vypis("Barva je číslo MicroStationu 0–255 (nebo „barva dle“ = dle hladiny).")
             return
         if self.vyber:
             ents = list(self.vyber)
@@ -1370,7 +1445,51 @@ class CadPage(QWidget):
             self._zvyrazni()
         else:
             self.kresleni.barva = c
-        self.vypis(f"Barva {c}.")
+            self.kresleni.ms_barva = None if c == 256 else int(arg)
+        self.vypis(f"Barva {arg.strip()}." + ("" if c == 256 else f" (v DXF ACI {c})"))
+        self.aktivni_atributy()
+
+    def _styl_tloustka(self, cmd: str, arg: str):
+        """Styl čáry (0–7, kód vlastního stylu) a tloušťka (wt 0–31) jako v MicroStationu."""
+        from ..cad import symbologie as S
+        rs = self._pravidla()
+        a = arg.strip()
+        try:
+            if cmd == "styl":
+                if not a:
+                    raise ValueError
+                hodnota = "BYLAYER" if a.lower().startswith("dle") else S.styl_na_typ(a)
+                if hodnota.startswith("DGN Style"):
+                    S.zajisti_styly(self.dok.doc)
+                if hodnota not in ("BYLAYER", "CONTINUOUS") and hodnota not in self.dok.doc.linetypes:
+                    raise KeyError(hodnota)
+                attr = {"linetype": hodnota}
+            else:
+                if not a:
+                    raise ValueError
+                lw, odhad = (-1, False) if a.lower().startswith("dle") else S.wt_na_lw(int(a), rs)
+                attr = {"lineweight": lw}
+                if odhad:
+                    self.vypis(f"⚠ Tloušťka {a} není v převodní tabulce zadání – použit odhad {lw / 100:.2f} mm "
+                               "(upravte v Atributy ze zadání).")
+        except KeyError as e:
+            self.vypis(f"Styl {e.args[0]} ve výkresu není – nahrajte vzorový výkres nebo soubor .lin od učitele.")
+            return
+        except ValueError:
+            self.vypis("Styl čáry 0–7 nebo kód (např. 2.103), tloušťka 0–31; „dle“ = dle hladiny.")
+            return
+        if self.vyber:
+            ents = [e for e in self.vyber if e.dxftype() not in ("TEXT", "MTEXT", "INSERT", "POINT")]
+            nove = U.zmen_vlastnosti(self.prostor, self.historie_zmen, ents, **attr)
+            self._po_zmene(nove, ents)
+            self.vyber = nove
+            self._zvyrazni()
+        elif "linetype" in attr:
+            self.kresleni.typ_cary = attr["linetype"]
+        else:
+            self.kresleni.tloustka = attr["lineweight"]
+        self.vypis(f"{'Styl' if cmd == 'styl' else 'Tloušťka'} {a}.")
+        self.aktivni_atributy()
 
     def _info(self):
         if not self.vyber:
@@ -1647,6 +1766,9 @@ class CadPage(QWidget):
         if not jmena:
             raise ValueError("Ve výkresu nejsou žádné bloky (vytvořte příkazem „blok“).")
         self.vypis("Bloky: " + ", ".join(jmena[:40]) + ("…" if len(jmena) > 40 else ""))
+        ac = getattr(self, "_aktivni_bunka", None)
+        if ac and ac in jmena:
+            jmena = [ac] + [j for j in jmena if j != ac]
         nazev = yield Pozadavek("text", f"Název bloku [{jmena[0]}]:", vychozi=jmena[0])
         if nazev not in jmena:
             raise ValueError(f"Blok {nazev} ve výkresu není.")

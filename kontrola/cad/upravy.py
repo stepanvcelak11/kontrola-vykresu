@@ -96,6 +96,8 @@ class Kresleni:
         self.vyska_textu: float | None = None
         self.meritko_stylu: float | None = None
         self.predvolba = None
+        self.ms_barva: int | None = None  # přesné číslo barvy MicroStationu (ACI v DXF není jednoznačné)
+        self.ms_barvy_prvku: dict[str, int] = {}  # handle → číslo barvy MicroStationu u nakreslených prvků
 
     def nastav_predvolbu(self, p) -> None:
         """Atributy podle druhu prvku ze zadání (viz ``cad.zadani.Predvolba``); None = výchozí."""
@@ -106,6 +108,10 @@ class Kresleni:
             self.sirka_faktor = 1.0
             return
         self.vrstva, self.barva, self.typ_cary, self.tloustka = p.vrstva, p.barva, p.typ_cary, p.tloustka
+        try:
+            self.ms_barva = int((p.ms or {}).get("barva"))
+        except (TypeError, ValueError):
+            self.ms_barva = None
         self.textovy_styl, self.zarovnani, self.sirka_faktor = p.textovy_styl, p.zarovnani, p.sirka_faktor
         self.vyska_textu, self.meritko_stylu = p.vyska, p.meritko_stylu
 
@@ -127,7 +133,11 @@ class Kresleni:
         return a
 
     def _hotovo(self, nazev, e):
-        self.h.proved(nazev, [e] if not isinstance(e, list) else e)
+        ents = [e] if not isinstance(e, list) else e
+        if self.ms_barva is not None and self.barva != 256:
+            for x in ents:
+                self.ms_barvy_prvku[x.dxf.handle] = self.ms_barva
+        self.h.proved(nazev, ents)
         return e
 
     def bod(self, p):

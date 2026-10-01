@@ -5,7 +5,45 @@ from __future__ import annotations
 from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
                                QVBoxLayout)
 
+from ..cad import symbologie as S
 from ..cad import upravy as U
+
+
+def vlastnosti_ms(prvek, rs, znama_barva: int | None = None):
+    """Vlastnosti prvku s barvou, stylem a tloušťkou pojmenovanými jako v MicroStationu."""
+    out = []
+    for k, popis, v in U.vlastnosti(prvek):
+        if k == "layer":
+            out.append((k, "Hladina", v))
+        elif k == "color":
+            b = znama_barva if znama_barva is not None and v != 256 else S.aci_na_ms(v, rs)
+            popis = "Barva (0–255, prázdné = dle hladiny)" + ("" if znama_barva is not None or v == 256 else
+                                                               " – odhad z DXF")
+            out.append(("ms_barva", popis, "" if b is None else str(b)))
+        elif k == "linetype":
+            out.append(("ms_styl", "Styl čáry (0–7 nebo kód, např. 2.103)", S.typ_na_styl(v)))
+        elif k == "lineweight":
+            w = S.lw_na_wt(v, rs)
+            out.append(("ms_tl", "Tloušťka wt (0–31, prázdné = dle hladiny)", "" if w is None else str(w)))
+        else:
+            out.append((k, popis, v))
+    return out
+
+
+def preved_ms(z: dict, rs) -> dict:
+    """Změny v pojmech MicroStationu → atributy DXF."""
+    out = {}
+    for k, v in z.items():
+        t = str(v).strip()
+        if k == "ms_barva":
+            out["color"] = 256 if t in ("", "dle hladiny") else S.ms_na_aci(int(t), rs)
+        elif k == "ms_styl":
+            out["linetype"] = "BYLAYER" if t in ("", "dle hladiny") else S.styl_na_typ(t)
+        elif k == "ms_tl":
+            out["lineweight"] = -1 if t in ("", "dle hladiny") else S.wt_na_lw(int(t), rs)[0]
+        else:
+            out[k] = v
+    return out
 
 
 def _f(v) -> str:
@@ -23,7 +61,9 @@ class VlastnostiDialog(QDialog):
         form = QFormLayout()
         self.pole: dict[str, QLineEdit | QCheckBox] = {}
         self._puvodni: dict[str, str] = {}
-        for k, popis, v in U.vlastnosti(prvek):
+        self.rs = page._pravidla()
+        self.znama = page.kresleni.ms_barvy_prvku.get(prvek.dxf.handle) if page.kresleni else None
+        for k, popis, v in vlastnosti_ms(prvek, self.rs, self.znama):
             if k.startswith("_"):
                 form.addRow(popis + ":", QLabel(_f(v)))
                 continue
@@ -52,7 +92,7 @@ class VlastnostiDialog(QDialog):
 
     def zmeny(self) -> dict:
         out = {}
-        typy = {k: v for k, _p, v in U.vlastnosti(self.prvek)}
+        typy = {k: v for k, _p, v in vlastnosti_ms(self.prvek, self.rs, self.znama)}
         for k, w in self.pole.items():
             if isinstance(w, QCheckBox):
                 if w.isChecked() != typy[k]:
@@ -80,10 +120,15 @@ class VlastnostiDialog(QDialog):
 
     def pouzit(self):
         try:
-            z = self.zmeny()
+            z = preved_ms(self.zmeny(), self.rs)
+            if "linetype" in z and z["linetype"].startswith("DGN Style"):
+                S.zajisti_styly(self.page.dok.doc)
             if z:
                 pg = self.page
                 novy = U.nastav_vlastnosti(pg.prostor, pg.historie_zmen, self.prvek, z)
+                zb = self.zmeny().get("ms_barva", self.znama)
+                if zb not in (None, "") and pg.kresleni is not None:
+                    pg.kresleni.ms_barvy_prvku[novy.dxf.handle] = int(zb)
                 pg._po_zmene([novy], [self.prvek])
                 pg.vyber = [novy]
                 pg._zvyrazni()

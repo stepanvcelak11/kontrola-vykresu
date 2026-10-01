@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDialog, QHBoxLayout, QInputDialog, QLabel,
                                QMessageBox, QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout)
 
-SLOUPCE = ("Vrstva", "Zapnutá", "Zmrazená", "Zamčená", "Barva", "Typ čáry", "Tloušťka", "Prvků")
+SLOUPCE = ("Hladina", "Zapnutá", "Zmrazená", "Zamčená", "Barva", "Styl čáry", "Tloušťka", "Prvků")
 TLOUSTKY = [-3, 0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211]
 
 
@@ -73,18 +73,26 @@ class VrstvyDialog(QDialog):
                 ch.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 ch.setCheckState(Qt.Checked if stav else Qt.Unchecked)
                 self.tab.setItem(r, c, ch)
+            from ..cad import symbologie as S
+            rs = self.page._pravidla()
             sp = QSpinBox()
-            sp.setRange(1, 255)
-            sp.setValue(abs(ly.dxf.get("color", 7)) or 7)
-            sp.valueChanged.connect(lambda v, n=name: self._nastav(n, color=v))
+            sp.setRange(0, 255)
+            sp.setToolTip("Číslo barvy MicroStationu (0–255)")
+            sp.setValue(S.aci_na_ms(abs(ly.dxf.get("color", 7)) or 7, rs) or 0)
+            sp.valueChanged.connect(lambda v, n=name, r=rs: self._nastav(n, color=S.ms_na_aci(v, r)))
             self.tab.setCellWidget(r, 4, sp)
             cb = QComboBox()
             cb.addItems(typy)
+            cb.setToolTip("Continuous = styl 0, DGN Style 1–7 = styly 1–7, kód = vlastní styl (např. 2.103)")
             cb.setCurrentText(ly.dxf.get("linetype", "Continuous"))
             cb.currentTextChanged.connect(lambda t, n=name: self._nastav(n, linetype=t))
             self.tab.setCellWidget(r, 5, cb)
             tw = QComboBox()
-            tw.addItems(["výchozí" if t == -3 else f"{t / 100:.2f} mm" for t in TLOUSTKY])
+            from ..cad import symbologie as S2
+            rs2 = self.page._pravidla()
+            tw.addItems(["výchozí" if t == -3 else (f"wt {S2.lw_na_wt(t, rs2)} ({t / 100:.2f} mm)"
+                                                     if abs(S2.mapa_tloustek(rs2)[S2.lw_na_wt(t, rs2)] - t / 100) < 0.006
+                                                     else f"{t / 100:.2f} mm") for t in TLOUSTKY])
             lw = ly.dxf.get("lineweight", -3)
             tw.setCurrentIndex(TLOUSTKY.index(lw) if lw in TLOUSTKY else 0)
             tw.currentIndexChanged.connect(lambda i, n=name: self._nastav(n, lineweight=TLOUSTKY[i]))
@@ -95,8 +103,8 @@ class VrstvyDialog(QDialog):
             self.tab.setItem(r, 7, pc)
         self.tab.resizeColumnsToContents()
         self.tab.blockSignals(False)
-        self.info.setText(f"{len(vrstvy)} vrstev, aktuální: {self.page.kresleni.vrstva}. Zamčené vrstvy nejdou "
-                          "vybrat ani upravit, vypnuté a zmrazené se nezobrazují.")
+        self.info.setText(f"{len(vrstvy)} hladin, aktivní: {self.page.kresleni.vrstva}. Zamčené hladiny nejdou "
+                          "vybrat ani upravit, vypnuté a zmrazené se nezobrazují. Barvy jsou čísla MicroStationu.")
 
     def _jmeno(self, r: int | None = None) -> str | None:
         r = self.tab.currentRow() if r is None else r

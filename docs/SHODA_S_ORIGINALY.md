@@ -58,6 +58,14 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Makra, dávky, pluginy | ❌ |
 | Výkon na statisících prvků | ❌ |
 
+## Jednotné pojmenování (Kontrola, CAD, tahák, atributy)
+
+- Barva = číslo MicroStationu 0–255 (vestavěná tabulka color.tbl, nebo tabulka z projektu); v DXF ACI jako při exportu z MicroStationu.
+- Styl čáry = 0–7 (v DXF „Continuous“, „DGN Style 1“…„DGN Style 7“ jako MicroStation), vlastní styly kódem („2.103“ Dřevěný plot) – skutečný vzor se převezme ze vzorového výkresu DXF nebo souboru .lin od učitele.
+- Tloušťka = wt 0–31 (převod na mm podle zadání).
+- Textové styly = „Style-Arial Narrow“, kurzíva „Style-Arial Narrow IF“, nebo názvy z knihovny učitele („Popis ploch“).
+- Key-iny MicroStationu (lv=, co=, lc=, wt=, th=, tw=, ac=) fungují i v příkazovém řádku CAD.
+
 ## Plán dál
 
 1. Dokončit nejčastěji používané funkce Gromy a MicroStationu, pak méně používané

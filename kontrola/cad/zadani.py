@@ -23,15 +23,16 @@ from ..rules import RuleSet, color_rgb, rgb_to_aci, split_alternatives
 # DXF povoluje jen tyto tloušťky (setiny mm)
 _DXF_TLOUSTKY = (0, 5, 9, 13, 15, 18, 20, 25, 30, 35, 40, 50, 53, 60, 70, 80, 90, 100, 106, 120, 140, 158, 200, 211)
 
-# styly čar MicroStationu 0–7 jako typy čar DXF (vzory v metrech na papíře × LTSCALE)
+# styly čar MicroStationu 1–7 jako typy čar DXF – pojmenované jako při exportu z MicroStationu
+# („DGN Style 2“); vzor stylu 2 je převzatý z DXF exportovaného MicroStationem, ostatní jsou přibližné
 MS_STYLY = {
-    1: ("MicroStation styl 1 – tečkovaná", [0.6, 0.0, -0.6]),
-    2: ("MicroStation styl 2 – čárkovaná střední", [3.0, 2.0, -1.0]),
-    3: ("MicroStation styl 3 – čárkovaná dlouhá", [5.0, 4.0, -1.0]),
-    4: ("MicroStation styl 4 – čerchovaná", [4.0, 2.5, -0.5, 0.0, -1.0]),
-    5: ("MicroStation styl 5 – čárkovaná krátká", [1.5, 1.0, -0.5]),
-    6: ("MicroStation styl 6 – dvojčerchovaná", [4.5, 2.5, -0.5, 0.0, -0.5, 0.0, -1.0]),
-    7: ("MicroStation styl 7 – dlouhá a krátká čárka", [5.0, 3.0, -0.5, 1.0, -0.5]),
+    1: ("Dgn Style 1", [0.6, 0.0, -0.6]),
+    2: ("Dgn Style 2", [1.496808, 0.898085, -0.598723]),
+    3: ("Dgn Style 3", [5.0, 4.0, -1.0]),
+    4: ("Dgn Style 4", [4.0, 2.5, -0.5, 0.0, -1.0]),
+    5: ("Dgn Style 5", [1.5, 1.0, -0.5]),
+    6: ("Dgn Style 6", [4.5, 2.5, -0.5, 0.0, -0.5, 0.0, -1.0]),
+    7: ("Dgn Style 7", [5.0, 3.0, -0.5, 1.0, -0.5]),
 }
 
 _ZAROVNANI = {(0, 0): "LEFT", (1, 0): "CENTER", (2, 0): "RIGHT", (0, 1): "BOTTOM_LEFT", (1, 1): "BOTTOM_CENTER",
@@ -59,6 +60,7 @@ class Predvolba:
     font: str | None = None  # font z pravidla i se souborem, např. „Arial Narrow IF (ARIALNI.TTF)“
     tucne: bool = False
     kurziva: bool = False
+    nazev_pravidla: str = ""
     ms: dict = field(default_factory=dict)  # původní hodnoty z pravidla (čísla MicroStationu) pro key-in
 
     def popis(self) -> str:
@@ -101,7 +103,7 @@ def _aci(barva, rs: RuleSet) -> tuple[int, str | None]:
         return (v if 1 <= v <= 255 else 7), None
     rgb = color_rgb(v, rs.paleta, rs.barevna_tabulka)
     if rgb is None:
-        return 7, f"barvu {barva} nejde převést (chybí tabulka barev color.tbl) – nastavte ji ručně"
+        return 7, f"barvu {barva} nejde převést (není v tabulce barev color.tbl) – nastavte ji ručně"
     return min(rgb_to_aci(tuple(rgb))), None
 
 
@@ -114,7 +116,7 @@ def _typ_cary(styl) -> tuple[str, str | None]:
         if n == 0:
             return "CONTINUOUS", None
         if n in MS_STYLY:
-            return f"MS{n}", None
+            return f"DGN Style {n}", None
     m = re.match(r"^(\d+\.[0-9A-Za-z]+)", s)
     if m:  # vlastní styl MicroStationu (z rozsahu „2.09–2.17“ první) – typ čáry se jménem kódu stylu
         return m.group(1), None
@@ -169,8 +171,16 @@ def predvolby(rs: RuleSet) -> list[Predvolba]:
             if r.font:
                 p.font = r.font
                 p.tucne, p.kurziva = bool(r.tucne), bool(r.kurziva)
-                p.textovy_styl = _nazev_stylu(r.font) + (" Bold" if p.tucne else "") + (" Italic" if p.kurziva
-                                                                                       else "")
+                # jako MicroStation při exportu: „Style-Arial Narrow“, kurzíva „Style-Arial Narrow IF“
+                zaklad = _nazev_stylu(r.font)
+                if not zaklad.lower().startswith("style-"):
+                    zaklad = "Style-" + zaklad
+                znamy = any(r.font.lower().strip().startswith(n) for n in _REZY)
+                if znamy:  # řez pozná program ze souboru písma (ARIALNI.TTF) – název jako v MicroStationu
+                    p.textovy_styl = zaklad + (" B" if p.tucne else "") + (" IF" if p.kurziva else "")
+                else:  # u .shx písma řez v souboru není – musí být v názvu stylu
+                    p.textovy_styl = zaklad + (" Bold" if p.tucne else "") + (" Italic" if p.kurziva else "")
+                p.nazev_pravidla = r.nazev or ""
             p.vyska = rs.text_size(r.vyska_textu) if r.vyska_textu else None
             if r.sirka_textu and p.vyska:
                 p.sirka_faktor = rs.text_size(r.sirka_textu) / p.vyska
@@ -189,15 +199,20 @@ def priprav_dokument(doc, rs: RuleSet, vzory: list[str | Path] = ()) -> list[str
     zprava = []
     pv = predvolby(rs)
     # typy čar MicroStationu
+    # nejdřív skutečné styly čar a textu od učitele (vzorový výkres DXF, soubor .lin), pak doplnit chybějící
+    prevzato = prevezmi_styly(doc, vzory) if vzory else []
+    if prevzato:
+        zprava.append("Ze vzoru převzaty styly: " + ", ".join(prevzato[:40]) + ("…" if len(prevzato) > 40 else ""))
     pouzite = {p.typ_cary for p in pv}
     for n, (popis, vzor) in MS_STYLY.items():
-        if f"MS{n}" in pouzite and f"MS{n}" not in doc.linetypes:
-            doc.linetypes.add(f"MS{n}", pattern=vzor, description=popis)
+        if f"DGN Style {n}" in pouzite and f"DGN Style {n}" not in doc.linetypes:
+            doc.linetypes.add(f"DGN Style {n}", pattern=vzor, description=popis)
     for p in pv:
         if re.match(r"^\d+\.[0-9A-Za-z]+$", p.typ_cary) and p.typ_cary not in doc.linetypes:
             doc.linetypes.add(p.typ_cary, pattern=[3.0, 2.0, -0.5, 0.0, -0.5],
                               description=f"Vlastní styl MicroStationu {p.typ_cary} (vzhled jen přibližný)")
-            p.poznamky.append(f"styl {p.typ_cary} je vlastní styl MicroStationu – v CAD má přibližný vzhled")
+            p.poznamky.append(f"styl {p.typ_cary} je vlastní styl MicroStationu – v CAD má přibližný vzhled "
+                              "(přesný se převezme ze vzorového výkresu DXF nebo souboru .lin od učitele)")
     for p in pv:
         if p.typ_cary not in ("BYLAYER", "CONTINUOUS") and p.typ_cary not in doc.linetypes:
             p.poznamky.append(f"typ čáry {p.typ_cary} ve výkresu není – použije se plná")
@@ -215,7 +230,13 @@ def priprav_dokument(doc, rs: RuleSet, vzory: list[str | Path] = ()) -> list[str
     # textové styly
     styly = []
     for p in pv:
-        if p.textovy_styl and p.textovy_styl not in doc.styles:
+        if not p.textovy_styl:
+            continue
+        hotovy = _najdi_styl(doc, p)
+        if hotovy is not None:  # styl ze vzoru (knihovna textových stylů učitele) – použít ten
+            p.textovy_styl = hotovy
+            continue
+        if p.textovy_styl not in doc.styles:
             font = p.font or p.textovy_styl
             m = re.search(r"\(([^()]*\.(?:shx|ttf|otf))\)\s*$", font, re.I)
             if m:
@@ -237,6 +258,84 @@ def priprav_dokument(doc, rs: RuleSet, vzory: list[str | Path] = ()) -> list[str
     if rs.meritko:
         doc.header["$LTSCALE"] = rs.meritko / 1000.0
     return zprava
+
+
+def _najdi_styl(doc, p) -> str | None:
+    """Textový styl, který už ve výkresu je: pojmenovaný jako pravidlo (knihovna stylů učitele), nebo se
+    stejným souborem písma a řezem."""
+    jmena = {s.dxf.name.lower(): s.dxf.name for s in doc.styles}
+    if p.nazev_pravidla and p.nazev_pravidla.lower() in jmena:
+        return jmena[p.nazev_pravidla.lower()]
+    if p.textovy_styl.lower() in jmena:
+        return jmena[p.textovy_styl.lower()]
+    soubor = _soubor_fontu(p.font or "", p.tucne, p.kurziva).lower() if p.font else ""
+    m = re.search(r"\(([^()]*)\)\s*$", p.font or "")
+    if m:
+        soubor = m.group(1).lower()
+    if soubor:
+        for s in doc.styles:
+            if (s.dxf.get("font", "") or "").lower() == soubor and s.dxf.name.lower().startswith("style-"):
+                return s.dxf.name
+    return None
+
+
+def nacti_lin(cesta) -> dict[str, tuple[str, str]]:
+    """Soubor typů čar .lin (AutoCAD; MicroStation do něj umí styly vyexportovat): {název: (popis, vzor)}."""
+    text = Path(cesta).read_bytes().decode("cp1250", errors="replace")
+    out, jmeno, popis = {}, None, ""
+    for radek in text.splitlines():
+        r = radek.strip()
+        if not r or r.startswith(";;"):
+            continue
+        if r.startswith("*"):
+            jmeno, _, popis = r[1:].partition(",")
+            jmeno = jmeno.strip()
+        elif jmeno and r[:2].upper() == "A,":
+            out[jmeno] = (popis.strip(), r)
+            jmeno = None
+    return out
+
+
+def prevezmi_styly(doc, vzory) -> list[str]:
+    """Typy čar a textové styly ze vzorových výkresů DXF a souborů .lin (od učitele) – se skutečným vzorem."""
+    import ezdxf
+    from ezdxf.addons import importer
+    out = []
+    for f in vzory:
+        f = Path(f)
+        if f.suffix.lower() == ".lin":
+            try:
+                for jm, (popis, vzor) in nacti_lin(f).items():
+                    if jm in doc.linetypes:
+                        continue
+                    try:
+                        delka = sum(abs(float(x)) for x in vzor.split(",")[1:] if re.match(r"^-?[\d.]+$", x.strip()))
+                        doc.linetypes.add(jm, pattern=vzor, description=popis, length=delka)
+                        out.append(jm)
+                    except Exception:  # noqa: BLE001 – složitý styl s tvary, který nejde načíst
+                        continue
+            except OSError:
+                continue
+        elif f.suffix.lower() == ".dxf":
+            try:
+                src = ezdxf.readfile(f)
+            except Exception:  # noqa: BLE001
+                continue
+            lt = [l.dxf.name for l in src.linetypes
+                  if l.dxf.name.upper() not in ("BYBLOCK", "BYLAYER", "CONTINUOUS") and l.dxf.name not in doc.linetypes]
+            st = [s.dxf.name for s in src.styles if s.dxf.name not in doc.styles and s.dxf.name.upper() != "STANDARD"
+                  and not s.dxf.name.startswith("*")]
+            imp = importer.Importer(src, doc)
+            try:
+                if lt:
+                    imp.import_table("linetypes", lt)
+                if st:
+                    imp.import_table("styles", st)
+                imp.finalize()
+            except Exception:  # noqa: BLE001
+                continue
+            out += lt + st
+    return out
 
 
 def prevezmi_bloky(doc, vzory) -> list[str]:

@@ -94,9 +94,9 @@ def test_symbologie_barevna_tabulka_microstation(make_dxf, tmp_path):
         msp.add_line((0, 0), (1, 0), dxfattribs={"layer": "P", "true_color": 0x804020})
         msp.add_line((0, 1), (1, 1), dxfattribs={"layer": "P", "true_color": 0x00FF00})
     d = make_dxf(build)
-    # bez barevné tabulky nelze barvu 100 ověřit – jen poznámka, žádná chyba
+    # bez tabulky barev projektu se použije vestavěná color.tbl MicroStationu (barva 100 ≠ obě čáry)
     res = run_checks(d, rs, Config(), only=["symbologie"])
-    assert res.issues == [] and any("nelze ověřit" in n for n in res.notes)
+    assert len(res.issues) == 2 and all("má být 100" in i.message for i in res.issues)
     # binární color.tbl: 256 × RGB, barva 100 = #804020
     from kontrola.rules import MICROSTATION_COLORS
     data = bytearray(768)

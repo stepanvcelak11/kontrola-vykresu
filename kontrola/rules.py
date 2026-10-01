@@ -31,6 +31,22 @@ MICROSTATION_COLORS = {
     15: (0, 240, 240),
 }
 
+
+def _plna_tabulka_ms() -> None:
+    """Doplní barvy 16–255 z vestavěné tabulky color.tbl (stejná tabulka jako v CAD), aby šly ověřit
+    i bez tabulky barev v projektu."""
+    import json
+    from pathlib import Path
+    try:
+        data = json.loads((Path(__file__).resolve().parent / "resources" / "ms_barvy.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return
+    for k, v in data.items():
+        MICROSTATION_COLORS.setdefault(int(k), (int(v[1:3], 16), int(v[3:5], 16), int(v[5:7], 16)))
+
+
+_plna_tabulka_ms()
+
 # Názvy barev se převádějí na RGB, takže fungují pro obě palety (MicroStation i AutoCAD).
 COLOR_NAMES = {
     "červená": "#FF0000", "cervena": "#FF0000", "red": "#FF0000",
@@ -199,10 +215,15 @@ def rgb_to_aci(rgb: tuple[int, int, int]) -> frozenset[int]:
 
 def ms_index_for_aci(aci: int, table: dict[int, tuple[int, int, int]] | None = None) -> int | None:
     """Číslo barvy MicroStationu, ze kterého mohlo při exportu vzniknout dané ACI (nejpodobnější)."""
-    tab = dict(MICROSTATION_COLORS)
-    if table:
-        tab.update(table)
+    if table and len(table) >= 200:  # celá tabulka projektu (color.tbl) – platí jen ona
+        tab = dict(table)
+    else:
+        tab = dict(MICROSTATION_COLORS)
+        if table:
+            tab.update(table)
     cands = [i for i, c in tab.items() if aci in rgb_to_aci(tuple(c))]
+    if table and any(i in table for i in cands):  # barvy, které projekt sám definuje, mají přednost
+        cands = [i for i in cands if i in table]
     if not cands:
         return None
     ref = AUTOCAD_ACI.get(aci, (255, 255, 255))
