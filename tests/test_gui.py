@@ -1232,3 +1232,38 @@ def test_vypocty_seznam_souradnic(window, tmp_path):
     # duplicity
     p.seznam.pridej([__import__("kontrola.geodezie.body", fromlist=["Bod"]).Bod("99", 595975.72, 1158246.97)])
     assert p.duplicates_dialog(accept_all=True) == 1 and p.seznam.najdi("99") is None
+
+
+def test_vypocty_ulohy(window):
+    from kontrola.geodezie import vypocty as V
+    from kontrola.geodezie.body import Bod
+    w = window
+    w.show_page("vypocty")
+    p = w.vypocty
+    p.seznam.pridej([Bod("1", 595000.0, 1158000.0, 250.0), Bod("2", 595100.0, 1158000.0, 251.0),
+                     Bod("3", 595050.0, 1158080.0), Bod("4", 595000.0, 1158100.0)])
+    p.model.refresh()
+    p.tabs.setCurrentWidget(p.ulohy)
+    u = p.ulohy
+    names = [u.lst.item(i).text() for i in range(u.lst.count())]
+    # rajón
+    u.lst.setCurrentRow(names.index("Rajón (polární bod)"))
+    u.nastav(st="1", o="2", so="0", sm="100", d="50", nove="10")
+    r = u.vypocitej()
+    assert r and "Y =" in u.vystup.toPlainText()
+    exp = V.rajon(V.P(595000, 1158000), V.norm_gon(V.smernik(V.P(595000, 1158000), V.P(595100, 1158000)) + 100), 50)
+    assert u.pridej() == 1 and abs(p.seznam.najdi("10").y - exp.y) < 1e-9
+    # chybný vstup – srozumitelná hláška, žádný pád
+    u.nastav(st="999")
+    assert u.vypocitej() is None and "není" in u.chyba.text()
+    # výměra
+    u.lst.setCurrentRow(names.index("Výměra a obvod"))
+    u.nastav(body="1 2 3")
+    u.vypocitej()
+    assert "výměra P = 4000.00 m²" in u.vystup.toPlainText()
+    # protokol v projektu
+    assert "Výměra a obvod" in (w.project.root / "vypocty" / "protokol.txt").read_text(encoding="utf-8")
+    # každá úloha s prázdným formulářem jen ohlásí, co chybí
+    for i in range(u.lst.count()):
+        u.lst.setCurrentRow(i)
+        assert u.vypocitej() is None and u.chyba.text()

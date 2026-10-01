@@ -304,6 +304,16 @@ Stránka **Výpočty** v levé liště (vlastní implementace, nic z Gromy se ne
 * **Zpět / Znovu** (Ctrl+Z / Ctrl+Y, 200 kroků) a **automatické ukládání** do projektu
   (`vypocty/seznam_bodu.json`) po každé změně, historie změn.
 * **Polární metoda** ze zápisníku Gromy (.zap) – tlačítko na stránce (výpočet a kontroly jako dosud).
+* **Úlohy** (záložka na stránce Výpočty): směrník a délka, rajón (polární bod s orientací), protínání vpřed
+  z úhlů, protínání z délek, protínání zpět, volné stanovisko (MNČ, opravy na známých bodech), transformace
+  shodnostní / podobnostní / afinní z identických bodů (opravy, m0) a převod dalších bodů, výměra a obvod,
+  staničení a kolmice, bod ze staničení a kolmice, kontrola dvou určení bodu s mezní odchylkou podle kódu
+  kvality. Body se zadávají číslem ze seznamu (s našeptáváním), nové body jdou jedním tlačítkem do seznamu,
+  každý výpočet se připíše do protokolu projektu `vypocty/protokol.txt`. Chybný vstup = srozumitelná hláška.
+* **Ověření výpočtů:** `tests/test_geodeticke_vypocty.py` – ručně spočitatelné příklady (přesně) a zpětné
+  výpočty ze známé geometrie (shoda na 1e-6 m, protínání zpět 1e-5 m). Mezní odchylky (m_xy podle kódu
+  kvality 3–7: 0,14 / 0,26 / 0,50 / 1,00 / 2,00 m, mezní polohová odchylka 2·√2·m_xy) jsou výchozí
+  hodnoty – ověřte je v platném znění katastrální vyhlášky.
 
 ## Zadání z předmětu (MicroStation, Směrnice-výběr.xls)
 

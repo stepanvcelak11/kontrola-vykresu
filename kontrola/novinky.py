@@ -15,6 +15,9 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "prohozené souřadnice) se rozpozná sám a jde upravit. <b>Export</b> do TXT/CSV.",
         "<b>Hromadné úpravy</b> (kód, kvalita, posun, přečíslování), <b>duplicity</b> s bezpečným "
         "slučováním, <b>Zpět/Znovu</b> (Ctrl+Z / Ctrl+Y) a automatické ukládání do projektu.",
+        "<b>Úlohy</b> na stránce Výpočty: rajón, protínání vpřed / z délek / zpět, volné stanovisko, "
+        "transformace s opravami, výměra, staničení a kolmice, kontrola dvou určení – protokol a nové body "
+        "do seznamu jedním klikem.",
         "<b>Hlášení o problému</b> (Nápověda) – zkopírujete a pošlete; po pádu se nabídne samo.",
     ]),
     (3, "1. října 2026 – odpoledne", [

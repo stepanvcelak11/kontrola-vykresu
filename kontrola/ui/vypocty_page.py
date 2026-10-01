@@ -321,6 +321,14 @@ class VypoctyPage(QWidget):
         head = QLabel("<span style='font-size:16pt;font-weight:800'>Výpočty</span>"
                       "&nbsp;&nbsp;<span style='color:gray'>seznam souřadnic projektu</span>")
         lay.addWidget(head)
+        from PySide6.QtWidgets import QTabWidget
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        lay.addWidget(self.tabs, 1)
+        seznam_w = QWidget()
+        outer = lay
+        lay = QVBoxLayout(seznam_w)
+        lay.setContentsMargins(0, 8, 0, 0)
         bar = QHBoxLayout()
         self.b_import = QPushButton("Import…")
         self.b_import.setToolTip("Načíst seznam souřadnic z TXT / CSV (formát se rozpozná, jde upravit)")
@@ -376,6 +384,13 @@ class VypoctyPage(QWidget):
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+        self.tabs.addTab(seznam_w, "Seznam souřadnic")
+        from .ulohy import UlohyPanel
+        self.ulohy = UlohyPanel(self)
+        self.tabs.addTab(self.ulohy, "Úlohy")
+        self.tabs.currentChanged.connect(lambda i: self.ulohy._completer_model.setStringList(
+            [b.cislo for b in self.seznam.body]))
+        lay = outer
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
         self._save_timer.setInterval(400)
@@ -413,6 +428,17 @@ class VypoctyPage(QWidget):
             self._path = self._path.with_name("seznam_bodu_obnoveny.json") if self._path else None
         self.model.seznam = self.seznam
         self._refresh()
+
+    def protokol_append(self, radky: list[str]) -> None:
+        """Každý výpočet se připíše do protokolu projektu (vypocty/protokol.txt) – nic se neztratí."""
+        if self._path is None:
+            return
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._path.with_name("protokol.txt"), "a", encoding="utf-8") as fh:
+                fh.write("\n".join(radky) + "\n\n")
+        except OSError as e:
+            self.message(f"Protokol nejde zapsat: {e}", True)
 
     def save(self) -> None:
         if self._path is None:
