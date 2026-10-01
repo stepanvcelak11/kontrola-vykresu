@@ -141,6 +141,12 @@ nebo vypnout jednotlivé kontroly, změnit jejich závažnost a parametry.
   chyb ubylo a kolik zbývá (jen když je aplikace v pozadí; vypnout v Nabídka → Kontrola).
 * **Osobní tahák** na úvodní stránce – „Na co si dát pozor“: typy chyb, které se vám opakují nejčastěji
   (podle poslední kontroly každého projektu).
+* **Velikost písma** (Nabídka → Zobrazení → Velikost písma): menší, normální, větší, největší – zvětší
+  text v celé aplikaci a karty chyb se přizpůsobí.
+* **Zpět (Ctrl+Z)** – vrátí poslední ✓ Opraveno / ✕ Ignorovat, když se kliknutí nepovedlo (v textovém poli
+  Ctrl+Z dál vrací psaní).
+* **⧉ Hned vedle jsou další chyby** – u vybrané chyby návod vypíše chyby do 10 cm (nebo na stejném prvku
+  do 50 cm) s odkazy; často mají jednu příčinu a po opravě zmizí spolu. Karta má odznak ⧉ +N.
 * **Úvodní okénko** hned po spuštění .exe a **aktualizace jedním klikem** – při nové verzi stačí
   „Aktualizovat teď“: stáhne se, nahradí starý soubor a program se znovu spustí (projekty a nastavení zůstanou).
 
