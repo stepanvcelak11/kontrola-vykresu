@@ -31,7 +31,7 @@ a = Analysis(
     pathex=["."],
     binaries=[],
     datas=datas,
-    hiddenimports=["kontrola.checks.topology", "kontrola.checks.attributes", "pdfplumber", "pypdfium2",
+    hiddenimports=["qrcode", "kontrola.checks.topology", "kontrola.checks.attributes", "pdfplumber", "pypdfium2",
                    "openpyxl", "xlrd", "olefile", "PySide6.QtSvg", "reportlab.graphics.barcode"],
     excludes=excludes,
     noarchive=False,

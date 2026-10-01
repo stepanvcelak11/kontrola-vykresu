@@ -1540,3 +1540,51 @@ def test_cad_podle_zadani(window, tmp_path):
     finally:
         w.project.rules = puvodni
         window.cad.obnov_predvolby()
+
+
+def test_mobil_druha_obrazovka(window):
+    import json
+    import urllib.request
+    from PySide6.QtWidgets import QApplication
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w), 30)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    d = w.show_mobil()
+    try:
+        base = f"http://127.0.0.1:{d.server.port}"
+        t = d.server.klic
+        assert d.qr.pixmap() is not None and not d.qr.pixmap().isNull()
+        # bez klíče nic
+        try:
+            urllib.request.urlopen(base + "/api/stav?t=spatne", timeout=5)
+            raise AssertionError("bez klíče musí být 403")
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
+        html = urllib.request.urlopen(f"{base}/?t={t}", timeout=5).read().decode()
+        assert "Opraveno" in html
+        stav = json.loads(urllib.request.urlopen(f"{base}/api/stav?t={t}", timeout=5).read())
+        assert len(stav["chyby"]) == len(w.issues)
+        prvni = w.issues[0].number
+
+        def post(akce, cislo=None):
+            req = urllib.request.Request(f"{base}/api/akce?t={t}", data=json.dumps(
+                {"akce": akce, "cislo": cislo}).encode(), headers={"Content-Type": "application/json"})
+            assert urllib.request.urlopen(req, timeout=5).status == 200
+        post("vybrat", prvni)
+        assert w._wait(lambda: (QApplication.processEvents() or True) and w.issue_panel.current_issue() is not None
+                       and w.issue_panel.current_issue().number == prvni, 10)
+        post("opraveno")
+        assert w._wait(lambda: (QApplication.processEvents() or True)
+                       and next(i for i in w.issues if i.number == prvni).state == "opraveno", 10)
+        stav = json.loads(urllib.request.urlopen(f"{base}/api/stav?t={t}", timeout=5).read())
+        assert next(c for c in stav["chyby"] if c["cislo"] == prvni)["stav"] == "opraveno"
+        post("vybrat", prvni)
+        assert w._wait(lambda: (QApplication.processEvents() or True) and w.issue_panel.current_issue() is not None
+                       and w.issue_panel.current_issue().number == prvni, 10)
+        post("vratit")
+        assert w._wait(lambda: (QApplication.processEvents() or True)
+                       and next(i for i in w.issues if i.number == prvni).state == "nová", 10)
+    finally:
+        d.close()

@@ -249,6 +249,8 @@ class MainWindow(QMainWindow):
         self.a_redo = self._act("Znovu", self.redo_dispatch, "Ctrl+Y", "Znovu provede vrácený krok (Výpočty)")
         self.a_open_cad = self._act("Otevřít výkres v CAD", self.open_in_cad, None,
                                     "Otevře právě kontrolovaný výkres DXF na stránce CAD (kreslení a opravy)")
+        self.a_mobil = self._act("Mobil jako druhá obrazovka…", self.show_mobil, None,
+                                 "QR kód pro telefon ve stejné Wi-Fi: seznam chyb a tlačítka Opraveno / Další")
         self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+Shift+H",
                                 "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
         self.a_focus = self._act("Režim soustředění", self.set_focus_mode, "F11",
@@ -359,6 +361,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_fixguide)
         m_check.addAction(self.a_undo)
         m_check.addAction(self.a_open_cad)
+        m_check.addAction(self.a_mobil)
         m_check.addAction(self.a_mini)
         m_check.addAction(self.a_notify)
         m_check.addAction(self.a_timeline)
@@ -1767,6 +1770,18 @@ class MainWindow(QMainWindow):
             self.vypocty.redo()
         elif self.tabs.currentWidget() is getattr(self, "cad", None):
             self.cad.redo()
+
+    def show_mobil(self):
+        from .mobil_dialog import MobilDialog
+        try:
+            d = MobilDialog(self)
+        except (OSError, ImportError) as e:
+            QMessageBox.warning(self, "Mobil", f"Spojení s mobilem nejde spustit: {e}")
+            return None
+        d.setAttribute(Qt.WA_DeleteOnClose)
+        d.show()
+        self._mobil = d
+        return d
 
     def show_report(self, problem: str = ""):
         from .crash import show_report_dialog
