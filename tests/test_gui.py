@@ -1991,3 +1991,36 @@ def test_cad_knihovna_bunek(window, tmp_path):
     for t in ("vlož", "4.05", "1", "0", "x=10 y=10", ""):
         c.zadej(t)
     assert [e.dxf.name for e in c.prostor.query("INSERT")] == ["4.05"]
+
+
+def test_cad_zkoseni_a_vrcholy(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    for t in ("u", "x=10 y=-2", "x=10 y=10", ""):
+        c.zadej(t)
+    a, b = list(c.prostor.query("LINE"))
+    c.proved("cha")
+    c.zadej("2")
+    c.zadej("2")
+    c._posli((a, (2, 0)))
+    c._posli((b, (10, 8)))
+    assert len(c.prostor.query("LINE")) == 3
+    c.proved("pl")
+    for t in ("x=0 y=20", "x=10 y=20", "x=10 y=30", ""):
+        c.zadej(t)
+    p = c.prostor.query("LWPOLYLINE").first
+    c.proved("iv")
+    c._posli((p, (5, 20)))
+    c.zadej("x=5 y=18")
+    p = c.prostor.query("LWPOLYLINE").first
+    assert len(p) == 4
+    c.proved("dv")
+    c._posli((p, (5, 18)))
+    c.zrus()
+    assert len(c.prostor.query("LWPOLYLINE").first) == 3
+    c.proved("zpět")
+    c.proved("zpět")
+    assert len(c.prostor.query("LWPOLYLINE").first) == 3

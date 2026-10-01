@@ -233,6 +233,8 @@ class CadPage(QWidget):
         "kopie": "kopírovat výběr (i vícekrát)", "otoč": "otočit výběr", "měřítko": "změnit velikost výběru",
         "zrcadli": "zrcadlit výběr", "rovnoběžka": "rovnoběžka (offset)", "ořež": "oříznout k průsečíkům",
         "prodluž": "prodloužit úsečku k prvku", "zaobli": "zaoblit / spojit roh dvou úseček",
+        "zkos": "zkosit roh dvou úseček (Chamfer)", "vlož vrchol": "vložit vrchol do strany polylinie",
+        "smaž vrchol": "smazat vrchol polylinie", "posuň vrchol": "posunout vrchol (Modify Element)",
         "rozpoj": "rozpojit polylinie, bloky, kóty", "spoj": "spojit navazující prvky do polylinie",
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
         "vše": "vybrat vše", "zpět": "vrátit poslední změnu (Ctrl+Z)", "vpřed": "znovu provést (Ctrl+Y)",
@@ -265,7 +267,10 @@ class CadPage(QWidget):
         "otoc": "otoč", "sc": "měřítko", "scale": "měřítko", "meritko": "měřítko", "mi": "zrcadli",
         "mirror": "zrcadli", "of": "rovnoběžka", "offset": "rovnoběžka", "rovnobezka": "rovnoběžka",
         "tr": "ořež", "trim": "ořež", "orez": "ořež", "ex": "prodluž", "extend": "prodluž",
-        "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
+        "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "cha": "zkos", "chamfer": "zkos",
+        "zkoseni": "zkos", "zkosení": "zkos", "iv": "vlož vrchol", "insert vertex": "vlož vrchol",
+        "vloz vrchol": "vlož vrchol", "dv": "smaž vrchol", "delete vertex": "smaž vrchol",
+        "smaz vrchol": "smaž vrchol", "mo": "posuň vrchol", "modify": "posuň vrchol", "posun vrchol": "posuň vrchol", "x": "rozpoj", "explode": "rozpoj",
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
         "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
@@ -1840,6 +1845,31 @@ class CadPage(QWidget):
         e1, k1 = yield Pozadavek("prvek", "První úsečka (klikněte na část, která zůstane):")
         e2, k2 = yield Pozadavek("prvek", "Druhá úsečka:")
         U.zaobli(self.prostor, self.historie_zmen, e1, k1, e2, k2, r)
+
+    def n_zkos(self):
+        d1 = yield Pozadavek("cislo", "První délka zkosení:", vychozi=1.0)
+        d2 = yield Pozadavek("cislo", "Druhá délka zkosení:", vychozi=d1)
+        e1, k1 = yield Pozadavek("prvek", "První úsečka (klikněte na část, která zůstane):")
+        e2, k2 = yield Pozadavek("prvek", "Druhá úsečka:")
+        U.zkos(self.prostor, self.historie_zmen, e1, k1, e2, k2, d1, d2)
+
+    def n_vloz_vrchol(self):
+        e, k = yield Pozadavek("prvek", "Vložit vrchol – klikněte na stranu úsečky / polylinie:")
+        b = yield self._bod_req("Poloha nového vrcholu:", k)
+        U.vloz_vrchol(self.prostor, self.historie_zmen, e, k, b)
+
+    def n_smaz_vrchol(self):
+        while True:
+            e, k = yield Pozadavek("prvek", "Smazat vrchol – klikněte u vrcholu polylinie (Esc = konec):")
+            try:
+                U.smaz_vrchol(self.prostor, self.historie_zmen, e, k)
+            except ValueError as ex:
+                self.vypis(f"⚠ {ex}")
+
+    def n_posun_vrchol(self):
+        e, k = yield Pozadavek("prvek", "Posunout vrchol – klikněte u vrcholu úsečky / polylinie:")
+        b = yield self._bod_req("Nová poloha vrcholu:", k)
+        U.posun_vrchol(self.prostor, self.historie_zmen, e, k, b)
 
     def n_rozpoj(self):
         ents = yield from self._vyber_req("Rozpojit")

@@ -90,7 +90,21 @@ if _TRACE:
     sys.exit = _sys_exit
     _os._exit = _os_exit
 
+    _qt_handler = {}
+
+    def _qt_zpravy():
+        """Zprávy Qt (i qFatal těsně před abort) do trasování – na Windows jinak zmizí."""
+        if _qt_handler or "PySide6.QtCore" not in sys.modules:
+            return
+        from PySide6.QtCore import qInstallMessageHandler
+
+        def handler(typ, ctx, msg):
+            _zapis(f"QT[{int(typ.value) if hasattr(typ, 'value') else typ}] {msg} ({ctx.file}:{ctx.line})")
+        _qt_handler["h"] = handler
+        qInstallMessageHandler(handler)
+
     def pytest_runtest_setup(item):
+        _qt_zpravy()
         _zapis(f"SETUP {item.nodeid} vlákna={[t.name for t in threading.enumerate()]}")
 
     _SLEDOVAT = {"test_vypocty_seznam_souradnic"}  # test, ve kterém proces na Windows tiše umírá

@@ -279,3 +279,37 @@ def test_rozdeleni_ohrada_omerne_miry_koty():
     assert abs(kp.get_measurement() - 7) < 1e-9
     ku = U.kota_uhlu(msp, h, (0, 0), (10, 0), (0, 10), (5, 5))
     assert abs(math.degrees(ku.get_measurement()) - 90) < 1e-6 or abs(ku.get_measurement() - 90) < 1e-6
+
+
+def test_zkoseni_a_vrcholy():
+    doc, msp, h, k = _novy()
+    a = k.usecka((0, 0), (10, 0))
+    b = k.usecka((10, -2), (10, 10))
+    l1, l2, z = U.zkos(msp, h, a, (2, 0), b, (10, 8), 2, 3)
+    assert (l1.dxf.end.x, l1.dxf.end.y) == pytest.approx((8, 0))
+    assert (l2.dxf.end.x, l2.dxf.end.y) == pytest.approx((10, 3))
+    assert z.dxf.start.distance(z.dxf.end) == pytest.approx(math.hypot(2, 3))
+    with pytest.raises(ValueError):
+        U.zkos(msp, h, l1, (2, 0), l2, (10, 2), 50)
+    assert len(msp.query("LINE")) == 3  # chybné zkosení výkres nezměnilo
+    h.krok_zpet()
+    assert {e.dxf.handle for e in msp.query("LINE")} == {a.dxf.handle, b.dxf.handle}
+
+    p = k.polylinie([(0, 0), (10, 0), (10, 10)])
+    p2 = U.vloz_vrchol(msp, h, p, (5, 0.1), (5, -2))
+    assert [tuple(q[:2]) for q in p2.get_points("xy")] == [(0, 0), (5, -2), (10, 0), (10, 10)]
+    p3 = U.posun_vrchol(msp, h, p2, (9.8, 9.9), (12, 12))
+    assert tuple(list(p3.get_points("xy"))[-1]) == pytest.approx((12, 12))
+    p4 = U.smaz_vrchol(msp, h, p3, (5, -2))
+    assert len(p4) == 3
+    p5 = U.smaz_vrchol(msp, h, p4, (0, 0))
+    with pytest.raises(ValueError):
+        U.smaz_vrchol(msp, h, p5, (10, 0))
+    l = k.usecka((0, 0), (4, 0))
+    pl = U.vloz_vrchol(msp, h, l, (2, 0), (2, 1))
+    assert pl.dxftype() == "LWPOLYLINE" and len(pl) == 3 and l.dxf.owner is None
+    l2 = U.posun_vrchol(msp, h, k.usecka((0, 0), (4, 0)), (3.9, 0), (5, 5))
+    assert (l2.dxf.end.x, l2.dxf.end.y) == (5, 5)
+    for _ in range(3):  # posun vrcholu, nakreslení úsečky, vložení vrcholu
+        h.krok_zpet()
+    assert l.dxf.owner is not None

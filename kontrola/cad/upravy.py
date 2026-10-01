@@ -617,6 +617,112 @@ def zaobli(msp, h, e1, klik1, e2, klik2, r: float):
     return nove
 
 
+def zkos(msp, h, e1, klik1, e2, klik2, d1: float, d2: float | None = None):
+    """Zkosí roh dvou úseček (Chamfer): úsečky se zkrátí o d1 a d2 od průsečíku a spojí se úsečkou."""
+    d2 = d1 if d2 is None else d2
+    if d1 <= 0 or d2 <= 0:
+        raise ValueError("Délky zkosení musí být kladné.")
+    pom = Historie(msp)
+    nove = zaobli(msp, pom, e1, klik1, e2, klik2, 0.0)  # ostrý roh do pomocné historie
+    (c1, c2) = nove
+    p = _xy(c1.dxf.end)
+    body = []
+    for c, d in ((c1, d1), (c2, d2)):
+        k = _xy(c.dxf.start)
+        dl = _dist(p, k)
+        if d > dl + 1e-9:
+            pom.krok_zpet()
+            raise ValueError("Zkosení je delší než úsečka.")
+        q = (p[0] + (k[0] - p[0]) * d / dl, p[1] + (k[1] - p[1]) * d / dl)
+        c.dxf.end = (q[0], q[1], 0)
+        body.append(q)
+    attrs = {k: e1.dxf.get(k) for k in ("layer", "color", "linetype", "lineweight") if e1.dxf.hasattr(k)}
+    spoj_ = msp.add_line(body[0], body[1], dxfattribs=attrs)
+    h.proved("Zkosení", [c1, c2, spoj_], [e1, e2])
+    return [c1, c2, spoj_]
+
+
+# ------------------------------------------------------------------ vrcholy polylinie
+def _nejblizsi_segment(pts, bod, uzavrena: bool):
+    px, py = _xy(bod)
+    n = len(pts)
+    best = None
+    for i in range(n if uzavrena else n - 1):
+        (x1, y1), (x2, y2) = pts[i][:2], pts[(i + 1) % n][:2]
+        dx, dy = x2 - x1, y2 - y1
+        ll = dx * dx + dy * dy
+        tt = 0.0 if ll == 0 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / ll))
+        d = math.hypot(x1 + tt * dx - px, y1 + tt * dy - py)
+        if best is None or d < best[0]:
+            best = (d, i)
+    return best[1]
+
+
+def _nejblizsi_vrchol(pts, bod) -> int:
+    px, py = _xy(bod)
+    return min(range(len(pts)), key=lambda i: math.hypot(pts[i][0] - px, pts[i][1] - py))
+
+
+def _polylinie_z(msp, e, pts):
+    c = _kopie(e)
+    c.set_points(pts, format="xyseb")
+    msp.add_entity(c)
+    return c
+
+
+def _body_polylinie(e):
+    if e.dxftype() == "LINE":
+        return [(*_xy(e.dxf.start), 0, 0, 0), (*_xy(e.dxf.end), 0, 0, 0)], False
+    if e.dxftype() != "LWPOLYLINE":
+        raise ValueError("Vrcholy jde upravovat u úsečky nebo polylinie.")
+    return [tuple(p) for p in e.get_points("xyseb")], bool(e.closed)
+
+
+def vloz_vrchol(msp, h, e, klik, novy):
+    """Vloží vrchol do strany, na kterou se kliklo (Insert Vertex). Úsečka se změní na polylinii."""
+    pts, zavr = _body_polylinie(e)
+    i = _nejblizsi_segment(pts, klik, zavr)
+    pts = [(*p[:4], 0.0) if k == i else p for k, p in enumerate(pts)]  # oblouk strany se zruší
+    x, y = _xy(novy)
+    pts.insert(i + 1, (x, y, 0, 0, 0))
+    if e.dxftype() == "LINE":
+        attrs = {k: e.dxf.get(k) for k in ("layer", "color", "linetype", "lineweight") if e.dxf.hasattr(k)}
+        c = msp.add_lwpolyline(pts, format="xyseb", dxfattribs=attrs)
+    else:
+        c = _polylinie_z(msp, e, pts)
+    h.proved("Vložení vrcholu", [c], [e])
+    return c
+
+
+def smaz_vrchol(msp, h, e, klik):
+    """Smaže nejbližší vrchol polylinie (Delete Vertex)."""
+    pts, zavr = _body_polylinie(e)
+    if e.dxftype() != "LWPOLYLINE" or len(pts) <= (3 if zavr else 2):
+        raise ValueError("Vrchol nejde smazat – prvek by zanikl.")
+    i = _nejblizsi_vrchol(pts, klik)
+    del pts[i]
+    c = _polylinie_z(msp, e, pts)
+    h.proved("Smazání vrcholu", [c], [e])
+    return c
+
+
+def posun_vrchol(msp, h, e, klik, novy):
+    """Posune nejbližší vrchol úsečky / polylinie do nového bodu (Modify Element)."""
+    pts, _zavr = _body_polylinie(e)
+    i = _nejblizsi_vrchol(pts, klik)
+    x, y = _xy(novy)
+    if e.dxftype() == "LINE":
+        c = _kopie(e)
+        z = (c.dxf.start if i == 0 else c.dxf.end).z
+        c.dxf.set("start" if i == 0 else "end", (x, y, z))
+        msp.add_entity(c)
+    else:
+        pts[i] = (x, y, *pts[i][2:])
+        c = _polylinie_z(msp, e, pts)
+    h.proved("Posun vrcholu", [c], [e])
+    return c
+
+
 # ------------------------------------------------------------------ rozpojení a spojení
 def rozpoj(msp, h, ents) -> list:
     """Rozpojí polylinie, bloky, kóty, víceřádkové texty na jednoduché prvky."""
