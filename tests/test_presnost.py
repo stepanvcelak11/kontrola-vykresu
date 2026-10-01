@@ -153,6 +153,22 @@ def inj_cislo_prepsane(lab, d, rng):
     return (g.geometry.x, g.geometry.y)
 
 
+def inj_popis_na_popis(lab, d, rng):
+    from shapely import affinity
+
+    from kontrola.checks.kartografie import text_box
+    t = [f for f in lab.base.features if f.geom_type == GeomType.TEXT and (f.text or "").strip()
+         and f.dxftype in ("TEXT", "MTEXT")]
+    f, g = rng.sample(t, 2)
+    fr = replace(f, rotation=g.rotation)
+    bf, bg = text_box(fr), text_box(g)
+    if bf is None or bg is None:
+        return None
+    _set(d, f, rotation=g.rotation, geometry=affinity.translate(f.geometry, bg.centroid.x - bf.centroid.x,
+                                                                  bg.centroid.y - bf.centroid.y))
+    return (bg.centroid.x, bg.centroid.y)
+
+
 PRIPADY = {
     "nedotažení 5 mm": (inj_nedotazeni, {"chybejici_napojeni"}),
     "volný konec 40 cm": (inj_volny_konec, {"visici_konce"}),
@@ -162,6 +178,7 @@ PRIPADY = {
     "špatná barva": (inj_barva, {"symbologie", "jednotnost_hladiny"}),
     "špička": (inj_spicka, {"spicka"}),
     "přepsané číslo bodu": (inj_cislo_prepsane, {"duplicitni_cislo_bodu"}),
+    "popis na popisu": (inj_popis_na_popis, {"popisy_pres_sebe"}),
 }
 
 

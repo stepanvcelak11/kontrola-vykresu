@@ -710,7 +710,7 @@ místě a co se nahlásí navíc. Výsledky (20 opakování na každý druh chyb
 | špatná barva / tloušťka / vrstva | 100 % | 100 % |
 | zatoulaný prvek, prázdný text | 100 % | 100 % |
 | přepsané číslo bodu (duplicitní číslo) | 100 % | 100 % |
-| text vzhůru nohama, jiná výška textu, výška s 1 des. místem | 100 % | 100 % |
+| text vzhůru nohama, jiná výška textu, výška s 1 des. místem, popis přes jiný popis | 100 % | 100 % |
 | číslo bodu odsunuté o 3 m | 80 % | 100 % |
 | smazané číslo bodu | 90 % do 2 m | 100 % |
 
