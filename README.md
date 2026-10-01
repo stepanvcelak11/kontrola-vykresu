@@ -370,6 +370,7 @@ Obecné nastavení:
 | Kontrola (id) | Co hlídá | Výchozí |
 |---|---|---|
 | Zbytečné lomové body (`zbytecne_lomove_body`) | lomový bod na rovné čáře, na který nic nenavazuje | info |
+| Zdvojený lomový bod (`zdvojeny_vrchol`) | dva vrcholy čáry na sobě (i když je načítání sloučí) | varování |
 | Špička (`spicka`) | čára se v lomovém bodě vrací zpět (úhel pod 10°) | varování |
 | Nepatrná nebo úzká plocha (`nepatrna_plocha`) | plocha pod 0,05 m² nebo průměrná šířka pod 0,02 m | varování |
 | Zatoulaný prvek (`zatoulany_prvek`) | prvek nebo malá skupinka daleko od ostatní kresby (např. v počátku souřadnic) | varování |

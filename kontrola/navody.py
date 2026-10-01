@@ -43,6 +43,8 @@ _ATTR = {
     "zbytecne_lomove_body": "Odstraňte vrchol nástrojem Odstranit vrchol (Delete Vertex).",
     "spicka": "Odstraňte vrchol na konci špičky (Delete Vertex), nebo ho přesuňte na správné místo.",
     "nepatrna_plocha": "Plochu smažte, nebo upravte hranice, aby sousední plochy navazovaly přesně (přichycení).",
+    "zdvojeny_vrchol": "Klikněte na místo chyby nástrojem Odstranit vrchol (Delete Vertex) – zdvojený bod zmizí, "
+                       "tvar čáry zůstane.",
     "zatoulany_prvek": "Přibližte chybu, prvek vyberte a smažte (Smazat), nebo ho přesuňte na správné místo "
                        "(Přesunout). Pak Zobrazit vše (Fit View) ukáže celou kresbu.",
     "bod_bez_cisla": "Doplňte číslo bodu podle seznamu souřadnic (Umístit text – Place Text) ve stejném "

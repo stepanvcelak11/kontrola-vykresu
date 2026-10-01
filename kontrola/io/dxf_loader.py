@@ -304,12 +304,16 @@ class _Loader:
             else:
                 verts = [self.ctx.xy(p) for p in e.points_in_wcs()]
                 has_arc = any(abs(v.dxf.get("bulge", 0.0)) > 1e-12 for v in e.vertices)
+            dups = [q for a, q in zip(verts, verts[1:]) if abs(a[0] - q[0]) <= 1e-9 and abs(a[1] - q[1]) <= 1e-9]
             verts = _dedupe(verts)
             pts = _flatten(e, self.ctx) if (has_arc and len(verts) > 1) else list(verts)
             if closed and pts and pts[0] != pts[-1]:
                 pts = pts + [pts[0]]
             geom, gt = _linear_geometry(pts, closed)
-            yield self._new(dxftype=t, geom_type=gt, geometry=geom, closed=closed, vertices=verts, **base)
+            if closed and len(verts) > 2 and dups and dups[-1] == verts[0] == verts[-1]:
+                dups = dups[:-1]  # uzavírací bod tvaru (první = poslední) je v pořádku
+            yield self._new(dxftype=t, geom_type=gt, geometry=geom, closed=closed, vertices=verts,
+                            dup_vertices=dups, **base)
         elif t in ("ARC", "SPLINE", "ELLIPSE"):
             pts = _flatten(e, self.ctx)
             closed = False

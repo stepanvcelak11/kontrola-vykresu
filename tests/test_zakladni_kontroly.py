@@ -355,3 +355,13 @@ def test_bez_pravidel_pomocne_vrstvy_se_netopologizuji(make_dxf):
     res = run_checks(d, RuleSet(), Config(), only=["visici_konce"])
     assert {i.layer for i in res.issues} == {"PLOT"}
     assert any("KOTY" in n and "pomocné" in n for n in res.notes)
+
+
+def test_zdvojeny_vrchol(make_dxf):
+    def build(msp, doc):
+        msp.add_lwpolyline([(0, 0), (5, 0), (5, 0), (10, 3)], dxfattribs={"layer": "A"})
+        msp.add_lwpolyline([(0, 10), (5, 10), (5.00001, 10), (10, 13)], dxfattribs={"layer": "A"})
+        msp.add_lwpolyline([(0, 20), (5, 20), (5, 25), (0, 20)], close=True, dxfattribs={"layer": "A"})
+        msp.add_line((30, 30), (30, 30), dxfattribs={"layer": "A"})
+    d = make_dxf(build, name="zdvoj.dxf")
+    assert [(i.x, i.y) for i in check(d, "zdvojeny_vrchol")] == [(5.0, 0.0), (5.00001, 10.0)]

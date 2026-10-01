@@ -63,6 +63,32 @@ class ZbytecneLomoveBody(Check):
 
 
 @register
+class ZdvojenyVrchol(Check):
+    id = "zdvojeny_vrchol"
+    nazev = "Zdvojený lomový bod"
+    skupina = "Geometrie"
+    popis = ("Dva lomové body čáry leží na sobě (nebo skoro na sobě – do přesnosti výkresu). Na výkrese to není "
+             "vidět, ale čára má úsek nulové délky; MGEO to hlásí jako zdvojený bod.")
+    vychozi_zavaznost = Severity.VAROVANI
+
+    def run(self, ctx: CheckContext):
+        eps = max(ctx.precision, 1e-9)
+        for f in ctx.linear():
+            if f.geom_type not in (GeomType.LINIE, GeomType.POLYGON) or f.dxftype in ("HATCH", "CIRCLE", "ELLIPSE"):
+                continue
+            found = list(f.dup_vertices)
+            v = [tuple(p[:2]) for p in f.vertices]
+            if f.zero_length or len(v) <= 2:
+                v = []  # úsečku nulové délky hlásí kontrola Prvek nulové délky
+            n = len(v) - 1 if (f.closed and len(v) > 2 and math.dist(v[0], v[-1]) <= 1e-9) else len(v)
+            for k in range(1, n):
+                if math.dist(v[k - 1], v[k]) <= eps:
+                    found.append(v[k])
+            for p in found:
+                yield ctx.issue(self, f, "Zdvojený lomový bod (dva vrcholy na sobě)", at=p)
+
+
+@register
 class Spicka(Check):
     id = "spicka"
     nazev = "Špička (čára se vrací zpět)"

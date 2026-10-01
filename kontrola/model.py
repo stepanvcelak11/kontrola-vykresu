@@ -93,6 +93,7 @@ class Feature:
     font: str = ""  # název stylu / fontu textu
     bylayer: frozenset = frozenset()  # vlastnosti převzaté z hladiny: {"barva", "styl", "tloušťka"}
     zero_length: bool = False  # úsečka nulové délky (bod MicroStationu)
+    dup_vertices: list[tuple[float, float]] = field(default_factory=list)  # zdvojené vrcholy (při čtení sloučené)
 
     @property
     def is_linear(self) -> bool:

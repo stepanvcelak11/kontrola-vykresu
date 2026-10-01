@@ -221,6 +221,11 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Nepatrná nebo úzká plocha",
         "Uzavřená plocha s nepatrnou výměrou nebo štěrbina – zbytek po editaci.<br><br><b>Oprava:</b> plochu "
         "smažte, nebo upravte hranice tak, aby sousední plochy navazovaly přesně."),
+    "zdvojeny_vrchol": (
+        "Zdvojený lomový bod",
+        "Dva lomové body čáry leží na sobě – na výkrese to není vidět, ale čára má úsek nulové délky."
+        "<br><br><b>Oprava:</b> jeden z vrcholů odstraňte (Odstranit vrchol – Delete Vertex) nebo čáru "
+        "nakreslete znovu."),
     "zatoulany_prvek": (
         "Zatoulaný prvek daleko od kresby",
         "Prvek leží daleko od ostatní kresby – omylem kliknutý bod, prvek v počátku souřadnic nebo kopie mimo "
