@@ -236,6 +236,9 @@ class MainWindow(QMainWindow):
         self.a_notify.setChecked(self.settings.value("upozorneni/zapnuto", True, type=bool))
         self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+H",
                                 "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
+        self.a_focus = self._act("Režim soustředění", self.set_focus_mode, "F11",
+                                 "Jen výkres a jedna chyba velkým písmem – Opraveno / Další, Esc ukončí",
+                                 checkable=True)
         self.a_mini = self._act("Okno „Další chyba“ navrchu", self.show_mini, "Ctrl+Shift+N",
                                 "Malé okno, které zůstane nad MicroStationem: popis chyby, key-in, Opraveno/Další")
         self.a_fixguide = self._act("Opravný průvodce (MicroStation)…", self.show_fix_guide, "Ctrl+G",
@@ -284,6 +287,7 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.a_dark)
         m_view.addAction(self.a_labels)
         m_view.addAction(self.a_heat)
+        m_view.addAction(self.a_focus)
         from PySide6.QtGui import QActionGroup
         m_size = m_view.addMenu("Velikost kroužků chyb")
         grp = QActionGroup(self)
@@ -511,6 +515,8 @@ class MainWindow(QMainWindow):
             self.a_menu.setIcon(icon("menu"))
         if getattr(self, "a_mini", None) is not None:
             self.a_mini.setIcon(icon("okno"))
+        if getattr(self, "a_focus", None) is not None:
+            self.a_focus.setIcon(icon("soustredeni"))
         if getattr(self, "a_heat", None) is not None:
             self.a_heat.setIcon(icon("teplo"))
         if getattr(self, "a_layers_panel", None) is not None:
@@ -1335,6 +1341,60 @@ class MainWindow(QMainWindow):
 
     def _set_notify(self, on: bool):
         self.settings.setValue("upozorneni/zapnuto", bool(on))
+
+    def set_focus_mode(self, on: bool):
+        """Schová vše kromě výkresu; dole karta s vybranou chybou (Opraveno / Další), Esc ukončí."""
+        from PySide6.QtGui import QShortcut
+        from .soustredeni import FocusBar
+        if getattr(self, "_focus_bar", None) is None:
+            self._focus_bar = FocusBar(self)
+            self.split.add_overlay(self._focus_bar, "dole")
+            self._focus_esc = QShortcut(QKeySequence("Esc"), self, activated=lambda: self.a_focus.setChecked(False))
+            self.issue_panel.issueSelected.connect(lambda _n: self._focus_bar.refresh() if self.split.focus_mode
+                                                   else None)
+        bar = self._focus_bar
+        if on:
+            if self.split.focus_mode:
+                return
+            self.show_page("vykres")
+            docks = [d for d in self.findChildren(QDockWidget) if d.isVisible()]
+            self._focus_saved = {"panel": self.split.panel_visible, "status": self.statusBar().isVisible(),
+                                 "docks": docks,
+                                 "over": [w for w, _ in self.split.overlays if w.isVisible() and w is not bar]}
+            self.split.focus_mode = True
+            self.toolbar.hide()
+            self.statusBar().hide()
+            for d in docks:
+                d.hide()
+            for w in self._focus_saved["over"]:
+                w.hide()
+            self.minimap.suppressed = True
+            self.split.set_panel_visible(False, animate=False)
+            self._focus_esc.setEnabled(True)
+            bar.show()
+            if self.issue_panel.current_issue() is None or self.issue_panel.current_issue().state != "nová":
+                self.issue_panel.next_open()
+            bar.refresh()
+            self.split._layout()
+            iss = self.issue_panel.current_issue()
+            if iss is not None:
+                self.view.highlight_issue(iss.number, zoom=True)
+        else:
+            if not self.split.focus_mode:
+                return
+            sv = getattr(self, "_focus_saved", {})
+            self.split.focus_mode = False
+            self._focus_esc.setEnabled(False)
+            bar.hide()
+            self.toolbar.show()
+            self.statusBar().setVisible(sv.get("status", True))
+            for d in sv.get("docks", []):
+                d.show()
+            for w in sv.get("over", []):
+                w.show()
+            self.minimap.suppressed = False
+            self.split.set_panel_visible(sv.get("panel", True), animate=False)
+            self.split._layout()
 
     def show_mini(self):
         from .mini_okno import MiniOkno

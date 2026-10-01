@@ -875,3 +875,24 @@ def test_tepelna_mapa(window):
     assert w.view._heat_item is None
     w.a_heat.setChecked(False)
     assert w.view._heat_item is None
+
+
+def test_rezim_soustredeni(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.show()
+    w.a_focus.setChecked(True)
+    bar = w._focus_bar
+    assert bar.isVisible() and not w.toolbar.isVisible() and not w.view_tools.isVisible()
+    assert not w.split.card.isVisible() or not w.split.panel_visible
+    iss = w.issue_panel.current_issue()
+    assert iss is not None and iss.message in bar.title.text()
+    todo = sum(1 for i in w.issues if i.state == "nová")
+    bar.b_ok.click()
+    assert iss.state == "opraveno" and sum(1 for i in w.issues if i.state == "nová") == todo - 1
+    assert w.issue_panel.current_issue() is not iss
+    w._focus_esc.activated.emit()
+    assert not w.a_focus.isChecked() and not bar.isVisible()
+    assert w.toolbar.isVisible() and w.view_tools.isVisible() and w.split.panel_visible

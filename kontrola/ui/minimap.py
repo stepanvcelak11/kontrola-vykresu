@@ -31,7 +31,7 @@ class Minimap(QFrame):
     # ---------------------------------------------------------------- obsah
     def _tick(self):
         v = self.view
-        if v.drawing is None:
+        if v.drawing is None or getattr(self, "suppressed", False):
             if self.isVisible():
                 self.hide()
             return

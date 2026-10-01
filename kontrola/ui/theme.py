@@ -43,6 +43,7 @@ _ICONS = {
     "sk_geometrie": '<path d="M3 17l5-9 6 6 7-10"/><circle cx="8" cy="8" r="1.6"/><circle cx="14" cy="14" r="1.6"/>',
     "vrstvy": '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
     "teplo": '<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.4 1.3-3.9 2.4-5 .2 1.6 1 2.6 2.1 3 .6-2.6-.5-5.2.5-8z"/>',
+    "soustredeni": '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="2.5"/>',
     "okno": '<rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
     "hledat": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/>',

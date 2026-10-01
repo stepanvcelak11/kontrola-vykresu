@@ -53,6 +53,7 @@ class Canvas(QWidget):
         _shadow(self.b_show, 18, 50)
         self.overlays: list[tuple[QWidget, str]] = []  # další plovoucí prvky a jejich umístění
         self.panel_visible = True
+        self.focus_mode = False  # režim soustředění: žádná tlačítka panelu
         self._anim: QPropertyAnimation | None = None
 
     # ---------------------------------------------------------------- rozvržení
@@ -80,10 +81,10 @@ class Canvas(QWidget):
         self.card.setVisible(self.panel_visible or (self._anim is not None
                                                     and self._anim.state() == QPropertyAnimation.Running))
         self.b_hide.move(self.card.x() - self.b_hide.width() + 4, MARGIN + 60)
-        self.b_hide.setVisible(self.panel_visible)
+        self.b_hide.setVisible(self.panel_visible and not self.focus_mode)
         self.b_show.adjustSize()
         self.b_show.move(W - self.b_show.width() - MARGIN, MARGIN)
-        self.b_show.setVisible(not self.panel_visible)
+        self.b_show.setVisible(not self.panel_visible and not self.focus_mode)
         right = (W - pw - 2 * MARGIN) if self.panel_visible else W
         if hasattr(self.view, "inset_right"):
             self.view.inset_right = (pw + 2 * MARGIN) if self.panel_visible else 0
@@ -91,7 +92,7 @@ class Canvas(QWidget):
         for w, where in self.overlays:
             if not w.isVisible():
                 continue
-            if where != "vlevo_dole":
+            if where not in ("vlevo_dole", "dole"):
                 w.adjustSize()
             if where == "nahore":
                 ww = min(420, max(200, right - 2 * MARGIN - 140))
@@ -99,6 +100,10 @@ class Canvas(QWidget):
                 w.move(max(MARGIN + 70, (right - ww) // 2), MARGIN)
             elif where == "vlevo_dole":
                 w.move(MARGIN, H - w.height() - MARGIN)
+            elif where == "dole":
+                ww = min(980, W - 2 * MARGIN)
+                w.resize(ww, w.heightForWidth(ww) if w.hasHeightForWidth() else w.sizeHint().height())
+                w.move((W - ww) // 2, H - w.height() - MARGIN)
             elif where == "vlevo_nahore":
                 w.resize(w.sizeHint())
                 w.move(MARGIN, MARGIN)
