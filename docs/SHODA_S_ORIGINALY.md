@@ -1,0 +1,53 @@
+# Shoda s originály (Groma, MicroStation) – co aplikace umí a co chybí
+
+Stav se průběžně aktualizuje. ✅ hotovo a ověřeno testy · 🟡 částečně · ❌ zatím chybí.
+Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani nezpětně nevyvíjí).
+
+## Výpočty (náhrada Gromy)
+
+| Funkce Gromy | Stav | Ověření |
+|---|---|---|
+| Seznam souřadnic (číslo, Y, X, Z, kód, kvalita), třídění, hledání, hromadné úpravy, duplicity | ✅ | testy seznamu |
+| Import/export TXT/CSV s formátem sloupců | ✅ | skutečné seznamy ze zadání |
+| Zpracování zápisníku (.zap), redukce délek, měřítkový koeficient, refrakce a zakřivení | ✅ | protokol Gromy Husovice |
+| Opakovaná měření (dvě polohy), obousměrně měřené délky | ✅ | shoda s Gromou na mm |
+| Polární metoda dávkou (orientace, posun, m0, podrobné body) | ✅ | 118 bodů vs. Groma ≤ 0,5 mm (poloha), ≤ 1,5 mm (výška) |
+| Výpočetní protokol ve stejném členění (TXT/PDF) | ✅ | test protokolu |
+| Směrník a délka, rajón | ✅ | ruční příklady, komplexní čísla |
+| Protínání vpřed z úhlů / směrníků, z délek, zpět | ✅ | Shapely, Gauss–Newton |
+| Volné stanovisko (MNČ) | ✅ | nezávislá MNČ (Gauss–Newton) |
+| Transformace shodnostní, podobnostní, afinní (opravy, m0) | ✅ | přesný výpočet zlomky (1e-11 m) |
+| Výměra a obvod | ✅ | přesný výpočet zlomky |
+| Staničení a kolmice, bod ze staničení a kolmice | ✅ | zpětný výpočet |
+| Kontrola dvou určení, mezní odchylky podle kódu kvality | 🟡 | hodnoty z vyhlášky k ověření |
+| Ortogonální metoda (dávka, vyrovnání na měřenou délku) | ✅ | zpětný výpočet staničení a kolmic |
+| Průsečík přímek, přímky a kružnice, dvou kružnic | ✅ | náhodné příklady, body leží na obou útvarech |
+| Polygonový pořad (oboustranně připojený a orientovaný, vyrovnání) | ✅ | 50 syntetických pořadů bez chyb (přesně), rozdělení zavedených chyb |
+| Vytyčovací prvky (směr a délka ze stanoviska) | ✅ | zpětný rajón |
+| Trigonometrické výšky, nivelační pořad | ✅ | ruční příklady, uzávěr na mm |
+| Oddělování parcel rovnoběžně s hranicí | ✅ | výměra na 0,0001 m² (Shapely) |
+| Oddělování bodem, úprava hranic | ❌ | |
+| Převod S-JTSK ↔ WGS84 (EPSG:5239, ≈ 1 m) s odkazem na mapy.cz | ✅ | shoda s PROJ na 2·10⁻⁸ ° |
+| Import GSI a dalších formátů totálních stanic | ❌ | |
+| Kresba podle kódů, export DXF | ❌ (v CAD) | |
+| Vyrovnání sítě MNČ | ❌ | |
+
+## CAD (náhrada MicroStationu pro 2D, jen DXF)
+
+| Funkce MicroStationu | Stav |
+|---|---|
+| Otevření/uložení DXF beze ztrát, zpráva o načtení, poškozené soubory | ✅ |
+| Zobrazení (barvy, styly, texty, bloky, šrafy), zoom, posun | ✅ |
+| Souřadnice kurzoru S-JTSK, úchyty (konec, střed, průsečík, kolmice, tečna), ortho, polární | ✅ |
+| Příkazový řádek (key-in), zadání souřadnic, měření vzdálenosti | ✅ |
+| Propojení s Kontrolou výkresu | ✅ |
+| Kreslení: bod, úsečka, polyline, oblouk, kružnice, elipsa, křivka, text, šrafa, kóty | ❌ → další fáze |
+| Úpravy: výběr, posun, kopie, rotace, měřítko, zrcadlení, ořez, prodloužení, offset, zaoblení, spojení, rozpojení, mazání | ❌ → další fáze |
+| Zpět/Vpřed bez omezení | ❌ → další fáze |
+| Vrstvy (barva, styl, tloušťka, zámek, zapnutí), typy čar, bloky (buňky) | 🟡 jen zobrazení |
+| Výběr podle vrstvy/vlastností, hromadné změny, hledání prvků | ❌ |
+| Geodetické funkce (body ze seznamu s čísly a kódy, kódovník, výměry, mřížka, transformace výkresu) | ❌ |
+| Rastry s georeferencí, podkladový DXF (reference) | ❌ |
+| Tisk, rámečky, razítka, PDF, layouty | ❌ |
+| Makra, dávky, pluginy | ❌ |
+| Výkon na statisících prvků | ❌ |

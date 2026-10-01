@@ -321,6 +321,251 @@ def u_odchylka(s, h):
     return Vysledek(prot)
 
 
+def _radky_cisel(text: str, n_min: int, popis: str) -> list[list[str]]:
+    """Řádky „text číslo číslo…“; vrací rozdělené řádky (první položka text, ostatní ověřená čísla)."""
+    out = []
+    for i, line in enumerate((text or "").splitlines(), 1):
+        parts = line.replace(";", " ").split()
+        if not parts:
+            continue
+        if len(parts) < n_min:
+            raise ChybaVstupu(f"Řádek {i}: zadejte „{popis}“.")
+        for t in parts[1:n_min]:
+            try:
+                v = float(t.replace(",", "."))
+            except ValueError:
+                raise ChybaVstupu(f"Řádek {i}: „{t}“ není číslo.") from None
+            if not math.isfinite(v):
+                raise ChybaVstupu(f"Řádek {i}: „{t}“ není konečné číslo.")
+        out.append([parts[0]] + [float(t.replace(",", ".")) for t in parts[1:n_min]])
+    return out
+
+
+def u_prusecik(s, h):
+    druh = h.get("druh") or "dvou přímek"
+    a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    _ruzne(a, b)
+    n = _nove_cislo(s, h)
+    prot = _hlavicka(f"Průsečík {druh}")
+    if druh == "dvou přímek":
+        c, d = _bod(s, h, "c", "bod C"), _bod(s, h, "d", "bod D")
+        _ruzne(c, d)
+        try:
+            body = [V.prusecik_primek(a, b, c, d)]
+        except ValueError as e:
+            raise ChybaVstupu(str(e)) from None
+        prot.append(f"přímky {a.cislo}–{b.cislo} a {c.cislo}–{d.cislo}")
+    elif druh == "přímky a kružnice":
+        c = _bod(s, h, "c", "střed kružnice (bod C)")
+        r = _cislo(h, "r1", "poloměr")
+        if r <= 0:
+            raise ChybaVstupu("Poloměr musí být kladný.")
+        body = V.prusecik_primky_kruznice(a, b, c, r)
+        prot.append(f"přímka {a.cislo}–{b.cislo}, kružnice se středem {c.cislo} a poloměrem {_f(r)} m")
+    elif druh == "dvou kružnic":
+        r1, r2 = _cislo(h, "r1", "poloměr kolem A"), _cislo(h, "r2", "poloměr kolem B")
+        if r1 <= 0 or r2 <= 0:
+            raise ChybaVstupu("Poloměry musí být kladné.")
+        body = V.prusecik_kruznic(a, r1, b, r2)
+        prot.append(f"kružnice {a.cislo} (r = {_f(r1)} m) a {b.cislo} (r = {_f(r2)} m)")
+    else:
+        raise ChybaVstupu("Zvolte druh průsečíku.")
+    if not body:
+        raise ChybaVstupu("Průsečík neexistuje (přímka kružnici neprotíná / kružnice se neprotínají).")
+    nove = []
+    for i, p in enumerate(body):
+        c = n if i == 0 else n + "b"
+        prot.append(f"bod {c}:  Y = {_f(p.y)}   X = {_f(p.x)}")
+        nove.append(Bod(c, p.y, p.x, poznamka="průsečík"))
+    if len(body) > 1:
+        prot.append("(dvě řešení – druhé má k číslu připojené „b“)")
+    return Vysledek(prot, nove)
+
+
+def u_vytyceni(s, h):
+    st, o = _bod(s, h, "st", "stanovisko"), _bod(s, h, "o", "orientaci")
+    _ruzne(st, o)
+    body = _radky_bodu(s, h.get("body") or "")
+    if not body:
+        raise ChybaVstupu("Zadejte čísla vytyčovaných bodů.")
+    prot = _hlavicka("Vytyčovací prvky")
+    prot += [f"stanovisko {st.cislo}, orientace na {o.cislo} (směrník {_f(V.smernik(st, o), 4)} gon, "
+             f"délka {_f(V.delka(st, o))} m); úhel měřen od orientace po směru hodin",
+             "  bod              úhel [gon]   délka [m]  směrník [gon]"]
+    for b in body:
+        if V.delka(st, b) < 1e-9:
+            prot.append(f"  {b.cislo:<14} leží na stanovisku")
+            continue
+        u, d, sm = V.vytycovaci_prvky(st, o, b)
+        prot.append(f"  {b.cislo:<14} {u:>12.4f} {d:>11.3f} {sm:>14.4f}")
+    return Vysledek(prot)
+
+
+def u_trig_vyska(s, h):
+    st = _bod(s, h, "st", "stanovisko")
+    if st.z is None:
+        raise ChybaVstupu(f"Stanovisko {st.cislo} nemá výšku.")
+    d, z = _cislo(h, "d", "šikmou délku"), _cislo(h, "z", "zenitový úhel")
+    if d <= 0:
+        raise ChybaVstupu("Délka musí být kladná.")
+    if not 0 < z < 400:
+        raise ChybaVstupu("Zenitový úhel musí být mezi 0 a 400 gon.")
+    vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
+    vc = _cislo(h, "vc", "výšku cíle") if (h.get("vc") or "").strip() else 0.0
+    hh, dh = V.trigonometricka_vyska(st.z, d, z, vp, vc)
+    prot = _hlavicka("Trigonometrická výška")
+    prot += [f"stanovisko {st.cislo} (H = {_f(st.z)} m), šikmá délka {_f(d)} m, zenit {_f(z, 4)} gon, "
+             f"výška přístroje {_f(vp)} m, cíle {_f(vc)} m",
+             f"vodorovná délka {_f(d * math.sin(V.gon2rad(z)))} m, převýšení terén–terén {_f(dh)} m "
+             "(se zakřivením Země a refrakcí k = 0,13)",
+             f"výška bodu H = {_f(hh)} m"]
+    nove = []
+    c = (h.get("nove") or "").strip()
+    if c:
+        b = s.najdi(c)
+        if b is not None:
+            prot.append(f"(bod {c} je v seznamu – výška se doplní úpravou v seznamu, zde jen výpočet)")
+        else:
+            prot.append("(bod bez polohy se do seznamu nepřidává)")
+    return Vysledek(prot, nove)
+
+
+def u_nivelace(s, h):
+    a, b = _bod(s, h, "a", "počáteční bod"), _bod(s, h, "b", "koncový bod")
+    if a.z is None or b.z is None:
+        raise ChybaVstupu("Počáteční i koncový bod musí mít výšku.")
+    rad = _radky_cisel(h.get("oddily") or "", 3, "cílový_bod převýšení[m] délka[m]")
+    if not rad:
+        raise ChybaVstupu("Zadejte oddíly pořadu.")
+    if any(r[2] < 0 for r in rad):
+        raise ChybaVstupu("Délky oddílů nesmí být záporné.")
+    try:
+        mez = _cislo(h, "mez", "mezní odchylku") if (h.get("mez") or "").strip() else 40.0
+        r = V.nivelacni_porad(a.z, b.z, [(c, dh, d) for c, dh, d in rad], mez)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    prot = _hlavicka("Nivelační pořad")
+    prot += [f"{a.cislo} (H = {_f(a.z)}) → {b.cislo} (H = {_f(b.z)}), délka {r.delka_km:.3f} km",
+             f"odchylka uzávěru {r.odchylka * 1000:.1f} mm, mezní {r.mezni * 1000:.1f} mm "
+             f"({_f(mez, 1)} mm·√L) – " + ("VYHOVUJE" if r.vyhovuje else "NEVYHOVUJE"),
+             "  bod              převýšení    oprava      výška"]
+    nove = []
+    for (c, dh, _d), v, (_c, hh) in zip(rad, r.opravy, r.vysky):
+        prot.append(f"  {c:<14} {dh:>10.4f} {v * 1000:>8.2f}mm {hh:>10.4f}")
+        bod = s.najdi(c)
+        if bod is not None and bod.cislo not in (a.cislo, b.cislo):
+            nove.append(Bod(c + "_niv", bod.y, bod.x, hh, bod.kod, bod.kvalita, "nivelace"))
+    return Vysledek(prot, nove)
+
+
+def u_ortogonalni(s, h):
+    a, b = _bod(s, h, "a", "bod A (začátek přímky)"), _bod(s, h, "b", "bod B (konec přímky)")
+    _ruzne(a, b)
+    rad = _radky_cisel(h.get("mereni") or "", 3, "číslo staničení kolmice")
+    if not rad:
+        raise ChybaVstupu("Zadejte měření (řádek: číslo staničení kolmice).")
+    dm = _cislo(h, "dm", "měřenou délku A–B") if (h.get("dm") or "").strip() else None
+    if dm is not None and dm <= 0:
+        raise ChybaVstupu("Měřená délka musí být kladná.")
+    body, q, odch = V.ortogonalni_davka(a, b, [(c, st, k) for c, st, k in rad], dm)
+    prot = _hlavicka("Ortogonální metoda")
+    prot.append(f"měřická přímka {a.cislo} → {b.cislo}: ze souřadnic {_f(V.delka(a, b))} m"
+                + (f", měřeno {_f(dm)} m, rozdíl {_f(odch)} m, měřítko {q:.6f}" if dm else ""))
+    prot.append("  bod             staničení    kolmice            Y            X")
+    nove = []
+    for (c, st, k), (_c, p) in zip(rad, body):
+        prot.append(f"  {c:<14} {st:>10.3f} {k:>10.3f} {p.y:>12.3f} {p.x:>12.3f}")
+        nove.append(Bod(c, p.y, p.x, poznamka="ortogonální metoda"))
+    return Vysledek(prot, nove)
+
+
+def u_polygon(s, h):
+    ao, a = _bod(s, h, "ao", "orientaci na začátku"), _bod(s, h, "a", "počáteční bod")
+    b, bo = _bod(s, h, "b", "koncový bod"), _bod(s, h, "bo", "orientaci na konci")
+    _ruzne(a, ao)
+    _ruzne(b, bo)
+    uhly = _radky_cisel(h.get("uhly") or "", 2, "bod úhel[gon]")
+    strany = _radky_cisel(h.get("delky") or "", 2, "bod délka[m] (délka strany k dalšímu bodu)")
+    if len(uhly) < 2:
+        raise ChybaVstupu("Zadejte vrcholové úhly na počátečním bodě, všech nových bodech a koncovém bodě.")
+    cisla = [u[0] for u in uhly[1:-1]]
+    try:
+        r = V.polygonovy_porad(a, ao, b, bo, [u[1] for u in uhly], [d[1] for d in strany], cisla)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    mez_u = 0.0060 * math.sqrt(len(uhly))  # orientační mez 60 cc·√n (k ověření podle předpisu)
+    prot = _hlavicka("Polygonový pořad oboustranně připojený a orientovaný")
+    prot += [f"{ao.cislo} → {a.cislo} … {b.cislo} → {bo.cislo}, nových bodů {len(cisla)}, délka {_f(r.delka)} m",
+             f"úhlová odchylka {r.uhlova_odchylka * 10000:.0f} cc (orientačně mezní {mez_u * 10000:.0f} cc)",
+             f"souřadnicové odchylky dY = {_f(r.dy)} m, dX = {_f(r.dx)} m, polohová {_f(r.polohova)} m",
+             "  bod                 směrník        délka            Y            X"]
+    nove = []
+    for i, (c, p) in enumerate(r.body):
+        prot.append(f"  {c:<14} {r.smerniky[i]:>12.4f} {strany[i][1]:>12.3f} {p.y:>12.3f} {p.x:>12.3f}")
+        nove.append(Bod(c, p.y, p.x, poznamka="polygonový pořad"))
+    return Vysledek(prot, nove)
+
+
+def u_oddeleni(s, h):
+    parc = _radky_bodu(s, h.get("body") or "")
+    if len(parc) < 3:
+        raise ChybaVstupu("Zadejte body parcely po obvodu (aspoň tři).")
+    a, b = _bod(s, h, "a", "bod A hranice"), _bod(s, h, "b", "bod B hranice")
+    _ruzne(a, b)
+    cil = _cislo(h, "vymera", "oddělovanou výměru")
+    try:
+        cast, t = V.oddeleni_rovnobezne(parc, a, b, cil)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    pre = (h.get("predpona") or "").strip() or "D"
+    prot = _hlavicka("Oddělení části parcely rovnoběžně s hranicí")
+    prot += [f"parcela {' – '.join(p.cislo for p in parc)}: výměra {_f(V.vymera(parc), 2)} m²",
+             f"oddělit {_f(cil, 2)} m² rovnoběžně s hranicí {a.cislo}–{b.cislo}: dělicí čára ve vzdálenosti "
+             f"{_f(t)} m", f"oddělená část: {_f(V.vymera(cast), 2)} m², body:"]
+    nove, i = [], 0
+    for p in cast:
+        if any(abs(p.y - q.y) < 1e-6 and abs(p.x - q.x) < 1e-6 for q in parc):
+            c = next(q.cislo for q in parc if abs(p.y - q.y) < 1e-6 and abs(p.x - q.x) < 1e-6)
+            prot.append(f"  {c:<14} Y = {_f(p.y)}   X = {_f(p.x)}  (daný)")
+        else:
+            i += 1
+            prot.append(f"  {pre + str(i):<14} Y = {_f(p.y)}   X = {_f(p.x)}  (nový)")
+            nove.append(Bod(pre + str(i), p.y, p.x, poznamka="oddělení parcely"))
+    return Vysledek(prot, nove)
+
+
+def u_wgs(s, h):
+    from ..geodezie import sjtsk as J
+    smer = h.get("smer") or "S-JTSK → WGS84"
+    prot = _hlavicka("Převod S-JTSK ↔ WGS84")
+    prot.append("přesnost převodu přibližně 1 m (parametry EPSG:5239) – pro katastr používejte síť a opravnou "
+                "tabulku ČÚZK")
+    if smer == "S-JTSK → WGS84":
+        body = _radky_bodu(s, h.get("body") or "")
+        if not body:
+            raise ChybaVstupu("Zadejte čísla bodů.")
+        prot.append("  bod             šířka              délka              mapy.cz")
+        for b in body:
+            if not (300000 < abs(b.y) < 1000000 and 900000 < abs(b.x) < 1400000):
+                prot.append(f"  {b.cislo:<14} mimo území S-JTSK")
+                continue
+            la, lo, _hh = J.sjtsk_na_wgs84(b.y, b.x, b.z or 0.0)
+            prot.append(f"  {b.cislo:<14} {J.stupne_text(la, 'N', 'S')}  {J.stupne_text(lo, 'E', 'W')}  "
+                        f"({la:.7f}, {lo:.7f})  {J.odkaz_mapy_cz(la, lo)}")
+        return Vysledek(prot)
+    rad = _radky_cisel(h.get("wgs") or "", 3, "číslo šířka[°] délka[°]")
+    if not rad:
+        raise ChybaVstupu("Zadejte řádky „číslo šířka délka“ ve stupních.")
+    nove = []
+    for c, la, lo in rad:
+        if not (47 < la < 52 and 11 < lo < 20):
+            raise ChybaVstupu(f"Bod {c}: souřadnice {la}, {lo} neleží v Česku ani na Slovensku.")
+        y, x, _hb = J.wgs84_na_sjtsk(la, lo)
+        prot.append(f"  {c:<14} Y = {_f(y, 2)}   X = {_f(x, 2)}")
+        nove.append(Bod(c, y, x, poznamka="převod z WGS84 (≈1 m)"))
+    return Vysledek(prot, nove)
+
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -359,6 +604,42 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Kontrola dvou určení", "Polohová odchylka dvou určení bodu a mezní odchylka podle kódu kvality.",
      [Pole("a", "První určení (bod)"), Pole("b", "Druhé určení (bod)"),
       Pole("kk", "Kód kvality", "volba", "3", ("3", "4", "5", "6", "7"))], u_odchylka),
+    ("Průsečíky", "Průsečík dvou přímek, přímky a kružnice nebo dvou kružnic.",
+     [Pole("druh", "Druh", "volba", "dvou přímek", ("dvou přímek", "přímky a kružnice", "dvou kružnic")),
+      Pole("a", "Bod A"), Pole("b", "Bod B"),
+      Pole("c", "Bod C (přímka C–D / střed kružnice)", napoveda="u dvou kružnic nevyplňujte"),
+      Pole("d", "Bod D (jen dvě přímky)"), Pole("r1", "Poloměr (kolem C, u dvou kružnic kolem A) [m]", "m"),
+      Pole("r2", "Poloměr kolem B [m] (dvě kružnice)", "m"), Pole("nove", "Číslo nového bodu", "text")],
+     u_prusecik),
+    ("Ortogonální metoda", "Body ze staničení a kolmic k měřické přímce dávkou, s vyrovnáním na měřenou délku.",
+     [Pole("a", "Bod A (začátek)"), Pole("b", "Bod B (konec)"),
+      Pole("dm", "Měřená délka A–B [m] (nepovinné)", "m"),
+      Pole("mereni", "Měření (řádek: číslo staničení kolmice)", "radky")], u_ortogonalni),
+    ("Polygonový pořad", "Oboustranně připojený a orientovaný pořad: úhlové a souřadnicové vyrovnání.",
+     [Pole("ao", "Orientace na začátku (bod)"), Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
+      Pole("bo", "Orientace na konci (bod)"),
+      Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – počátek, nové body, konec", "radky",
+           napoveda="levé úhly od zadní k přední záměře, po směru hodin"),
+      Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky")], u_polygon),
+    ("Vytyčovací prvky", "Úhel od orientace a délka ze stanoviska pro vytyčení bodů.",
+     [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("body", "Vytyčované body (čísla)", "radky")],
+     u_vytyceni),
+    ("Trigonometrická výška", "Výška bodu ze šikmé délky a zenitového úhlu (se zakřivením a refrakcí).",
+     [Pole("st", "Stanovisko (s výškou)"), Pole("d", "Šikmá délka [m]", "m"), Pole("z", "Zenitový úhel [gon]", "gon"),
+      Pole("vp", "Výška přístroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
+      Pole("nove", "Číslo bodu (nepovinné)", "text")], u_trig_vyska),
+    ("Nivelační pořad", "Výšky bodů pořadu mezi dvěma výškově danými body, rozdělení uzávěru úměrně délkám.",
+     [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
+      Pole("oddily", "Oddíly (řádek: cílový bod převýšení délka)", "radky"),
+      Pole("mez", "Mezní odchylka [mm/√km]", "m", "40")], u_nivelace),
+    ("Oddělení parcely", "Oddělí část zadané výměry dělicí čarou rovnoběžnou s hranicí A–B.",
+     [Pole("body", "Body parcely po obvodu (čísla)", "radky"), Pole("a", "Hranice – bod A"),
+      Pole("b", "Hranice – bod B"), Pole("vymera", "Oddělit výměru [m²]", "m"),
+      Pole("predpona", "Předpona nových bodů", "text", "D")], u_oddeleni),
+    ("Převod S-JTSK ↔ WGS84", "Zeměpisné souřadnice bodů (s odkazem na mapy.cz) a opačně, přesnost ≈ 1 m.",
+     [Pole("smer", "Směr", "volba", "S-JTSK → WGS84", ("S-JTSK → WGS84", "WGS84 → S-JTSK")),
+      Pole("body", "Body (čísla) pro S-JTSK → WGS84", "radky"),
+      Pole("wgs", "WGS84 → S-JTSK (řádek: číslo šířka délka)", "radky")], u_wgs),
 ]
 
 

@@ -304,3 +304,216 @@ def mezni_polohova_odchylka(kod_kvality: int, nasobek: float = 2.0 * math.sqrt(2
     if kod_kvality not in MXY_KOD_KVALITY:
         raise ValueError(f"Pro kód kvality {kod_kvality} není střední chyba stanovena.")
     return nasobek * MXY_KOD_KVALITY[kod_kvality]
+
+
+# ------------------------------------------------------------------ průsečíky
+def prusecik_primek(a1, a2, b1, b2) -> P:
+    """Průsečík přímek A1A2 a B1B2 (i mimo úsečky)."""
+    (y1, x1), (y2, x2), (y3, x3), (y4, x4) = _yx(a1), _yx(a2), _yx(b1), _yx(b2)
+    d = (y2 - y1) * (x4 - x3) - (x2 - x1) * (y4 - y3)
+    if abs(d) < 1e-12 * max(1.0, abs(y2 - y1) + abs(x2 - x1)) ** 2:
+        raise ValueError("Přímky jsou rovnoběžné – průsečík neexistuje.")
+    t = ((y3 - y1) * (x4 - x3) - (x3 - x1) * (y4 - y3)) / d
+    return P(y1 + t * (y2 - y1), x1 + t * (x2 - x1))
+
+
+def prusecik_primky_kruznice(a, b, s, r: float) -> list[P]:
+    """Průsečíky přímky AB s kružnicí (střed S, poloměr r) – 0, 1 nebo 2 body (seřazené od A)."""
+    (ya, xa), (yb, xb), (ys, xs) = _yx(a), _yx(b), _yx(s)
+    dy, dx = yb - ya, xb - xa
+    fy, fx = ya - ys, xa - xs
+    aa = dy * dy + dx * dx
+    if aa == 0:
+        raise ValueError("Body přímky splývají.")
+    bb = 2 * (fy * dy + fx * dx)
+    cc = fy * fy + fx * fx - r * r
+    disc = bb * bb - 4 * aa * cc
+    if disc < -1e-9:
+        return []
+    disc = max(0.0, disc)
+    ts = sorted({(-bb - math.sqrt(disc)) / (2 * aa), (-bb + math.sqrt(disc)) / (2 * aa)})
+    return [P(ya + t * dy, xa + t * dx) for t in ts]
+
+
+def prusecik_kruznic(s1, r1: float, s2, r2: float) -> list[P]:
+    """Průsečíky dvou kružnic (= protínání z délek, obě řešení)."""
+    (y1, x1), (y2, x2) = _yx(s1), _yx(s2)
+    d = math.hypot(y2 - y1, x2 - x1)
+    if d == 0 or d > r1 + r2 + 1e-9 or d < abs(r1 - r2) - 1e-9:
+        return []
+    out = [protinani_z_delek(s1, s2, r1, r2, True)]
+    other = protinani_z_delek(s1, s2, r1, r2, False)
+    if delka(other, out[0]) > 1e-9:
+        out.append(other)
+    return out
+
+
+# ------------------------------------------------------------------ vytyčovací prvky
+def vytycovaci_prvky(st, orientace, bod) -> tuple[float, float, float]:
+    """Pro vytyčení bodu ze stanoviska orientovaného na známý bod: (vytyčovací úhel od orientace ve směru
+    hodin [gon], vodorovná délka [m], směrník [gon])."""
+    s_o, s_b = smernik(st, orientace), smernik(st, bod)
+    return norm_gon(s_b - s_o), delka(st, bod), s_b
+
+
+# ------------------------------------------------------------------ výšky
+def trigonometricka_vyska(h_st: float, sikma: float, zenit_gon: float, vp: float = 0.0, vc: float = 0.0,
+                          k_refr: float = 0.13, r_zeme: float = 6380000.0) -> tuple[float, float]:
+    """Výška bodu z trigonometrického měření: (výška, převýšení terén–terén) se zakřivením a refrakcí."""
+    z = gon2rad(zenit_gon)
+    d = sikma * math.sin(z)
+    dh = sikma * math.cos(z) + vp - vc + d * d * (1 - k_refr) / (2 * r_zeme)
+    return h_st + dh, dh
+
+
+@dataclass
+class NivelacniPorad:
+    vysky: list[tuple[str, float]]  # (bod, vyrovnaná výška)
+    odchylka: float  # uzávěr = Σ měřených převýšení − (H_konec − H_začátek) [m]
+    mezni: float  # mezní odchylka [m]
+    delka_km: float
+    opravy: list[float]
+
+    @property
+    def vyhovuje(self) -> bool:
+        return abs(self.odchylka) <= self.mezni
+
+
+def nivelacni_porad(h_zac: float, h_kon: float, oddily: list[tuple[str, float, float]],
+                    mez_mm_na_km: float = 40.0) -> NivelacniPorad:
+    """Nivelační pořad mezi dvěma výškově danými body: ``oddily`` = [(cílový bod, převýšení [m], délka [m])].
+
+    Uzávěr se rozdělí úměrně délkám; mezní odchylka = mez · √L[km] (technická nivelace 40 mm/√km)."""
+    if not oddily:
+        raise ValueError("Pořad nemá žádný oddíl.")
+    L = sum(max(0.0, d) for _b, _h, d in oddily)
+    suma = sum(h for _b, h, _d in oddily)
+    w = suma - (h_kon - h_zac)
+    mezni = mez_mm_na_km / 1000.0 * math.sqrt(max(L, 1.0) / 1000.0)
+    vysky, opravy, h = [], [], h_zac
+    for b, dh, d in oddily:
+        v = -w * (d / L if L > 0 else 1 / len(oddily))
+        h += dh + v
+        opravy.append(v)
+        vysky.append((b, h))
+    return NivelacniPorad(vysky, w, mezni, L / 1000.0, opravy)
+
+
+# ------------------------------------------------------------------ ortogonální metoda
+def ortogonalni_davka(a, b, mereni: list[tuple[str, float, float]], delka_merena: float | None = None):
+    """Ortogonální metoda dávkou: body ze staničení a kolmic k měřické přímce A→B.
+
+    Je-li zadaná měřená délka přímky (konec měření na B), staničení i kolmice se opraví v poměru
+    délka ze souřadnic / měřená délka (jako zavedení měřítka). Vrací (body, poměr, odchylka délky)."""
+    c = delka(a, b)
+    q = c / delka_merena if delka_merena else 1.0
+    body = [(cislo, bod_ze_stanicni(a, b, st * q, k * q)) for cislo, st, k in mereni]
+    return body, q, (c - delka_merena) if delka_merena else 0.0
+
+
+# ------------------------------------------------------------------ polygonový pořad
+@dataclass
+class PolygonovyPorad:
+    body: list[tuple[str, P]]
+    uhlova_odchylka: float  # [gon] – měřené − teoretické
+    dy: float
+    dx: float
+    polohova: float  # √(dy² + dx²) [m]
+    delka: float  # [m]
+    smerniky: list[float]
+
+
+def polygonovy_porad(a, a_orient, b, b_orient, uhly: list[float], delky: list[float],
+                     cisla: list[str]) -> PolygonovyPorad:
+    """Oboustranně připojený a oboustranně orientovaný polygonový pořad.
+
+    Začátek A (známý) s orientací na známý bod, konec B (známý) s orientací na známý bod.
+    ``uhly`` = vrcholové (levé) úhly β měřené ve směru hodin od zadní k přední záměře na A, P1, …, Pn, B
+    (n+2 úhlů), ``delky`` = délky stran A–P1, …, Pn–B (n+1), ``cisla`` = čísla nových bodů P1…Pn (n).
+    Úhlová odchylka se rozdělí rovnoměrně, souřadnicová úměrně délkám stran."""
+    n = len(cisla)
+    if len(uhly) != n + 2 or len(delky) != n + 1:
+        raise ValueError(f"Pořad s {n} novými body potřebuje {n + 2} úhlů a {n + 1} délek.")
+    if any(d <= 0 for d in delky):
+        raise ValueError("Délky stran musí být kladné.")
+    s0 = smernik(a_orient, a)  # směrník „příchozí“ strany: z orientace na A
+    s_konec = smernik(b, b_orient)
+    # směrník přední záměry: σ_i = σ_{i−1} + β_i − 200
+    s = s0
+    sm = []
+    for beta in uhly:
+        s = norm_gon(s + beta - 200)
+        sm.append(s)
+    # sm[-1] je směrník z B na orientaci konce (vypočtený z měření)
+    w = (sm[-1] - s_konec + 200) % 400 - 200  # úhlová odchylka
+    oprava = -w / (n + 2)
+    s = s0
+    smer = []
+    for beta in uhly:
+        s = norm_gon(s + beta + oprava - 200)
+        smer.append(s)
+    strany = smer[:-1]  # směrníky stran A→P1 … Pn→B
+    dys = [d * math.sin(gon2rad(sg)) for d, sg in zip(delky, strany)]
+    dxs = [d * math.cos(gon2rad(sg)) for d, sg in zip(delky, strany)]
+    ya, xa = _yx(a)
+    yb, xb = _yx(b)
+    ody = sum(dys) - (yb - ya)
+    odx = sum(dxs) - (xb - xa)
+    L = sum(delky)
+    body, y, x = [], ya, xa
+    for i in range(n):
+        y += dys[i] - ody * delky[i] / L
+        x += dxs[i] - odx * delky[i] / L
+        body.append((cisla[i], P(y, x)))
+    return PolygonovyPorad(body, w, ody, odx, math.hypot(ody, odx), L, strany)
+
+
+# ------------------------------------------------------------------ oddělení parcely
+def oddeleni_rovnobezne(parcela: list, a, b, vymera_cil: float) -> tuple[list[P], float]:
+    """Oddělí od parcely (mnohoúhelník) část dané výměry dělicí čarou rovnoběžnou s přímkou A–B.
+
+    Část se odděluje na straně přímky A–B, posun dělicí čáry se hledá půlením intervalu.
+    Vrací (body oddělené části, vzdálenost dělicí čáry od A–B)."""
+    from shapely.geometry import LineString, Polygon
+    from shapely.ops import split
+    poly = Polygon([_yx(p) for p in parcela])
+    if not poly.is_valid or poly.area <= 0:
+        raise ValueError("Parcela není platný mnohoúhelník.")
+    if not 0 < vymera_cil < poly.area:
+        raise ValueError(f"Výměra musí být mezi 0 a {poly.area:.2f} m².")
+    (ya, xa), (yb, xb) = _yx(a), _yx(b)
+    c = math.hypot(yb - ya, xb - xa)
+    if c == 0:
+        raise ValueError("Body A a B splývají.")
+    uy, ux = (yb - ya) / c, (xb - xa) / c
+    ny, nx = -ux, uy  # normála (jedna strana)
+    big = 10 * math.sqrt(poly.area) + c + max(poly.bounds[2] - poly.bounds[0], poly.bounds[3] - poly.bounds[1])
+    # strana, na které leží parcela
+    cy, cx = poly.centroid.x, poly.centroid.y
+    sgn = 1 if (cy - ya) * ny + (cx - xa) * nx >= 0 else -1
+    ny, nx = ny * sgn, nx * sgn
+
+    def cast(t):
+        oy, ox = ya + ny * t, xa + nx * t
+        line = LineString([(oy - uy * big, ox - ux * big), (oy + uy * big, ox + ux * big)])
+        parts = split(poly, line)
+        side = [g for g in parts.geoms if ((g.centroid.x - oy) * ny + (g.centroid.y - ox) * nx) < 0]
+        if not side:
+            return None, 0.0
+        g = side[0] if len(side) == 1 else max(side, key=lambda q: q.area)
+        return g, sum(q.area for q in side)
+
+    lo, hi = 0.0, max(math.hypot(px - ya, py - xa) for px, py in poly.exterior.coords) * 2
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        _g, area = cast(mid)
+        if area < vymera_cil:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < 1e-9:
+            break
+    g, _area = cast((lo + hi) / 2)
+    if g is None:
+        raise ValueError("Oddělení se nepodařilo – zkontrolujte, že přímka A–B leží na hranici parcely.")
+    return [P(y, x) for y, x in list(g.exterior.coords)[:-1]], (lo + hi) / 2
