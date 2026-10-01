@@ -1483,3 +1483,60 @@ def test_poradce_citelny_v_tmavem_vzhledu(window):
         assert theme.DARK_MAP["#1F2937"] in html  # světlé písmo na tmavém pozadí
     finally:
         theme._dark = puvodni
+
+
+def test_cad_podle_zadani(window, tmp_path):
+    from kontrola.config import Config
+    from kontrola.io.dxf_loader import load_drawing
+    from kontrola.rules import RuleSet
+    from kontrola.runner import run_checks
+    f = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "pravidla_zadani1.yaml"
+    if not f.exists():
+        pytest.skip("chybí pravidla")
+    w = window
+    puvodni = w.project.rules
+    w.project.rules = RuleSet.load(f)
+    try:
+        c = w.cad
+        w.show_page("cad")
+        c.obnov_predvolby()
+        assert c.predvolby_cb.count() == len(w.project.rules.pravidla) + 1
+        c.novy_podle_zadani(vzory=[])
+        assert "5" in c.dok.doc.layers and "58" in c.dok.doc.layers
+        assert c.sjtsk
+        # zvolit „Budovy zděné“ → spustí se polylinie s atributy budovy
+        assert c.vyber_predvolbu("Budovy zděné")
+        assert c._gen is not None and c.kresleni.vrstva == "5"
+        for t in ("600000 1160000", "600010 1160000", "600010 1160010", "k"):
+            c.zadej(t)
+        pl = [e for e in c.dok.msp if e.dxftype() == "LWPOLYLINE"]
+        assert len(pl) == 1 and pl[0].dxf.layer == "5" and pl[0].dxf.color == c.predvolba.barva
+        # čísla podrobných bodů – text s výškou a písmem podle zadání
+        c.zrus()
+        c.proved("prvek Čísla podrobných bodů")
+        assert c.predvolba.geometrie == "text"
+        for t in ("600001 1160001", "", "0", "101", ""):
+            c.zadej(t)
+        tx = [e for e in c.dok.msp if e.dxftype() == "TEXT"]
+        assert tx and abs(tx[0].dxf.height - c.predvolba.vyska) < 1e-9 and tx[0].dxf.style == c.predvolba.textovy_styl
+        # úsečka nakreslená volně → „Použít na výběr“ jako plot drátěný
+        c.zrus()
+        c.predvolby_cb.setCurrentIndex(0)
+        c.zrus()
+        for t in ("u", "600020 1160000", "600030 1160000", ""):
+            c.zadej(t)
+        c.vyber = [e for e in c.dok.msp if e.dxftype() == "LINE"]
+        assert c.vyber_predvolbu("Plot drátěný")
+        c.zrus()
+        c.vyber = [e for e in c.dok.msp if e.dxftype() == "LINE"]
+        c.predvolba_na_vyber()
+        ln = [e for e in c.dok.msp if e.dxftype() == "LINE"][0]
+        assert ln.dxf.layer == "7" and ln.dxf.linetype == "2.123"
+        th = c.uloz_tahak(path=str(tmp_path / "tahak.html"))
+        assert "lv=5;co=94;lc=0;wt=0" in th.read_text(encoding="utf-8")
+        p = c.uloz(path=str(tmp_path / "zadani.dxf"))
+        res = run_checks(load_drawing(p), w.project.rules, Config(), only=["symbologie", "atribut_dle_vrstvy"])
+        assert not res.issues, [i.message for i in res.issues]
+    finally:
+        w.project.rules = puvodni
+        window.cad.obnov_predvolby()

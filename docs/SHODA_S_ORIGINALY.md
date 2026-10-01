@@ -49,7 +49,8 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Bloky (buňky): tvorba z výběru, vložení s měřítkem a natočením, rozpojení | ✅ |
 | Knihovna buněk (sdílené bloky mezi výkresy) | ❌ |
 | Výběr podle vrstvy/vlastností, hledání prvků | 🟡 hromadná změna vrstvy a barvy; výběr podle vlastností chybí |
-| Geodetické funkce (body ze seznamu s čísly a kódy, kódovník, výměry, mřížka, transformace výkresu) | ❌ |
+| Výkres podle zadání: vrstvy, typy čar, písma a buňky ze Směrnice / zadání / vzorového výkresu; druh prvku → atributy se nastaví samy (ověřeno kontrolou symbologie na obou zadáních); tahák s key-in pro MicroStation | ✅ |
+| Geodetické funkce (kódovník bodů, mřížka, transformace výkresu) | ❌ |
 | Rastry s georeferencí, podkladový DXF (reference) | ❌ |
 | Tisk, rámečky, razítka, PDF, layouty | ❌ |
 | Makra, dávky, pluginy | ❌ |

@@ -229,7 +229,7 @@ class CadPage(QWidget):
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
         "vše": "vybrat vše", "zpět": "vrátit poslední změnu (Ctrl+Z)", "vpřed": "znovu provést (Ctrl+Y)",
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
-        "vrstvy": "správce vrstev", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
+        "vrstvy": "správce vrstev", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -326,6 +326,29 @@ class CadPage(QWidget):
             self.nastroje[cmd] = b
         tools.addStretch(1)
         lay.addLayout(tools)
+        zrow = QHBoxLayout()
+        zrow.setContentsMargins(10, 0, 10, 4)
+        self.b_novy_zadani = QPushButton("Nový podle zadání")
+        self.b_novy_zadani.setToolTip("Založí výkres se všemi vrstvami, styly čar, písmy a buňkami podle pravidel "
+                                      "ze zadání (Zadání → Pravidla, Směrnice, vzorový výkres)")
+        zrow.addWidget(self.b_novy_zadani)
+        zrow.addWidget(QLabel("Kreslím:"))
+        self.predvolby_cb = QComboBox()
+        self.predvolby_cb.setMinimumWidth(360)
+        self.predvolby_cb.setToolTip("Druh prvku ze zadání – vrstva, barva, styl, tloušťka a písmo se nastaví samy")
+        zrow.addWidget(self.predvolby_cb, 1)
+        self.b_na_vyber = QPushButton("Použít na výběr")
+        self.b_na_vyber.setToolTip("Vybraným prvkům nastaví atributy zvoleného druhu prvku")
+        zrow.addWidget(self.b_na_vyber)
+        self.b_tahak = QPushButton("Tahák atributů…")
+        self.b_tahak.setToolTip("Přehled atributů všech prvků ze zadání s řádky key-in pro MicroStation (HTML, "
+                                "dá se vytisknout)")
+        zrow.addWidget(self.b_tahak)
+        self.predvolba_info = QLabel()
+        self.predvolba_info.setObjectName("predvolba_info")
+        zrow.addWidget(self.predvolba_info, 1)
+        lay.addLayout(zrow)
+        self._predvolby: list = []
         self.view = CadView()
         self.view.setCursor(Qt.CrossCursor)
         lay.addWidget(self.view, 1)
@@ -373,6 +396,10 @@ class CadPage(QWidget):
         self.b_redo.clicked.connect(self.redo)
         self.b_check.clicked.connect(self.zkontroluj)
         self.b_vrstvy.clicked.connect(lambda: self.spravce_vrstev())
+        self.b_novy_zadani.clicked.connect(lambda: self.novy_podle_zadani())
+        self.predvolby_cb.currentIndexChanged.connect(self._predvolba_zmenena)
+        self.b_na_vyber.clicked.connect(self.predvolba_na_vyber)
+        self.b_tahak.clicked.connect(lambda: self.uloz_tahak(otevrit=True))
         self.vrstvy.currentTextChanged.connect(self._vrstva_zmenena)
         self.prikaz.returnPressed.connect(self._enter)
         self.view.mouseMoved.connect(self._pohyb)
@@ -411,6 +438,8 @@ class CadPage(QWidget):
         self.dok = dok
         self.historie_zmen = U.Historie(dok.msp)
         self.kresleni = U.Kresleni(dok.msp, self.historie_zmen)
+        if self.predvolba is not None:
+            self.kresleni.nastav_predvolbu(self.predvolba)
         self._ulozena_zmena = 0
         self.vyber = []
         self._vykresli()
@@ -422,6 +451,133 @@ class CadPage(QWidget):
         self._napln_vrstvy()
         self.view.zoom_all()
         self._aktualizuj_tlacitka()
+
+    # ------------------------------------------------------------ zadání → předvolby
+    def _pravidla(self):
+        pr = getattr(self.win, "project", None) if self.win is not None else None
+        return pr.rules if pr is not None and pr.rules.pravidla else None
+
+    def obnov_predvolby(self):
+        from ..cad.zadani import predvolby
+        rs = self._pravidla()
+        self._predvolby = predvolby(rs) if rs is not None else []
+        cur = self.predvolby_cb.currentText()
+        self.predvolby_cb.blockSignals(True)
+        self.predvolby_cb.clear()
+        self.predvolby_cb.addItem("(volně – bez předvolby)" if self._predvolby else
+                                  "(nahrajte pravidla v Zadání – pak se atributy nastaví samy)")
+        for p in self._predvolby:
+            self.predvolby_cb.addItem(f"{p.nazev}  ·  {p.geometrie or '?'}")
+        i = self.predvolby_cb.findText(cur)
+        self.predvolby_cb.setCurrentIndex(max(0, i))
+        self.predvolby_cb.blockSignals(False)
+        self.b_novy_zadani.setEnabled(bool(self._predvolby))
+        self.b_tahak.setEnabled(bool(self._predvolby))
+        self.predvolby_cb.setEnabled(bool(self._predvolby))
+
+    def showEvent(self, e):  # noqa: N802
+        super().showEvent(e)
+        self.obnov_predvolby()
+
+    @property
+    def predvolba(self):
+        i = self.predvolby_cb.currentIndex() - 1
+        return self._predvolby[i] if 0 <= i < len(self._predvolby) else None
+
+    def vyber_predvolbu(self, text: str) -> bool:
+        """Zvolí druh prvku podle části názvu nebo kódu (i z příkazového řádku: „prvek budovy“)."""
+        t = text.strip().lower()
+        for i, p in enumerate(self._predvolby):
+            if t and (t == p.kod.lower() or t in p.nazev.lower()):
+                self.predvolby_cb.setCurrentIndex(i + 1)
+                return True
+        return False
+
+    def _predvolba_zmenena(self, _i=None):
+        p = self.predvolba
+        if self.kresleni is None:
+            return
+        self.kresleni.nastav_predvolbu(p)
+        if p is None:
+            self.predvolba_info.setText("")
+            return
+        if p.vrstva not in self.dok.doc.layers:
+            self.dok.doc.layers.add(p.vrstva)
+        for lt in (p.typ_cary,):
+            if lt not in ("BYLAYER", "CONTINUOUS") and lt not in self.dok.doc.linetypes:
+                from ..cad.zadani import priprav_dokument
+                priprav_dokument(self.dok.doc, self._pravidla())
+        if p.textovy_styl and p.textovy_styl not in self.dok.doc.styles:
+            from ..cad.zadani import priprav_dokument
+            priprav_dokument(self.dok.doc, self._pravidla())
+        self._napln_vrstvy()
+        if p.vyska:
+            self.vyska_textu = p.vyska
+        self.predvolba_info.setText(p.popis())
+        self.predvolba_info.setToolTip("\n".join([p.popis()] + p.poznamky))
+        self.vypis(f"Kreslím: {p.nazev} – {p.popis()}" + ("".join(f"\n  ⚠ {x}" for x in p.poznamky)))
+        if self._gen is None and not self._prikaz:
+            self.proved(p.nastroj)
+
+    def predvolba_na_vyber(self):
+        p = self.predvolba
+        if p is None or not self.vyber or self.dok is None:
+            self.vypis("Vyberte prvky a zvolte druh prvku v poli „Kreslím“.")
+            return
+        ents = list(self.vyber)
+        texty = [e for e in ents if e.dxftype() in ("TEXT", "MTEXT")]
+        ostatni = [e for e in ents if e not in texty]
+        k = self.kresleni
+        nove = []
+        if ostatni:
+            nove += U.zmen_vlastnosti(self.dok.msp, self.historie_zmen, ostatni, **k._attr())
+            self._po_zmene(nove, ostatni)
+        if texty:
+            a = k._attr(text=True)
+            if p.vyska:
+                a["height"] = p.vyska
+            nt = U.zmen_vlastnosti(self.dok.msp, self.historie_zmen, texty, **a)
+            self._po_zmene(nt, texty)
+            nove += nt
+        self.vyber = nove
+        self._zvyrazni()
+        self.vypis(f"{len(nove)} prvků nastaveno na „{p.nazev}“.")
+
+    def uloz_tahak(self, path=None, otevrit: bool = False):
+        from ..cad.zadani import tahak_html
+        rs = self._pravidla()
+        if rs is None:
+            self.vypis("V projektu nejsou pravidla ze zadání.")
+            return None
+        pr = self.win.project
+        out = Path(path) if path else Path(pr.root) / "tahak_atributu.html"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(tahak_html(rs, f"Atributy podle zadání – {pr.name if hasattr(pr, 'name') else ''}".rstrip(" –")),
+                       encoding="utf-8")
+        self.vypis(f"Tahák atributů uložen: {out}")
+        if otevrit:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(out)))
+        return out
+
+    def novy_podle_zadani(self, vzory=None):
+        from ..cad.zadani import novy_dokument
+        rs = self._pravidla()
+        if rs is None:
+            self.vypis("V projektu nejsou pravidla ze zadání – nahrajte Směrnici nebo zadání na stránce Zadání.")
+            return None
+        if not self._zahodit_zmeny():
+            return None
+        if vzory is None:
+            pr = self.win.project
+            vzory = [a.path for a in pr.attachments("vzor")]
+        dok, zprava = novy_dokument(rs, vzory)
+        self.nastav_dokument(dok)
+        self.sjtsk = rs.rozsah == "sjtsk" or rs.rozsah is None
+        self.obnov_predvolby()
+        self.vypis("Výkres podle zadání připraven:\n  " + "\n  ".join(zprava))
+        return dok
 
     def _napln_vrstvy(self):
         self.vrstvy.blockSignals(True)
@@ -545,7 +701,7 @@ class CadPage(QWidget):
         self.b_redo.setEnabled(bool(h and h.vpred))
         for b in self.nastroje.values():
             b.setEnabled(self.dok is not None)
-        for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy):
+        for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy, self.b_na_vyber):
             b.setEnabled(self.dok is not None)
 
     def _zahodit_zmeny(self) -> bool:
@@ -916,6 +1072,11 @@ class CadPage(QWidget):
             self.vypis(f"Vybráno {len(self.vyber)} prvků.")
         elif cmd == "vrstvy":
             self.spravce_vrstev()
+        elif cmd == "prvek":
+            if not arg:
+                self.vypis("Druhy prvků: " + "; ".join(p.nazev for p in self._predvolby[:40]))
+            elif not self.vyber_predvolbu(arg):
+                self.vypis(f"Druh prvku „{arg}“ v pravidlech zadání není.")
         elif cmd == "vrstva":
             self._vrstva(arg)
         elif cmd == "barva":
@@ -1231,6 +1392,14 @@ class CadPage(QWidget):
 
     def n_vloz(self):
         jmena = U.bloky(self.dok.doc)
+        p = self.predvolba
+        if p is not None and p.blok:
+            from ..rules import block_matches, split_alternatives
+            vhodne = [j for j in jmena if any(block_matches(v, j) for v in split_alternatives(p.blok))]
+            if not vhodne:
+                raise ValueError(f"Buňka {p.blok} pro „{p.nazev}“ ve výkresu není – nahrajte vzorový výkres "
+                                 "s buňkami do Zadání → Vzorový výkres a založte výkres tlačítkem Nový podle zadání.")
+            jmena = vhodne + [j for j in jmena if j not in vhodne]
         if not jmena:
             raise ValueError("Ve výkresu nejsou žádné bloky (vytvořte příkazem „blok“).")
         self.vypis("Bloky: " + ", ".join(jmena[:40]) + ("…" if len(jmena) > 40 else ""))

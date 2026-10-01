@@ -88,9 +88,41 @@ class Kresleni:
         self.h = historie
         self.vrstva = "0"
         self.barva = 256
+        self.typ_cary = "BYLAYER"
+        self.tloustka = -1  # setiny mm, −1 = BYLAYER
+        self.textovy_styl: str | None = None
+        self.zarovnani: str | None = None  # TextEntityAlignment (např. TOP_LEFT)
+        self.sirka_faktor = 1.0
+        self.vyska_textu: float | None = None
+        self.meritko_stylu: float | None = None
+        self.predvolba = None
 
-    def _attr(self, **kw) -> dict:
+    def nastav_predvolbu(self, p) -> None:
+        """Atributy podle druhu prvku ze zadání (viz ``cad.zadani.Predvolba``); None = výchozí."""
+        self.predvolba = p
+        if p is None:
+            self.barva, self.typ_cary, self.tloustka = 256, "BYLAYER", -1
+            self.textovy_styl = self.zarovnani = self.vyska_textu = self.meritko_stylu = None
+            self.sirka_faktor = 1.0
+            return
+        self.vrstva, self.barva, self.typ_cary, self.tloustka = p.vrstva, p.barva, p.typ_cary, p.tloustka
+        self.textovy_styl, self.zarovnani, self.sirka_faktor = p.textovy_styl, p.zarovnani, p.sirka_faktor
+        self.vyska_textu, self.meritko_stylu = p.vyska, p.meritko_stylu
+
+    def _attr(self, text: bool = False, **kw) -> dict:
         a = {"layer": self.vrstva, "color": self.barva}
+        if not text:
+            if self.typ_cary and self.typ_cary.upper() != "BYLAYER":
+                a["linetype"] = self.typ_cary
+            if self.tloustka != -1:
+                a["lineweight"] = self.tloustka
+            if self.meritko_stylu:
+                a["ltscale"] = self.meritko_stylu
+        else:
+            if self.textovy_styl:
+                a["style"] = self.textovy_styl
+            if abs(self.sirka_faktor - 1.0) > 1e-9:
+                a["width"] = self.sirka_faktor
         a.update(kw)
         return a
 
@@ -167,8 +199,12 @@ class Kresleni:
             raise ValueError("Prázdný text.")
         if vyska <= EPS:
             raise ValueError("Výška textu musí být kladná.")
-        e = self.msp.add_text(text, height=vyska, rotation=natoceni_deg, dxfattribs=self._attr())
-        e.set_placement(_xy(p))
+        e = self.msp.add_text(text, height=vyska, rotation=natoceni_deg, dxfattribs=self._attr(text=True))
+        if self.zarovnani:
+            from ezdxf.enums import TextEntityAlignment
+            e.set_placement(_xy(p), align=TextEntityAlignment[self.zarovnani])
+        else:
+            e.set_placement(_xy(p))
         return self._hotovo("Text", e)
 
     def sraf(self, hranice, vzor: str = "SOLID", meritko: float = 1.0):
