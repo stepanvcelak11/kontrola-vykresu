@@ -214,7 +214,9 @@ Otevřete ukázkový výkres a stiskněte F5.
   (nebo proti jinému DXF) – přidané (zeleně), odebrané (červeně čárkovaně), upravené (oranžově)
   a prvky se změněnými atributy (fialově). Kliknutím na řádek se výkres přiblíží na změnu.
 * **Soubor → Export → Seznam k opravě na tisk** (Ctrl+P): PDF se zbývajícími chybami
-  seskupenými podle typu, s políčkem k odškrtnutí, návodem a výřezem výkresu.
+  seskupenými podle typu, s políčkem k odškrtnutí, návodem, obrázkem „chyba / správně“ u každé skupiny
+  a výřezem výkresu.
+* **Nápověda → Co je nového** – po aktualizaci se jednou ukáže seznam novinek.
 * **Zobrazení → Tmavý režim** (volba se pamatuje).
 * **Kontrola aktualizací:** hotový `.exe` se jednou denně podívá na GitHub, jestli není
   novější sestavení, a nabídne odkaz ke stažení. Zjišťuje se jen číslo poslední verze

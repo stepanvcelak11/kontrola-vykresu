@@ -1558,6 +1558,25 @@ class MainWindow(QMainWindow):
     def _set_autoupdate(self, on: bool):
         self.settings.setValue("aktualizace/kontrolovat", bool(on))
 
+    def _illustrations(self, check_ids) -> dict[str, bytes]:
+        """Obrázky „chyba / správně“ (PNG) pro tisk – stejné jako ve vysvětlení „?“."""
+        from PySide6.QtCore import QBuffer, QIODevice
+
+        from .help_topics import illustration
+        out: dict[str, bytes] = {}
+        for cid in check_ids:
+            try:
+                pm = illustration(cid, 520)
+            except Exception:  # noqa: BLE001 – obrázek je jen pomůcka
+                pm = None
+            if pm is None:
+                continue
+            buf = QBuffer()
+            buf.open(QIODevice.WriteOnly)
+            pm.save(buf, "PNG")
+            out[cid] = bytes(buf.data())
+        return out
+
     def maybe_show_news(self):
         """Po aktualizaci jednou ukáže, co je nového (při prvním spuštění vůbec ne – tam je průvodce)."""
         from .. import novinky
@@ -1807,7 +1826,8 @@ class MainWindow(QMainWindow):
                 from ..export.pdf_report import export_checklist
                 todo = [i for i in issues if i.state == "nová" and i.severity != Severity.INFO]
                 name = Path(self.drawing.source_path or self.drawing.path).name if self.drawing else ""
-                export_checklist(issues, path, name, self._issue_images(todo, 80, 300))
+                export_checklist(issues, path, name, self._issue_images(todo, 80, 300),
+                                 self._illustrations({i.check_id for i in todo}))
             elif kind == "log":
                 from ..export.mgeo_log import export_mgeo_log
                 if self.drawing is None:

@@ -194,8 +194,11 @@ def _image(png: bytes, max_w: float, max_h: float) -> Image:
 
 
 def export_checklist(issues: list[Issue], path: str | Path, drawing_name: str = "",
-                     images: dict[int, bytes] | None = None):
-    """Seznam k opravě na tisk: otevřené chyby seskupené podle typu, políčko k odškrtnutí, návod, výřez."""
+                     images: dict[int, bytes] | None = None, ilustrace: dict[str, bytes] | None = None):
+    """Seznam k opravě na tisk: otevřené chyby seskupené podle typu, políčko k odškrtnutí, návod, výřez.
+
+    ``ilustrace`` – obrázek „chyba / správně“ (PNG) podle id kontroly, tiskne se u návodu skupiny.
+    """
     font, bold = _font()
     ss = getSampleStyleSheet()
     st = {
@@ -207,6 +210,7 @@ def export_checklist(issues: list[Issue], path: str | Path, drawing_name: str = 
         "box": ParagraphStyle("b", parent=ss["Normal"], fontName=font, fontSize=14, leading=14),
     }
     images = images or {}
+    ilustrace = ilustrace or {}
     todo = [i for i in issues if i.state == "nová" and i.severity != Severity.INFO]
     doc = SimpleDocTemplate(str(path), pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm,
                             topMargin=14 * mm, bottomMargin=14 * mm, title="Seznam k opravě",
@@ -225,7 +229,14 @@ def export_checklist(issues: list[Issue], path: str | Path, drawing_name: str = 
     for name, items in groups.items():
         story.append(Paragraph(f"{_esc(name)} ({len(items)})", st["h2"]))
         h = navod(items[0])
-        if h:
+        pic = ilustrace.get(items[0].check_id)
+        if h and pic:  # návod vlevo, vzor „chyba / správně“ vpravo
+            ht = Table([[Paragraph(f"Jak opravit: {_esc(h)}", st["hint"]), _image(pic, 46 * mm, 22 * mm)]],
+                       colWidths=[134 * mm, 48 * mm])
+            ht.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (0, 0), 0)]))
+            story.append(ht)
+            story.append(Spacer(1, 3))
+        elif h:
             story.append(Paragraph(f"Jak opravit: {_esc(h)}", st["hint"]))
             story.append(Spacer(1, 3))
         rows = []

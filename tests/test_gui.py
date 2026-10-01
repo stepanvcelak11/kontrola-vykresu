@@ -319,6 +319,10 @@ def test_seznam_k_oprave_pdf(window, tmp_path, monkeypatch):
     with pdfplumber.open(out) as pdf:
         text = "\n".join(p.extract_text() or "" for p in pdf.pages)
     assert "Seznam k opravě" in text and "Jak opravit" in text
+    with pdfplumber.open(out) as pdf:  # u skupin s návodem i obrázek „chyba / správně“
+        n_img = sum(len(p.images) for p in pdf.pages)
+    ids = {i.check_id for i in w.issues if i.state == "nová" and i.severity.value != "info"}
+    assert n_img >= len(w._illustrations(ids)) > 0
 
 
 @pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
