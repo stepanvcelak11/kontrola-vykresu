@@ -18,6 +18,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Volné stanovisko (MNČ) | ✅ | nezávislá MNČ (Gauss–Newton) |
 | Transformace shodnostní, podobnostní, afinní (opravy, m0) | ✅ | přesný výpočet zlomky (1e-11 m) |
 | Výměra a obvod | ✅ | přesný výpočet zlomky |
+| Grafika seznamu souřadnic (čísla, výšky, kódy, výběr myší propojený s tabulkou, měření délky/směrníku/převýšení) | ✅ | test |
 | Staničení a kolmice, bod ze staničení a kolmice | ✅ | zpětný výpočet |
 | Kontrola dvou určení, mezní odchylky podle kódu kvality | 🟡 | hodnoty z vyhlášky k ověření |
 | Ortogonální metoda (dávka, vyrovnání na měřenou délku) | ✅ | zpětný výpočet staničení a kolmic |

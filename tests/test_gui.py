@@ -1763,3 +1763,30 @@ def test_cad_pojmenovani_jako_microstation(window):
     assert S.aci_na_ms(ln.dxf.color) == 3 and ln.dxf.linetype == "CONTINUOUS"
     c.proved("co=300")
     assert "0–255" in c.historie.toPlainText()
+
+
+def test_vypocty_grafika_bodu(window):
+    from kontrola.geodezie.body import Bod
+    w = window
+    w.show_page("vypocty")
+    v = w.vypocty
+    v.seznam.pridej([Bod("G1", 1000.0, 2000.0, 250.0, "BUD"), Bod("G2", 1003.0, 2004.0, 251.5)])
+    v._after_change()
+    v.tabs.setCurrentWidget(v.grafika)
+    g = v.grafika
+    g.obnov()
+    g.cele()
+    # klik na bod G1 (obrazovka x = −Y, y = −X) vybere i řádek v tabulce
+    g._klik(-1000.0, -2000.0, False)
+    assert g.vyber == ["G1"] and [b.cislo for b in v.selected()] == ["G1"]
+    g._klik(-1003.0, -2004.0, True)
+    assert set(g.vyber) == {"G1", "G2"}
+    # měření mezi body: délka 5 m, převýšení 1,5 m
+    g.b_mer.setChecked(True)
+    g._klik(-1000.0, -2000.0, False)
+    g._klik(-1003.0, -2004.0, False)
+    assert "délka 5.000 m" in g.info.text() and "Δh 1.500" in g.info.text()
+    g.b_mer.setChecked(False)
+    v.seznam.smaz(["G1", "G2"])  # smazání mimo tabulku → obnovení nesmí spadnout
+    v._after_change()
+    assert v.model.rowCount() == len(v.seznam.body)

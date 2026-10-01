@@ -385,6 +385,10 @@ class VypoctyPage(QWidget):
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
         self.tabs.addTab(seznam_w, "Seznam souřadnic")
+        from .grafika_bodu import GrafikaBodu
+        self.grafika = GrafikaBodu(self)
+        self.tabs.addTab(self.grafika, "Grafika")
+        self.grafika.vybrano.connect(self._vyber_z_grafiky)
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)
         self.tabs.addTab(self.ulohy, "Úlohy")
@@ -412,6 +416,8 @@ class VypoctyPage(QWidget):
         self.model.dataChanged.connect(lambda *a: self._after_change())
         from PySide6.QtGui import QKeySequence, QShortcut
         QShortcut(QKeySequence.Delete, self.table, activated=self.delete_selected)
+        self.table.selectionModel().selectionChanged.connect(
+            lambda *_a: self.grafika.oznac([b.cislo for b in self.selected()]))
         self.des.setValue(2)
         self._refresh()
 
@@ -455,10 +461,14 @@ class VypoctyPage(QWidget):
 
     # ------------------------------------------------------------ zobrazení
     def _refresh(self, keep: bool = False):
-        if not keep:
+        # „keep“ (jen přepočítat zobrazení) smí být jen při stejném počtu bodů – jinak by tabulka
+        # sahala na řádky, které už neexistují (pád Qt); po přidání / smazání vždy úplné obnovení
+        n = len(self.seznam.body)
+        if not keep or n != getattr(self, "_pocet_radku", n):
             self.model.refresh()
         else:
             self.model.layoutChanged.emit()
+        self._pocet_radku = n
         cur = self.kody.currentData()
         self.kody.blockSignals(True)
         self.kody.clear()
@@ -471,6 +481,8 @@ class VypoctyPage(QWidget):
         self._filter()
         self.b_undo.setEnabled(self.seznam.lze_zpet())
         self.b_redo.setEnabled(self.seznam.lze_znovu())
+        if hasattr(self, "grafika") and self.grafika.isVisible():
+            self.grafika.obnov()
 
     def _filter(self):
         self.proxy.text = self.search.text().strip()
@@ -486,6 +498,20 @@ class VypoctyPage(QWidget):
     def message(self, text: str, warn: bool = False):
         col = "#B45309" if warn else "gray"
         self.msg.setText(f"<span style='color:{col}'>{text}</span>")
+
+    def _vyber_z_grafiky(self, cisla: list[str]):
+        """Body vybrané v grafice → vybrat i v tabulce."""
+        from PySide6.QtCore import QItemSelection, QItemSelectionModel
+        sm = self.table.selectionModel()
+        sel = QItemSelection()
+        for c in cisla:
+            r = next((i for i, b in enumerate(self.seznam.body) if b.cislo == c), None)
+            if r is None:
+                continue
+            idx = self.proxy.mapFromSource(self.model.index(r, 0))
+            if idx.isValid():
+                sel.select(idx, idx)
+        sm.select(sel, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
 
     def selected(self) -> list[Bod]:
         rows = {self.proxy.mapToSource(i).row() for i in self.table.selectionModel().selectedRows()}
