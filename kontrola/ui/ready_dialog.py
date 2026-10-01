@@ -223,6 +223,10 @@ def checklist_for(project, drawing, config) -> list[tuple[bool | None, str]]:
             fresh = src.stat().st_mtime >= dgn.stat().st_mtime - 2
             out.append((fresh, "DXF je uložené po poslední změně DGN" if fresh else
                         "DGN je novější než DXF – v MicroStationu znovu uložte DXF, jinak kontrolujete starý stav."))
+        from ..nazev_souboru import zhodnot
+        h = zhodnot(src)
+        if h is not None:
+            out.append((h.ok, h.text))
     docs = [a for a in project.attachments("dokumenty")
             if Path(a.name).suffix.lower() in (".doc", ".docx", ".odt", ".rtf", ".pdf")]
     if docs:

@@ -188,6 +188,8 @@ Otevřete ukázkový výkres a stiskněte F5.
   zapnutý rozpracovaný výkres). Ukáže semafor (červená: chyby, oranžová: jen varování, zelená:
   hotovo), co zbývá opravit, kontrolní seznam (pravidla, seznam souřadnic, je DXF novější než
   DGN?), graf počtu chyb v čase a **počítadlo odevzdání** (nejvýš 5 pokusů).
+  Kontroluje i **název souboru** podle zadání `Prijmeni_cz_ax_tx.dgn` (např. `Vcelak_13_a0_t0.dgn`) a poradí
+  název pro další odevzdání (`…_a1_t0` po opravě atributů, `…_a0_t1` po opravě topologie).
 * **Hlídat změny výkresu** (menu Kontrola, ve výchozím stavu zapnuto): kreslíte v MicroStationu,
   uložíte DXF a aplikace během pár vteřin sama načte výkres a zkontroluje ho znovu. Nad
   seznamem chyb ukáže, co přibylo a co zmizelo. Každé uložení DGN (Ctrl+S) to nespustí – je
