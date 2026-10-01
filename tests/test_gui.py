@@ -1389,3 +1389,22 @@ def test_cad_kresleni_upravy_zpet(window, tmp_path):
     c.zadej("-3")
     assert "⚠" in c.historie.toPlainText()
     c.proved("?")
+
+
+def test_vypocet_ze_souboru_gsi(window, tmp_path):
+    from kontrola.geodezie.gsi import zapis_gsi
+    from kontrola.ui.vypocet_dialog import VypocetDialog
+    from kontrola.vypocet import read_zap
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+    if not (z / "zap_husovice.zap").exists():
+        pytest.skip("podklady chybí")
+    f = tmp_path / "mereni.gsi"
+    f.write_text(zapis_gsi(read_zap(z / "zap_husovice.zap")), encoding="ascii")
+    d = VypocetDialog(window.project, window)
+    d.zap.setText(str(f))
+    d.dane.setText(str(z / "dane_body.txt"))
+    d.seznam.setText("")
+    d.run()
+    assert d.result is not None and len(d.result.body) > 100
+    assert any("GSI: stanovisko 4001 – orientace na" in t for t in d._gsi_zpravy)
+    d.close()

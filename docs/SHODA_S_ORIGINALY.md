@@ -28,7 +28,8 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Oddělování parcel rovnoběžně s hranicí | ✅ | výměra na 0,0001 m² (Shapely) |
 | Oddělování bodem, úprava hranic | ❌ | |
 | Převod S-JTSK ↔ WGS84 (EPSG:5239, ≈ 1 m) s odkazem na mapy.cz | ✅ | shoda s PROJ na 2·10⁻⁸ ° |
-| Import GSI a dalších formátů totálních stanic | ❌ | |
+| Import zápisníku Leica GSI-8 / GSI-16 (gon, stupně, mil; mm–0,01 mm) | ✅ | Husovice přes GSI = stejné souřadnice jako ze .zap |
+| Další formáty totálních stanic (Trimble, Topcon, Sokkia) | ❌ | |
 | Kresba podle kódů, export DXF | ❌ (v CAD) | |
 | Vyrovnání sítě MNČ | ❌ | |
 

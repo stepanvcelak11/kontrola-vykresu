@@ -32,7 +32,7 @@ class VypocetDialog(QDialog):
         form = QFormLayout()
         meta = project.meta.setdefault("vypocet", {}) if project else {}
         self.zap = self._file_row(form, "Zápisník (.zap):", meta.get("zapisnik", ""),
-                                  "Zápisník (*.zap *.txt);;Vše (*)")
+                                  "Zápisník (*.zap *.txt *.gsi);;Leica GSI (*.gsi);;Vše (*)")
         self.dane = self._file_row(form, "Dané body (Y X Z):", meta.get("dane", ""),
                                    "Seznam (*.txt *.crd *.csv);;Vše (*)", multi=True,
                                    tip="Stanoviska (např. gnss_husovice.txt) a orientační / nivelační body "
@@ -163,6 +163,20 @@ class VypocetDialog(QDialog):
         form.addRow(label, w)
         return ed
 
+    def _nacti_mereni(self, zap: str, known) -> list:
+        """Zápisník Gromy (.zap) nebo Leica GSI-8/16 (orientace = dané body na začátku stanoviska)."""
+        from ..geodezie.gsi import je_gsi, read_gsi, rozdel_orientace
+        text = Path(zap).read_bytes()[:4000].decode("cp1250", errors="replace")
+        self._gsi_zpravy = []
+        if not je_gsi(text):
+            return read_zap(zap)
+        stations, var = read_gsi(zap)
+        rozdel_orientace(stations, {p.cislo for p in known})
+        self._gsi_zpravy = [f"GSI: stanovisko {st.bod} – orientace na " + (", ".join(o.bod for o in st.orient)
+                                                                           or "žádný daný bod")
+                            for st in stations] + var[:10]
+        return stations
+
     def run(self):
         zap = self.zap.text().strip()
         dane = [s.strip() for s in self.dane.text().split(";") if s.strip()]
@@ -172,8 +186,8 @@ class VypocetDialog(QDialog):
             QMessageBox.information(self, "Kontrola výpočtu", "Vyberte: " + ", ".join(missing) + ".")
             return
         try:
-            stations = read_zap(zap)
             known = [p for f in dane for p in read_point_list(f)]
+            stations = self._nacti_mereni(zap, known)
             student = read_point_list(seznam) if seznam else []
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Kontrola výpočtu", f"Soubor nelze načíst: {exc}")
@@ -188,7 +202,7 @@ class VypocetDialog(QDialog):
                      else ([], []))
         self.result = res
         self._stations, self._known, self._files = stations, known, (zap, "; ".join(dane))
-        diag = diagnose(res, rows, self.tol_xy.value(), self.tol_z.value())
+        diag = self._gsi_zpravy + diagnose(res, rows, self.tol_xy.value(), self.tol_z.value())
         self.report = text_report(res, rows, bad, diag)
         self._fill_checks(res, diag)
         self.plot.set_data(res, rows, self.tol_xy.value())
