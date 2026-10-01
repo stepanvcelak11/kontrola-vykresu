@@ -155,11 +155,14 @@ class MainWindow(QMainWindow):
             a.setToolTip(tip)
             a.setStatusTip(tip)
         a.setCheckable(checkable)
+        from .crash import step
         if checkable:
+            # jen kliknutí uživatele (triggered), ne nastavení volby při startu (toggled)
+            a.triggered.connect(lambda on, t=text: step(f"{t}: {'zapnuto' if on else 'vypnuto'}"))
             a.toggled.connect(slot)
         else:
             # triggered(bool) by jinak předal „checked“ jako první argument (např. run_checks(after=False))
-            a.triggered.connect(lambda _checked=False, s=slot: s())
+            a.triggered.connect(lambda _checked=False, s=slot, t=text: (step(t), s()))
         return a
 
     def _build_actions(self):
@@ -380,6 +383,10 @@ class MainWindow(QMainWindow):
         m_help.addAction(self._act("Kokeš, Atlas DMT, AutoCAD a katastr (VFK)",
                                    lambda: QMessageBox.information(self, "Jiné programy", JINE_PROGRAMY_NAVOD)))
         m_help.addSeparator()
+        self.a_report = self._act("Vytvořit hlášení o problému…", self.show_report, None,
+                                  "Hlášení pro vývojáře (verze, poslední kroky a chyby) – zkopírovat do chatu nebo "
+                                  "uložit na plochu")
+        m_help.addAction(self.a_report)
         m_help.addAction(self._act("Nahlásit chybu / složka s logy…", self._open_logs, None,
                                    "Pokud se něco pokazilo: záznam chyb je v této složce"))
         m_help.addAction(self._act("Zkontrolovat aktualizace", lambda: self.check_updates(manual=True)))
@@ -515,6 +522,8 @@ class MainWindow(QMainWindow):
     def show_page(self, key: str):
         w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani}.get(key)
         if w is not None:
+            from .crash import step
+            step(f"stránka {key}")
             self.tabs.setCurrentWidget(w)
 
     def _sync_page_buttons(self):
@@ -1708,6 +1717,19 @@ class MainWindow(QMainWindow):
         install_and_restart(dest)
         self.close()
         QApplication.instance().quit()
+
+    def show_report(self, problem: str = ""):
+        from .crash import show_report_dialog
+        self._report_dlg = show_report_dialog(self, problem)
+        return self._report_dlg
+
+    def offer_crash_report(self):
+        """Minule se aplikace nečekaně ukončila – nabídnout hlášení."""
+        if QMessageBox.question(
+                self, "Aplikace se minule nečekaně ukončila",
+                "Minule se aplikace nezavřela řádně (spadla nebo zamrzla).\n\nChcete vytvořit hlášení o problému? "
+                "Stačí ho zkopírovat a poslat – pomůže to chybu opravit.") == QMessageBox.Yes:
+            self.show_report("Minule se aplikace nečekaně ukončila.")
 
     def _open_logs(self):
         from PySide6.QtCore import QUrl

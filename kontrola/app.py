@@ -56,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
             pass
     from .ui import crash
     crash.install(lambda: QApplication.activeWindow())
+    crashed_before = crash.previous_run_crashed()  # minule se aplikace nezavřela řádně
+    crash.start_session()
+    app.aboutToQuit.connect(crash.end_session)
     _splash("Načítám poslední projekt…")
     win = MainWindow()
     win.show()
@@ -63,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     if not win.settings.value("pruvodce/skryt", False, type=bool):
         QTimer.singleShot(400, win.show_guide)  # průvodce při prvním spuštění
     QTimer.singleShot(1500, win.maybe_show_news)  # po aktualizaci jednou „Co je nového“
+    if crashed_before:
+        QTimer.singleShot(1200, win.offer_crash_report)
     QTimer.singleShot(3000, win.maybe_check_updates)
     for a in argv[1:]:
         if not a.startswith("-"):

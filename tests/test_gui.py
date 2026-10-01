@@ -1083,3 +1083,33 @@ def test_pocet_na_tlacitku_chyby(window):
     w.issue_panel.select_issue(first.number)
     w.issue_panel.set_state("opraveno")
     assert f"({k()})" in w.split.b_show.text()
+
+
+def test_hlaseni_o_problemu(window, tmp_path, monkeypatch):
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtCore import QStandardPaths
+    from kontrola.ui import crash
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    monkeypatch.setattr(QStandardPaths, "writableLocation", staticmethod(lambda loc: str(tmp_path / "plocha")))
+    w = window
+    # tvrdý pád minule: příznak běhu zůstal
+    crash.start_session()
+    assert crash.previous_run_crashed()
+    crash.end_session()
+    assert not crash.previous_run_crashed()
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.a_heat.trigger()  # jako kliknutí uživatele
+    w.a_heat.trigger()
+    crash.write_log("Traceback (most recent call last):\n  ValueError: zkouška")
+    dlg = w.show_report("Klikl jsem na mapu")
+    text = dlg._text()
+    assert "Verze:" in text and "Klikl jsem na mapu" in text and "Tepelná mapa chyb" in text
+    assert "ValueError: zkouška" in text and "prvků" in text
+    dlg._copy()
+    assert QGuiApplication.clipboard().text().startswith("HLÁŠENÍ O PROBLÉMU")
+    dlg._save()
+    saved = list((tmp_path / "plocha").glob("KontrolaVykresu_hlaseni_*.txt"))
+    assert saved and "Poslední kroky" in saved[0].read_text(encoding="utf-8")
+    dlg.close()
