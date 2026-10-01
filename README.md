@@ -127,6 +127,22 @@ nebo vypnout jednotlivé kontroly, změnit jejich závažnost a parametry.
   vlevo dole s tečkami chyb – klik nebo tažení posune pohled. Přiblížení na chybu je plynulé a výkres se
   centruje do části, kterou nezakrývá panel.
 * **Tmavý vzhled je výchozí**; světlý jde zapnout v Nabídka → Zobrazení → Tmavý režim.
+* **Barva vzhledu** (Nabídka → Zobrazení → Barva vzhledu): modrá, zelená, fialová nebo oranžová –
+  přebarví tlačítka, výběr a lištu; barvy chyb (červená, oranžová, modrá) zůstávají.
+* **Tepelná mapa chyb (Ctrl+H)** – průhledné žluto-červené skvrny ukážou, kde je ve výkrese nejvíc
+  neopravených chyb (chyby váží víc než varování a info). Řídí se filtrem panelu.
+* **Režim soustředění (F11)** – schová lišty, panely i minimapu; zůstane jen výkres a dole jedna chyba
+  velkým písmem s tlačítky ◀ / ✓ Opraveno / Další ▶. Esc nebo ✕ Konec vrátí okno, jak bylo.
+* **Okno „Další chyba“ (Ctrl+Shift+N)** – malé okénko, které zůstává nad MicroStationem: popis vybrané
+  chyby, krátký postup, tlačítka pro zkopírování key-inu a ✓ Opraveno – další.
+* **Obrázek „jak to má vypadat“** – pod návodem u vybrané chyby je malý obrázek chyba / správně
+  (celé vysvětlení pod tlačítkem „?“).
+* **Upozornění Windows** – když hlídáte výkres a uložíte ho v MicroStationu, vpravo dole se ukáže, kolik
+  chyb ubylo a kolik zbývá (jen když je aplikace v pozadí; vypnout v Nabídka → Kontrola).
+* **Osobní tahák** na úvodní stránce – „Na co si dát pozor“: typy chyb, které se vám opakují nejčastěji
+  (podle poslední kontroly každého projektu).
+* **Úvodní okénko** hned po spuštění .exe a **aktualizace jedním klikem** – při nové verzi stačí
+  „Aktualizovat teď“: stáhne se, nahradí starý soubor a program se znovu spustí (projekty a nastavení zůstanou).
 
 ### Krok 3: panel chyb s kroužky, popisky a filtry
 
