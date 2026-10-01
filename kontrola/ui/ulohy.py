@@ -61,9 +61,17 @@ def _cislo(h: dict, key: str, nazev: str) -> float:
     if not t:
         raise ChybaVstupu(f"Vyplňte {nazev}.")
     try:
-        return float(t)
+        v = float(t)
     except ValueError:
         raise ChybaVstupu(f"{nazev}: „{t}“ není číslo.") from None
+    if not math.isfinite(v):
+        raise ChybaVstupu(f"{nazev}: „{t}“ není konečné číslo.")
+    return v
+
+
+def _ruzne(a: Bod, b: Bod) -> None:
+    if math.hypot(a.y - b.y, a.x - b.x) < 1e-9:
+        raise ChybaVstupu(f"Body {a.cislo} a {b.cislo} jsou na stejném místě – zvolte dva různé body.")
 
 
 def _nove_cislo(seznam: SeznamBodu, h: dict, key: str = "nove") -> str:
@@ -93,6 +101,7 @@ def _hlavicka(nazev: str) -> list[str]:
 # ------------------------------------------------------------------ úlohy
 def u_smernik(s, h):
     a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    _ruzne(a, b)
     p = _hlavicka("Směrník a délka")
     p += [f"z bodu {a.cislo} na bod {b.cislo}",
           f"  směrník σ = {_f(V.smernik(a, b), 4)} gon",
@@ -105,6 +114,7 @@ def u_smernik(s, h):
 
 def u_rajon(s, h):
     st, o = _bod(s, h, "st", "stanovisko"), _bod(s, h, "o", "orientaci")
+    _ruzne(st, o)
     so, sm, d = _cislo(h, "so", "směr na orientaci"), _cislo(h, "sm", "měřený směr"), _cislo(h, "d", "délku")
     if d <= 0:
         raise ChybaVstupu("Délka musí být kladná.")
@@ -125,6 +135,7 @@ def u_rajon(s, h):
 
 def u_vpred_uhly(s, h):
     a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    _ruzne(a, b)
     alfa, beta = _cislo(h, "alfa", "úhel α"), _cislo(h, "beta", "úhel β")
     n = _nove_cislo(s, h)
     try:
@@ -143,6 +154,7 @@ def u_vpred_uhly(s, h):
 
 def u_z_delek(s, h):
     a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    _ruzne(a, b)
     da, db = _cislo(h, "da", "délku z A"), _cislo(h, "db", "délku z B")
     n = _nove_cislo(s, h)
     vlevo = (h.get("strana") or "vlevo") == "vlevo"
@@ -186,9 +198,12 @@ def u_volne(s, h):
         if b is None:
             raise ChybaVstupu(f"Řádek {i}: bod {parts[0]} v seznamu není.")
         try:
-            mer.append((b.cislo, b, float(parts[1]), float(parts[2])))
+            sm_, d_ = float(parts[1]), float(parts[2])
+            if not (math.isfinite(sm_) and math.isfinite(d_)) or d_ <= 0:
+                raise ValueError
+            mer.append((b.cislo, b, sm_, d_))
         except ValueError:
-            raise ChybaVstupu(f"Řádek {i}: směr a délka musí být čísla.") from None
+            raise ChybaVstupu(f"Řádek {i}: směr a délka musí být čísla (délka kladná).") from None
     n = _nove_cislo(s, h)
     try:
         vs = V.volne_stanovisko(mer, meritko_volne=(h.get("meritko") == "volné"))
@@ -216,11 +231,16 @@ def u_transformace(s, h):
         if b is None:
             raise ChybaVstupu(f"Řádek {i}: bod {parts[0]} v seznamu není.")
         try:
-            pary.append((b, (float(parts[1]), float(parts[2]))))
+            yy, xx = float(parts[1]), float(parts[2])
+            if not (math.isfinite(yy) and math.isfinite(xx)):
+                raise ValueError
+            pary.append((b, (yy, xx)))
         except ValueError:
             raise ChybaVstupu(f"Řádek {i}: souřadnice musí být čísla.") from None
-    druh = {"shodnostní": "shodnostni", "podobnostní": "podobnostni", "afinní": "afinni"}[h.get("druh") or
-                                                                                         "podobnostní"]
+    druh = {"shodnostní": "shodnostni", "podobnostní": "podobnostni", "afinní": "afinni"}.get(
+        h.get("druh") or "podobnostní")
+    if druh is None:
+        raise ChybaVstupu("Zvolte druh transformace: shodnostní, podobnostní nebo afinní.")
     try:
         t = V.transformace([b for b, _ in pary], [c for _, c in pary], druh)
     except ValueError as e:
@@ -258,6 +278,7 @@ def u_vymera(s, h):
 
 def u_staniceni(s, h):
     a, b = _bod(s, h, "a", "bod A (začátek přímky)"), _bod(s, h, "b", "bod B (směr přímky)")
+    _ruzne(a, b)
     body = _radky_bodu(s, h.get("body") or "")
     if not body:
         raise ChybaVstupu("Zadejte čísla bodů, ke kterým se počítá staničení a kolmice.")
@@ -272,6 +293,7 @@ def u_staniceni(s, h):
 
 def u_ze_staniceni(s, h):
     a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    _ruzne(a, b)
     st, k = _cislo(h, "st", "staničení"), _cislo(h, "kol", "kolmici")
     n = _nove_cislo(s, h)
     p = V.bod_ze_stanicni(a, b, st, k)
@@ -283,7 +305,12 @@ def u_ze_staniceni(s, h):
 
 def u_odchylka(s, h):
     a, b = _bod(s, h, "a", "první určení"), _bod(s, h, "b", "druhé určení")
-    kk = int(h.get("kk") or 3)
+    try:
+        kk = int(h.get("kk") or 3)
+    except ValueError:
+        raise ChybaVstupu("Kód kvality je číslo 3–7.") from None
+    if kk not in V.MXY_KOD_KVALITY:
+        raise ChybaVstupu("Kód kvality je číslo 3–7.")
     d = V.polohova_odchylka(a, b)
     lim = V.mezni_polohova_odchylka(kk)
     prot = _hlavicka("Kontrola dvou určení bodu")

@@ -260,3 +260,26 @@ def test_obousmerne_delky_jako_groma():
     assert abs(o["dh"] - -2.714) <= 0.001
     orient = r.protokol[0]["orientace"][1]  # 4002 z 4001: Groma délka 21.253, V délky −0.007
     assert round(orient["delka_mer"], 3) == 21.253 and round(orient["v_delky"], 3) == -0.007
+
+
+def test_ulohy_nespadnou_na_spatnych_datech():
+    """Tisíce náhodných vstupů do všech úloh: výsledek nebo srozumitelná hláška (ChybaVstupu), nikdy pád."""
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.ui.ulohy import ULOHY, ChybaVstupu
+    r = random.Random(42)
+    s = SeznamBodu()
+    s.pridej([Bod("1", 0, 0), Bod("2", 0, 0), Bod("3", 100, 0), Bod("4", 100, 100, 5.0), Bod("5", 50, 50)])
+    hodnoty = ["", "1", "2", "3", "4", "5", "99", "abc", "0", "-5", "400", "1e9", "nan", "inf", "1,5", " ",
+               "1 2 3", "1 2", "4 5 3 2 1", "1 100 50\n2 200 60\n3 300 70", "3 0 0\n4 1 1\n5 2 2", "x y z"]
+    pady = []
+    for nazev, _p, pole, fn in ULOHY:
+        for _ in range(300):
+            h = {p.key: (r.choice(p.volby) if p.typ == "volba" and r.random() < 0.8 else r.choice(hodnoty))
+                 for p in pole}
+            try:
+                fn(s, h)
+            except ChybaVstupu:
+                pass
+            except Exception as e:  # noqa: BLE001
+                pady.append(f"{nazev}: {type(e).__name__}: {e} ← {h}")
+    assert not pady, "\n".join(pady[:10])

@@ -283,6 +283,8 @@ def bod_ze_stanicni(a, b, staniceni: float, kolmice: float) -> P:
     """Opačná úloha: bod ze staničení a kolmice (vpravo kladná) – vytyčení, oměrné."""
     (ya, xa), (yb, xb) = _yx(a), _yx(b)
     c = math.hypot(yb - ya, xb - xa)
+    if c == 0:
+        raise ValueError("Body A a B splývají – směr přímky není určen.")
     uy, ux = (yb - ya) / c, (xb - xa) / c
     return P(ya + staniceni * uy + kolmice * ux, xa + staniceni * ux - kolmice * uy)
 
