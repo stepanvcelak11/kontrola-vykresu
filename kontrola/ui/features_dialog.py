@@ -77,6 +77,20 @@ FUNKCE = [
         ("Protokoly", "PDF, Excel, CSV, interaktivní HTML, seznam k opravě na tisk, DXF s vrstvou chyb, "
          "protokol ve formátu MGEO (.log).", "a_exp_html"),
     ]),
+    ("Pohodlné opravování", [
+        ("Okno „Další chyba“", "Malé okénko nad MicroStationem: popis chyby, postup, key-in ke zkopírování "
+         "a ✓ Opraveno – další (Ctrl+Shift+N).", "a_mini"),
+        ("Režim soustředění", "Jen výkres a jedna chyba velkým písmem, Opraveno / Další; Esc ukončí (F11).",
+         "a_focus"),
+        ("Tepelná mapa chyb", "Žluto-červené skvrny ukážou, kde je nejvíc neopravených chyb (Ctrl+Shift+H).",
+         "a_heat"),
+        ("Zpět", "Vrátí poslední Opraveno / Ignorovat (Ctrl+Z).", "a_undo"),
+        ("Související chyby", "U chyby se ukáže, které další chyby jsou hned vedle nebo na stejném prvku – "
+         "často jedna příčina.", None),
+        ("Upozornění Windows", "Po uložení výkresu v MicroStationu ukáže, kolik chyb ubylo a kolik zbývá.",
+         "a_notify"),
+        ("Vzhled", "Tmavý / světlý režim, barva vzhledu a velikost písma (Nabídka → Zobrazení).", "a_dark"),
+    ]),
     ("Pomocníci", [
         ("Poradce", "Zeptejte se česky: „co dál“, „kolik mi zbývá“, „jak opravit tuhle chybu“ – zná váš "
          "projekt, pravidla i pokyny ze zadání. Funguje offline.", "_poradce"),

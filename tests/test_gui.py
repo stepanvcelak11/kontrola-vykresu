@@ -990,3 +990,11 @@ def test_velikost_pisma(window):
     finally:
         w.set_font_scale("normalni")
     assert abs(QApplication.font().pointSizeF() - base) < 0.05 and theme.font_scale_name() == "normalni"
+
+
+def test_co_aplikace_umi_akce_existuji(window):
+    from kontrola.ui.features_dialog import FUNKCE
+    for _g, items in FUNKCE:
+        for name, _d, act in items:
+            if act and act.startswith("a_"):
+                assert getattr(window, act, None) is not None, (name, act)
