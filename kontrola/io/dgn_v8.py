@@ -46,13 +46,22 @@ class DgnError(Exception):
     pass
 
 
-def _inflate(raw: bytes) -> bytes:
+def _inflate(raw: bytes, broken: list | None = None) -> bytes:
     i = raw.find(b"\x78\x5e")
     if i < 0:
         i = raw.find(b"\x78\x9c")
     if i < 0:
         return b""  # prázdný proud (jen 16B hlavička)
-    return zlib.decompressobj().decompress(raw[i:])
+    z = zlib.decompressobj()
+    try:
+        out = z.decompress(raw[i:])
+    except zlib.error:
+        if broken is not None:
+            broken.append(1)
+        return b""
+    if broken is not None and not z.eof:
+        broken.append(1)  # proud skončil dřív – soubor je useknutý / poškozený
+    return out
 
 
 def _streams(ole, prefix: str) -> list[str]:
@@ -206,10 +215,15 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
         styles = _styles(ole)
         fonts = _fonts(ole)
         uor = _uor(ole)
-        data = b"".join(_inflate(ole.openstream(n).read()) for n in _streams(ole, "Dgn-Md/#000000/Dgn^G/"))
+        broken: list = []
+        data = b"".join(_inflate(ole.openstream(n).read(), broken)
+                        for n in _streams(ole, "Dgn-Md/#000000/Dgn^G/"))
     finally:
         ole.close()
     d = Drawing(path=str(path), source_path=str(path))
+    if broken:
+        d.warnings.append(f"{path.name} je nejspíš poškozený nebo neúplně uložený – přečetla se jen část kresby. "
+                          "Uložte výkres v MicroStationu znovu.")
     skipped: Counter = Counter()
     fid = 0
     s = 1.0 / uor

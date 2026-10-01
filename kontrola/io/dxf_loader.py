@@ -485,6 +485,9 @@ def load_drawing(path: str | Path, progress: ProgressFn | None = None,
                  oda_path: str | None = None) -> Drawing:
     """Načte výkres (DXF, DGN/DWG, VFK, SHP, GeoJSON) a upozorní na podezřelé jednotky."""
     d = _load_drawing(path, progress, oda_path)
+    if not d.features:
+        d.warnings.insert(0, f"Ve výkresu {Path(path).name} nejsou žádné prvky, které by šly zkontrolovat – "
+                             "soubor může být prázdný, poškozený nebo uložený neúplně.")
     w = units_warning(d)
     if w and w not in d.warnings:
         d.warnings.append(w)

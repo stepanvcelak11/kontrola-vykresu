@@ -197,6 +197,8 @@ def read_geojson(path: str | Path, progress=None) -> Drawing:
     except (ValueError, UnicodeDecodeError) as e:
         raise GisError(f"{path.name} není platný GeoJSON: {e}") from e
     b = _Builder(path)
+    if not isinstance(data, dict):
+        raise GisError(f"{path.name} není platný GeoJSON (čekám objekt s „type“).")
     if data.get("type") == "FeatureCollection":
         items = data.get("features") or []
     elif data.get("type") == "Feature":
@@ -204,12 +206,16 @@ def read_geojson(path: str | Path, progress=None) -> Drawing:
     else:
         items = [{"type": "Feature", "geometry": data, "properties": {}}]
     for it in items:
+        if not isinstance(it, dict):
+            continue
         g = it.get("geometry")
         if not g:
             continue
         try:
             geom = shape(g)
-        except (ValueError, TypeError, AttributeError, KeyError):
+        except Exception:  # noqa: BLE001 – vadný tvar se přeskočí, ostatní se načtou
+            continue
+        if geom.is_empty:
             continue
         props = it.get("properties") or {}
         b.add(geom, {k: v for k, v in props.items() if not isinstance(v, (dict, list))})
