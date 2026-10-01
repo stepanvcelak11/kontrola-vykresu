@@ -674,7 +674,9 @@ class UlohyPanel(QWidget):
         self.b_add = QPushButton("Přidat do seznamu")
         self.b_add.setEnabled(False)
         self.b_copy = QPushButton("Kopírovat protokol")
-        for b in (self.b_calc, self.b_add, self.b_copy):
+        self.b_pdf = QPushButton("Protokol PDF…")
+        self.b_pdf.setToolTip("Výpočetní protokol (tento výpočet, nebo všechny výpočty projektu) do PDF")
+        for b in (self.b_calc, self.b_add, self.b_copy, self.b_pdf):
             row.addWidget(b)
         row.addStretch(1)
         rl.addLayout(row)
@@ -694,6 +696,7 @@ class UlohyPanel(QWidget):
         self.b_calc.clicked.connect(self.vypocitej)
         self.b_add.clicked.connect(self.pridej)
         self.b_copy.clicked.connect(self._copy)
+        self.b_pdf.clicked.connect(lambda: self.protokol_pdf())
         self.lst.setCurrentRow(0)
 
     def _show(self, i: int):
@@ -782,6 +785,39 @@ class UlohyPanel(QWidget):
             self.chyba.setText(f"<span style='color:#16A34A'>✓ Přidáno do seznamu: {n} bodů.</span>")
         self.pointsAdded.emit(n)
         return n
+
+    def protokol_pdf(self, cesta: str | None = None, vse: bool | None = None):
+        """Uloží protokol do PDF: buď poslední výpočet, nebo celý protokol projektu (všechny výpočty)."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from ..geodezie.protokol import protokol_pdf
+        celek = None
+        p = getattr(self.page, "_path", None)
+        if p is not None and p.with_name("protokol.txt").exists():
+            celek = p.with_name("protokol.txt").read_text(encoding="utf-8")
+        if vse is None:
+            if celek and self.vystup.toPlainText().strip():
+                r = QMessageBox.question(self, "Protokol PDF", "Uložit protokol všech výpočtů projektu?\n\n"
+                                         "Ano = všechny výpočty, Ne = jen poslední výpočet.",
+                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+                if r == QMessageBox.Cancel:
+                    return None
+                vse = r == QMessageBox.Yes
+            else:
+                vse = bool(celek) and not self.vystup.toPlainText().strip()
+        text = celek if vse else self.vystup.toPlainText()
+        if not (text or "").strip():
+            self.chyba.setText("<span style='color:#B45309'>Zatím není co uložit – nejdřív něco vypočítejte.</span>")
+            return None
+        if cesta is None:
+            cesta, _ = QFileDialog.getSaveFileName(self, "Protokol do PDF", "protokol_vypoctu.pdf", "PDF (*.pdf)")
+            if not cesta:
+                return None
+        win = getattr(self.page, "win", None)
+        pr = getattr(win, "project", None) if win is not None else None
+        nazev = getattr(pr, "name", "") if pr is not None else ""
+        out = protokol_pdf(text, cesta, nazev=f"Výpočetní protokol {nazev}".strip())
+        self.chyba.setText(f"<span style='color:#16A34A'>✓ Protokol uložen: {out}</span>")
+        return out
 
     def _copy(self):
         from PySide6.QtGui import QGuiApplication

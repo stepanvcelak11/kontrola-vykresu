@@ -241,6 +241,7 @@ class CadPage(QWidget):
         "výřez": "výřez modelu na listu v měřítku", "reference": "správce referencí (připojit DXF podklad)",
         "vlastnosti": "vlastnosti vybraného prvku (i dvojklik)", "podobné": "vybrat podobné (stejný typ a vrstva)",
         "najdi": "najít text („najdi 12/1“)", "nahraď": "nahradit text („nahraď staré / nové“)",
+        "měř plochu": "výměra a obvod klikáním na body (Enter = konec)", "měř úhel": "úhel mezi třemi body",
         "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -263,7 +264,9 @@ class CadPage(QWidget):
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
         "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "pr": "vlastnosti", "props": "vlastnosti",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "mp": "měř plochu", "plocha bodů": "měř plochu",
+        "mer plochu": "měř plochu", "measure area": "měř plochu", "mu": "měř úhel", "mer uhel": "měř úhel",
+        "uhel": "měř úhel", "úhel": "měř úhel", "pr": "vlastnosti", "props": "vlastnosti",
         "podobne": "podobné", "similar": "podobné", "find": "najdi", "nahrad": "nahraď", "replace": "nahraď", "plot": "tisk", "print": "tisk",
         "pdf": "tisk", "razitko": "razítko", "mv": "výřez", "viewport": "výřez",
         "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
@@ -1389,7 +1392,7 @@ class CadPage(QWidget):
             self._vymera()
         else:
             self._posledni_prikaz = cmd
-            fn = getattr(self, "n_" + _ascii(cmd))
+            fn = getattr(self, "n_" + _ascii(cmd).replace(" ", "_"))
             self._spust(fn())
 
     def _vrstva(self, arg: str):
@@ -1888,6 +1891,33 @@ class CadPage(QWidget):
             self.historie_zmen.zmena += 1
         self._vykresli()
         self._titulek()
+
+    # ------------------------------------------------------------ měření
+    def n_mer_plochu(self):
+        body = [(yield self._bod_req("Výměra – první bod obvodu:"))]
+        while True:
+            q = yield self._bod_req("Další bod (Enter = spočítat):", body[-1], True)
+            if q is None:
+                break
+            body.append(q)
+            self.view.zvyraznene = [_linie(body + [body[0]])] if len(body) > 2 else [_linie(body)]
+        if len(body) < 3:
+            raise ValueError("Výměra potřebuje aspoň tři body.")
+        from ..geodezie.vypocty import obvod, vymera
+        p = vymera(body)
+        self.vypis(f"Výměra {p:.2f} m² ({round(p)} m²), obvod {obvod(body):.3f} m, bodů {len(body)}")
+        self._zvyrazni()
+
+    def n_mer_uhel(self):
+        a = yield self._bod_req("Úhel – bod na prvním rameni:")
+        v = yield self._bod_req("Vrchol:", a)
+        b = yield self._bod_req("Bod na druhém rameni:", v)
+        u1 = math.atan2(a[1] - v[1], a[0] - v[0])
+        u2 = math.atan2(b[1] - v[1], b[0] - v[0])
+        # úhel po směru hodin od prvního ramene (jako geodetický úhel) a vnitřní úhel
+        po_smeru = ((u1 - u2) % math.tau) / GON
+        vnitrni = min(po_smeru, 400 - po_smeru)
+        self.vypis(f"Úhel {po_smeru:.4f} g po směru hodin ({po_smeru * 0.9:.4f}°), vnitřní {vnitrni:.4f} g")
 
 
 def _linie(body):

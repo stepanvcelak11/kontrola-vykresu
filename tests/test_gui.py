@@ -1790,3 +1790,35 @@ def test_vypocty_grafika_bodu(window):
     v.seznam.smaz(["G1", "G2"])  # smazání mimo tabulku → obnovení nesmí spadnout
     v._after_change()
     assert v.model.rowCount() == len(v.seznam.body)
+
+
+def test_ulohy_protokol_pdf(window, tmp_path):
+    from kontrola.geodezie.body import Bod
+    w = window
+    w.show_page("vypocty")
+    v = w.vypocty
+    v.seznam.pridej([Bod("P1", 1000.0, 2000.0), Bod("P2", 1003.0, 2004.0)])
+    v._after_change()
+    u = v.ulohy
+    u.lst.setCurrentRow(0)
+    u.nastav(a="P1", b="P2")
+    assert u.vypocitej() is not None
+    out = u.protokol_pdf(str(tmp_path / "jeden.pdf"), vse=False)
+    assert out and out.stat().st_size > 1000
+    import pdfplumber
+    with pdfplumber.open(out) as pdf:
+        assert "SMĚRNÍK A DÉLKA" in pdf.pages[0].extract_text()
+    v.seznam.smaz(["P1", "P2"])
+    v._after_change()
+
+
+def test_cad_mereni_plochy_a_uhlu(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("mp", "x=0 y=0", "x=10 y=0", "x=10 y=10", "x=0 y=10", ""):
+        c.zadej(t)
+    assert "Výměra 100.00 m²" in c.historie.toPlainText() and "obvod 40.000" in c.historie.toPlainText()
+    for t in ("měř úhel", "x=10 y=0", "x=0 y=0", "x=0 y=10"):
+        c.zadej(t)
+    assert "vnitřní 100.0000 g" in c.historie.toPlainText()
