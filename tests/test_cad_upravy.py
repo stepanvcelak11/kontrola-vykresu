@@ -192,3 +192,31 @@ def test_vlastnosti_a_smazani():
     h.krok_zpet()
     h.krok_zpet()
     assert list(msp) == [l]
+
+
+def test_bloky():
+    doc, msp, h, k = _novy()
+    a = k.usecka((100, 100), (102, 100))
+    b = k.kruznice((101, 100), 0.5)
+    ins = U.vytvor_blok(doc, msp, h, [a, b], "ZNACKA", (101, 100))
+    assert list(msp) == [ins] and ins.dxf.name == "ZNACKA" and "ZNACKA" in U.bloky(doc)
+    blk = doc.blocks.get("ZNACKA")
+    assert sorted(e.dxftype() for e in blk) == ["CIRCLE", "LINE"]
+    assert next(e for e in blk if e.dxftype() == "CIRCLE").dxf.center.isclose((0, 0, 0))
+    i2 = U.vloz_blok(doc, msp, h, "ZNACKA", (200, 50), 2.0, 90)
+    v = [e for e in i2.virtual_entities() if e.dxftype() == "LINE"][0]
+    assert v.dxf.start.isclose((200, 48, 0), abs_tol=1e-9) and v.dxf.end.isclose((200, 52, 0), abs_tol=1e-9)
+    with pytest.raises(ValueError):
+        U.vytvor_blok(doc, msp, h, [i2], "ZNACKA", (0, 0))
+    with pytest.raises(ValueError):
+        U.vloz_blok(doc, msp, h, "NENI", (0, 0))
+    h.krok_zpet()
+    h.krok_zpet()
+    assert sorted(e.dxftype() for e in msp) == ["CIRCLE", "LINE"]
+    d2 = _znovu_nacti(doc)
+    assert "ZNACKA" in d2.blocks
+    # rozpojení bloku vrátí prvky na místo
+    h.krok_vpred()
+    casti = U.rozpoj(msp, h, [ins])
+    c = next(e for e in casti if e.dxftype() == "CIRCLE")
+    assert c.dxf.center.isclose((101, 100, 0))

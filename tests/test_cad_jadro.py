@@ -104,3 +104,15 @@ def test_poskozeny_dxf(tmp_path):
     p.write_text("tohle není DXF", encoding="utf-8")
     with pytest.raises(ValueError):
         CadDokument.otevri(p)
+
+
+def test_uchyty_jedna_mala_kruznice_a_velky_kruh():
+    doc = ezdxf.new("R2000")
+    m = doc.modelspace()
+    m.add_circle((0, 0), 1)
+    u = Uchyty(m)
+    assert len(u.grid) < 100000 and u.najdi(0.05, 0, 0.2).typ == "stred_kruznice"
+    m.add_circle((0, 0), 1e6)
+    m.add_line((0, 0), (0.001, 0))
+    u = Uchyty(m)
+    assert len(u.grid) < 100000 and u.velke

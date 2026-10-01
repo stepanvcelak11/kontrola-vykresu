@@ -229,7 +229,7 @@ class CadPage(QWidget):
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
         "vše": "vybrat vše", "zpět": "vrátit poslední změnu (Ctrl+Z)", "vpřed": "znovu provést (Ctrl+Y)",
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
-        "vrstvy": "správce vrstev",
+        "vrstvy": "správce vrstev", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -250,9 +250,10 @@ class CadPage(QWidget):
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "b": "blok", "block": "blok",
+        "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
-    VYBEROVE = {"smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj"}
+    VYBEROVE = {"smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
 
     def __init__(self, win=None, parent=None):
         super().__init__(parent)
@@ -1216,6 +1217,33 @@ class CadPage(QWidget):
         p = U.spoj(self.dok.msp, self.historie_zmen, ents, tol=max(1e-6, self._tol() / 100))
         self._hotovo_vyber([p])
         self.vypis("Spojeno do " + ("uzavřené " if p.closed else "") + "polylinie.")
+
+    # ------------------------------------------------------------ bloky
+    def n_blok(self):
+        ents = yield from self._vyber_req("Blok")
+        nazev = yield Pozadavek("text", "Název bloku:")
+        if nazev in self.dok.doc.blocks:
+            raise ValueError(f"Blok {nazev} už existuje.")
+        b = yield self._bod_req("Základní (vkládací) bod bloku:")
+        ins = U.vytvor_blok(self.dok.doc, self.dok.msp, self.historie_zmen, ents, nazev, b)
+        self._hotovo_vyber([ins])
+        self.vypis(f"Blok {nazev} vytvořen z {len(ents)} prvků.")
+
+    def n_vloz(self):
+        jmena = U.bloky(self.dok.doc)
+        if not jmena:
+            raise ValueError("Ve výkresu nejsou žádné bloky (vytvořte příkazem „blok“).")
+        self.vypis("Bloky: " + ", ".join(jmena[:40]) + ("…" if len(jmena) > 40 else ""))
+        nazev = yield Pozadavek("text", f"Název bloku [{jmena[0]}]:", vychozi=jmena[0])
+        if nazev not in jmena:
+            raise ValueError(f"Blok {nazev} ve výkresu není.")
+        m = yield Pozadavek("cislo", "Měřítko [1]:", vychozi=1.0)
+        u = yield Pozadavek("cislo", "Natočení ve stupních [0]:", vychozi=0.0)
+        while True:
+            p = yield self._bod_req("Vkládací bod (Enter = konec):", volitelne=True)
+            if p is None:
+                return
+            U.vloz_blok(self.dok.doc, self.dok.msp, self.historie_zmen, nazev, p, m, u, self.kresleni.vrstva)
 
 
 def _linie(body):

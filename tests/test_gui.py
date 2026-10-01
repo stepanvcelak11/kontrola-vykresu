@@ -1448,3 +1448,23 @@ def test_cad_spravce_vrstev(window, monkeypatch):
     assert c.dok.doc.layers.get("0").is_off() and c.vyber_v_bode(5, 0) is None
     assert c.neulozeno
     d.close()
+
+
+def test_cad_bloky(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("kr", "x=0 y=0", "1", "u", "x=-1 y=0", "x=1 y=0", ""):
+        c.zadej(t)
+    c.proved("vše")
+    for t in ("blok", "", "BOD_ZNACKA", "x=0 y=0"):
+        c.zadej(t)
+    assert [e.dxftype() for e in c.dok.msp] == ["INSERT"]
+    for t in ("vlož", "BOD_ZNACKA", "2", "0", "x=10 y=10", "x=20 y=10", ""):
+        c.zadej(t)
+    assert sum(1 for e in c.dok.msp if e.dxftype() == "INSERT") == 3
+    c.undo()
+    assert sum(1 for e in c.dok.msp if e.dxftype() == "INSERT") == 2
+    c.proved("vlož")
+    c.zadej("NENI")
+    assert "⚠" in c.historie.toPlainText()

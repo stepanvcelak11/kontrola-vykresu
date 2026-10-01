@@ -46,7 +46,8 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Úpravy: výběr (klik, okno, protínající okno), posun, kopie (i v řadě), otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, spojení, rozpojení, mazání, vlastnosti (vrstva, barva) | ✅ |
 | Zpět/Vpřed bez omezení | ✅ |
 | Vrstvy: správce (zapnutí, zmrazení, zámek, barva, typ čáry, tloušťka, nová, přejmenovat, smazat, aktuální, výběr prvků vrstvy) | ✅ |
-| Bloky (buňky): vložení, tvorba, knihovna | ❌ |
+| Bloky (buňky): tvorba z výběru, vložení s měřítkem a natočením, rozpojení | ✅ |
+| Knihovna buněk (sdílené bloky mezi výkresy) | ❌ |
 | Výběr podle vrstvy/vlastností, hledání prvků | 🟡 hromadná změna vrstvy a barvy; výběr podle vlastností chybí |
 | Geodetické funkce (body ze seznamu s čísly a kódy, kódovník, výměry, mřížka, transformace výkresu) | ❌ |
 | Rastry s georeferencí, podkladový DXF (reference) | ❌ |

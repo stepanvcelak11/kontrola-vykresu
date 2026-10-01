@@ -197,16 +197,24 @@ class Uchyty:
 
     def obnov(self, entities) -> None:
         self.us, self.ob, self.body, self.konce = primitiva(entities)
-        xs = [u.x1 for u in self.us] + [u.x2 for u in self.us] + [o.cx for o in self.ob] + [b[0] for b in self.body]
-        ys = [u.y1 for u in self.us] + [u.y2 for u in self.us] + [o.cy for o in self.ob] + [b[1] for b in self.body]
-        span = max((max(xs) - min(xs)) if xs else 1.0, (max(ys) - min(ys)) if ys else 1.0, 1e-6)
+        xs = ([u.x1 for u in self.us] + [u.x2 for u in self.us] + [o.cx - o.r for o in self.ob]
+              + [o.cx + o.r for o in self.ob] + [b[0] for b in self.body])
+        ys = ([u.y1 for u in self.us] + [u.y2 for u in self.us] + [o.cy - o.r for o in self.ob]
+              + [o.cy + o.r for o in self.ob] + [b[1] for b in self.body])
+        span = max((max(xs) - min(xs)) if xs else 1.0, (max(ys) - min(ys)) if ys else 1.0, 1e-3)
         self.cell = span / 150.0
         self.grid: dict[tuple[int, int], list] = {}
+        self.velke: list = []  # prvky přes mnoho buněk (zkontrolují se vždy) – ochrana paměti
 
         def add(obj, x0, y0, x1, y1):
             c = self.cell
-            for i in range(int(math.floor(min(x0, x1) / c)), int(math.floor(max(x0, x1) / c)) + 1):
-                for j in range(int(math.floor(min(y0, y1) / c)), int(math.floor(max(y0, y1) / c)) + 1):
+            i0, i1 = int(math.floor(min(x0, x1) / c)), int(math.floor(max(x0, x1) / c))
+            j0, j1 = int(math.floor(min(y0, y1) / c)), int(math.floor(max(y0, y1) / c))
+            if (i1 - i0 + 1) * (j1 - j0 + 1) > 4000:
+                self.velke.append(obj)
+                return
+            for i in range(i0, i1 + 1):
+                for j in range(j0, j1 + 1):
                     self.grid.setdefault((i, j), []).append(obj)
         for u in self.us:
             add(u, u.x1, u.y1, u.x2, u.y2)
@@ -219,7 +227,11 @@ class Uchyty:
 
     def _blizko(self, x, y, tol):
         c = self.cell
-        seen, out = set(), []
+        seen, out = set(), list(self.velke)
+        seen.update(id(o) for o in out)
+        n = int(math.floor((x + tol) / c)) - int(math.floor((x - tol) / c))
+        if n > 60:  # kurzor zachytává víc než celý výkres (velká tolerance) – vrátit vše
+            return list(self.velke) + [o for v in self.grid.values() for o in v]
         for i in range(int(math.floor((x - tol) / c)), int(math.floor((x + tol) / c)) + 1):
             for j in range(int(math.floor((y - tol) / c)), int(math.floor((y + tol) / c)) + 1):
                 for o in self.grid.get((i, j), ()):

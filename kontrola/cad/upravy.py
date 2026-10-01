@@ -807,3 +807,49 @@ def _prusecik_primek(a1, b1, a2, b2):
         return None
     t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d
     return x1 + t * (x2 - x1), y1 + t * (y2 - y1)
+
+
+# ------------------------------------------------------------------ bloky (buňky)
+def vytvor_blok(doc, msp, h: Historie, ents, nazev: str, zakladni_bod, nahradit: bool = True):
+    """Z prvků vytvoří definici bloku (základní bod = vkládací bod) a prvky nahradí jeho vložením."""
+    nazev = (nazev or "").strip()
+    if not nazev or any(c in nazev for c in '<>/\\":;?*|=`'):
+        raise ValueError("Neplatný název bloku.")
+    if nazev in doc.blocks:
+        raise ValueError(f"Blok {nazev} už existuje.")
+    ents = list(ents)
+    if not ents:
+        raise ValueError("Blok musí obsahovat aspoň jeden prvek.")
+    bx, by = _xy(zakladni_bod)
+    blk = doc.blocks.new(nazev, base_point=(0, 0, 0))
+    m = Matrix44.translate(-bx, -by, 0)
+    for e in ents:
+        c = _kopie(e)
+        c.transform(m)
+        blk.add_entity(c)
+    if not nahradit:
+        return None
+    ins = msp.add_blockref(nazev, (bx, by), dxfattribs={"layer": ents[0].dxf.get("layer", "0")})
+    h.proved(f"Blok {nazev}", [ins], ents)
+    return ins
+
+
+def vloz_blok(doc, msp, h: Historie, nazev: str, bod, meritko: float = 1.0, natoceni_deg: float = 0.0,
+              vrstva: str = "0"):
+    if nazev not in doc.blocks or nazev.startswith("*"):
+        raise ValueError(f"Blok {nazev} ve výkresu není.")
+    if abs(meritko) < EPS:
+        raise ValueError("Měřítko nesmí být nulové.")
+    ins = msp.add_blockref(nazev, _xy(bod), dxfattribs={"layer": vrstva, "xscale": meritko, "yscale": meritko,
+                                                         "zscale": meritko, "rotation": natoceni_deg})
+    blk = doc.blocks.get(nazev)
+    if any(e.dxftype() == "ATTDEF" for e in blk):
+        ins.add_auto_attribs({})
+    h.proved(f"Vložení {nazev}", [ins])
+    return ins
+
+
+def bloky(doc) -> list[str]:
+    """Uživatelské bloky (bez anonymních *D, *U, rozvržení)."""
+    return sorted((b.name for b in doc.blocks if not b.name.startswith("*") and not b.is_any_layout),
+                  key=str.lower)
