@@ -385,7 +385,7 @@ class IssuePanel(QWidget):
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(QHeaderView.Interactive)
         hh.setStretchLastSection(False)
-        for c, w in enumerate((46, 100, 118, 380, 170, 150, 110, 110)):
+        for c, w in enumerate((44, 98, 96, 285, 205, 130, 104, 104)):  # typ kontroly vidět i v užším panelu
             self.table.setColumnWidth(c, w)
         self.table.selectionModel().currentRowChanged.connect(self._current_changed)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
