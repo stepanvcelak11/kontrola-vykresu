@@ -254,6 +254,11 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Prvek je na vrstvě <b>Default</b> (v DXF <b>0</b>) – v MicroStationu se před kreslením nepřepnula "
         "aktivní vrstva. Učitel ho bere jako prvek na špatné vrstvě.<br><br><b>Oprava:</b> vyberte prvek a "
         "změňte mu vrstvu (Změnit atributy prvku → Level); příště nejdřív zvolte aktivní vrstvu."),
+    "vypnuta_vrstva": (
+        "Prvky na vypnuté vrstvě",
+        "Vrstva je ve výkresu vypnutá nebo zmrazená, takže její prvky na obrazovce nevidíte – ale v souboru "
+        "jsou a učitelova kontrola je najde (zapomenuté pomocné čáry, kopie staré kresby).<br><br>"
+        "<b>Oprava:</b> zapněte vrstvu ve Správci vrstev, prvky prohlédněte a smažte nebo přesuňte."),
     "maly_text": (
         "Nečitelně malý text",
         "Text je po vytištění v měřítku výkresu menší než zadaná mez a nepůjde přečíst.<br><br><b>Oprava:</b> "

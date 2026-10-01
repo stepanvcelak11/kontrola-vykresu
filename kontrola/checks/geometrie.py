@@ -344,3 +344,27 @@ class VychoziVrstva(Check):
         for f in on_default:
             yield ctx.issue(self, f, f"{f.geom_type.value.capitalize()} je na výchozí vrstvě „{f.layer}“ – "
                                      "patří na vrstvu podle obsahu")
+
+
+@register
+class VypnutaVrstva(Check):
+    id = "vypnuta_vrstva"
+    nazev = "Prvky na vypnuté vrstvě"
+    skupina = "Atributy"
+    popis = ("Ve výkresu jsou prvky na vrstvě, která je vypnutá nebo zmrazená – v MicroStationu je nevidíte, ale "
+             "učitelova kontrola je najde (zapomenuté pomocné čáry, staré verze kresby). Hlásí se jednou za vrstvu.")
+    vychozi_zavaznost = Severity.VAROVANI
+
+    def run(self, ctx: CheckContext):
+        hidden = {n for n, li in ctx.drawing.layers.items() if li.off or li.frozen}
+        if not hidden:
+            return
+        per: dict[str, list] = {}
+        for f in ctx.features():
+            if f.layer in hidden:
+                per.setdefault(f.layer, []).append(f)
+        for layer, feats in sorted(per.items()):
+            li = ctx.drawing.layers[layer]
+            how = "zmrazené" if li.frozen else "vypnuté"
+            yield ctx.issue(self, feats, f"{len(feats)} prvků na {how} vrstvě „{layer}“ – v MicroStationu je "
+                                         "nevidíte; zapněte vrstvu a prvky smažte nebo přesuňte")

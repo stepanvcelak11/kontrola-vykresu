@@ -382,3 +382,16 @@ def test_vychozi_vrstva(make_dxf):
         msp.add_line((0, 0), (10, 0))
         msp.add_line((0, 5), (10, 5), dxfattribs={"layer": "A"})
     assert not check(make_dxf(jen_nula, name="nula.dxf"), "vychozi_vrstva")
+
+
+def test_vypnuta_vrstva(make_dxf):
+    def build(msp, doc):
+        doc.layers.add("STARE").off()
+        doc.layers.add("POMOC").freeze()
+        msp.add_line((0, 0), (10, 0), dxfattribs={"layer": "STARE"})
+        msp.add_line((0, 1), (10, 1), dxfattribs={"layer": "STARE"})
+        msp.add_line((0, 2), (10, 2), dxfattribs={"layer": "POMOC"})
+        msp.add_line((0, 3), (10, 3), dxfattribs={"layer": "A"})
+    iss = check(make_dxf(build, name="vypnuta.dxf"), "vypnuta_vrstva")
+    assert sorted((i.layer, len(i.feature_ids)) for i in iss) == [("POMOC", 1), ("STARE", 2)]
+    assert "zmrazené" in next(i.message for i in iss if i.layer == "POMOC")

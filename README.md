@@ -420,6 +420,8 @@ Obecné nastavení:
 | Stejné číslo bodu dvakrát (`duplicitni_cislo_bodu`) | stejné číslo bodu (popis nebo atribut CISLO) na dvou místech výkresu | chyba |
 | Nejednotný formát popisů (`format_popisu`) | na vrstvě s číselnými popisy má popis jiný tvar (např. 245.3 místo 245.37, čárka místo tečky) | varování |
 | Nečitelně malý text (`maly_text`) | výška písma na papíře v měřítku výkresu pod 1 mm | vypnuto |
+| Prvek na výchozí vrstvě (`vychozi_vrstva`) | prvek zůstal na Default / 0, i když výkres má vlastní vrstvy (jen bez pravidel – s pravidly to hlídá „Vrstva není ve Směrnici“) | zapnuto |
+| Prvky na vypnuté vrstvě (`vypnuta_vrstva`) | prvky na vypnuté nebo zmrazené vrstvě, které v MicroStationu nevidíte (jednou za vrstvu) | zapnuto |
 
 ### Co zkontrolovat (Ctrl+Shift+K)
 

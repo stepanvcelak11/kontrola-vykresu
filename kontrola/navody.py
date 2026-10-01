@@ -56,6 +56,8 @@ _ATTR = {
     "rozdelena_cara": "Nepovinné – čáry lze spojit (Vytvořit složený řetězec / Spojit prvky), jinak nevadí.",
     "vychozi_vrstva": "Vyberte prvek a v Atributech prvku (Element Information / Změnit atributy) mu nastavte "
                       "správnou vrstvu. Příště před kreslením přepněte aktivní vrstvu (Attributes → Level).",
+    "vypnuta_vrstva": "Ve Správci vrstev (Level Manager / Zobrazení vrstev) vrstvu zapněte, prohlédněte si její "
+                      "prvky a nepotřebné smažte, potřebné přesuňte na správnou vrstvu.",
     "maly_text": "Zvětšete výšku textu podle Směrnice (Změnit atributy prvku / Upravit text).",
     "prekryv_linii": "Kus čáry leží na jiné čáře. Přebytečnou čáru smažte, nebo ji zkraťte k navazujícímu bodu "
                      "(Částečné smazání – Partial Delete, Oříznout k prvku). Tab/Reset přepíná mezi prvky na sobě.",
