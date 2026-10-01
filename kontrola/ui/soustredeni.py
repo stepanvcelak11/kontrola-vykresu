@@ -6,7 +6,7 @@ Všechny lišty, panely a minimapa se schovají, aby nic nerušilo – jako „�
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout
 
 
 class FocusBar(QFrame):
@@ -27,6 +27,10 @@ class FocusBar(QFrame):
         self.sub.setWordWrap(True)
         txt.addWidget(self.title)
         txt.addWidget(self.sub)
+        self.progress = QProgressBar()  # kolik z chyb k opravě je už vyřešeno
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(5)
+        txt.addWidget(self.progress)
         lay.addLayout(txt, 1)
         self.b_prev = QPushButton("◀")
         self.b_prev.setToolTip("Předchozí chyba (F7)")
@@ -56,8 +60,13 @@ class FocusBar(QFrame):
 
     def refresh(self):
         iss = self.win.issue_panel.current_issue()
-        todo = sum(1 for i in self.win.issues if i.state == "nová")
-        if iss is None or (todo == 0 and iss.state != "nová"):
+        real = [i for i in self.win.issues if i.severity.value != "info"]  # info se neopravuje
+        todo = sum(1 for i in real if i.state == "nová")  # jako „k opravě“ v panelu
+        done = len(real) - todo
+        self.progress.setRange(0, max(1, len(real)))
+        self.progress.setValue(done)
+        self.progress.setToolTip(f"Vyřešeno {done} z {len(real)} chyb a varování")
+        if iss is None or (todo == 0 and (iss.state != "nová" or iss.severity.value == "info")):
             if todo == 0 and self.win.issues:
                 self.title.setText("<span style='font-size:15pt;font-weight:800'>Hotovo – vše opraveno 🎉</span>")
             else:
