@@ -1588,3 +1588,47 @@ def test_mobil_druha_obrazovka(window):
                        and next(i for i in w.issues if i.number == prvni).state == "nová", 10)
     finally:
         d.close()
+
+
+def test_cad_atributy_ze_zadani_kontrola_a_uprava(window):
+    from kontrola.rules import RuleSet
+    from kontrola.ui.cad_atributy import C_HL, C_OVE, C_TL, parse_mapa
+    f = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice" / "pravidla_zadani2.yaml"
+    if not f.exists():
+        pytest.skip("chybí pravidla")
+    w = window
+    puvodni = w.project.rules
+    w.project.rules = RuleSet.load(f)
+    try:
+        c = w.cad
+        w.show_page("cad")
+        c.obnov_predvolby()
+        d = c.atributy_zadani(modal=False)
+        v = d.vysledek
+        spatne = {i for i, m in v.items() if m}
+        assert len(v) == len(w.project.rules.pravidla) and len(spatne) == 4
+        kody = [r.kod for r in d.rs.pravidla]
+        # doplnit převod tloušťky 1 a vrstvu chybějícímu pravidlu
+        d.mapa.setText(d.mapa.text() + "; 1=0,18")
+        d.mapa.editingFinished.emit()
+        i = kody.index("10.xx6")
+        d.tab.item(i, C_HL).setText("GS10-popis sítí")
+        v = d.overit()
+        assert not any(v.values()), {kody[i]: m for i, m in v.items() if m}
+        assert d.tab.item(i, C_OVE).text().startswith("✓")
+        # úprava tloušťky se projeví ve sloupci „Kreslí se jako“
+        j = kody.index("12.02")
+        d.tab.item(j, C_TL).setText("0")
+        assert d.rs.pravidla[j].tloustka == 0
+        assert d.ulozit()
+        assert w.project.rules.mapa_tloustek[1] == 0.18
+        assert next(r for r in w.project.rules.pravidla if r.kod == "10.xx6").hladina == "GS10-popis sítí"
+        assert any(p.vrstva == "GS10-popis sítí" for p in c._predvolby)
+        assert parse_mapa("0=0; 2=0,3") == {0: 0.0, 2: 0.3}
+        with pytest.raises(ValueError):
+            parse_mapa("x=1")
+        d.zmeneno = False
+        d.close()
+    finally:
+        w.project.rules = puvodni
+        w.cad.obnov_predvolby()

@@ -352,3 +352,59 @@ def novy_dokument(rs: RuleSet, vzory=()):
     zprava = priprav_dokument(d.doc, rs, vzory)
     d._souhrn()
     return d, zprava
+
+
+def _nazev_bunky(blok) -> str | None:
+    v = _prvni(blok)
+    if not v:
+        return None
+    return re.split(r"\s*[–—]\s*|\s+-\s+|(?<=\d)-(?=\d)", v)[0].strip() or None
+
+
+def overit_predvolby(rs: RuleSet) -> dict[int, list[str]]:
+    """Každý druh prvku zkušebně nakreslí podle předvolby a projede kontrolou symbologie a atributů.
+
+    Vrací {index pravidla: [zprávy]} – prázdný seznam = prvek nakreslený v CAD kontrolou projde."""
+    import tempfile
+
+    from ..config import Config
+    from ..io.dxf_loader import load_drawing
+    from ..runner import run_checks
+    from . import upravy as U
+    dok, _z = novy_dokument(rs)
+    msp = dok.msp
+    h = U.Historie(msp)
+    k = U.Kresleni(msp, h)
+    pv = predvolby(rs)
+    poloha: dict[int, tuple[float, float]] = {}
+    vysledek: dict[int, list[str]] = {i: list(p.poznamky) for i, p in enumerate(pv)}
+    krok = 1000.0
+    for i, p in enumerate(pv):
+        k.nastav_predvolbu(p)
+        x0, y0 = -600000.0 - i * krok, -1160000.0
+        poloha[i] = (x0, y0)
+        try:
+            if p.blok:
+                jm = _nazev_bunky(p.blok)
+                if jm and jm not in dok.doc.blocks:
+                    dok.doc.blocks.new(jm).add_circle((0, 0), 0.5)
+                ins = msp.add_blockref(jm, (x0, y0), dxfattribs=k._attr())
+                h.proved("test", [ins])
+            elif p.geometrie == "text":
+                k.text((x0, y0), "123", p.vyska or 1.0)
+            elif p.geometrie == "bod":
+                k.bod((x0, y0))
+            elif p.geometrie == "polygon":
+                k.polylinie([(x0, y0), (x0 + 10, y0), (x0 + 10, y0 + 10), (x0, y0 + 10)], uzavrena=True)
+            else:
+                k.usecka((x0, y0), (x0 + 10, y0 + 3))
+        except Exception as e:  # noqa: BLE001
+            vysledek[i].append(f"nejde nakreslit: {e}")
+    with tempfile.TemporaryDirectory() as td:
+        f = dok.uloz(Path(td) / "overeni.dxf")
+        res = run_checks(load_drawing(f), rs, Config(), only=["symbologie", "atribut_dle_vrstvy", "nepovolene_hladiny"])
+    for iss in res.issues:
+        i = int(round((-600000.0 - iss.x) / krok)) if iss.x is not None else -1
+        if i in vysledek and abs(iss.x - poloha[i][0]) < krok / 2:
+            vysledek[i].append(iss.message)
+    return vysledek

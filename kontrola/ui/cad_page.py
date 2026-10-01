@@ -229,7 +229,7 @@ class CadPage(QWidget):
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
         "vše": "vybrat vše", "zpět": "vrátit poslední změnu (Ctrl+Z)", "vpřed": "znovu provést (Ctrl+Y)",
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
-        "vrstvy": "správce vrstev", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
+        "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -340,6 +340,10 @@ class CadPage(QWidget):
         self.b_na_vyber = QPushButton("Použít na výběr")
         self.b_na_vyber.setToolTip("Vybraným prvkům nastaví atributy zvoleného druhu prvku")
         zrow.addWidget(self.b_na_vyber)
+        self.b_atributy = QPushButton("Atributy ze zadání…")
+        self.b_atributy.setToolTip("Zkontrolovat a upravit atributy, které aplikace načetla ze zadání (vrstva, "
+                                   "barva, styl, tloušťka, písmo…) a ověřit, že nakreslené prvky projdou kontrolou")
+        zrow.addWidget(self.b_atributy)
         self.b_tahak = QPushButton("Tahák atributů…")
         self.b_tahak.setToolTip("Přehled atributů všech prvků ze zadání s řádky key-in pro MicroStation (HTML, "
                                 "dá se vytisknout)")
@@ -400,6 +404,7 @@ class CadPage(QWidget):
         self.predvolby_cb.currentIndexChanged.connect(self._predvolba_zmenena)
         self.b_na_vyber.clicked.connect(self.predvolba_na_vyber)
         self.b_tahak.clicked.connect(lambda: self.uloz_tahak(otevrit=True))
+        self.b_atributy.clicked.connect(lambda: self.atributy_zadani())
         self.vrstvy.currentTextChanged.connect(self._vrstva_zmenena)
         self.prikaz.returnPressed.connect(self._enter)
         self.view.mouseMoved.connect(self._pohyb)
@@ -473,6 +478,7 @@ class CadPage(QWidget):
         self.predvolby_cb.blockSignals(False)
         self.b_novy_zadani.setEnabled(bool(self._predvolby))
         self.b_tahak.setEnabled(bool(self._predvolby))
+        self.b_atributy.setEnabled(self.win is not None and getattr(self.win, "project", None) is not None)
         self.predvolby_cb.setEnabled(bool(self._predvolby))
 
     def showEvent(self, e):  # noqa: N802
@@ -542,6 +548,15 @@ class CadPage(QWidget):
         self.vyber = nove
         self._zvyrazni()
         self.vypis(f"{len(nove)} prvků nastaveno na „{p.nazev}“.")
+
+    def atributy_zadani(self, modal: bool = True):
+        if self.win is None or getattr(self.win, "project", None) is None:
+            return None
+        from .cad_atributy import AtributyDialog
+        d = AtributyDialog(self)
+        if modal:
+            d.exec()
+        return d
 
     def uloz_tahak(self, path=None, otevrit: bool = False):
         from ..cad.zadani import tahak_html
@@ -1072,6 +1087,8 @@ class CadPage(QWidget):
             self.vypis(f"Vybráno {len(self.vyber)} prvků.")
         elif cmd == "vrstvy":
             self.spravce_vrstev()
+        elif cmd == "atributy":
+            self.atributy_zadani()
         elif cmd == "prvek":
             if not arg:
                 self.vypis("Druhy prvků: " + "; ".join(p.nazev for p in self._predvolby[:40]))
