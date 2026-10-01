@@ -10,6 +10,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Seznam souřadnic (číslo, Y, X, Z, kód, kvalita), třídění, hledání, hromadné úpravy, duplicity | ✅ | testy seznamu |
 | Import/export TXT/CSV s formátem sloupců | ✅ | skutečné seznamy ze zadání |
 | Zpracování zápisníku (.zap), redukce délek, měřítkový koeficient, refrakce a zakřivení | ✅ | protokol Gromy Husovice |
+| Editor zápisníku (stanoviska, záměry v obou polohách, orientace/podrobné, uložení .zap, výpočet proti seznamu projektu, body do seznamu) | ✅ | .zap tam a zpět = stejné souřadnice |
 | Opakovaná měření (dvě polohy), obousměrně měřené délky | ✅ | shoda s Gromou na mm |
 | Polární metoda dávkou (orientace, posun, m0, podrobné body) | ✅ | 118 bodů vs. Groma ≤ 0,5 mm (poloha), ≤ 1,5 mm (výška) |
 | Výpočetní protokol ve stejném členění (TXT/PDF) | ✅ | test protokolu |

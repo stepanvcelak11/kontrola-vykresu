@@ -113,8 +113,10 @@ def _merge_faces(obs: list[Obs]) -> list[Obs]:
     return out
 
 
-def read_zap(path: str | Path) -> list[Station]:
-    """Zápisník Gromy: ``1 <stanovisko> <vp> *``, orientace, ``-1``, podrobné body, ``/``."""
+def read_zap(path: str | Path, spojit: bool = True) -> list[Station]:
+    """Zápisník Gromy: ``1 <stanovisko> <vp> *``, orientace, ``-1``, podrobné body, ``/``.
+
+    ``spojit=False`` vrátí měření tak, jak jsou zapsaná (obě polohy dalekohledu zvlášť) – pro editor."""
     raw = Path(path).read_bytes()
     text = raw.decode("cp1250", errors="replace")
     stations: list[Station] = []
@@ -147,9 +149,10 @@ def read_zap(path: str | Path) -> list[Station]:
             except ValueError:
                 continue
             (cur.orient if part == "orient" else cur.detail).append(o)
-    for st in stations:
-        st.orient = _merge_faces(st.orient)
-        st.detail = _merge_faces(st.detail)
+    if spojit:
+        for st in stations:
+            st.orient = _merge_faces(st.orient)
+            st.detail = _merge_faces(st.detail)
     return stations
 
 

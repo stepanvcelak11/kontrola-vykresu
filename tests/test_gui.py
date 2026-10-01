@@ -1877,3 +1877,36 @@ def test_cad_rastr(window, tmp_path):
     assert len(c._rastry) == 2
     c.undo()
     assert len(c._rastry) == 1
+
+
+def test_vypocty_zapisnik_editor(window, tmp_path):
+    from kontrola.geodezie.formaty import nacti_soubor
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+    if not (z / "zap_husovice.zap").exists():
+        pytest.skip("podklady chybí")
+    w = window
+    w.show_page("vypocty")
+    v = w.vypocty
+    puvodni = list(v.seznam.body)
+    dane, _var, _f = nacti_soubor(z / "dane_body.txt")
+    v.seznam.pridej(dane, "dané body")
+    v._after_change()
+    zp = v.zapisnik
+    v.tabs.setCurrentWidget(zp)
+    assert zp.nacist(str(z / "zap_husovice.zap"))
+    assert zp.seznam_st.count() >= 1 and zp.tab.rowCount() > 10
+    r = zp.vypocitej()
+    assert r is not None and len([b for b in r.body if not b.kontrolni]) > 100
+    assert "POLÁRNÍ METODA DÁVKOU" in zp.vystup.toPlainText()
+    # úprava délky v tabulce změní výsledek bodu
+    row = next(i for i in range(zp.tab.rowCount()) if zp.tab.cellWidget(i, 5).currentText() == "podrobný")
+    bod = zp.tab.item(row, 0).text()
+    y0 = next(b.y for b in r.body if b.bod == bod)
+    zp.tab.item(row, 1).setText(f"{float(zp.tab.item(row, 1).text()) + 1:.3f}")
+    r2 = zp.vypocitej()
+    assert abs(next(b.y for b in r2.body if b.bod == bod) - y0) > 0.1
+    out = zp.ulozit(str(tmp_path / "upraveny.zap"))
+    assert out.exists() and "-1" in out.read_text(encoding="cp1250")
+    assert zp.do_seznamu() > 100
+    v.seznam.body[:] = puvodni
+    v._after_change()

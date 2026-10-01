@@ -389,6 +389,9 @@ class VypoctyPage(QWidget):
         self.grafika = GrafikaBodu(self)
         self.tabs.addTab(self.grafika, "Grafika")
         self.grafika.vybrano.connect(self._vyber_z_grafiky)
+        from .zapisnik_page import ZapisnikPanel
+        self.zapisnik = ZapisnikPanel(self)
+        self.tabs.addTab(self.zapisnik, "Zápisník")
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)
         self.tabs.addTab(self.ulohy, "Úlohy")
