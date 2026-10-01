@@ -230,6 +230,12 @@ class MainWindow(QMainWindow):
                                  "opravit, počítadlo odevzdání a průběh chyb v čase")
         self.a_seznam = self._act("Ověřit seznam souřadnic…", self.verify_list, "Ctrl+J",
                                   "Sedí body ve výkresu na seznam souřadnic? (poloha, čísla, výšky, body navíc)")
+        self.a_notify = self._act("Upozornění Windows po uložení výkresu", self._set_notify, None,
+                                  "Když hlídáte výkres a uložíte ho v MicroStationu, vpravo dole se ukáže, kolik "
+                                  "chyb ubylo a kolik zbývá", checkable=True)
+        self.a_notify.setChecked(self.settings.value("upozorneni/zapnuto", True, type=bool))
+        self.a_mini = self._act("Okno „Další chyba“ navrchu", self.show_mini, "Ctrl+Shift+N",
+                                "Malé okno, které zůstane nad MicroStationem: popis chyby, key-in, Opraveno/Další")
         self.a_fixguide = self._act("Opravný průvodce (MicroStation)…", self.show_fix_guide, "Ctrl+G",
                                     "Chyby jedna po druhé s přesným postupem a souřadnicemi pro MicroStation")
         self.a_predikce = self._act("Učitelův pohled – předpověď protokolu…", self.show_prediction, None,
@@ -304,6 +310,8 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_fixguide)
+        m_check.addAction(self.a_mini)
+        m_check.addAction(self.a_notify)
         m_check.addAction(self.a_timeline)
         m_check.addAction(self.a_ms_send)
         m_check.addAction(self.a_ms_help)
@@ -430,7 +438,7 @@ class MainWindow(QMainWindow):
         a_layers.setText("Vrstvy")
         a_layers.setToolTip("Panel vrstev – zapnutí a vypnutí vrstev výkresu")
         self.a_layers_panel = a_layers
-        for act in (self.a_fit, self.a_labels, a_layers, self.a_region, self.a_wip, self.a_sketch):
+        for act in (self.a_fit, self.a_labels, a_layers, self.a_region, self.a_wip, self.a_sketch, self.a_mini):
             vt.addAction(act)
             b = vt.widgetForAction(act)
             if b is not None:
@@ -497,6 +505,8 @@ class MainWindow(QMainWindow):
             act.setIcon(icon(key, themed("#2563EB") if act.isChecked() else themed("#6B7280")))
         if getattr(self, "a_menu", None) is not None:
             self.a_menu.setIcon(icon("menu"))
+        if getattr(self, "a_mini", None) is not None:
+            self.a_mini.setIcon(icon("okno"))
         if getattr(self, "a_layers_panel", None) is not None:
             self.a_layers_panel.setIcon(icon("vrstvy"))
         if getattr(self, "tabs", None) is not None:
@@ -539,6 +549,8 @@ class MainWindow(QMainWindow):
         self.a_dark.blockSignals(False)
 
     def closeEvent(self, event):  # noqa: N802
+        if getattr(self, "_mini", None) is not None:
+            self._mini.close()
         if self.task is not None and self.task.is_running():
             self.task.cancel()
         self.settings.setValue("okno/geometrie", self.saveGeometry())
@@ -970,6 +982,8 @@ class MainWindow(QMainWindow):
             return
         carry_states(self.project.issue_states(), res.issues, recheck=callable(after))
         self._mark_new(res.issues)
+        from .. import tahak
+        tahak.record(self.settings, str(self.project.root), res.issues)
         from .ready_dialog import record_history
         record_history(self.project, res.issues)
         self.issue_panel.history.set_data(self.project.meta.get("historie", []))
@@ -1000,6 +1014,9 @@ class MainWindow(QMainWindow):
             msg = (f"Opakovaná kontrola: {len(res.issues)} problémů (předtím {len(old)}). {cmp.text()}")
             if silent:
                 self.statusBar().showMessage("Výkres se změnil – " + msg, 15000)
+                todo = sum(1 for i in res.issues if i.state == "nová")
+                self.notify("Výkres zkontrolován po uložení",
+                            f"Opraveno {cmp.fixed}, nové {cmp.new}, zbývá opravit {todo}.")
             else:
                 QMessageBox.information(self, "Zkontrolovat znovu", msg)
             return msg
@@ -1291,6 +1308,37 @@ class MainWindow(QMainWindow):
         dlg = VyberKontrol(self)
         if dlg.exec() and dlg.run_now and self.drawing is not None:
             self.a_check.trigger()
+
+    def notify(self, title: str, text: str):
+        """Upozornění Windows vpravo dole – jen když je aplikace v pozadí (pracuje se v MicroStationu)."""
+        from PySide6.QtWidgets import QApplication, QSystemTrayIcon
+        if not self.settings.value("upozorneni/zapnuto", True, type=bool):
+            return
+        if QApplication.activeWindow() is not None and not getattr(self, "_notify_always", False):
+            return  # okno je vpředu – stačí stavový řádek
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        if getattr(self, "_tray", None) is None:
+            self._tray = QSystemTrayIcon(self.windowIcon(), self)
+            self._tray.setToolTip("Kontrola výkresu")
+            self._tray.messageClicked.connect(lambda: (self.showNormal(), self.raise_(), self.activateWindow()))
+            self._tray.activated.connect(lambda _r: (self.showNormal(), self.raise_(), self.activateWindow()))
+        self._tray.show()
+        self._tray.showMessage(title, text, QSystemTrayIcon.Information, 8000)
+        self._last_notify = (title, text)
+
+    def _set_notify(self, on: bool):
+        self.settings.setValue("upozorneni/zapnuto", bool(on))
+
+    def show_mini(self):
+        from .mini_okno import MiniOkno
+        if getattr(self, "_mini", None) is None:
+            self._mini = MiniOkno(self)
+        if not self.issue_panel.current_issue() and self.issues:
+            self.issue_panel.step(1)
+        self._mini.refresh()
+        self._mini.show()
+        self._mini.raise_()
 
     def show_timeline(self):
         from .timeline_dialog import TimelineDialog

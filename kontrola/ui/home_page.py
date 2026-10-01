@@ -161,6 +161,13 @@ class HomePage(QScrollArea):
         for c in (self.c_zad, self.c_vyk, self.c_kon, self.c_ode):
             steps.addWidget(c, 1)
         lay.addLayout(steps)
+        self.tahak = QLabel()
+        self.tahak.setObjectName("navod")
+        self.tahak.setWordWrap(True)
+        self.tahak.setTextFormat(Qt.RichText)
+        self.tahak.setToolTip("Z posledních kontrol všech vašich projektů – na tyhle chyby si dejte pozor už při kreslení")
+        self.tahak.hide()
+        lay.addWidget(self.tahak)
         self.c_zad.button.clicked.connect(lambda: win.tabs.setCurrentWidget(win.zadani))
         self.c_vyk.button.clicked.connect(win.open_dialog)
         self.c_kon.button.clicked.connect(lambda: (win.tabs.setCurrentWidget(win.split), win.a_check.trigger()))
@@ -315,6 +322,13 @@ class HomePage(QScrollArea):
                 self.projects.setItem(i, c, it)
 
     def refresh(self):
+        from .. import tahak
+        t = tahak.text(self.win.settings)
+        self.tahak.setText(t)
+        self.tahak.setVisible(bool(t))
+        self._refresh_rest()
+
+    def _refresh_rest(self):
         win = self.win
         p = getattr(win, "project", None)
         from .. import __version__

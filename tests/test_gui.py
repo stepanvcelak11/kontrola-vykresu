@@ -158,10 +158,13 @@ def test_hlidani_souboru_zkontroluje_znovu(window, tmp_path):
     for e in list(msp.query("LINE"))[:3]:
         msp.delete_entity(e)
     doc.saveas(src)
+    shown = []
+    w.notify = lambda title, text: shown.append(text)  # upozornění Windows (v testu jen zaznamenat)
     w._file_changed(str(src))
     import time
     assert w._wait(lambda: _idle(w) and "Opakovaná" in w.issue_panel.summary.text(), 20)
     assert n_before > 0
+    assert shown and "zbývá opravit" in shown[0]
 
 
 @pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
@@ -811,3 +814,41 @@ def test_plovouci_panel_a_minimapa(window):
     assert not w.issue_panel.table.isColumnHidden(0)
     w.issue_panel.set_card_mode(True)
     assert w.issue_panel.table.isColumnHidden(0)
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_mini_okno_dalsi_chyba(window):
+    from PySide6.QtWidgets import QApplication
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 2, 30)
+    w.a_mini.trigger()
+    m = w._mini
+    assert m.isVisible() and m.windowFlags() & m.windowFlags().WindowStaysOnTopHint
+    first = w.issue_panel.current_issue()
+    assert first is not None and f"#{first.number}" in m.head.text()
+    m._fixed()
+    assert first.state == "opraveno"
+    assert w.issue_panel.current_issue() is not first
+    keys = [m.keyrow.itemAt(i).widget() for i in range(m.keyrow.count())]
+    assert keys
+    keys[0].click()
+    assert QApplication.clipboard().text()
+    m.close()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_osobni_tahak(window):
+    w = window
+    w.settings.remove("tahak/projekty")  # QSettings přežívá mezi testy
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.home.refresh()
+    assert w.home.tahak.isVisibleTo(w.home) and "Na co si dát pozor" in w.home.tahak.text()
+    from kontrola import tahak
+    w.a_check.trigger()  # opakovaná kontrola téhož projektu počty nezdvojí
+    assert w._wait(lambda: _idle(w), 30)
+    mine = tahak._load(w.settings)[str(w.project.root)]
+    assert 0 < sum(mine.values()) <= sum(1 for i in w.issues if i.severity.value != "info")

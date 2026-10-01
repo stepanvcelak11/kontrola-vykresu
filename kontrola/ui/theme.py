@@ -42,6 +42,7 @@ _ICONS = {
     "sk_kartografie": '<path d="M5 19L12 4l7 15"/><path d="M8 13h8"/>',
     "sk_geometrie": '<path d="M3 17l5-9 6 6 7-10"/><circle cx="8" cy="8" r="1.6"/><circle cx="14" cy="14" r="1.6"/>',
     "vrstvy": '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+    "okno": '<rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
     "hledat": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/>',
     "uvod": '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
