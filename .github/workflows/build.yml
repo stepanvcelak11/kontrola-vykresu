@@ -33,6 +33,13 @@ jobs:
       # -v: při tvrdém pádu je vidět poslední test; -X faulthandler vypíše zásobník nativní chyby;
       # -s: hlášky Qt (qFatal) se nezachytávají, takže se při pádu neztratí
       - run: python -X faulthandler -m pytest -v -rfE -s tests
+        env:
+          KONTROLA_TEST_TRACE: ${{ github.workspace }}/test_trace.log
+      - name: Trasování testů (při selhání)
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path test_trace.log) { Get-Content test_trace.log -Tail 120 } else { "trasování chybí" }
       - name: Číslo sestavení do programu (pro kontrolu aktualizací)
         shell: bash
         run: printf 'BUILD = %s\nCOMMIT = "%s"\n' "${{ github.run_number }}" "${{ github.sha }}" > kontrola/_build.py
