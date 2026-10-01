@@ -73,6 +73,9 @@ class MainWindow(QMainWindow):
         self.tabs.setDocumentMode(True)
         self.tabs.addTab(self.split, "Výkres a chyby")
         self.tabs.addTab(self.zadani, "Zadání")
+        from .vypocty_page import VypoctyPage
+        self.vypocty = VypoctyPage(self)
+        self.tabs.addTab(self.vypocty, "Výpočty")
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
 
@@ -237,8 +240,10 @@ class MainWindow(QMainWindow):
                                   "Když hlídáte výkres a uložíte ho v MicroStationu, vpravo dole se ukáže, kolik "
                                   "chyb ubylo a kolik zbývá", checkable=True)
         self.a_notify.setChecked(self.settings.value("upozorneni/zapnuto", True, type=bool))
-        self.a_undo = self._act("Zpět (stav chyby)", lambda: self.issue_panel.undo(), "Ctrl+Z",
-                                "Vrátí poslední Opraveno / Ignorovat – když se kliknutí nepovedlo")
+        self.a_undo = self._act("Zpět", self.undo_dispatch, "Ctrl+Z",
+                                "Vrátí poslední krok: na stránce Výpočty změnu seznamu bodů, jinak Opraveno / "
+                                "Ignorovat u chyby")
+        self.a_redo = self._act("Znovu", self.redo_dispatch, "Ctrl+Y", "Znovu provede vrácený krok (Výpočty)")
         self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+Shift+H",
                                 "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
         self.a_focus = self._act("Režim soustředění", self.set_focus_mode, "F11",
@@ -423,7 +428,8 @@ class MainWindow(QMainWindow):
         self.a_page = {}
         for key, text, tip in (("uvod", "Úvod", "Úvodní stránka – stav projektu a další krok"),
                                ("vykres", "Výkres", "Výkres a seznam chyb"),
-                               ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady")):
+                               ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady"),
+                               ("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)")):
             act = QAction(text, self)
             act.setCheckable(True)
             act.setToolTip(tip)
@@ -520,7 +526,8 @@ class MainWindow(QMainWindow):
         self._apply_icons()
 
     def show_page(self, key: str):
-        w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani}.get(key)
+        w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani,
+             "vypocty": getattr(self, "vypocty", None)}.get(key)
         if w is not None:
             from .crash import step
             step(f"stránka {key}")
@@ -530,7 +537,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "a_page"):
             return
         w = self.tabs.currentWidget()
-        key = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else "zadani"
+        key = ("uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split
+               else "vypocty" if w is getattr(self, "vypocty", None) else "zadani")
         self.a_page[key].setChecked(True)
 
     def _popup_main_menu(self):
@@ -565,7 +573,7 @@ class MainWindow(QMainWindow):
             for i in range(self.tabs.count()):
                 w = self.tabs.widget(i)
                 name = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else \
-                    "zadani" if w is self.zadani else None
+                    "zadani" if w is self.zadani else "vypocty" if w is getattr(self, "vypocty", None) else None
                 if name:
                     self.tabs.setTabIcon(i, icon(name, accent() if i == self.tabs.currentIndex()
                                                  else themed("#6B7280")))
@@ -631,6 +639,8 @@ class MainWindow(QMainWindow):
         self.a_dark.blockSignals(False)
 
     def closeEvent(self, event):  # noqa: N802
+        if getattr(self, "vypocty", None) is not None:
+            self.vypocty.save()
         if getattr(self, "_mini", None) is not None:
             self._mini.close()
         if self.task is not None and self.task.is_running():
@@ -907,6 +917,8 @@ class MainWindow(QMainWindow):
 
     def set_project(self, project: Project):
         self.project = project
+        if getattr(self, "vypocty", None) is not None:
+            self.vypocty.set_project(project)
         self._syncing_wip = True
         self.a_wip.setChecked(bool(project.config.rozpracovany))
         self._syncing_wip = False
@@ -1720,6 +1732,16 @@ class MainWindow(QMainWindow):
         install_and_restart(dest)
         self.close()
         QApplication.instance().quit()
+
+    def undo_dispatch(self):
+        if self.tabs.currentWidget() is getattr(self, "vypocty", None):
+            self.vypocty.undo()
+        else:
+            self.issue_panel.undo()
+
+    def redo_dispatch(self):
+        if self.tabs.currentWidget() is getattr(self, "vypocty", None):
+            self.vypocty.redo()
 
     def show_report(self, problem: str = ""):
         from .crash import show_report_dialog

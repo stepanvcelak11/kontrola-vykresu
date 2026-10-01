@@ -1193,3 +1193,42 @@ def test_kazda_funkce_bez_padu(window, tmp_path, monkeypatch):
         except Exception:  # noqa: BLE001
             errs.append((t, traceback.format_exc()[-1200:]))
     assert not errs, "\n\n".join(f"{t}:\n{e}" for t, e in errs)
+
+
+def test_vypocty_seznam_souradnic(window, tmp_path):
+    w = window
+    w.show_page("vypocty")
+    p = w.vypocty
+    assert w.tabs.currentWidget() is p and w.a_page["vypocty"].isChecked()
+    src = tmp_path / "body.csv"
+    src.write_text("Číslo;Y;X;Z;Kód\n1;595975,72;1158246,97;258,27;plot\n2;595976,10;1158247,01;;roh\n"
+                   "3;595980,00;1158250,00;259,00;plot\nšpatný řádek;x;y\n", encoding="cp1250")
+    assert p.import_dialog(str(src), accept=True) == 3
+    assert len(p.seznam) == 3 and p.seznam.najdi("2").kod == "roh"
+    # úprava v tabulce + chybná hodnota se nepřijme
+    idx = p.proxy.mapFromSource(p.model.index(0, 3))
+    assert p.proxy.setData(idx, "260,5")
+    assert p.seznam.najdi("1").z == 260.5
+    assert not p.proxy.setData(idx, "abc") and "není číslo" in p.msg.text()
+    # filtr podle kódu
+    p.kody.setCurrentIndex(p.kody.findData("plot"))
+    assert p.proxy.rowCount() == 2
+    p.kody.setCurrentIndex(0)
+    # hromadně, smazat, Zpět přes Ctrl+Z okna
+    p.table.selectAll()
+    p.bulk_dialog({"kod": "hranice", "kvalita": 3, "dy": 0.0, "dx": 0.0, "dz": 0.0, "predpona": None,
+                   "pricti_k_cislu": 0})
+    assert all(b.kod == "hranice" and b.kvalita == 3 for b in p.seznam.body)
+    w.a_undo.trigger()
+    assert p.seznam.najdi("1").kod == "plot"
+    w.a_redo.trigger()
+    assert p.seznam.najdi("1").kod == "hranice"
+    # export s plnou přesností do souboru a automatické uložení v projektu
+    out = p.export_dialog(str(tmp_path / "ven.txt"))
+    assert "595975.72" in Path(out).read_text(encoding="utf-8")
+    p.save()
+    from kontrola.geodezie.body import SeznamBodu
+    assert len(SeznamBodu.nacti(w.project.root / "vypocty" / "seznam_bodu.json")) == 3
+    # duplicity
+    p.seznam.pridej([__import__("kontrola.geodezie.body", fromlist=["Bod"]).Bod("99", 595975.72, 1158246.97)])
+    assert p.duplicates_dialog(accept_all=True) == 1 and p.seznam.najdi("99") is None

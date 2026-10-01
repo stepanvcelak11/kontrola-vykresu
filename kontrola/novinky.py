@@ -8,6 +8,15 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (4, "1. října 2026 – večer", [
+        "<b>Výpočty</b> (nová stránka v levé liště): seznam souřadnic jako v Gromě – číslo, Y, X, Z, kód, "
+        "kvalita; úpravy přímo v tabulce, hledání, filtr podle kódu, řazení kliknutím na záhlaví.",
+        "<b>Import TXT/CSV</b> s náhledem – formát (sloupce, oddělovač, desetinná čárka, záporné nebo "
+        "prohozené souřadnice) se rozpozná sám a jde upravit. <b>Export</b> do TXT/CSV.",
+        "<b>Hromadné úpravy</b> (kód, kvalita, posun, přečíslování), <b>duplicity</b> s bezpečným "
+        "slučováním, <b>Zpět/Znovu</b> (Ctrl+Z / Ctrl+Y) a automatické ukládání do projektu.",
+        "<b>Hlášení o problému</b> (Nápověda) – zkopírujete a pošlete; po pádu se nabídne samo.",
+    ]),
     (3, "1. října 2026 – odpoledne", [
         "<b>Nové kontroly:</b> prvek na výchozí vrstvě Default / 0 a prvky na vypnuté nebo zmrazené vrstvě, "
         "které v MicroStationu nevidíte.",

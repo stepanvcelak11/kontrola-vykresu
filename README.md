@@ -287,6 +287,24 @@ python -m pytest -q tests\test_topologie.py tests\test_atributy.py
 
 ---
 
+## Výpočty – seznam souřadnic (jako Groma)
+
+Stránka **Výpočty** v levé liště (vlastní implementace, nic z Gromy se nekopíruje):
+
+* **Seznam souřadnic projektu:** číslo bodu, Y, X, Z, kód, kód kvality, poznámka. Úpravy přímo v tabulce
+  (dvojklik), hledání, filtr podle kódu, řazení kliknutím na záhlaví (čísla „jako člověk“: 2 < 10 < 4001).
+  Počet desetinných míst je jen pro zobrazení a export – v seznamu zůstává plná přesnost.
+* **Import TXT / CSV / XYZ:** formát se rozpozná sám (oddělovač, sloupce podle hlavičky i obsahu, desetinná
+  čárka, záporné souřadnice, prohozené Y/X) a v náhledu jde změnit. Nečitelné řádky se vypíšou s číslem
+  řádku. Body se stejným číslem se nepřepíšou, pokud to nezaškrtnete.
+* **Export** do zarovnaného TXT (jako Groma) nebo CSV pro Excel – celý seznam nebo vybrané body.
+* **Hromadně:** kód, kvalita, posun Y/X/Z, předpona čísla, přičtení k číslu (kolize čísel se odmítne).
+* **Duplicity:** stejné číslo vícekrát nebo různá čísla na stejném místě; sloučí se jen zaškrtnuté skupiny,
+  volitelně s průměrem polohy a výšky, v poznámce zůstane, co se sloučilo.
+* **Zpět / Znovu** (Ctrl+Z / Ctrl+Y, 200 kroků) a **automatické ukládání** do projektu
+  (`vypocty/seznam_bodu.json`) po každé změně, historie změn.
+* **Polární metoda** ze zápisníku Gromy (.zap) – tlačítko na stránce (výpočet a kontroly jako dosud).
+
 ## Zadání z předmětu (MicroStation, Směrnice-výběr.xls)
 
 Ve složce [`podklady/zadani1-microstation/`](podklady/zadani1-microstation/) je zadání, učitelova
