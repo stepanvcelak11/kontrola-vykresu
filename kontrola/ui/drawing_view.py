@@ -506,14 +506,28 @@ class DrawingView(QGraphicsView):
     def _cluster(self, items: list, pos: dict):
         """Překrývající se kroužky se při oddálení sloučí do jednoho s počtem chyb (vedoucí = nejzávažnější)."""
         groups: list[tuple[QPointF, list]] = []
-        lim2 = self.CLUSTER_PX ** 2
+        cell = self.CLUSTER_PX
+        lim2 = cell ** 2
+        grid: dict[tuple[int, int], list[int]] = {}  # buňka → indexy shluků (hledají se jen sousední)
         for m in items:  # items jsou seřazené od nejzávažnější chyby → ta vede shluk
             p = pos[id(m)]
-            for c, ms in groups:
-                if (c.x() - p.x()) ** 2 + (c.y() - p.y()) ** 2 <= lim2:
-                    ms.append(m)
+            gx, gy = int(p.x() // cell), int(p.y() // cell)
+            found = None
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for gi in grid.get((gx + dx, gy + dy), ()):
+                        c = groups[gi][0]
+                        if (c.x() - p.x()) ** 2 + (c.y() - p.y()) ** 2 <= lim2:
+                            found = gi
+                            break
+                    if found is not None:
+                        break
+                if found is not None:
                     break
+            if found is not None:
+                groups[found][1].append(m)
             else:
+                grid.setdefault((gx, gy), []).append(len(groups))
                 groups.append((p, [m]))
         self._clusters = {}
         for _c, ms in groups:
