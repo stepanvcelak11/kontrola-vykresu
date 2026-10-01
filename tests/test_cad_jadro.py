@@ -116,3 +116,17 @@ def test_uchyty_jedna_mala_kruznice_a_velky_kruh():
     m.add_line((0, 0), (0.001, 0))
     u = Uchyty(m)
     assert len(u.grid) < 100000 and u.velke
+
+
+def test_keyiny_a_cislo_bodu():
+    from types import SimpleNamespace
+
+    from kontrola.cad.uchyty import zadani_bodu
+    assert zadani_bodu("xy=1.5,-2", None, True) == (1.5, -2)
+    assert zadani_bodu("DL=3,4", (1, 1), False) == (4, 5)
+    x, y = zadani_bodu("di=10,100", (0, 0), sjtsk=True)
+    assert abs(x + 10) < 1e-9 and abs(y) < 1e-9
+    body = {"4001": SimpleNamespace(y=595975.72, x=1158246.97)}.get
+    assert zadani_bodu("#4001", None, True, body) == (-595975.72, -1158246.97)
+    with pytest.raises(ValueError, match="není"):
+        zadani_bodu("#9", None, True, body)

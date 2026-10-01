@@ -339,16 +339,37 @@ def polarni(posledni: tuple[float, float], x: float, y: float, krok_gon: float =
 _NUM = r"[+-]?\d+(?:[.,]\d+)?"
 
 
-def zadani_bodu(text: str, posledni: tuple[float, float] | None, sjtsk: bool) -> tuple[float, float]:
+def zadani_bodu(text: str, posledni: tuple[float, float] | None, sjtsk: bool,
+                body=None) -> tuple[float, float]:
     """Souřadnice z příkazového řádku (výsledek v DXF x, y):
 
     * ``Y X`` nebo ``Y,X`` – absolutně; u výkresu v S-JTSK (záporné souřadnice) se kladné Y X převedou,
     * ``x=… y=…`` – přímo souřadnice DXF,
     * ``@dx,dy`` – relativně (DXF),
     * ``@d<σ`` – polárně: délka a směrník v gonech (S-JTSK: od +X po směru hodin), u ostatních výkresů
-      úhel v gonech od osy x proti směru hodin.
+      úhel v gonech od osy x proti směru hodin,
+    * key-iny MicroStationu: ``xy=x,y`` (absolutně v souřadnicích výkresu), ``dl=dx,dy`` (relativně),
+      ``di=délka,úhel`` (polárně jako ``@d<úhel``),
+    * ``#4001`` – bod ze seznamu souřadnic (``body`` = funkce číslo → bod s Y, X), shodně se světem.
     """
-    t = text.strip().replace(";", ",")
+    t = text.strip()
+    m = re.fullmatch(r"#\s*(\S+)", t)
+    if m:
+        b = body(m.group(1)) if body is not None else None
+        if b is None:
+            raise ValueError(f"Bod {m.group(1)} v seznamu souřadnic není.")
+        return (-abs(b.y), -abs(b.x)) if sjtsk or b.y > 0 else (b.y, b.x)
+    m = re.fullmatch(r"(xy|dl|di)\s*=\s*(.+)", t, re.IGNORECASE)
+    if m:
+        druh, zbytek = m.group(1).lower(), m.group(2).strip()
+        cisla = [c for c in re.split(r"\s*[,;]\s*|\s+", zbytek) if c]
+        if len(cisla) != 2:
+            raise ValueError(f"„{text}“ – key-in potřebuje dvě čísla oddělená čárkou.")
+        if druh == "xy":
+            return float(cisla[0]), float(cisla[1])
+        return zadani_bodu(("@" + cisla[0] + "," + cisla[1]) if druh == "dl" else ("@" + cisla[0] + "<" + cisla[1]),
+                           posledni, sjtsk)
+    t = t.replace(";", ",")
     f = lambda s: float(s.replace(",", "."))  # noqa: E731
     m = re.fullmatch(rf"@\s*({_NUM})\s*<\s*({_NUM})", t)
     if m:
@@ -372,4 +393,4 @@ def zadani_bodu(text: str, posledni: tuple[float, float] | None, sjtsk: bool) ->
         if sjtsk and a > 0 and b > 0:
             return -a, -b  # S-JTSK Y X → DXF
         return a, b
-    raise ValueError(f"„{text}“ – zadejte „Y X“, „@dx,dy“ nebo „@délka<směrník“.")
+    raise ValueError(f"„{text}“ – zadejte „Y X“, „@dx,dy“, „@délka<směrník“, „xy=x,y“ nebo „#číslo bodu“.")

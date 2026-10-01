@@ -1266,7 +1266,7 @@ class CadPage(QWidget):
             self._posli(v)
         elif r.typ == "bod":
             try:
-                x, y = zadani_bodu(t, self.view.posledni, self.sjtsk)
+                x, y = zadani_bodu(t, self.view.posledni, self.sjtsk, self._bod_seznamu)
             except ValueError as e:
                 if self._je_prikaz(t):
                     self.proved(t)
@@ -1386,7 +1386,7 @@ class CadPage(QWidget):
         cmd = self.ALIASY.get(t.lower(), self.ALIASY.get(slovo, slovo if slovo in self.PRIKAZY else t.lower()))
         if cmd not in self.PRIKAZY:
             try:
-                x, y = zadani_bodu(t, self.view.posledni, self.sjtsk)
+                x, y = zadani_bodu(t, self.view.posledni, self.sjtsk, self._bod_seznamu)
             except ValueError as e:
                 self.vypis(f"Neznámý příkaz nebo souřadnice: {e}")
                 return
@@ -1644,6 +1644,10 @@ class CadPage(QWidget):
         self.vypis(f"Výměra {p:.2f} m², obvod {g.length + (0 if g.is_closed else math.dist(g.coords[0], g.coords[-1])):.3f} m")
 
     # ------------------------------------------------------------ nástroje kreslení
+    def _bod_seznamu(self, cislo: str):
+        v = getattr(self.win, "vypocty", None)
+        return v.seznam.najdi(cislo) if v is not None else None
+
     def _bod_req(self, vyzva, ref=None, volitelne=False, slova=()):
         return Pozadavek("bod", vyzva, volitelne, slova, ref)
 
