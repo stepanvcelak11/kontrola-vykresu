@@ -77,24 +77,29 @@ class _EndpointAnalysis:
         geoms = np.array([ctx.boundary(f) for f in feats], dtype=object)
         self.geoms = geoms
         self.tree = shapely.STRtree(geoms) if len(geoms) else None
-        pts, owner, is_end, own_gap = [], [], [], []
-        for i, f in enumerate(feats):
-            if f.geom_type != GeomType.LINIE or i >= n_checked:
-                continue  # konce se hledají jen u kontrolovaných linií
-            coords = f.geometry.coords
-            if len(coords) < 2:
-                continue
-            a, b = coords[0][:2], coords[-1][:2]
-            if math.dist(a, b) <= ctx.precision:
-                continue  # geometricky uzavřená linie nemá volné konce
-            pts += [a, b]
-            owner += [i, i]
-            is_end += [0, 1]
-            own_gap += [math.dist(a, b)] * 2
-        self.points = np.array(pts, dtype=float).reshape(-1, 2)
-        self.owner = np.array(owner, dtype=int)
-        self.is_end = np.array(is_end, dtype=int)
-        self.own_gap = np.array(own_gap, dtype=float)
+        # konce se hledají jen u kontrolovaných linií (hromadně, bez procházení souřadnic po prvcích)
+        idx = np.array([i for i, f in enumerate(feats[:n_checked]) if f.geom_type == GeomType.LINIE
+                        and f.geometry.geom_type == "LineString"], dtype=int)
+        if len(idx):
+            lg = np.array([feats[i].geometry for i in idx], dtype=object)
+            npts = shapely.get_num_points(lg)
+            ok = npts >= 2
+            idx, lg = idx[ok], lg[ok]
+        if len(idx):
+            a = shapely.get_coordinates(shapely.get_point(lg, 0))
+            b = shapely.get_coordinates(shapely.get_point(lg, -1))
+            gap = np.hypot(*(a - b).T)
+            keep = gap > ctx.precision  # geometricky uzavřená linie nemá volné konce
+            idx, a, b, gap = idx[keep], a[keep], b[keep], gap[keep]
+            self.points = np.column_stack([a, b]).reshape(-1, 2)
+            self.owner = np.repeat(idx, 2)
+            self.is_end = np.tile(np.array([0, 1]), len(idx))
+            self.own_gap = np.repeat(gap, 2)
+        else:
+            self.points = np.zeros((0, 2))
+            self.owner = np.zeros(0, dtype=int)
+            self.is_end = np.zeros(0, dtype=int)
+            self.own_gap = np.zeros(0)
         self.nearest = np.full(len(self.points), np.inf)
         self.nearest_idx = np.full(len(self.points), -1)
         if self.tree is None or not len(self.points):
@@ -118,12 +123,20 @@ class _EndpointAnalysis:
 
 
 def _without_end_segments(feats, owner, is_end):
-    out = []
-    for o, e in zip(owner, is_end):
-        coords = list(feats[o].geometry.coords)
-        part = coords[:-2] if e == 1 else coords[2:]
-        out.append(LineString(part) if len(part) >= 2 else LineString())
-    return np.array(out, dtype=object)
+    out = np.empty(len(owner), dtype=object)
+    empty = LineString()
+    cache: dict[int, np.ndarray] = {}
+    for k, (o, e) in enumerate(zip(owner, is_end)):
+        g = feats[o].geometry
+        if shapely.get_num_points(g) < 4:
+            out[k] = empty  # bez koncového úseku zbude nejvýš jeden bod
+            continue
+        c = cache.get(o)
+        if c is None:
+            c = cache[o] = shapely.get_coordinates(g)
+        part = c[:-2] if e == 1 else c[2:]
+        out[k] = shapely.linestrings(part)
+    return out
 
 
 def _endpoint_analysis(ctx: CheckContext) -> _EndpointAnalysis:
@@ -251,14 +264,14 @@ def _leads_out(an: _EndpointAnalysis, k: int, reach: float, precision: float) ->
     Konec, za kterým v prodloužení čáry (±12°) až k hranici výkresu nic neleží, je okraj
     zaměřeného území – učitelova kontrola ho nepočítá.
     """
-    coords = list(an.feats[an.owner[k]].geometry.coords)
+    coords = shapely.get_coordinates(an.feats[an.owner[k]].geometry)
     if an.is_end[k] == 0:
         coords = coords[::-1]
-    end = coords[-1][:2]
+    end = coords[-1]
     prev = None
-    for c in reversed(coords[:-1]):
-        if math.dist(c[:2], end) > precision:
-            prev = c[:2]
+    for c in coords[-2::-1]:
+        if math.dist(c, end) > precision:
+            prev = c
             break
     if prev is None:
         return False
@@ -304,14 +317,17 @@ class VisiciKonce(Check):
             reach = math.hypot(b[2] - b[0], b[3] - b[1])
             if len(an.points):
                 hull_d = shapely.distance(hull, an.pgeoms)
+        cand = []
         for k in range(len(an.points)):
             if np.isfinite(an.nearest[k]) or an.self_touch[k] or an.own_gap[k] <= ctx.tolerance:
                 continue  # napojeno, nebo jde o téměř uzavřený polygon (řeší jiná kontrola)
             if k in over:
                 continue  # přetažená linie – hlásí kontrola nedotažení/přetažení
-            f = an.feats[an.owner[k]]
-            if _expects_polygon(ctx, f):
+            if _expects_polygon(ctx, an.feats[an.owner[k]]):
                 continue  # řeší kontrola nezavřených polygonů
+            cand.append(k)
+        for k in cand:
+            f = an.feats[an.owner[k]]
             x, y = an.points[k]
             if hull is not None and (hull_d[k] <= edge or _leads_out(an, k, reach, ctx.precision)):
                 # konec na okraji kresby: MGEO ho nepočítá, ale ukázat ho (aby bylo jasné, proč jinde ano)
