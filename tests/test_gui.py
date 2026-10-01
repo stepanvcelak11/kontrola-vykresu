@@ -936,3 +936,20 @@ def test_zadne_dvojite_zkratky(window):
             seen.setdefault(sc, set()).add(a.text())
     dup = {k: v for k, v in seen.items() if len(v) > 1}
     assert not dup, dup
+
+
+def test_souvisejici_chyby_na_stejnem_miste(window):
+    from kontrola.checks.base import Issue, Severity
+    w = window
+    mk = lambda n, x, y, sev=Severity.CHYBA: Issue("pruseciky_bez_uzlu", "Průsečík", sev, f"chyba {n}", x, y,
+                                                   number=n)
+    issues = [mk(1, 0, 0), mk(2, 0.05, 0.05), mk(3, 0.3, 0), mk(4, 0.25, 0.3), mk(5, 0.05, 0, Severity.INFO)]
+    issues[0].feature_ids = [7]
+    issues[2].feature_ids = [7]  # stejný prvek do 50 cm; #4 jiný prvek 25 cm → nesouvisí
+    p = w.issue_panel
+    p.set_issues(issues)
+    assert p.near[1] == [2, 3] and 4 not in p.near and 5 not in p.near
+    p.select_issue(1)
+    assert "Hned vedle" in p.hint.text() and "#2" in p.hint.text()
+    p.hint.linkActivated.emit("3")
+    assert p.current_issue().number == 3

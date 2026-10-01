@@ -154,6 +154,9 @@ class CardDelegate(QStyledItemDelegate):
         painter.setFont(f2)
         fm2 = painter.fontMetrics()
         sub = f"#{iss.number} · {iss.check_name}" + (f" · {iss.layer}" if iss.layer else "")
+        near = len(self.panel.near.get(iss.number, ()))
+        if near:
+            sub = f"⧉ +{near} · " + sub
         bot = QRectF(x0, top.bottom() + 4, r.right() - x0 - 10, fm2.height())
         painter.setPen(QColor(themed("#6B7280")))
         painter.drawText(bot, Qt.AlignLeft | Qt.AlignVCenter, fm2.elidedText(sub, Qt.ElideRight, int(bot.width())))
@@ -337,6 +340,7 @@ class IssuePanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.near: dict[int, list[int]] = {}  # číslo chyby → čísla chyb na stejném místě
         self.model = IssueModel(self)
         self.proxy = IssueFilter(self)
         self.proxy.setSourceModel(self.model)
@@ -536,7 +540,8 @@ class IssuePanel(QWidget):
         self.hint = QLabel()
         self.hint.setObjectName("navod")
         self.hint.setWordWrap(True)
-        self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
+        self.hint.linkActivated.connect(lambda h: self.select_issue(int(h)) if h.isdigit() else None)
         self.hint.setVisible(False)
         tl.addWidget(self.hint)
         # obrázek „jak to má vypadat“ k typu chyby (stejný jako ve vysvětlení „?“)
@@ -599,8 +604,32 @@ class IssuePanel(QWidget):
             self.b_view.setToolTip("Přepnout na tabulku se sloupci (řazení, souřadnice)" if on
                                    else "Přepnout na karty")
 
+    NEAR_M = 0.1  # chyby blíž než 10 cm bývají jedna příčina (nepořádek v rohu, dva body na sobě…)
+    NEAR_SAME_FEATURE_M = 0.5  # … na stejném prvku i do 50 cm
+
+    @staticmethod
+    def _neighbours(issues: list[Issue], r0: float, r1: float = 0.5) -> dict[int, list[int]]:
+        r = max(r0, r1)
+        cells: dict[tuple[int, int], list[Issue]] = {}
+        for i in issues:
+            if i.severity != Severity.INFO:
+                cells.setdefault((int(i.x // r), int(i.y // r)), []).append(i)
+        out: dict[int, list[int]] = {}
+        for (cx, cy), lst in cells.items():
+            cand = [j for dx in (-1, 0, 1) for dy in (-1, 0, 1) for j in cells.get((cx + dx, cy + dy), ())]
+            for i in lst:
+                # stejný hlavní prvek (první v seznamu) – sdílená sousední čára (např. obrys šrafy) nestačí
+                f0 = i.feature_ids[0] if i.feature_ids else None
+                near = [j.number for j in cand if j is not i and (
+                    (d2 := (j.x - i.x) ** 2 + (j.y - i.y) ** 2) <= r0 * r0
+                    or (d2 <= r1 * r1 and f0 is not None and j.feature_ids[:1] == [f0]))]
+                if near:
+                    out[i.number] = sorted(near)
+        return out
+
     def set_issues(self, issues: list[Issue], summary: str = ""):
         prev_hidden = set(self.proxy.hidden_types)
+        self.near = self._neighbours(issues, self.NEAR_M, self.NEAR_SAME_FEATURE_M)
         self.model.set_issues(issues)
         n_new = sum(1 for i in issues if i.nove and i.state == "nová")
         b_new = self.quick.get("nove")
@@ -815,6 +844,14 @@ class IssuePanel(QWidget):
                 parts.append(f"<b>Prvek:</b> {info}")
             if h:
                 parts.append(f"<b>Jak opravit:</b> {h}")
+            near = self.near.get(iss.number, [])
+            if near:
+                by_n = {i.number: i for i in self.model.issues}
+                from .theme import accent
+                links = ", ".join(f"<a href='{n}' style='color:{accent()}'>#{n} {by_n[n].message}</a>"
+                                  for n in near[:6] if n in by_n)
+                parts.append(f"<b>⧉ Hned vedle</b> jsou další chyby – možná stejná příčina, po opravě často "
+                             f"zmizí spolu: {links}" + ("…" if len(near) > 6 else ""))
             self.hint.setText("<br>".join(parts))
             self.hint.setVisible(bool(parts))
             self._show_illustration(iss.check_id)
