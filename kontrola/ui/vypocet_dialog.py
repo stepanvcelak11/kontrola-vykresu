@@ -88,9 +88,18 @@ class VypocetDialog(QDialog):
         self.b_coords = QPushButton("Uložit vypočtené souřadnice…")
         self.b_coords.clicked.connect(self.save_coords)
         self.b_coords.setEnabled(False)
+        self.b_prot = QPushButton("Výpočetní protokol…")
+        self.b_prot.setToolTip("Celý protokol výpočtu (import, redukce, orientace, podrobné body, kontroly, "
+                               "seznam) do TXT nebo PDF")
+        self.b_prot.clicked.connect(lambda: self.save_protokol())
+        self.b_prot.setEnabled(False)
+        self.b_list = QPushButton("Do seznamu bodů")
+        self.b_list.setToolTip("Vypočtené body přidat do seznamu souřadnic na stránce Výpočty")
+        self.b_list.clicked.connect(self.to_list)
+        self.b_list.setEnabled(False)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
-        for b in (self.b_run, self.b_save, self.b_coords):
+        for b in (self.b_run, self.b_prot, self.b_list, self.b_save, self.b_coords):
             brow.addWidget(b)
         brow.addWidget(self.summary, 1)
         lay.addLayout(brow)
@@ -158,14 +167,14 @@ class VypocetDialog(QDialog):
         zap = self.zap.text().strip()
         dane = [s.strip() for s in self.dane.text().split(";") if s.strip()]
         seznam = self.seznam.text().strip()
-        missing = [n for n, v in (("zápisník", zap), ("dané body", dane), ("váš seznam", seznam)) if not v]
+        missing = [n for n, v in (("zápisník", zap), ("dané body", dane)) if not v]
         if missing:
             QMessageBox.information(self, "Kontrola výpočtu", "Vyberte: " + ", ".join(missing) + ".")
             return
         try:
             stations = read_zap(zap)
             known = [p for f in dane for p in read_point_list(f)]
-            student = read_point_list(seznam)
+            student = read_point_list(seznam) if seznam else []
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Kontrola výpočtu", f"Soubor nelze načíst: {exc}")
             return
@@ -175,8 +184,10 @@ class VypocetDialog(QDialog):
             return
         k = None if self.k_auto.isChecked() else self.k.value()
         res = compute(stations, known, k)
-        bad, rows = compare(res, student, self.tol_xy.value(), self.tol_z.value(), known=known)
+        bad, rows = (compare(res, student, self.tol_xy.value(), self.tol_z.value(), known=known) if student
+                     else ([], []))
         self.result = res
+        self._stations, self._known, self._files = stations, known, (zap, "; ".join(dane))
         diag = diagnose(res, rows, self.tol_xy.value(), self.tol_z.value())
         self.report = text_report(res, rows, bad, diag)
         self._fill_checks(res, diag)
@@ -201,6 +212,11 @@ class VypocetDialog(QDialog):
                                  "všechny rozdíly v povolené toleranci.")
         self.b_save.setEnabled(True)
         self.b_coords.setEnabled(bool(res.body))
+        self.b_prot.setEnabled(bool(res.body))
+        self.b_list.setEnabled(bool(res.body))
+        if not student and res.body:
+            self.summary.setText(f"<span style='color:#15803D'><b>Spočítáno {len(res.body)} bodů.</b></span> "
+                                 "Výpočetní protokol a seznam uložíte tlačítky vlevo.")
 
     def _fill_checks(self, res, diag):
         red, green = QColor(185, 28, 28), QColor(21, 128, 61)
@@ -261,6 +277,49 @@ class VypocetDialog(QDialog):
         p, _ = QFileDialog.getSaveFileName(self, "Uložit protokol", "kontrola_vypoctu.txt", "Text (*.txt)")
         if p:
             Path(p).write_text(self.report, encoding="utf-8-sig")
+
+    def protokol_text(self) -> str:
+        from ..geodezie.protokol import protokol_polarni
+        nazev = self.project.name if self.project is not None else ""
+        autor = (self.project.meta.get("autor", "") if self.project is not None else "")
+        return protokol_polarni(self.result, self._stations, self._known, nazev=nazev, autor=autor,
+                                soubor_souradnic=Path(self._files[1].split(";")[0]).name if self._files[1] else "",
+                                soubor_mereni=Path(self._files[0]).name)
+
+    def save_protokol(self, path: str | None = None):
+        if self.result is None:
+            return None
+        if path is None:
+            path, _ = QFileDialog.getSaveFileName(self, "Výpočetní protokol", "vypocetni_protokol.pdf",
+                                                  "PDF (*.pdf);;Text (*.txt)")
+        if not path:
+            return None
+        text = self.protokol_text()
+        try:
+            if path.lower().endswith(".pdf"):
+                from ..geodezie.protokol import protokol_pdf
+                protokol_pdf(text, path, self.project.name if self.project is not None else "")
+            else:
+                Path(path).write_text(text, encoding="utf-8-sig")
+        except OSError as e:
+            QMessageBox.warning(self, "Výpočetní protokol", f"Protokol nejde uložit: {e}")
+            return None
+        return path
+
+    def to_list(self):
+        win = self.parent()
+        page = getattr(win, "vypocty", None)
+        if self.result is None or page is None:
+            return 0
+        from ..geodezie.body import Bod
+        nove = [Bod(b.bod, b.y, b.x, b.z, poznamka=f"polární metoda ze st. {b.stanovisko}")
+                for b in self.result.body if not b.kontrolni]
+        n, konf = page.seznam.pridej(nove, "Polární metoda: vypočtené body")
+        page.model.refresh()
+        page._after_change()
+        QMessageBox.information(self, "Do seznamu bodů", f"Přidáno {n} bodů do seznamu na stránce Výpočty."
+                                + (f"\n{len(konf)} čísel už v seznamu bylo a ponechala se původní." if konf else ""))
+        return n
 
     def save_coords(self):
         if self.result is None:

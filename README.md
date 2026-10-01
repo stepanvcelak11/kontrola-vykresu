@@ -303,7 +303,15 @@ Stránka **Výpočty** v levé liště (vlastní implementace, nic z Gromy se ne
   volitelně s průměrem polohy a výšky, v poznámce zůstane, co se sloučilo.
 * **Zpět / Znovu** (Ctrl+Z / Ctrl+Y, 200 kroků) a **automatické ukládání** do projektu
   (`vypocty/seznam_bodu.json`) po každé změně, historie změn.
-* **Polární metoda** ze zápisníku Gromy (.zap) – tlačítko na stránce (výpočet a kontroly jako dosud).
+* **Polární metoda dávkou** ze zápisníku (.zap) – tlačítko na stránce. Spočítá body i bez vašeho seznamu
+  (porovnání je nepovinné). **Výpočetní protokol** (TXT nebo PDF) má stejné členění jako protokoly běžných
+  geodetických programů: import souřadnic, kontrola číslování, import měření (měřítkový koeficient,
+  podezřelé výšky signálu, statistika), redukce šikmých délek, oprava z refrakce a zakřivení, opakovaná
+  měření, polární metoda dávkou (orientace osnovy s Hz, vahou, směrníkem, opravou, délkou a převýšením,
+  orientační posun, m0, střední chyba posunu, překročené tolerance, podrobné body), kontroly a seznam.
+  Na zadání Husovice se shoduje s protokolem z Gromy (orientační posun 204.7677 g, m0 0.0236 g, podrobné body
+  na milimetr). V hlavičce je uvedeno, že protokol vytvořila tato aplikace.
+  **Do seznamu bodů** přidá vypočtené body na stránku Výpočty.
 * **Úlohy** (záložka na stránce Výpočty): směrník a délka, rajón (polární bod s orientací), protínání vpřed
   z úhlů, protínání z délek, protínání zpět, volné stanovisko (MNČ, opravy na známých bodech), transformace
   shodnostní / podobnostní / afinní z identických bodů (opravy, m0) a převod dalších bodů, výměra a obvod,

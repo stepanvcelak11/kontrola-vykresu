@@ -18,6 +18,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "<b>Úlohy</b> na stránce Výpočty: rajón, protínání vpřed / z délek / zpět, volné stanovisko, "
         "transformace s opravami, výměra, staničení a kolmice, kontrola dvou určení – protokol a nové body "
         "do seznamu jedním klikem.",
+        "<b>Výpočetní protokol polární metody</b> (TXT/PDF) se stejným členěním jako protokol z Gromy a "
+        "tlačítko <b>Do seznamu bodů</b>; výpočet jde i bez vlastního seznamu.",
         "<b>Hlášení o problému</b> (Nápověda) – zkopírujete a pošlete; po pádu se nabídne samo.",
     ]),
     (3, "1. října 2026 – odpoledne", [

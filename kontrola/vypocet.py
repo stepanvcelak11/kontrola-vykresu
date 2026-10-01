@@ -80,6 +80,7 @@ class Result:
     zpravy: list[str]
     kontroly: list[Kontrola] = field(default_factory=list)
     posuny: dict[str, float] = field(default_factory=dict)  # orientační posun na stanovisku [g]
+    protokol: list[dict] = field(default_factory=list)  # mezivýsledky po stanoviscích (pro výpočetní protokol)
 
 
 def _merge_faces(obs: list[Obs]) -> list[Obs]:
@@ -242,6 +243,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
     seen: set[str] = set()
     kontroly: list[Kontrola] = []
     posuny: dict[str, float] = {}
+    protokol: list[dict] = []
     for st in stations:
         sp = st_pts.get(st.bod)
         if sp is None:
@@ -249,6 +251,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         # orientace
         num = den = 0.0
         rows = []
+        orient_rows: list[dict] = []
         for o in st.orient:
             kp = _find(known, o.bod)
             if kp is None:
@@ -262,9 +265,16 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             posun = (smer - o.hz) % 400.0
             w = math.hypot(dy, dx)
             rows.append((o.bod, posun, w))
+            orow = {"bod": o.bod, "hz": o.hz, "smernik": smer, "delka": w, "kp": kp, "v_delky": None,
+                    "v_prev": None, "obs": o}
+            orient_rows.append(orow)
             if o.sd > 0.5:  # délka na orientaci ověří, že jde opravdu o daný bod
-                dm = _dh(o, st.vp, m)[0]
+                dm, dh_o = _dh(o, st.vp, m)
                 dd = dm - w
+                orow["v_delky"] = -dd  # ze souřadnic − měřená
+                orow["delka_mer"] = dm
+                if kp.z and sp.z is not None:
+                    orow["v_prev"] = (kp.z - sp.z) - dh_o
                 lim = max(0.03, 0.0002 * w)
                 kontroly.append(Kontrola("Délka na orientaci", st.bod, o.bod, f"{dd * 1000:+.0f} mm", abs(dd) <= lim,
                                          f"měřená vodorovná délka {dm:.3f} m, ze souřadnic {w:.3f} m"
@@ -299,6 +309,16 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             kontroly.append(Kontrola("Indexová chyba z", st.bod, "", f"{mi * 10000:+.0f} cc", abs(mi) < 0.01,
                                      f"průměr z {len(idx)} měření ve dvou polohách; zprůměrováním poloh se "
                                      "vyloučí"))
+        vv = [((p_ - posun + 200) % 400) - 200 for _b, p_, _w in rows]
+        nn = len(vv)
+        for orow, v in zip(orient_rows, vv):
+            orow["v_or"] = v
+            orow["vaha"] = orow["delka"] / den if den else 0.0
+        st_rec = {"stanovisko": st.bod, "y": sp.y, "x": sp.x, "z": sp.z, "vp": st.vp, "posun": posun,
+                  "m0": math.sqrt(sum(v * v for v in vv) / (nn - 1)) if nn > 1 else None,
+                  "m_posun": math.sqrt(sum(v * v for v in vv) / (nn * (nn - 1))) if nn > 1 else None,
+                  "orientace": orient_rows, "detail": []}
+        protokol.append(st_rec)
         msgs.append(f"Stanovisko {st.bod}: orientační posun {posun:.4f} g ("
                     + ", ".join(f"{b} v={(((p_ - posun + 200) % 400) - 200):+.4f} g" for b, p_, _ in rows) + ")")
         for o in st.detail:
@@ -310,6 +330,12 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             key = frozenset(short_numbers(o.bod))
             ctrl = any(key & frozenset(short_numbers(s)) for s in seen)
             body.append(Point(o.bod, y, x, z, st.bod, ctrl))
+            # převýšení terén–terén (s výškou přístroje, cíle, zakřivením a refrakcí) a odpovídající
+            # zenitový úhel „redukovaný na terén“ – výška cíle je pak 0
+            z_red = math.acos(max(-1.0, min(1.0, dh / o.sd))) / GON if o.sd > 0 else o.z
+            st_rec["detail"].append({"bod": o.bod, "hz": o.hz, "z_uhel": z_red, "dh": dh, "vc": 0.0,
+                                     "vc_mer": o.vc, "delka": d, "y": y, "x": x, "z": z, "kontrolni": ctrl,
+                                     "obs": o})
             seen.add(o.bod)
     # druhé (kontrolní) určení bodu z jiného stanoviska
     first: dict[frozenset, Point] = {}
@@ -325,7 +351,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
                                  f"{dxy * 1000:.0f} mm" + (f", výška {dz * 1000:+.0f} mm" if dz is not None else ""),
                                  dxy <= 0.05 and (dz is None or abs(dz) <= 0.05),
                                  "rozdíl dvou nezávislých určení téhož bodu z různých stanovisek"))
-    return Result(body, st_pts, m, msgs, kontroly, posuny)
+    return Result(body, st_pts, m, msgs, kontroly, posuny, protokol)
 
 
 @dataclass

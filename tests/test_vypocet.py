@@ -76,3 +76,33 @@ def test_diagnoza_typickych_chyb():
     assert any("prohozená" in x for x in d)
     # správný seznam → žádná diagnóza
     assert diagnose(r, compare(r, read_point_list(Z / "Husovice_Včelák_seznam.txt"), known=known)[1]) == []
+
+
+@pytest.mark.skipif(not (P / "zap_husovice.zap").exists(), reason="podklady nejsou k dispozici")
+def test_vypocetni_protokol_sedi_s_gromou(tmp_path):
+    """Hodnoty z protokolu Gromy v podkladech (Husovice_Včelák_protokol.pdf, stanovisko 4001)."""
+    from kontrola.geodezie.protokol import protokol_pdf, protokol_polarni
+    stations = read_zap(P / "zap_husovice.zap")
+    known = read_point_list(P / "dane_body.txt")
+    res = compute(stations, known)
+    t = protokol_polarni(res, stations, known, nazev="Husovice")
+    for oddil in ("IMPORT SOUŘADNIC", "KONTROLA ČÍSLOVÁNÍ BODŮ", "IMPORT MĚŘENÍ", "REDUKCE ŠIKMÝCH DÉLEK",
+                  "OPRAVA VLIVU REFRAKCE", "ZPRACOVÁNÍ OPAKOVANÝCH MĚŘENÍ", "POLÁRNÍ METODA DÁVKOU",
+                  "SEZNAM SOUŘADNIC"):
+        assert oddil in t, oddil
+    assert "Orientační posun [g]: 204.7677" in t  # Groma: 204.7677
+    assert "[g]: 0.0236" in t and "[g]: 0.0167" in t  # m0 a střední chyba posunu jako Groma
+    s = res.protokol[0]
+    o = s["orientace"][0]  # 944212300: Groma 0.0018 / 204.7770 / 0.0075 / 63.619 / 0.010
+    assert (round(o["hz"], 4), round(o["smernik"], 4), round(o["v_or"], 4)) == (0.0018, 204.7770, 0.0075)
+    assert round(o["delka_mer"], 3) == 63.619 and round(o["v_delky"], 3) == 0.010
+    d = next(x for x in s["detail"] if x["bod"] == "1")  # Groma 159.1520 100.7804 -0.332 27.100
+    assert (round(d["hz"], 4), round(d["z_uhel"], 4), round(d["dh"], 3), round(d["delka"], 3)) == \
+        (159.1520, 100.7804, -0.332, 27.100)
+    assert abs(d["y"] - 595975.720) < 0.0015 and abs(d["x"] - 1158246.973) < 0.0015
+    assert "Kontrola výkresu" in t.splitlines()[0]  # protokol uvádí program, který ho vytvořil
+    pdf = protokol_pdf(t, tmp_path / "p.pdf", "Husovice")
+    import pdfplumber
+    with pdfplumber.open(pdf) as doc:
+        txt = doc.pages[0].extract_text()
+    assert "strana 1" in txt and "IMPORT SOUŘADNIC" in txt

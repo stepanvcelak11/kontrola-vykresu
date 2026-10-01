@@ -1267,3 +1267,25 @@ def test_vypocty_ulohy(window):
     for i in range(u.lst.count()):
         u.lst.setCurrentRow(i)
         assert u.vypocitej() is None and u.chyba.text()
+
+
+def test_polarni_metoda_protokol_a_seznam(window, tmp_path, monkeypatch):
+    from kontrola.ui.vypocet_dialog import VypocetDialog
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+    if not (z / "zap_husovice.zap").exists():
+        pytest.skip("podklady chybí")
+    w = window
+    d = VypocetDialog(w.project, w)
+    d.zap.setText(str(z / "zap_husovice.zap"))
+    d.dane.setText(str(z / "dane_body.txt"))
+    d.seznam.setText("")  # bez porovnání – jen výpočet jako v Gromě
+    d.run()
+    assert d.b_prot.isEnabled() and d.b_list.isEnabled()
+    out = d.save_protokol(str(tmp_path / "protokol.pdf"))
+    assert out and Path(out).stat().st_size > 5000
+    txt = d.save_protokol(str(tmp_path / "protokol.txt"))
+    assert "POLÁRNÍ METODA DÁVKOU" in Path(txt).read_text(encoding="utf-8-sig")
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    assert d.to_list() > 100 and w.vypocty.seznam.najdi("1") is not None
+    d.close()
