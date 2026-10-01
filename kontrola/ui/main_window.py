@@ -1757,12 +1757,16 @@ class MainWindow(QMainWindow):
     def undo_dispatch(self):
         if self.tabs.currentWidget() is getattr(self, "vypocty", None):
             self.vypocty.undo()
+        elif self.tabs.currentWidget() is getattr(self, "cad", None):
+            self.cad.undo()
         else:
             self.issue_panel.undo()
 
     def redo_dispatch(self):
         if self.tabs.currentWidget() is getattr(self, "vypocty", None):
             self.vypocty.redo()
+        elif self.tabs.currentWidget() is getattr(self, "cad", None):
+            self.cad.redo()
 
     def show_report(self, problem: str = ""):
         from .crash import show_report_dialog

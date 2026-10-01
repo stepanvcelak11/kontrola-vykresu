@@ -52,6 +52,7 @@ class CadDokument:
         doc = ezdxf.new(verze, setup=True)
         doc.header["$INSUNITS"] = 6  # metry
         doc.header["$MEASUREMENT"] = 1
+        _cesky(doc)
         return doc
 
     @classmethod
@@ -72,6 +73,7 @@ class CadDokument:
             raise ValueError(f"Soubor {p.name} nejde otevřít: {e}") from None
         except UnicodeDecodeError:
             raise ValueError(f"Soubor {p.name} má neznámé kódování textu.") from None
+        _dekoduj_unicode(doc)
         d = cls(doc, p)
         d.zprava.opravy = opravy
         return d
@@ -100,6 +102,7 @@ class CadDokument:
                                  f"{verze} by znamenalo ztrátu dat.")
             if cil != self.doc.dxfversion:
                 self.doc.dxfversion = cil
+        _cesky(self.doc)
         import os
         import tempfile
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -125,6 +128,34 @@ class CadDokument:
         if not ext.has_data:
             return None
         return ext.extmin.x, ext.extmin.y, ext.extmax.x, ext.extmax.y
+
+
+def _cesky(doc: Drawing) -> None:
+    """Verze do R2004 ukládají texty v kódové stránce: výchozí ANSI_1252 neumí č, ř, ě, ů… (ty by se zapsaly
+    jako \\U+xxxx), proto česká ANSI_1250. R2007 a novější jsou v UTF-8."""
+    if doc.dxfversion < "AC1021" and (doc.encoding or "").lower() in ("cp1252", ""):
+        doc.encoding = "cp1250"
+
+
+def _dekoduj_unicode(doc: Drawing) -> None:
+    """Texty se zápisem \\U+xxxx (z programů, které neznají češtinu v kódové stránce) převede na znaky."""
+    from ezdxf.lldxf.encoding import decode_dxf_unicode, has_dxf_unicode
+    for e in doc.entitydb.values():
+        for attr in ("text", "tag", "prompt"):
+            try:
+                if e.dxf.hasattr(attr):
+                    v = e.dxf.get(attr)
+                    if isinstance(v, str) and has_dxf_unicode(v):
+                        e.dxf.set(attr, decode_dxf_unicode(v))
+            except Exception:  # noqa: BLE001
+                continue
+    for layer in doc.layers:
+        n = layer.dxf.name
+        if has_dxf_unicode(n):
+            try:
+                layer.rename(decode_dxf_unicode(n))
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def sjtsk(x: float, y: float) -> tuple[float, float]:

@@ -1314,3 +1314,78 @@ def test_cad_otevreni_mereni_a_propojeni(window, tmp_path):
     c.zkontroluj()
     assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
     assert w.tabs.currentWidget() is w.split
+
+
+def test_cad_kresleni_upravy_zpet(window, tmp_path):
+    import ezdxf
+    w = window
+    w.show_page("cad")
+    c = w.cad
+    c.novy()
+    assert c.dok is not None and not c.sjtsk
+    msp = c.dok.msp
+    # úsečky řetězcem z příkazového řádku
+    for t in ("u", "x=0 y=0", "@10,0", "@0,10", ""):
+        c.zadej(t)
+    assert sorted(e.dxftype() for e in msp) == ["LINE", "LINE"]
+    # kružnice: střed kliknutím, poloměr číslem
+    c.proved("kr")
+    c._klik(30.0, 0.0)
+    c.zadej("5")
+    assert any(e.dxftype() == "CIRCLE" and e.dxf.radius == 5 for e in msp)
+    # polylinie uzavřená
+    for t in ("pl", "x=50 y=0", "@10,0", "@0,10", "k"):
+        c.zadej(t)
+    pl = [e for e in msp if e.dxftype() == "LWPOLYLINE"]
+    assert len(pl) == 1 and pl[0].closed
+    c.view.zoom_all()
+    # výběr kliknutím a posun
+    c.vyber_v_bode(5, 0)
+    assert len(c.vyber) == 1 and c.vyber[0].dxftype() == "LINE"
+    for t in ("m", "x=0 y=0", "@0,-5"):
+        c.zadej(t)
+    l = [e for e in msp if e.dxftype() == "LINE" and abs(e.dxf.start.y + 5) < 1e-12]
+    assert len(l) == 1 and len(msp) == 4
+    assert c.view.scene().items()
+    # Zpět přes hlavní okno (Ctrl+Z) a Vpřed
+    w.undo_dispatch()
+    assert not any(abs(e.dxf.start.y + 5) < 1e-12 for e in msp if e.dxftype() == "LINE")
+    w.redo_dispatch()
+    assert any(abs(e.dxf.start.y + 5) < 1e-12 for e in msp if e.dxftype() == "LINE")
+    # výběr oknem a smazání, zpět
+    c.vyber = []
+    c._okno(45, -1, 61, 11)
+    assert [e.dxftype() for e in c.vyber] == ["LWPOLYLINE"]
+    c.proved("smaž")
+    assert not any(e.dxftype() == "LWPOLYLINE" for e in msp)
+    c.undo()
+    assert any(e.dxftype() == "LWPOLYLINE" for e in msp)
+    # ořez: úsečka přes kružnici
+    for t in ("u", "x=20 y=0", "x=40 y=0", ""):
+        c.zadej(t)
+    c.proved("tr")
+    c.view.mys = (30.0, 0.3)
+    c._req.typ == "prvek"
+    c._posli((next(e for e in msp if e.dxftype() == "LINE" and e.dxf.start.x == 20), (30.0, 0.0)))
+    c.zrus()
+    casti = sorted((round(e.dxf.start.x, 6), round(e.dxf.end.x, 6)) for e in msp
+                   if e.dxftype() == "LINE" and e.dxf.start.y == 0 and e.dxf.start.x >= 20)
+    assert casti == [(20, 25), (35, 40)]
+    # text, vrstva, uložení a znovu načtení
+    c.proved("vrstva POPIS")
+    for t in ("t", "x=0 y=20", "2", "0", "Měřický bod č. 1", ""):
+        c.zadej(t)
+    assert c.neulozeno and c.title.text().endswith("*")
+    p = c.uloz(path=str(tmp_path / "kresba.dxf"))
+    assert not c.neulozeno
+    d = ezdxf.readfile(p)
+    t = [e for e in d.modelspace() if e.dxftype() == "TEXT"]
+    assert t and t[0].dxf.text == "Měřický bod č. 1" and t[0].dxf.layer == "POPIS"
+    assert len(d.modelspace()) == len(msp)
+    # chybný vstup nespadne
+    c.proved("kr")
+    c.zadej("abc")
+    c.zadej("x=1 y=1")
+    c.zadej("-3")
+    assert "⚠" in c.historie.toPlainText()
+    c.proved("?")

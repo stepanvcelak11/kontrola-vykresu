@@ -36,16 +36,16 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 
 | Funkce MicroStationu | Stav |
 |---|---|
-| Otevření/uložení DXF beze ztrát, zpráva o načtení, poškozené soubory | ✅ |
+| Otevření/uložení DXF beze ztrát, zpráva o načtení, poškozené soubory, čeština v kódové stránce 1250 | ✅ |
 | Zobrazení (barvy, styly, texty, bloky, šrafy), zoom, posun | ✅ |
 | Souřadnice kurzoru S-JTSK, úchyty (konec, střed, průsečík, kolmice, tečna), ortho, polární | ✅ |
 | Příkazový řádek (key-in), zadání souřadnic, měření vzdálenosti | ✅ |
 | Propojení s Kontrolou výkresu | ✅ |
-| Kreslení: bod, úsečka, polyline, oblouk, kružnice, elipsa, křivka, text, šrafa, kóty | ❌ → další fáze |
-| Úpravy: výběr, posun, kopie, rotace, měřítko, zrcadlení, ořez, prodloužení, offset, zaoblení, spojení, rozpojení, mazání | ❌ → další fáze |
-| Zpět/Vpřed bez omezení | ❌ → další fáze |
-| Vrstvy (barva, styl, tloušťka, zámek, zapnutí), typy čar, bloky (buňky) | 🟡 jen zobrazení |
-| Výběr podle vrstvy/vlastností, hromadné změny, hledání prvků | ❌ |
+| Kreslení: bod, úsečka, polylinie, obdélník, oblouk (3 body), kružnice, elipsa, křivka, text, šrafa, kóta | ✅ |
+| Úpravy: výběr (klik, okno, protínající okno), posun, kopie (i v řadě), otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, spojení, rozpojení, mazání, vlastnosti (vrstva, barva) | ✅ |
+| Zpět/Vpřed bez omezení | ✅ |
+| Vrstvy (barva, styl, tloušťka, zámek, zapnutí), typy čar, bloky (buňky) | 🟡 aktuální vrstva a přesun do vrstvy; správce vrstev a bloky chybí |
+| Výběr podle vrstvy/vlastností, hledání prvků | 🟡 hromadná změna vrstvy a barvy; výběr podle vlastností chybí |
 | Geodetické funkce (body ze seznamu s čísly a kódy, kódovník, výměry, mřížka, transformace výkresu) | ❌ |
 | Rastry s georeferencí, podkladový DXF (reference) | ❌ |
 | Tisk, rámečky, razítka, PDF, layouty | ❌ |
