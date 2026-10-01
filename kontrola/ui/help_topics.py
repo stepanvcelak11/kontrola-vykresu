@@ -92,6 +92,80 @@ _SVG = {
         f'font-family="Arial" fill="#111827" text-anchor="middle">1234</text>'),
 }
 
+
+def _txt(x, y, t, size=12, col="#374151", rot=0, anchor="middle"):
+    tr = f' transform="rotate({rot} {x} {y})"' if rot else ""
+    return (f'<text x="{x}" y="{y}" font-family="Segoe UI, Arial" font-size="{size}" fill="{col}" '
+            f'text-anchor="{anchor}"{tr}>{t}</text>')
+
+
+def _pt(x, y, col="#374151"):
+    return f'<circle cx="{x}" cy="{y}" r="3.5" fill="{col}"/>'
+
+
+# další obrázky (kartografie, geometrie, čísla bodů)
+_SVG.update({
+    "prekryv_linii": _pair(
+        f'<line x1="10" y1="60" x2="80" y2="60" {_L}/><line x1="45" y1="66" x2="110" y2="66" {_L}/>'
+        f'<line x1="45" y1="60" x2="80" y2="60" stroke="#DC2626" stroke-width="5" opacity="0.45"/>'
+        + _txt(62, 40, "úsek 2×", 11, "#6B7280"),
+        f'<line x1="10" y1="60" x2="60" y2="60" {_OK}/><line x1="60" y1="60" x2="110" y2="60" {_OK}/>'
+        + _pt(60, 60, "#16A34A")),
+    "blizke_prvky": _pair(
+        f'<line x1="10" y1="60" x2="110" y2="60" {_L}/><polyline points="30,20 58,56 90,20" {_L}/>'
+        + _mark(58, 57, 9) + _txt(60, 92, "2 mm od čáry", 11, "#6B7280"),
+        f'<line x1="10" y1="60" x2="110" y2="60" {_L}/><polyline points="30,20 60,60 90,20" {_OK}/>'
+        + _pt(60, 60, "#16A34A")),
+    "popisy_pres_sebe": _pair(
+        _txt(55, 60, "245.37", 18) + _txt(68, 66, "Plot", 18) + _mark(62, 58, 22),
+        _txt(45, 45, "245.37", 18) + _txt(70, 85, "Plot", 18)),
+    "popis_pres_caru": _pair(
+        f'<line x1="10" y1="56" x2="110" y2="56" {_L}/>' + _txt(60, 62, "1203", 20) + _mark(60, 55, 22),
+        f'<line x1="10" y1="56" x2="110" y2="56" {_L}/>' + _txt(60, 44, "1203", 20)),
+    "cislo_bodu_daleko": _pair(
+        _pt(25, 75) + _txt(95, 30, "17", 16) + f'<line x1="28" y1="72" x2="88" y2="36" stroke="#DC2626" '
+        f'stroke-width="1.5" stroke-dasharray="4 3"/>' + _mark(95, 26, 14),
+        _pt(40, 65) + _txt(52, 58, "17", 16, anchor="start")),
+    "duplicitni_cislo_bodu": _pair(
+        _pt(30, 60) + _txt(38, 54, "12", 16, anchor="start") + _pt(85, 70) + _txt(93, 64, "12", 16, anchor="start")
+        + _mark(46, 49, 13) + _mark(101, 59, 13),
+        _pt(30, 60) + _txt(38, 54, "12", 16, anchor="start") + _pt(85, 70) + _txt(93, 64, "13", 16, anchor="start")),
+    "bod_bez_cisla": _pair(
+        _pt(30, 50) + _txt(38, 44, "21", 16, anchor="start") + _pt(80, 75) + _mark(80, 75, 12),
+        _pt(30, 50) + _txt(38, 44, "21", 16, anchor="start") + _pt(80, 75) + _txt(88, 69, "22", 16, anchor="start")),
+    "popis_vzhuru_nohama": _pair(
+        f'<line x1="10" y1="65" x2="110" y2="65" {_L}/>' + _txt(60, 48, "chodník", 16, rot=180) + _mark(60, 52, 24),
+        f'<line x1="10" y1="65" x2="110" y2="65" {_L}/>' + _txt(60, 55, "chodník", 16)),
+    "zbytecne_lomove_body": _pair(
+        f'<polyline points="10,60 40,60 70,60 110,60" {_L}/>' + _pt(40, 60) + _pt(70, 60)
+        + _mark(40, 60, 8) + _mark(70, 60, 8),
+        f'<line x1="10" y1="60" x2="110" y2="60" {_OK}/>'),
+    "zdvojeny_vrchol": _pair(
+        f'<polyline points="10,80 60,30 110,80" {_L}/>' + _pt(60, 30) + _mark(60, 30, 10)
+        + _txt(60, 100, "2 body na sobě", 11, "#6B7280"),
+        f'<polyline points="10,80 60,30 110,80" {_OK}/>' + _pt(60, 30, "#16A34A")),
+    "spicka": _pair(
+        f'<polyline points="10,70 60,70 100,25 62,68" {_L}/>' + _mark(100, 25, 10),
+        f'<polyline points="10,70 60,70" {_OK}/>'),
+    "nepatrna_plocha": _pair(
+        f'<polygon points="15,30 105,30 105,90 15,90" {_L}/><line x1="60" y1="30" x2="60" y2="90" {_L}/>'
+        f'<line x1="63" y1="30" x2="63" y2="90" {_L}/>' + _mark(61.5, 60, 10),
+        f'<polygon points="15,30 105,30 105,90 15,90" {_OK}/><line x1="60" y1="30" x2="60" y2="90" {_OK}/>'),
+    "zatoulany_prvek": _pair(
+        f'<polygon points="10,40 60,40 60,90 10,90" {_L}/><line x1="100" y1="15" x2="112" y2="22" {_L}/>'
+        + _mark(106, 18, 11),
+        f'<polygon points="10,40 60,40 60,90 10,90" {_OK}/>'),
+    "rozdelena_cara": _pair(
+        f'<line x1="10" y1="60" x2="60" y2="60" {_L}/><line x1="60" y1="60" x2="110" y2="60" '
+        f'stroke="#6B7280" stroke-width="3" stroke-linecap="round"/>' + _mark(60, 60, 9),
+        f'<line x1="10" y1="60" x2="110" y2="60" {_OK}/>'),
+    "kontrola_ploch": _pair(
+        f'<polygon points="10,25 110,25 110,95 10,95" {_L}/><line x1="60" y1="25" x2="60" y2="95" {_L}/>'
+        + _txt(35, 64, "15", 14) + _txt(85, 64, "?", 16, "#DC2626") + _mark(85, 60, 13),
+        f'<polygon points="10,25 110,25 110,95 10,95" {_OK}/><line x1="60" y1="25" x2="60" y2="95" {_OK}/>'
+        + _txt(35, 64, "15", 14) + _txt(85, 64, "16", 14)),
+})
+
 # id: (nadpis, vysvětlení v HTML)
 TOPICS: dict[str, tuple[str, str]] = {
     "chybejici_napojeni": (
