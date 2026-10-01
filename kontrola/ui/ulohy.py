@@ -85,7 +85,9 @@ def _radky_bodu(seznam: SeznamBodu, text: str) -> list[Bod]:
 
 
 def _hlavicka(nazev: str) -> list[str]:
-    return [f"{nazev}", f"vypočteno {dt.datetime.now():%d.%m.%Y %H:%M}", "-" * 60]
+    """Nadpis úlohy jako ve výpočetním protokolu: velkými písmeny, podtržený, s datem výpočtu."""
+    t = nazev.upper()
+    return [t, "=" * len(t), f"Vypočteno: {dt.datetime.now():%d.%m.%Y %H:%M}"]
 
 
 # ------------------------------------------------------------------ úlohy

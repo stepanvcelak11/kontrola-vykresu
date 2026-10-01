@@ -1262,7 +1262,7 @@ def test_vypocty_ulohy(window):
     u.vypocitej()
     assert "výměra P = 4000.00 m²" in u.vystup.toPlainText()
     # protokol v projektu
-    assert "Výměra a obvod" in (w.project.root / "vypocty" / "protokol.txt").read_text(encoding="utf-8")
+    assert "VÝMĚRA A OBVOD" in (w.project.root / "vypocty" / "protokol.txt").read_text(encoding="utf-8")
     # každá úloha s prázdným formulářem jen ohlásí, co chybí
     for i in range(u.lst.count()):
         u.lst.setCurrentRow(i)
