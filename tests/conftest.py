@@ -93,8 +93,25 @@ if _TRACE:
     def pytest_runtest_setup(item):
         _zapis(f"SETUP {item.nodeid} vlákna={[t.name for t in threading.enumerate()]}")
 
+    _SLEDOVAT = {"test_vypocty_seznam_souradnic"}  # test, ve kterém proces na Windows tiše umírá
+
+    def _sledovac(frame, event, arg):
+        if event == "call":
+            f = frame.f_code.co_filename
+            if "kontrola" in f and "site-packages" not in f:
+                _zapis(f"  → {f.rsplit('kontrola', 1)[-1]}:{frame.f_code.co_name}:{frame.f_lineno}")
+        return None
+
     def pytest_runtest_call(item):
         _zapis(f"CALL {item.nodeid}")
+        if item.name in _SLEDOVAT:
+            sys.settrace(_sledovac)
+            threading.settrace(_sledovac)
+
+    def pytest_runtest_makereport(item, call):
+        if call.when == "call" and item.name in _SLEDOVAT:
+            sys.settrace(None)
+            threading.settrace(None)
 
     def pytest_runtest_teardown(item):
         _zapis(f"TEARDOWN {item.nodeid}")
