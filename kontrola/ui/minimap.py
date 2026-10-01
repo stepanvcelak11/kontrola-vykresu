@@ -116,8 +116,11 @@ class Minimap(QFrame):
         vis = vp.adjusted(self.view.inset_left, 0, -self.view.inset_right, 0)
         poly = self.view.mapToScene(vis)
         pts = [self._to_mini(poly.at(i)) + QPointF(4, 4) for i in range(poly.count())]
-        p.setPen(QPen(QColor(37, 99, 235), 2))
-        fill = QColor(37, 99, 235, 40)
+        from .theme import accent
+        col = QColor(accent())
+        p.setPen(QPen(col, 2))
+        fill = QColor(col)
+        fill.setAlpha(40)
         p.setBrush(fill)
         p.drawPolygon(QPolygonF(pts))
         p.end()

@@ -285,6 +285,19 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.a_light)
         m_view.addAction(self.a_mslook)
         m_view.addAction(self.a_dark)
+        m_acc = m_view.addMenu("Barva vzhledu")
+        from PySide6.QtGui import QActionGroup
+        from .theme import ACCENTS, accent_name
+        self.accent_group = QActionGroup(self)
+        self.a_accent = {}
+        for key, (label, _h) in ACCENTS.items():
+            a = QAction(label, self, checkable=True)
+            a.setChecked(key == accent_name())
+            a.setToolTip(f"Barva zvýraznění tlačítek a výběru: {label.lower()}")
+            a.triggered.connect(lambda _c=False, k=key: self.set_accent(k))
+            self.accent_group.addAction(a)
+            m_acc.addAction(a)
+            self.a_accent[key] = a
         m_view.addAction(self.a_labels)
         m_view.addAction(self.a_heat)
         m_view.addAction(self.a_focus)
@@ -499,7 +512,7 @@ class MainWindow(QMainWindow):
             self.a_menu.menu().popup(btn.mapToGlobal(btn.rect().topRight()))
 
     def _apply_icons(self):
-        from .theme import icon, themed
+        from .theme import accent, icon, themed
         for a, name in ((self.a_open, "otevrit"), (self.a_check, "zkontrolovat"), (self.a_recheck, "znovu"),
                         (self.a_repair, "oprava"), (self.a_settings, "nastaveni"), (self.a_fit, "cele"),
                         (self.a_labels, "popisky"), (self.a_prev, "predchozi"), (self.a_next, "dalsi"),
@@ -510,7 +523,7 @@ class MainWindow(QMainWindow):
             if a is not None:
                 a.setIcon(icon(name))
         for key, act in getattr(self, "a_page", {}).items():
-            act.setIcon(icon(key, themed("#2563EB") if act.isChecked() else themed("#6B7280")))
+            act.setIcon(icon(key, accent() if act.isChecked() else themed("#6B7280")))
         if getattr(self, "a_menu", None) is not None:
             self.a_menu.setIcon(icon("menu"))
         if getattr(self, "a_mini", None) is not None:
@@ -527,7 +540,7 @@ class MainWindow(QMainWindow):
                 name = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else \
                     "zadani" if w is self.zadani else None
                 if name:
-                    self.tabs.setTabIcon(i, icon(name, themed("#2563EB") if i == self.tabs.currentIndex()
+                    self.tabs.setTabIcon(i, icon(name, accent() if i == self.tabs.currentIndex()
                                                  else themed("#6B7280")))
         if getattr(self, "toolbar", None) is not None:
             self.a_check.setIcon(icon("zkontrolovat", "#FFFFFF"))  # bílá ikona na modrém tlačítku
@@ -540,6 +553,20 @@ class MainWindow(QMainWindow):
         apply_theme(QApplication.instance(), bool(on))
         self._apply_icons()
         self.settings.setValue("zobrazeni/vzhled", "tmavy" if on else "svetly")
+        self.issue_panel.model.layoutChanged.emit()
+
+    def set_accent(self, key: str):
+        """Barva vzhledu (modrá / zelená / fialová / oranžová) – uloží se."""
+        from PySide6.QtWidgets import QApplication
+
+        from .theme import apply_theme, is_dark
+        from .theme import set_accent as _set
+        _set(key)
+        apply_theme(QApplication.instance(), is_dark())
+        self._apply_icons()
+        self.settings.setValue("zobrazeni/barva", key)
+        if key in getattr(self, "a_accent", {}):
+            self.a_accent[key].setChecked(True)
         self.issue_panel.model.layoutChanged.emit()
 
     def _restore_geometry(self):

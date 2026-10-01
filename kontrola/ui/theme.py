@@ -73,6 +73,45 @@ DARK_MAP = {
 }
 _dark = False
 
+# barva vzhledu (zvýraznění): modrá je výchozí, ostatní vzniknou otočením odstínu modrých tónů stylu
+ACCENTS = {"modra": ("Modrá", None), "zelena": ("Zelená", 158), "fialova": ("Fialová", 262),
+           "oranzova": ("Oranžová", 24)}
+_accent = "modra"
+
+
+def set_accent(name: str) -> None:
+    global _accent
+    _accent = name if name in ACCENTS else "modra"
+
+
+def accent_name() -> str:
+    return _accent
+
+
+def _accent_color(hexcol: str) -> str:
+    """Modrý tón převedený na zvolenou barvu vzhledu (jas a sytost zůstanou)."""
+    hue = ACCENTS[_accent][1]
+    if hue is None:
+        return hexcol
+    c = QColor(hexcol)
+    h, sat, light, _a = c.getHslF()
+    if h < 0 or sat < 0.2 or not (190 / 360 <= h <= 245 / 360):
+        return hexcol
+    out = QColor.fromHslF(hue / 360, sat, light)
+    return out.name().upper()
+
+
+def _to_accent(css: str) -> str:
+    if ACCENTS[_accent][1] is None:
+        return css
+    import re
+    return re.sub(r"#[0-9A-Fa-f]{6}\b", lambda m: _accent_color(m.group(0)), css)
+
+
+def accent(color: str = ACCENT) -> str:
+    """Barva zvýraznění v aktuálním vzhledu (tmavý režim i zvolená barva)."""
+    return _accent_color(themed(color))
+
 
 def is_dark() -> bool:
     return _dark
@@ -348,7 +387,7 @@ def apply_theme(app, dark: bool = False) -> None:
     pal.setColor(QPalette.WindowText, QColor(themed(TEXT)))
     pal.setColor(QPalette.Button, QColor(themed(PANEL)))
     pal.setColor(QPalette.ButtonText, QColor(themed(TEXT)))
-    pal.setColor(QPalette.Highlight, QColor(themed(ACCENT)))
+    pal.setColor(QPalette.Highlight, QColor(accent()))
     pal.setColor(QPalette.HighlightedText, QColor("white"))
     pal.setColor(QPalette.ToolTipBase, QColor(themed("#111827")))
     pal.setColor(QPalette.ToolTipText, QColor("white"))
@@ -370,4 +409,4 @@ def apply_theme(app, dark: bool = False) -> None:
         css = (STYLESHEET + _arrow_css(files)).replace("{SIPKA_BILA}", files["dolu_bila"])
     except OSError:  # bez zápisu do dočasné složky zůstanou výchozí šipky
         css = STYLESHEET.replace('image: url("{SIPKA_BILA}");', "")
-    app.setStyleSheet(_to_dark(css) if dark else css)
+    app.setStyleSheet(_to_accent(_to_dark(css) if dark else css))

@@ -111,7 +111,7 @@ class CardDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         from PySide6.QtCore import QRectF
 
-        from .theme import themed
+        from .theme import accent, themed
         src = self.panel.proxy.mapToSource(index)
         iss: Issue = self.panel.model.issues[src.row()]
         r = QRectF(option.rect).adjusted(4, 3, -4, -3)
@@ -121,8 +121,8 @@ class CardDelegate(QStyledItemDelegate):
         done = iss.state != "nová"
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
-        bg = QColor(themed("#E8F0FE") if selected else themed("#F8FAFC") if hover else themed("#FFFFFF"))
-        painter.setPen(QPen(QColor(themed("#2563EB") if selected else themed("#E3E7EE")), 1.4 if selected else 1))
+        bg = QColor(accent("#E8F0FE") if selected else themed("#F8FAFC") if hover else themed("#FFFFFF"))
+        painter.setPen(QPen(QColor(accent() if selected else themed("#E3E7EE")), 1.4 if selected else 1))
         painter.setBrush(bg)
         painter.drawRoundedRect(r, 10, 10)
         # ikona skupiny v kroužku barvy závažnosti

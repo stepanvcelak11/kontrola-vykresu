@@ -908,3 +908,20 @@ def test_obrazek_jak_to_ma_vypadat(window):
     w.issue_panel.select_issue(s.number)
     assert w.issue_panel.ilustrace.isVisibleTo(w.issue_panel)
     assert not w.issue_panel.ilustrace.pixmap().isNull()
+
+
+def test_barva_vzhledu(window):
+    from PySide6.QtWidgets import QApplication
+
+    from kontrola.ui import theme
+    w = window
+    try:
+        w.a_accent["zelena"].trigger()
+        assert theme.accent_name() == "zelena"
+        css = QApplication.instance().styleSheet()
+        assert theme.ACCENT not in css and theme._accent_color(theme.ACCENT) in css
+        assert w.settings.value("zobrazeni/barva") == "zelena"
+        assert theme._accent_color("#DC2626") == "#DC2626"  # červená (chyby) zůstává
+    finally:
+        w.set_accent("modra")
+    assert theme.ACCENT in QApplication.instance().styleSheet() or theme.is_dark()
