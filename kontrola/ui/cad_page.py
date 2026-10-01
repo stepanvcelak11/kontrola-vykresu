@@ -242,7 +242,7 @@ class CadPage(QWidget):
         "vlastnosti": "vlastnosti vybraného prvku (i dvojklik)", "podobné": "vybrat podobné (stejný typ a vrstva)",
         "najdi": "najít text („najdi 12/1“)", "nahraď": "nahradit text („nahraď staré / nové“)",
         "měř plochu": "výměra a obvod klikáním na body (Enter = konec)", "měř úhel": "úhel mezi třemi body",
-        "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
+        "body": "body ze seznamu souřadnic do výkresu", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -369,6 +369,10 @@ class CadPage(QWidget):
         self.b_na_vyber = QPushButton("Použít na výběr")
         self.b_na_vyber.setToolTip("Vybraným prvkům nastaví atributy zvoleného druhu prvku")
         zrow.addWidget(self.b_na_vyber)
+        self.b_body = QPushButton("Body ze seznamu…")
+        self.b_body.setToolTip("Vložit body ze seznamu souřadnic (Výpočty nebo soubor) na jejich souřadnice, "
+                               "s čísly a výškami v hladinách podle zadání")
+        zrow.addWidget(self.b_body)
         self.b_atributy = QPushButton("Atributy ze zadání…")
         self.b_atributy.setToolTip("Zkontrolovat a upravit atributy, které aplikace načetla ze zadání (vrstva, "
                                    "barva, styl, tloušťka, písmo…) a ověřit, že nakreslené prvky projdou kontrolou")
@@ -441,6 +445,7 @@ class CadPage(QWidget):
         self.b_na_vyber.clicked.connect(self.predvolba_na_vyber)
         self.b_tahak.clicked.connect(lambda: self.uloz_tahak(otevrit=True))
         self.b_atributy.clicked.connect(lambda: self.atributy_zadani())
+        self.b_body.clicked.connect(lambda: self.body_ze_seznamu())
         self.vrstvy.currentTextChanged.connect(self._vrstva_zmenena)
         self.prikaz.returnPressed.connect(self._enter)
         self.view.mouseMoved.connect(self._pohyb)
@@ -596,6 +601,15 @@ class CadPage(QWidget):
         self.vyber = nove
         self._zvyrazni()
         self.vypis(f"{len(nove)} prvků nastaveno na „{p.nazev}“.")
+
+    def body_ze_seznamu(self, modal: bool = True):
+        if self.dok is None:
+            self.novy_podle_zadani(vzory=None) if self._pravidla() is not None else self.novy()
+        from .cad_body import BodyDialog
+        d = BodyDialog(self)
+        if modal:
+            d.exec()
+        return d
 
     def atributy_zadani(self, modal: bool = True):
         if self.win is None or getattr(self.win, "project", None) is None:
@@ -902,7 +916,7 @@ class CadPage(QWidget):
         for b in self.nastroje.values():
             b.setEnabled(self.dok is not None)
         for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy, self.b_na_vyber, self.b_ref,
-                  self.modely, self.b_tisk):
+                  self.modely, self.b_tisk, self.b_body):
             b.setEnabled(self.dok is not None)
 
     def _zahodit_zmeny(self) -> bool:
@@ -1322,6 +1336,8 @@ class CadPage(QWidget):
             self.spravce_vrstev()
         elif cmd == "tisk":
             self.tisk_pdf()
+        elif cmd == "body":
+            self.body_ze_seznamu()
         elif cmd == "vlastnosti":
             if len(self.vyber) != 1:
                 self.vypis("Vyberte jeden prvek (nebo na něj dvakrát klikněte).")

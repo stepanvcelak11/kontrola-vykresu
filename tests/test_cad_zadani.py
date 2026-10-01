@@ -110,3 +110,50 @@ def test_textove_styly_pojmenovane_jako_microstation():
         pv = predvolby(rs)
         priprav_dokument(dok.doc, rs, [vzor])
         assert "Popis ploch" in dok.doc.styles
+
+
+def test_body_ze_seznamu_shodne_se_svetem_a_podle_zadani(tmp_path):
+    from kontrola.cad import upravy as U
+    from kontrola.cad.body_seznam import vloz_body, vychozi_nastaveni
+    from kontrola.geodezie.body import Bod
+    if not SOUBORY[0].exists():
+        pytest.skip("chybí pravidla")
+    rs = RuleSet.load(SOUBORY[0])
+    pv = predvolby(rs)
+    nast = vychozi_nastaveni(pv)
+    assert nast.znacka.vrstva == "58" and nast.cislo.vrstva == "59" and nast.vyska.vrstva == "60"
+    dok, _ = novy_dokument(rs)
+    h = U.Historie(dok.msp)
+    body = [Bod("1000130001", 565501.41, 1187927.40, 245.67), Bod("1000130002", 565492.18, 1187931.27, None)]
+    r = vloz_body(dok.msp, h, body, nast, pv)
+    assert r["vlozeno"] == 2 and len(h.zpet) == 1  # jedno Zpět pro celý import
+    pt = [e for e in dok.msp if e.dxftype() == "POINT"]
+    assert len(pt) == 2 and pt[0].dxf.location.isclose((-565501.41, -1187927.40, 0)) and pt[0].dxf.layer == "58"
+    texty = {e.dxf.text: e for e in dok.msp.query("TEXT")}
+    assert texty["1000130001"].dxf.layer == "59" and texty["245.67"].dxf.layer == "60"
+    assert "None" not in texty  # bod bez výšky – výška se nepíše
+    # opakovaný import přeskočí body, které už ve výkresu jsou
+    assert vloz_body(dok.msp, h, body, nast, pv)["preskoceno"] == 2
+    # výkres projde kontrolou symbologie (hladiny, barvy, písmo podle zadání)
+    f = dok.uloz(tmp_path / "body.dxf")
+    res = run_checks(load_drawing(f), rs, Config(), only=["symbologie", "atribut_dle_vrstvy"])
+    assert not res.issues, [i.message for i in res.issues][:5]
+    h.krok_zpet()
+    assert not list(dok.msp.query("POINT"))
+
+
+def test_body_s_kodem_bunky(tmp_path):
+    from kontrola.cad import upravy as U
+    from kontrola.cad.body_seznam import NastaveniBodu, vloz_body
+    from kontrola.geodezie.body import Bod
+    if not SOUBORY[1].exists():
+        pytest.skip("chybí pravidla")
+    rs = RuleSet.load(SOUBORY[1])
+    pv = predvolby(rs)
+    dok, _ = novy_dokument(rs)
+    dok.doc.blocks.new("9.12").add_circle((0, 0), 0.3)
+    h = U.Historie(dok.msp)
+    r = vloz_body(dok.msp, h, [Bod("501", 1000.0, 2000.0, 250.0, "9.12")], NastaveniBodu(), pv)
+    ins = list(dok.msp.query("INSERT"))
+    assert r["bunky"] == 1 and ins[0].dxf.name == "9.12" and ins[0].dxf.layer == "GS09-výškopis-body podrobné-buňky"
+    assert ins[0].dxf.insert.isclose((-1000, -2000, 0))

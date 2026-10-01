@@ -1822,3 +1822,34 @@ def test_cad_mereni_plochy_a_uhlu(window):
     for t in ("měř úhel", "x=10 y=0", "x=0 y=0", "x=0 y=10"):
         c.zadej(t)
     assert "vnitřní 100.0000 g" in c.historie.toPlainText()
+
+
+def test_cad_body_ze_seznamu(window):
+    from kontrola.geodezie.body import Bod
+    from kontrola.rules import RuleSet
+    f = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "pravidla_zadani1.yaml"
+    if not f.exists():
+        pytest.skip("chybí pravidla")
+    w = window
+    puvodni = w.project.rules
+    w.project.rules = RuleSet.load(f)
+    try:
+        c = w.cad
+        w.show_page("cad")
+        c.obnov_predvolby()
+        c.novy_podle_zadani(vzory=[])
+        d = c.body_ze_seznamu(modal=False)
+        d.nastav_body([Bod(str(i), 565500.0 + i, 1187900.0 + i, 240.0 + i) for i in range(1, 21)])
+        d.filtr.setText("1-5, 12")
+        assert len(d.body()) == 6
+        d.vlozit()
+        assert d.vysledek["vlozeno"] == 6
+        pts = list(c.prostor.query("POINT"))
+        assert len(pts) == 6 and all(p.dxf.layer == "58" for p in pts)
+        c.view.najed(-565503.0, -1187903.0)
+        assert c.sjtsk and "Y 565" in c.coords.text()  # souřadnice kurzoru v S-JTSK (shodně se světem)
+        c.undo()
+        assert not list(c.prostor.query("POINT"))
+    finally:
+        w.project.rules = puvodni
+        w.cad.obnov_predvolby()
