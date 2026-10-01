@@ -655,6 +655,26 @@ class MainWindow(QMainWindow):
             self._mini.close()
         if self.task is not None and self.task.is_running():
             self.task.cancel()
+        tray = getattr(self, "_tray", None)
+        if tray is not None:
+            # ikonu v liště schovat a zrušit hned: na Windows bublina žije dál a doručovala by
+            # události do rušeného okna (tvrdý pád procesu)
+            try:
+                tray.messageClicked.disconnect()
+                tray.activated.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            tray.hide()
+            tray.setParent(None)
+            tray.deleteLater()
+            self._tray = None
+        mob = getattr(self, "_mobil", None)
+        if mob is not None:
+            try:
+                mob.close()
+            except RuntimeError:
+                pass
+            self._mobil = None
         self.settings.setValue("okno/geometrie", self.saveGeometry())
         self.settings.setValue("okno/stav2", self.saveState())
         self.settings.setValue("zobrazeni/svetle_pozadi", self.a_light.isChecked())

@@ -30,8 +30,9 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
-      # -v: při tvrdém pádu je vidět poslední test; -X faulthandler vypíše zásobník nativní chyby
-      - run: python -X faulthandler -m pytest -v -rfE tests
+      # -v: při tvrdém pádu je vidět poslední test; -X faulthandler vypíše zásobník nativní chyby;
+      # -s: hlášky Qt (qFatal) se nezachytávají, takže se při pádu neztratí
+      - run: python -X faulthandler -m pytest -v -rfE -s tests
       - name: Číslo sestavení do programu (pro kontrolu aktualizací)
         shell: bash
         run: printf 'BUILD = %s\nCOMMIT = "%s"\n' "${{ github.run_number }}" "${{ github.sha }}" > kontrola/_build.py
