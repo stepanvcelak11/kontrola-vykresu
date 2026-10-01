@@ -242,7 +242,7 @@ class CadPage(QWidget):
         "vlastnosti": "vlastnosti vybraného prvku (i dvojklik)", "podobné": "vybrat podobné (stejný typ a vrstva)",
         "najdi": "najít text („najdi 12/1“)", "nahraď": "nahradit text („nahraď staré / nové“)",
         "měř plochu": "výměra a obvod klikáním na body (Enter = konec)", "měř úhel": "úhel mezi třemi body",
-        "body": "body ze seznamu souřadnic do výkresu", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
+        "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -602,6 +602,41 @@ class CadPage(QWidget):
         self._zvyrazni()
         self.vypis(f"{len(nove)} prvků nastaveno na „{p.nazev}“.")
 
+    def pripoj_rastr(self, cesta: str | None = None):
+        """Rastr s world filem se umístí sám; bez něj se zeptá na levý dolní roh a šířku."""
+        from ..cad import rastr as RA
+        if self.dok is None:
+            return None
+        if cesta is None:
+            cesta, _ = QFileDialog.getOpenFileName(self, "Připojit rastr", "",
+                                                   "Obrázky (*.jpg *.jpeg *.png *.tif *.tiff *.bmp)")
+            if not cesta:
+                return None
+        if not self._je_model():
+            self.nastav_model("Model")
+        zaklad = self.dok.path.parent if self.dok.path else None
+        if RA.world_file(cesta) is not None:
+            try:
+                im = RA.pripoj(self.dok.doc, self.prostor, self.historie_zmen, cesta, zaklad)
+            except ValueError as e:
+                self.vypis(f"⚠ {e}")
+                return None
+            self._po_zmene([im], [])
+            self.view.zoom_all()
+            self.vypis(f"Rastr {Path(cesta).name} připojen podle world filu.")
+            return im
+        self._spust(self._n_rastr_rucne(cesta, zaklad))
+        return None
+
+    def _n_rastr_rucne(self, cesta, zaklad):
+        from ..cad import rastr as RA
+        a = yield self._bod_req(f"Rastr {Path(cesta).name} nemá world file – levý dolní roh:")
+        b = yield self._bod_req("Pravý dolní roh (určí šířku a natočení):", a)
+        sirka = math.hypot(b[0] - a[0], b[1] - a[1])
+        uhel = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+        RA.pripoj(self.dok.doc, self.prostor, self.historie_zmen, cesta, zaklad, a, sirka, uhel)
+        self.vypis(f"Rastr připojen, šířka {sirka:.2f} m.")
+
     def body_ze_seznamu(self, modal: bool = True):
         if self.dok is None:
             self.novy_podle_zadani(vzory=None) if self._pravidla() is not None else self.novy()
@@ -690,6 +725,7 @@ class CadPage(QWidget):
         if not self._je_model():
             self._kresli_papir()
         self._kresli_entity(self.prostor, cely=True)
+        self._kresli_rastry()
         self._kresli_reference()
         if not self._je_model():
             self._kresli_ramecky_vyrezu()
@@ -781,6 +817,28 @@ class CadPage(QWidget):
 
     def _je_model(self) -> bool:
         return self.dok is not None and self.prostor is self.dok.msp
+
+    def _kresli_rastry(self):
+        """Rastry (IMAGE) jako obrázky pod kresbou – ezdxf kreslí jen jejich rámeček."""
+        from PySide6.QtGui import QPixmap, QTransform
+        from ..cad import rastr as RA
+        sc = self.view.scene()
+        self._rastry = []
+        zaklad = self.dok.path.parent if self.dok.path else None
+        for im in self.prostor.query("IMAGE"):
+            f = RA.cesta_obrazku(im, zaklad)
+            if f is None:
+                self.vypis(f"⚠ Rastr {getattr(im.image_def.dxf, 'filename', '?')} nenalezen – zkontrolujte cestu.")
+                continue
+            pm = QPixmap(str(f))
+            if pm.isNull():
+                continue
+            it = sc.addPixmap(pm)
+            it.setTransform(QTransform(*RA.qt_transform(im)))
+            it.setZValue(-20)
+            it.setOpacity(getattr(self, "pruhlednost_rastru", 0.85))
+            it.setTransformationMode(Qt.SmoothTransformation)
+            self._rastry.append(it)
 
     def _kresli_reference(self):
         """Reference pod výkresem: poloprůhledně, nejdou vybrat ani upravit (jako v MicroStationu)."""
@@ -888,7 +946,7 @@ class CadPage(QWidget):
         """Překreslí jen změněné prvky a obnoví úchyty a index výběru."""
         xref = {r.nazev for r in getattr(self, "reference", [])}
         zmenene = list(pridano) + list(odebrano)
-        if any(e.dxftype() == "VIEWPORT" for e in zmenene) or (
+        if any(e.dxftype() in ("VIEWPORT", "IMAGE") for e in zmenene) or (
                 xref and any(e.dxftype() == "INSERT" and e.dxf.name in xref for e in zmenene)):
             self._vykresli()  # připojení / odpojení reference (i přes Zpět) → překreslit podklad
             self._titulek()
@@ -1338,6 +1396,8 @@ class CadPage(QWidget):
             self.tisk_pdf()
         elif cmd == "body":
             self.body_ze_seznamu()
+        elif cmd == "rastr":
+            self.pripoj_rastr()
         elif cmd == "vlastnosti":
             if len(self.vyber) != 1:
                 self.vypis("Vyberte jeden prvek (nebo na něj dvakrát klikněte).")

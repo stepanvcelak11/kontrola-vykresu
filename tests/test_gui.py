@@ -1853,3 +1853,27 @@ def test_cad_body_ze_seznamu(window):
     finally:
         w.project.rules = puvodni
         w.cad.obnov_predvolby()
+
+
+def test_cad_rastr(window, tmp_path):
+    from PySide6.QtGui import QColor, QImage
+    img = QImage(80, 40, QImage.Format_RGB32)
+    img.fill(QColor("green"))
+    f = tmp_path / "sken.png"
+    img.save(str(f))
+    (tmp_path / "sken.pgw").write_text("1\n0\n0\n-1\n100.5\n239.5\n", encoding="ascii")
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.pripoj_rastr(str(f))
+    assert len(c._rastry) == 1
+    r = c._rastry[0].sceneBoundingRect()
+    assert abs(r.left() - 100) < 1e-6 and abs(r.right() - 180) < 1e-6 and abs(r.top() - 200) < 1e-6
+    g = tmp_path / "bez.png"
+    img.save(str(g))
+    c.pripoj_rastr(str(g))
+    for t in ("x=0 y=0", "x=40 y=0"):
+        c.zadej(t)
+    assert len(c._rastry) == 2
+    c.undo()
+    assert len(c._rastry) == 1
