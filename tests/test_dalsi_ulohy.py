@@ -189,3 +189,22 @@ def test_ulohy_formulare_polygon_a_wgs():
     # oddělení čtverce 10×10 na polovinu
     r = u_oddeleni(s, {"body": "P1 P4 P2 P3", "a": "P1", "b": "P4", "vymera": "50", "predpona": "D"})
     assert len(r.nove) == 2 and all(abs(n.x - 5) < 1e-6 for n in r.nove)
+
+
+def test_oddeleni_bodem():
+    parc = [(0, 0), (100, 0), (100, 50), (0, 50)]  # 5000 m²
+    cast, q = V.oddeleni_bodem(parc, (0, 0), 1000)
+    assert abs(Polygon([(p.y, p.x) for p in cast]).area - 1000) < 1e-6
+    assert (q.y, q.x) == pytest.approx((100, 20))
+    cast, q = V.oddeleni_bodem(parc, (50, 0), 3000)  # bod na straně
+    assert abs(Polygon([(p.y, p.x) for p in cast]).area - 3000) < 1e-6
+    assert (q.y, q.x) == pytest.approx((30, 50))
+    parc = [(600000, 1160000), (600080, 1160010), (600095, 1160070), (600020, 1160090), (599990, 1160040)]
+    plocha = Polygon(parc).area
+    for cil in (0.1 * plocha, 0.5 * plocha, 0.9 * plocha):
+        for orient in (parc, parc[::-1]):
+            cast, q = V.oddeleni_bodem(orient, parc[0], cil)
+            assert abs(Polygon([(p.y, p.x) for p in cast]).area - cil) < 1e-6
+            assert Polygon(parc).exterior.distance(Point(q.y, q.x)) < 1e-6
+    with pytest.raises(ValueError):
+        V.oddeleni_bodem(parc, (600050, 1160050), 100)  # bod uvnitř

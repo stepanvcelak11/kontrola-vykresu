@@ -517,3 +517,67 @@ def oddeleni_rovnobezne(parcela: list, a, b, vymera_cil: float) -> tuple[list[P]
     if g is None:
         raise ValueError("Oddělení se nepodařilo – zkontrolujte, že přímka A–B leží na hranici parcely.")
     return [P(y, x) for y, x in list(g.exterior.coords)[:-1]], (lo + hi) / 2
+
+
+def oddeleni_bodem(parcela: list, bod, vymera_cil: float, tol: float = 0.001) -> tuple[list[P], P]:
+    """Oddělí od parcely část dané výměry dělicí čarou vedenou daným bodem na hranici (jako v Gromě).
+
+    Oddělená část začíná v bodě a pokračuje po obvodu v pořadí zadaných lomových bodů, dokud nemá
+    požadovanou výměru; druhý konec dělicí čáry (nový bod) leží na hranici. Výsledek je přesný
+    (plocha trojúhelníku je na straně lineární). Vrací (body oddělené části, nový bod na hranici)."""
+    pts = [_yx(p) for p in parcela]
+    if len(pts) > 3 and math.dist(pts[0], pts[-1]) < 1e-9:
+        pts = pts[:-1]
+    if len(pts) < 3:
+        raise ValueError("Parcela musí mít aspoň tři body.")
+    n = len(pts)
+    s2 = sum(pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1] for i in range(n))
+    celkem = abs(s2) / 2
+    if celkem <= 0:
+        raise ValueError("Parcela má nulovou výměru.")
+    if not 0 < vymera_cil < celkem:
+        raise ValueError(f"Výměra musí být mezi 0 a {celkem:.2f} m².")
+    znam = 1.0 if s2 > 0 else -1.0
+    py_, px_ = _yx(bod)
+    # bod na hranici: vrchol, nebo na straně (vloží se jako vrchol)
+    best = None
+    for i in range(n):
+        (y1, x1), (y2, x2) = pts[i], pts[(i + 1) % n]
+        dy, dx = y2 - y1, x2 - x1
+        ll = dy * dy + dx * dx
+        t = 0.0 if ll == 0 else max(0.0, min(1.0, ((py_ - y1) * dy + (px_ - x1) * dx) / ll))
+        d = math.hypot(y1 + t * dy - py_, x1 + t * dx - px_)
+        if best is None or d < best[0]:
+            best = (d, i, t)
+    d, i, t = best
+    if d > tol:
+        raise ValueError(f"Bod dělicí čáry neleží na hranici parcely (vzdálenost {d:.3f} m).")
+    if t < 1e-9:
+        start = i
+    elif t > 1 - 1e-9:
+        start = (i + 1) % n
+    else:
+        pts.insert(i + 1, (py_, px_))
+        n += 1
+        start = i + 1
+    kruh = pts[start:] + pts[:start]
+    p0 = kruh[0]
+    akum = 0.0
+    for k in range(1, n - 1):
+        a, b = kruh[k], kruh[k + 1]
+        tri = znam * ((a[0] - p0[0]) * (b[1] - p0[1]) - (b[0] - p0[0]) * (a[1] - p0[1])) / 2
+        if akum + tri >= vymera_cil - 1e-12:
+            t = (vymera_cil - akum) / tri if tri > 0 else 0.0
+            q = (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+            cast = [p0] + kruh[1:k + 1] + ([q] if t > 1e-12 else [])
+            if t >= 1 - 1e-12:
+                cast = [p0] + kruh[1:k + 2]
+                q = b
+            from shapely.geometry import LineString, Polygon
+            poly = Polygon(pts)
+            if not poly.buffer(1e-6).contains(LineString([p0, q])):
+                raise ValueError("Dělicí čára by vedla mimo parcelu (nekonvexní tvar) – zvolte jiný bod "
+                                 "nebo opačné pořadí lomových bodů.")
+            return [P(y, x) for y, x in cast], P(*q)
+        akum += tri
+    raise ValueError("Oddělení se nepodařilo (zkontrolujte pořadí lomových bodů parcely).")
