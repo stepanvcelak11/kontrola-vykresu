@@ -555,7 +555,7 @@ Postup:
   prodloužení, oříznutí, rozdělení v průsečíku, uzavření plochy, souřadnice z klávesnice (XY=, DX=, DL=),
   přichytávání, AccuDraw, změna a výběr atributů – s obrázky a vyhledáváním.
 * **Interaktivní protokol (HTML)** (Soubor → Export): jeden soubor pro prohlížeč – přehledka výkresu
-  s klikacími kroužky, filtr Vše / K opravě / Topologie / Atributy, hledání, návod a výřez u každé chyby.
+  s klikacími kroužky, filtr Vše / K opravě / Topologie / Atributy, hledání, návod, obrázek „chyba / správně“ a výřez u každé chyby.
 * **Zkontrolovat více výkresů najednou** (Kontrola): souhrnná tabulka (chyby, varování, skóre,
   nejčastější chyba) a export do CSV.
 

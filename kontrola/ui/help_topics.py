@@ -309,6 +309,15 @@ def topic_for(check_id: str) -> str | None:
     return check_id if check_id in TOPICS else None
 
 
+def illustration_svg(check_id: str) -> str | None:
+    """Obrázek „chyba / správně“ jako samostatné SVG (pro HTML protokol – bez Qt)."""
+    body = _SVG.get(check_id)
+    if body is None:
+        return None
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 120" width="260" height="120">'
+            f'<rect width="260" height="120" fill="white"/>{body}</svg>')
+
+
 def illustration(check_id: str, width: int = 520) -> QPixmap | None:
     body = _SVG.get(check_id)
     if body is None:

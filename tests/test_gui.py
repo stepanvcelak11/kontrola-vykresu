@@ -405,6 +405,7 @@ def test_html_protokol(window, tmp_path, monkeypatch):
     assert "data:image/png;base64," in html and '"px": [' in html and "Jak opravit" in html
     assert html.count('"n": ') == len(w.issues)
     assert "Nespuštěno:" in html and "Špička" in html
+    assert "data:image/svg+xml;base64," in html and "const ILU=" in html  # obrázky „chyba / správně“
 
 
 @pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")

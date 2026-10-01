@@ -27,13 +27,22 @@ def export_html(issues: list[Issue], path: str | Path, drawing_name: str = "", p
     images = images or {}
     positions = positions or {}
     sk = compute_score(issues, has_rules)
+    ilu: dict[str, str] = {}  # obrázek „chyba / správně“ jednou za typ chyby
+    try:
+        from ..ui.help_topics import illustration_svg
+        for cid in {i.check_id for i in issues}:
+            svg = illustration_svg(cid)
+            if svg:
+                ilu[cid] = "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode()
+    except ImportError:  # bez Qt (jen příkazová řádka) se obrázky vynechají
+        ilu = {}
     rows = []
     for i in issues:
         rows.append({
             "n": i.number, "sev": i.severity.value, "col": _COL.get(i.severity, "#6B7280"),
             "grp": getattr(REGISTRY.get(i.check_id), "skupina", ""), "typ": i.check_name, "msg": i.message,
             "layer": i.layer, "x": round(i.x, 3), "y": round(i.y, 3), "state": i.state,
-            "hint": navod(i) or "", "note": i.note,
+            "hint": navod(i) or "", "note": i.note, "cid": i.check_id,
             "img": ("data:image/png;base64," + base64.b64encode(images[i.number]).decode()) if i.number in images
             else "",
             "px": positions.get(i.number),
@@ -54,6 +63,7 @@ def export_html(issues: list[Issue], path: str | Path, drawing_name: str = "", p
         "__TODO__": str(cnt[Severity.CHYBA] + cnt[Severity.VAROVANI]),
         "__OV__": ov, "__OW__": str(ow), "__OH__": str(oh),
         "__DATA__": json.dumps(rows, ensure_ascii=False).replace("</", "<\\/"),
+        "__ILU__": json.dumps(ilu),
     }.items():
         html = html.replace(k, v)
     path = Path(path)
@@ -87,7 +97,7 @@ background:var(--panel);color:var(--text)}.list{max-height:70vh;overflow:auto}.i
 padding:8px 6px;cursor:pointer;display:grid;grid-template-columns:44px 1fr;gap:8px}.it:hover,.it.sel{background:var(--soft)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.n{color:var(--muted);font-size:12px}
 .msg{font-weight:500;font-size:14px}.meta{color:var(--muted);font-size:12px}.hint{margin-top:6px;font-size:13px;background:var(--soft);
-border-radius:8px;padding:6px 8px;display:none}.it.sel .hint{display:block}.it img{max-width:260px;border-radius:6px;
+border-radius:8px;padding:6px 8px;display:none}.it.sel .hint{display:block}.hint img.ilu{max-width:220px;margin-top:6px;border-radius:6px;display:block}.it img{max-width:260px;border-radius:6px;
 margin-top:6px;display:none}.it.sel img{display:block}.done{opacity:.55;text-decoration:line-through}
 footer{color:var(--muted);font-size:12px;padding:0 24px 24px}
 </style></head><body>
@@ -113,7 +123,7 @@ footer{color:var(--muted);font-size:12px;padding:0 24px 24px}
 </main>
 <footer>Vytvořeno aplikací Kontrola výkresu. Souřadnice jsou v S-JTSK (jako ve výkresu).</footer>
 <script>
-const D=__DATA__;let F="all",Q="",SEL=null;
+const D=__DATA__;const ILU=__ILU__;let F="all",Q="",SEL=null;
 const list=document.getElementById("list"),marks=document.getElementById("marks");
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function ok(r){if(F==="todo"&&(r.state!=="nová"||r.sev==="info"))return false;if(F!=="all"&&F!=="todo"&&r.grp!==F)return false;
@@ -122,7 +132,7 @@ function render(){list.innerHTML="";marks.innerHTML="";const ns="http://www.w3.o
  D.filter(ok).forEach(r=>{const el=document.createElement("div");el.className="it"+(SEL===r.n?" sel":"");el.id="i"+r.n;
   el.innerHTML=`<div class="n">#${r.n}</div><div><div class="msg ${r.state!=="nová"?"done":""}"><span class="dot" style="background:${r.col}"></span>${esc(r.msg)}</div>
   <div class="meta">${esc(r.typ)} · vrstva ${esc(r.layer||"–")} · Y ${r.x} · X ${r.y}${r.state!=="nová"?" · "+esc(r.state):""}</div>
-  ${r.hint?`<div class="hint"><b>Jak opravit:</b> ${esc(r.hint)}</div>`:""}${r.img?`<img src="${r.img}" alt="">`:""}</div>`;
+  ${r.hint?`<div class="hint"><b>Jak opravit:</b> ${esc(r.hint)}${ILU[r.cid]?`<br><img class="ilu" src="${ILU[r.cid]}" alt="chyba / správně">`:""}</div>`:""}${r.img?`<img src="${r.img}" alt="">`:""}</div>`;
   el.onclick=()=>select(r.n,false);list.appendChild(el);
   if(r.px){const c=document.createElementNS(ns,"circle");c.setAttribute("cx",r.px[0]);c.setAttribute("cy",r.px[1]);
    c.setAttribute("r",SEL===r.n?14:10);c.setAttribute("class","m"+(SEL===r.n?" sel":""));c.setAttribute("stroke",r.col);
