@@ -130,6 +130,18 @@ if _TRACE:
     def pytest_runtest_teardown(item):
         _zapis(f"TEARDOWN {item.nodeid}")
 
+    _selhane: list[str] = []
+
     def pytest_runtest_logreport(report):
+        if report.failed:
+            text = str(report.longrepr)[-3000:]
+            _selhane.append(f"SELHAL {report.nodeid} ({report.when}):\n{text}")
+            _zapis(_selhane[-1])
         if report.when == "teardown":
             _zapis(f"HOTOVO {report.nodeid} {report.outcome}")
+
+    def pytest_sessionfinish(session, exitstatus):
+        # souhrn na konec trasování – krok CI vypisuje jen jeho konec
+        _zapis(f"KONEC exit={exitstatus}, selhalo {len(_selhane)}")
+        for t in _selhane[:5]:
+            _zapis(t)

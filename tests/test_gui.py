@@ -2071,7 +2071,7 @@ def test_qtrig_z_cloudu_a_ze_souboru(window, tmp_path, monkeypatch):
         assert d.stahni() == (0, 0, 1) and p.seznam.najdi("QT1") is None
         f = tmp_path / "smery.csv"
         f.write_text("ZÁPISNÍK VODOROVNÝCH SMĚRŮ — X\r\nStanovisko: 4001; délky zapsané jako: šikmé\r\n\r\nhlava\r\n"
-                     "12;1;87;287;87;98;302;87.1235;0.2;98.0000;30.015;30.000;0.943\r\n", encoding="utf-8")
+                     "12;1;87;287;87;98;302;87.1235;0.2;98.0000;30.015;30.000;0.943\r\n", encoding="utf-8", newline="")
         n = len(p.zapisnik.stanoviska)
         d.nacti_soubor(str(f))
         assert len(p.zapisnik.stanoviska) == n + 1 and p.zapisnik.stanoviska[-1].bod == "4001"

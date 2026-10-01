@@ -109,7 +109,9 @@ class SmeryQTrig:
 
 def nacti_zapisnik(text: str):
     """Nivelační zápisník nebo zápisník směrů z exportu QTrig (CSV se středníky)."""
-    radky = [r.rstrip("\r") for r in text.lstrip("﻿").splitlines()]
+    # konce řádků z mobilu i z Windows (\r\n, po dvojím převodu i \r\r\n) jako jeden konec řádku
+    text = text.lstrip("﻿").replace("\r\r\n", "\n").replace("\r\n", "\n")
+    radky = [r.rstrip("\r") for r in text.split("\n")]
     if not radky:
         raise ChybaQTrig("Prázdný soubor.")
     hlava = radky[0]

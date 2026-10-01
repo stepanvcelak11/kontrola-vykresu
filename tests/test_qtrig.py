@@ -47,7 +47,7 @@ def test_soubory(tmp_path):
     niv = tmp_path / "nivelace.csv"
     niv.write_text("﻿NIVELAČNÍ ZÁPISNÍK — Pořad A\r\nVýchozí výška: 250.000 m\r\n\r\n"
                    "bod;zpět z (m);vpřed p (m);h (m);výška (m)\r\nA;1.234;;;250.000\r\n1;1.100;0.987;0.247;250.247\r\n"
-                   "B;;1.500;-0.400;249.847\r\n\r\nΣz=2.334 m; Σp=2.487 m; Σh=-0.153 m\r\n", encoding="utf-8")
+                   "B;;1.500;-0.400;249.847\r\n\r\nΣz=2.334 m; Σp=2.487 m; Σh=-0.153 m\r\n", encoding="utf-8", newline="")
     n = Q.nacti_soubor(niv)
     assert n.nazev == "Pořad A" and n.vychozi_vyska == 250.0
     assert n.radky == [("A", 1.234, None), ("1", 1.1, 0.987), ("B", None, 1.5)]
@@ -58,7 +58,7 @@ def test_soubory(tmp_path):
                   f"{hl}\r\n5001;1;0.0000;200.0010;0.0000;100.0000;300.0000;0.0000;0.0;100.0000;50.000;50.000;0.000\r\n"
                   "5001;2;100.0000;300.0000;0.0000;;;\r\n"
                   "12;1;87.1234;287.1236;87.1235;98.0000;302.0000;87.1235;0.2;98.0000;30.015;30.000;0.943\r\n",
-                  encoding="utf-8")
+                  encoding="utf-8", newline="")
     s = Q.nacti_soubor(sm)
     assert s.stanovisko == "4001" and [c[0] for c in s.cile] == ["5001", "12"]
     st = Q.smery_na_stanovisko(s, 1.6)
