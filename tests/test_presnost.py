@@ -169,6 +169,17 @@ def inj_popis_na_popis(lab, d, rng):
     return (bg.centroid.x, bg.centroid.y)
 
 
+def inj_zdvojeny_bod(lab, d, rng):
+    c = [f for f in lab.lines if len(f.vertices) >= 3]
+    if not c:
+        return None
+    f = rng.choice(c)
+    v = [tuple(p[:2]) for p in f.vertices]
+    k = rng.randrange(1, len(v) - 1)
+    _set(d, f, vertices=v[:k + 1] + [v[k]] + v[k + 1:])
+    return v[k]
+
+
 PRIPADY = {
     "nedotažení 5 mm": (inj_nedotazeni, {"chybejici_napojeni"}),
     "volný konec 40 cm": (inj_volny_konec, {"visici_konce"}),
@@ -179,6 +190,7 @@ PRIPADY = {
     "špička": (inj_spicka, {"spicka"}),
     "přepsané číslo bodu": (inj_cislo_prepsane, {"duplicitni_cislo_bodu"}),
     "popis na popisu": (inj_popis_na_popis, {"popisy_pres_sebe"}),
+    "zdvojený lomový bod": (inj_zdvojeny_bod, {"zdvojeny_vrchol"}),
 }
 
 
