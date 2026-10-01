@@ -539,6 +539,14 @@ class IssuePanel(QWidget):
         self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.hint.setVisible(False)
         tl.addWidget(self.hint)
+        # obrázek „jak to má vypadat“ k typu chyby (stejný jako ve vysvětlení „?“)
+        self.ilustrace = QLabel()
+        self.ilustrace.setObjectName("ilustrace")
+        self.ilustrace.setAlignment(Qt.AlignLeft)
+        self.ilustrace.setToolTip("Jak to má vypadat – klikněte na „?“ pro celé vysvětlení")
+        self.ilustrace.setVisible(False)
+        self._ilu_cache: dict[str, object] = {}
+        tl.addWidget(self.ilustrace)
         frow = QHBoxLayout()
         self.b_find = QPushButton("Najít v MicroStationu")
         self.b_find.setToolTip("Zkopíruje příkaz, který v MicroStationu vycentruje pohled na místo chyby. "
@@ -777,6 +785,23 @@ class IssuePanel(QWidget):
             return [cur] if cur else []
         return [self.model.issues[r] for r in sorted(rows)]
 
+    def _show_illustration(self, check_id: str | None):
+        pm = None
+        if check_id:
+            if check_id not in self._ilu_cache:
+                from .help_topics import illustration
+                try:
+                    self._ilu_cache[check_id] = illustration(check_id, 210)
+                except Exception:  # noqa: BLE001 – obrázek je jen pomůcka
+                    self._ilu_cache[check_id] = None
+            pm = self._ilu_cache[check_id]
+        if pm is None:
+            self.ilustrace.clear()
+            self.ilustrace.setVisible(False)
+        else:
+            self.ilustrace.setPixmap(pm)
+            self.ilustrace.setVisible(True)
+
     def _current_changed(self, cur, prev):
         if cur.isValid():
             iss = self.model.issues[self.proxy.mapToSource(cur).row()]
@@ -792,10 +817,12 @@ class IssuePanel(QWidget):
                 parts.append(f"<b>Jak opravit:</b> {h}")
             self.hint.setText("<br>".join(parts))
             self.hint.setVisible(bool(parts))
+            self._show_illustration(iss.check_id)
             self.b_find.setEnabled(True)
             self.b_copyxy.setEnabled(True)
             self.issueSelected.emit(iss.number)
         else:
+            self._show_illustration(None)
             self.note.setEnabled(False)
             self.note.clear()
             self.hint.setVisible(False)

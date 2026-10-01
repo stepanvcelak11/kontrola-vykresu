@@ -896,3 +896,15 @@ def test_rezim_soustredeni(window):
     w._focus_esc.activated.emit()
     assert not w.a_focus.isChecked() and not bar.isVisible()
     assert w.toolbar.isVisible() and w.view_tools.isVisible() and w.split.panel_visible
+
+
+def test_obrazek_jak_to_ma_vypadat(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    from kontrola.ui.help_topics import _SVG
+    s = next(i for i in w.issues if i.check_id in _SVG)
+    w.issue_panel.select_issue(s.number)
+    assert w.issue_panel.ilustrace.isVisibleTo(w.issue_panel)
+    assert not w.issue_panel.ilustrace.pixmap().isNull()
