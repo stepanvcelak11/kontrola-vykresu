@@ -25,6 +25,9 @@ K_P = 0.9999
 
 # S-JTSK → WGS 84, EPSG:5239 (coordinate frame): posuny [m], rotace [″], měřítko [ppm]
 HELMERT = (572.213, 85.334, 461.94, -4.9732, -1.529, -5.2484, 3.5378)
+# parametry proj4 „+towgs84=570.8,85.7,462.8,4.998,1.587,5.261,3.56“ (position vector) přepsané do
+# konvence coordinate frame (opačné znaménko rotací) – používá je QTrig, body z něj tak sedí na mm
+HELMERT_PROJ4 = (570.8, 85.7, 462.8, -4.998, -1.587, -5.261, 3.56)
 
 _E2 = BESSEL_F * (2 - BESSEL_F)
 _E = math.sqrt(_E2)
@@ -93,8 +96,8 @@ def _cart2geod(x, y, z, a, f):
     return phi, lam, p / math.cos(phi) - n
 
 
-def _helmert(x, y, z, inverse=False):
-    tx, ty, tz, rx, ry, rz, s = HELMERT
+def _helmert(x, y, z, inverse=False, parametry=HELMERT):
+    tx, ty, tz, rx, ry, rz, s = parametry
     sec = math.pi / (180 * 3600)
     rx, ry, rz, m = rx * sec, ry * sec, rz * sec, 1 + s * 1e-6
     # konvence „coordinate frame“: X' = T + m·R·X, R = [[1, rz, −ry], [−rz, 1, rx], [ry, −rx, 1]]
@@ -105,19 +108,19 @@ def _helmert(x, y, z, inverse=False):
     return (x0 - rz * y0 + ry * z0, rz * x0 + y0 - rx * z0, -ry * x0 + rx * y0 + z0)
 
 
-def sjtsk_na_wgs84(y: float, x: float, h: float = 0.0) -> tuple[float, float, float]:
+def sjtsk_na_wgs84(y: float, x: float, h: float = 0.0, parametry=HELMERT) -> tuple[float, float, float]:
     """S-JTSK (Y, X kladné) + výška [m] → WGS84 (šířka, délka [°], elipsoidická výška [m] – přibližně)."""
     phi, lam = krovak_inv(abs(y), abs(x))
     cx, cy, cz = _geod2cart(phi, lam, h, BESSEL_A, BESSEL_F)
-    wx, wy, wz = _helmert(cx, cy, cz)
+    wx, wy, wz = _helmert(cx, cy, cz, parametry=parametry)
     p, l, hh = _cart2geod(wx, wy, wz, WGS_A, WGS_F)
     return math.degrees(p), math.degrees(l), hh
 
 
-def wgs84_na_sjtsk(sirka: float, delka: float, h: float = 0.0) -> tuple[float, float, float]:
+def wgs84_na_sjtsk(sirka: float, delka: float, h: float = 0.0, parametry=HELMERT) -> tuple[float, float, float]:
     """WGS84 (šířka, délka [°], výška) → S-JTSK (Y, X kladné, výška nad Besselem [m] – přibližně)."""
     wx, wy, wz = _geod2cart(math.radians(sirka), math.radians(delka), h, WGS_A, WGS_F)
-    cx, cy, cz = _helmert(wx, wy, wz, inverse=True)
+    cx, cy, cz = _helmert(wx, wy, wz, inverse=True, parametry=parametry)
     phi, lam, hb = _cart2geod(cx, cy, cz, BESSEL_A, BESSEL_F)
     y, x = krovak(phi, lam)
     return y, x, hb

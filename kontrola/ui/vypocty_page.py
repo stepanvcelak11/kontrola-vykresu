@@ -346,7 +346,9 @@ class VypoctyPage(QWidget):
         self.b_redo = QPushButton("↷ Znovu")
         self.b_polar = QPushButton("Polární metoda…")
         self.b_polar.setToolTip("Výpočet ze zápisníku (polární metoda, orientace, kontroly)")
-        for b in (self.b_import, self.b_export, self.b_add, self.b_del, self.b_bulk, self.b_dup, self.b_undo,
+        self.b_qtrig = QPushButton("QTrig…")
+        self.b_qtrig.setToolTip("Body a zápisníky z terénní aplikace QTrig (firemní cloud nebo export)")
+        for b in (self.b_import, self.b_export, self.b_qtrig, self.b_add, self.b_del, self.b_bulk, self.b_dup, self.b_undo,
                   self.b_redo, self.b_polar):
             bar.addWidget(b)
         bar.addStretch(1)
@@ -405,6 +407,7 @@ class VypoctyPage(QWidget):
         # signály
         self.b_import.clicked.connect(lambda: self.import_dialog())
         self.b_export.clicked.connect(lambda: self.export_dialog())
+        self.b_qtrig.clicked.connect(lambda: self.qtrig_dialog())
         self.b_add.clicked.connect(self.add_point)
         self.b_del.clicked.connect(self.delete_selected)
         self.b_bulk.clicked.connect(self.bulk_dialog)
@@ -589,6 +592,16 @@ class VypoctyPage(QWidget):
             msg += f" Přeskočeno {len(dlg.varovani)} nečitelných řádků."
         self.message(msg, bool(konf or dlg.varovani))
         return n
+
+    def qtrig_dialog(self, klient=None):
+        """Okno QTrig (nemodální – může hlídat zakázku, zatímco se pracuje dál)."""
+        from .qtrig_dialog import QTrigDialog
+        d = getattr(self, "_qtrig", None)
+        if d is None or klient is not None:
+            d = self._qtrig = QTrigDialog(self, klient)
+        d.show()
+        d.raise_()
+        return d
 
     def export_dialog(self, path: str | None = None):
         body = self.selected() or [self.seznam.body[self.proxy.mapToSource(self.proxy.index(r, 0)).row()]

@@ -2024,3 +2024,43 @@ def test_cad_zkoseni_a_vrcholy(window):
     c.proved("zpět")
     c.proved("zpět")
     assert len(c.prostor.query("LWPOLYLINE").first) == 3
+
+
+def test_qtrig_z_cloudu_a_ze_souboru(window, tmp_path, monkeypatch):
+    import json as _json
+
+    from kontrola import qtrig as Q
+    from tests.test_qtrig import _radek, _Server
+    monkeypatch.setattr("kontrola.ui.qtrig_dialog._nastaveni", lambda: __import__(
+        "PySide6.QtCore", fromlist=["QSettings"]).QSettings(str(tmp_path / "s.ini"), __import__(
+            "PySide6.QtCore", fromlist=["QSettings"]).QSettings.IniFormat))
+    w = window
+    w.show_page("vypocty")
+    p = w.vypocty
+    puvodni = list(p.seznam.body)
+    srv = _Server()
+    srv.radky = [_radek(1, "a", "QT1"), _radek(2, "b", "QT2", 49.2, 16.6)]
+    d = p.qtrig_dialog(Q.Klient(otevri=srv))
+    try:
+        d.kod.setText("ABCD1234")
+        assert not d.prihlas("spatne") and "heslo" in d.stav.text()
+        assert d.prihlas("heslo") and d.zakazka.count() == 1
+        assert d.stahni() == (2, 0, 0)
+        assert p.seznam.najdi("QT1") is not None and abs(p.seznam.najdi("QT1").y - 743011.7706) < 0.001
+        srv.radky.append(_radek(3, "a", deleted=1))
+        assert d.stahni() == (0, 0, 1) and p.seznam.najdi("QT1") is None
+        f = tmp_path / "smery.csv"
+        f.write_text("ZÁPISNÍK VODOROVNÝCH SMĚRŮ — X\r\nStanovisko: 4001; délky zapsané jako: šikmé\r\n\r\nhlava\r\n"
+                     "12;1;87;287;87;98;302;87.1235;0.2;98.0000;30.015;30.000;0.943\r\n", encoding="utf-8")
+        n = len(p.zapisnik.stanoviska)
+        d.nacti_soubor(str(f))
+        assert len(p.zapisnik.stanoviska) == n + 1 and p.zapisnik.stanoviska[-1].bod == "4001"
+        j = tmp_path / "moje_body.json"
+        j.write_text(_json.dumps([{"name": "QT9", "lat": 50.0, "lng": 15.0}]), encoding="utf-8")
+        d.nacti_soubor(str(j))
+        assert p.seznam.najdi("QT9") is not None
+    finally:
+        d.close()
+        p.zapisnik.nastav(p.zapisnik.stanoviska[:n])
+        p.seznam.body[:] = puvodni
+        p._after_change()

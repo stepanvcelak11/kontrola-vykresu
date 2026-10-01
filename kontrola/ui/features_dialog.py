@@ -99,6 +99,8 @@ FUNKCE = [
         ("Úlohy", "Směrník a délka, rajón, protínání, volné stanovisko, transformace, výměry, staničení, ortogonální "
          "metoda, polygonový pořad, průsečíky, vytyčovací prvky, nivelace, oddělení parcely, S-JTSK ↔ WGS84; "
          "protokol do PDF.", "_ulohy"),
+        ("QTrig", "Body zakázky z terénní aplikace QTrig přes firemní cloud (přírůstkově, i hlídání každou minutu) "
+         "nebo z exportu; nivelační zápisník a zápisník směrů z QTrig.", "_qtrig"),
     ]),
     ("CAD (jako MicroStation)", [
         ("Kreslení a úpravy", "Úsečky, polylinie, kružnice, oblouky, texty, šrafy, kóty, oměrné míry; posun, "
@@ -196,6 +198,7 @@ class FeaturesDialog(QDialog):
             "_zadani": lambda: w.tabs.setCurrentWidget(w.zadani),
             "_vypocty": lambda: w.show_page("vypocty"),
             "_zapisnik": lambda: (w.show_page("vypocty"), w.vypocty.tabs.setCurrentWidget(w.vypocty.zapisnik)),
+            "_qtrig": lambda: (w.show_page("vypocty"), w.vypocty.qtrig_dialog()),
             "_ulohy": lambda: (w.show_page("vypocty"), w.vypocty.tabs.setCurrentWidget(w.vypocty.ulohy)),
             "_cad": lambda: w.show_page("cad"),
             "_vzor": lambda: (w.tabs.setCurrentWidget(w.zadani),

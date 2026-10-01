@@ -322,6 +322,10 @@ Stránka **Výpočty** v levé liště (vlastní implementace, nic z Gromy se ne
   výpočty ze známé geometrie (shoda na 1e-6 m, protínání zpět 1e-5 m). Mezní odchylky (m_xy podle kódu
   kvality 3–7: 0,14 / 0,26 / 0,50 / 1,00 / 2,00 m, mezní polohová odchylka 2·√2·m_xy) jsou výchozí
   hodnoty – ověřte je v platném znění katastrální vyhlášky.
+* **QTrig (terénní aplikace):** tlačítko *QTrig…* v seznamu souřadnic. Přihlášení účtem QTrig a stažení bodů
+  zakázky z firemního cloudu (přírůstkově, volitelně hlídání každou minutu; smazané body se smažou jen pokud
+  přišly z QTrig), nebo načtení exportu (body JSON/CSV, nivelační zápisník, zápisník směrů). Převod WGS84 →
+  S-JTSK stejnými parametry jako QTrig (shoda pod 1 mm). V QTrig se nic nemění – jen čtení.
 
 ## CAD – kreslení v DXF (jako MicroStation, fáze 1)
 
