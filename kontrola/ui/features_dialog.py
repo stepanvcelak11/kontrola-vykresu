@@ -91,6 +91,26 @@ FUNKCE = [
          "a_notify"),
         ("Vzhled", "Tmavý / světlý režim, barva vzhledu a velikost písma (Nabídka → Zobrazení).", "a_dark"),
     ]),
+    ("Výpočty (jako Groma)", [
+        ("Seznam souřadnic", "Import a export TXT/CSV, hledání, kódy, hromadné úpravy, duplicity, Zpět; grafika "
+         "bodů s výběrem a měřením.", "_vypocty"),
+        ("Zápisník", "Zápisník .zap z Gromy nebo GSI z Leicy: úpravy stanovisek a záměr, uložení .zap, polární "
+         "metoda dávkou s protokolem jako Groma, vyrovnání sítě MNČ s elipsami chyb.", "_zapisnik"),
+        ("Úlohy", "Směrník a délka, rajón, protínání, volné stanovisko, transformace, výměry, staničení, ortogonální "
+         "metoda, polygonový pořad, průsečíky, vytyčovací prvky, nivelace, oddělení parcely, S-JTSK ↔ WGS84; "
+         "protokol do PDF.", "_ulohy"),
+    ]),
+    ("CAD (jako MicroStation)", [
+        ("Kreslení a úpravy", "Úsečky, polylinie, kružnice, oblouky, texty, šrafy, kóty, oměrné míry; posun, "
+         "kopie, otočení, ořez, prodloužení, rovnoběžka, zaoblení, rozdělení, ohrada; neomezené Zpět.", "_cad"),
+        ("Výkres podle zadání", "Hladiny, styly čar, písma a buňky ze Směrnice / zadání; pole „Kreslím“ nastaví "
+         "atributy samo; Atributy ze zadání jde zkontrolovat a upravit; tahák s key-iny pro MicroStation.",
+         "_cad"),
+        ("Body ze seznamu", "Body na své souřadnice (shodně se světem) s čísly a výškami v hladinách podle "
+         "zadání; kódy buněk jako buňky.", "_cad"),
+        ("Reference, rastry, modely, tisk", "Připojení DXF a ortofota s world filem, listy s výřezy v měřítku, "
+         "razítko, tisk do PDF v měřítku.", "_cad"),
+    ]),
     ("Pomocníci", [
         ("Poradce", "Zeptejte se česky: „co dál“, „kolik mi zbývá“, „jak opravit tuhle chybu“ – zná váš "
          "projekt, pravidla i pokyny ze zadání. Funguje offline.", "_poradce"),
@@ -174,6 +194,10 @@ class FeaturesDialog(QDialog):
             "_tips": w.show_tips, "_guide": w.show_guide, "_shortcuts": w.show_shortcuts,
             "_poradce": lambda: (w.poradce_dock.show(), w.poradce_dock.raise_()),
             "_zadani": lambda: w.tabs.setCurrentWidget(w.zadani),
+            "_vypocty": lambda: w.show_page("vypocty"),
+            "_zapisnik": lambda: (w.show_page("vypocty"), w.vypocty.tabs.setCurrentWidget(w.vypocty.zapisnik)),
+            "_ulohy": lambda: (w.show_page("vypocty"), w.vypocty.tabs.setCurrentWidget(w.vypocty.ulohy)),
+            "_cad": lambda: w.show_page("cad"),
             "_vzor": lambda: (w.tabs.setCurrentWidget(w.zadani),
                               w.zadani.tabs.setCurrentWidget(w.zadani.template_page)),
             "_dokumenty": lambda: (w.tabs.setCurrentWidget(w.zadani),
