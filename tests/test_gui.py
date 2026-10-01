@@ -38,6 +38,15 @@ def window(tmp_path, monkeypatch):
     yield w
     wait(lambda: w.task is None or not w.task.is_running())
     w.close()
+    # okna i jejich plovoucí okénka zrušit hned – desítky oken rušených až při ukončení Pythonu
+    # (v náhodném pořadí po QApplication) na Windows občas shodí proces po úspěšných testech
+    from PySide6.QtCore import QCoreApplication, QEvent
+    if getattr(w, "_mini", None) is not None:
+        w._mini.close()
+        w._mini.deleteLater()
+    w.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    app.processEvents()
 
 
 def _idle(w):
@@ -852,3 +861,17 @@ def test_osobni_tahak(window):
     assert w._wait(lambda: _idle(w), 30)
     mine = tahak._load(w.settings)[str(w.project.root)]
     assert 0 < sum(mine.values()) <= sum(1 for i in w.issues if i.severity.value != "info")
+
+
+def test_tepelna_mapa(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.a_heat.setChecked(True)
+    it = w.view._heat_item
+    assert it is not None and it.scene() is w.view.scene() and not it.pixmap().isNull()
+    w.issue_panel.filterChanged.emit(set())  # žádná viditelná chyba → mapa zmizí
+    assert w.view._heat_item is None
+    w.a_heat.setChecked(False)
+    assert w.view._heat_item is None

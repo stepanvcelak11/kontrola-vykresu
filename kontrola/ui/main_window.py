@@ -234,6 +234,8 @@ class MainWindow(QMainWindow):
                                   "Když hlídáte výkres a uložíte ho v MicroStationu, vpravo dole se ukáže, kolik "
                                   "chyb ubylo a kolik zbývá", checkable=True)
         self.a_notify.setChecked(self.settings.value("upozorneni/zapnuto", True, type=bool))
+        self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+H",
+                                "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
         self.a_mini = self._act("Okno „Další chyba“ navrchu", self.show_mini, "Ctrl+Shift+N",
                                 "Malé okno, které zůstane nad MicroStationem: popis chyby, key-in, Opraveno/Další")
         self.a_fixguide = self._act("Opravný průvodce (MicroStation)…", self.show_fix_guide, "Ctrl+G",
@@ -281,6 +283,7 @@ class MainWindow(QMainWindow):
         m_view.addAction(self.a_mslook)
         m_view.addAction(self.a_dark)
         m_view.addAction(self.a_labels)
+        m_view.addAction(self.a_heat)
         from PySide6.QtGui import QActionGroup
         m_size = m_view.addMenu("Velikost kroužků chyb")
         grp = QActionGroup(self)
@@ -438,7 +441,8 @@ class MainWindow(QMainWindow):
         a_layers.setText("Vrstvy")
         a_layers.setToolTip("Panel vrstev – zapnutí a vypnutí vrstev výkresu")
         self.a_layers_panel = a_layers
-        for act in (self.a_fit, self.a_labels, a_layers, self.a_region, self.a_wip, self.a_sketch, self.a_mini):
+        for act in (self.a_fit, self.a_labels, a_layers, self.a_heat, self.a_region, self.a_wip, self.a_sketch,
+                    self.a_mini):
             vt.addAction(act)
             b = vt.widgetForAction(act)
             if b is not None:
@@ -507,6 +511,8 @@ class MainWindow(QMainWindow):
             self.a_menu.setIcon(icon("menu"))
         if getattr(self, "a_mini", None) is not None:
             self.a_mini.setIcon(icon("okno"))
+        if getattr(self, "a_heat", None) is not None:
+            self.a_heat.setIcon(icon("teplo"))
         if getattr(self, "a_layers_panel", None) is not None:
             self.a_layers_panel.setIcon(icon("vrstvy"))
         if getattr(self, "tabs", None) is not None:

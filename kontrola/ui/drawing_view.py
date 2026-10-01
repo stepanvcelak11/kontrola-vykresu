@@ -725,10 +725,71 @@ class DrawingView(QGraphicsView):
             m.setPos(self.to_scene(iss.x, iss.y))
             sc.addItem(m)
             self.markers[iss.number] = m
+        self.refresh_heatmap()
 
     def set_visible_issues(self, numbers: set[int]):
         for n, m in self.markers.items():
             m.setVisible(n in numbers)
+        self.refresh_heatmap()
+
+    # ---------------------------------------------------------------- tepelná mapa
+    heatmap_on = False
+
+    def set_heatmap(self, on: bool):
+        self.heatmap_on = bool(on)
+        self.refresh_heatmap()
+
+    def refresh_heatmap(self):
+        """Kde je chyb nejvíc: průhledná vrstva žlutá → červená pod kroužky (jen neopravené, viditelné)."""
+        old = getattr(self, "_heat_item", None)
+        if old is not None:
+            if old.scene() is not None:
+                self.scene().removeItem(old)
+            self._heat_item = None
+        if not self.heatmap_on:
+            return
+        import numpy as np
+        from PySide6.QtGui import QImage, QPixmap
+        # váha podle závažnosti: info jen slabě
+        wts = {Severity.CHYBA: 1.0, Severity.VAROVANI: 0.6}
+        pts = [(m.scenePos(), wts.get(m.issue.severity, 0.25)) for m in self.markers.values()
+               if m.isVisible() and m.issue.state == "nová"]
+        rect = self._content_rect if not self._content_rect.isEmpty() else self.scene().itemsBoundingRect()
+        if not pts or rect.width() <= 0 or rect.height() <= 0:
+            return
+        n = 220  # buněk na delší stranu
+        cell = max(rect.width(), rect.height()) / n
+        gw, gh = max(1, int(rect.width() / cell) + 1), max(1, int(rect.height() / cell) + 1)
+        grid = np.zeros((gh, gw), dtype=np.float32)
+        for p, w in pts:
+            ix = min(gw - 1, max(0, int((p.x() - rect.x()) / cell)))
+            iy = min(gh - 1, max(0, int((p.y() - rect.y()) / cell)))
+            grid[iy, ix] += w
+        # rozmazání gaussem (oddělitelné) – poloměr ~ 4 % výkresu
+        sig = 6.0
+        r = int(sig * 3)
+        k = np.exp(-0.5 * (np.arange(-r, r + 1) / sig) ** 2).astype(np.float32)
+        grid = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 1, grid)
+        grid = np.apply_along_axis(lambda v: np.convolve(v, k, mode="same"), 0, grid)
+        mx = float(grid.max())
+        if mx <= 0:
+            return
+        t = np.sqrt(grid / mx)  # odmocnina: i osamělá chyba je vidět
+        rgba = np.zeros((gh, gw, 4), dtype=np.uint8)
+        rgba[..., 0] = 255
+        rgba[..., 1] = (220 * (1 - t)).astype(np.uint8)
+        rgba[..., 2] = (40 * (1 - t)).astype(np.uint8)
+        rgba[..., 3] = (np.clip(t * 1.6, 0, 1) * 150 * (t > 0.04)).astype(np.uint8)
+        img = QImage(rgba.data, gw, gh, gw * 4, QImage.Format_RGBA8888).copy()
+        item = QGraphicsPixmapItem(QPixmap.fromImage(img))
+        item.setTransformationMode(Qt.SmoothTransformation)
+        item.setScale(cell)
+        item.setPos(rect.topLeft())
+        item.setZValue(8_000)
+        item.setAcceptedMouseButtons(Qt.NoButton)
+        item.setToolTip("Tepelná mapa chyb – čím červenější, tím víc neopravených chyb")
+        self.scene().addItem(item)
+        self._heat_item = item
 
     def refresh_markers(self):
         for m in self.markers.values():
