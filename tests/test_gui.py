@@ -276,7 +276,7 @@ def test_tmavy_rezim_a_aktualizace(window, monkeypatch):
     w = window
     w.a_dark.setChecked(True)
     assert theme.is_dark() and "#1E1F22" in QApplication.instance().styleSheet()
-    assert w.settings.value("zobrazeni/tmavy", False, type=bool)
+    assert w.settings.value("zobrazeni/vzhled") == "tmavy"
     w.a_dark.setChecked(False)
     assert not theme.is_dark() and "#1E1F22" not in QApplication.instance().styleSheet()
     # nová verze → okno s odkazem ke stažení (síť se v testu nepoužije)
@@ -771,3 +771,43 @@ def test_nove_chyby_od_minule_kontroly(window, tmp_path):
     w.issue_panel.set_quick("nove")
     shown = w.issue_panel.proxy.rowCount()
     assert shown == sum(i.nove for i in w.issues) and shown > 0
+
+
+def test_hledani_prikazu(window, monkeypatch):
+    w = window
+    cs = w.cmd_search
+    cs._collect()
+    m = cs._matches("prehled vykres")  # bez diakritiky
+    assert m and m[0].startswith("Přehled výkresu")
+    called = []
+    monkeypatch.setattr(w, "show_overview", lambda: called.append(1))
+    from PySide6.QtGui import QAction
+    a = cs._actions[m[0]]
+    assert isinstance(a, QAction)
+    a.triggered.disconnect()
+    a.triggered.connect(lambda: called.append(1))
+    cs.setText("prehled vykres")
+    cs._run(cs._first())
+    assert called and cs.text() == ""
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_plovouci_panel_a_minimapa(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    w.resize(1300, 850)
+    w.show_page("vykres")
+    assert w.a_page["vykres"].isChecked() and w.tabs.currentWidget() is w.split
+    cv = w.split
+    assert cv.card.isVisible() and w.view.inset_right > 0
+    cv.set_panel_visible(False, animate=False)
+    assert not cv.card.isVisible() and cv.b_show.isVisible() and w.view.inset_right == 0
+    cv.set_panel_visible(True, animate=False)
+    assert cv.card.isVisible() and not cv.b_show.isVisible()
+    w.minimap._tick()
+    assert w.minimap.isVisible() and w.minimap._map is not None
+    w.issue_panel.set_card_mode(False)
+    assert not w.issue_panel.table.isColumnHidden(0)
+    w.issue_panel.set_card_mode(True)
+    assert w.issue_panel.table.isColumnHidden(0)

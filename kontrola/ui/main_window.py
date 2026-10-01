@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMenu, QMessageBox,
-                               QProgressBar, QPushButton, QSplitter, QTabWidget, QToolBar, QToolButton)
+                               QProgressBar, QPushButton, QSizePolicy, QTabWidget, QToolBar, QToolButton, QWidget)
 
 from .. import APP_NAME
 from ..checks.base import Issue, Severity
@@ -57,12 +57,9 @@ class MainWindow(QMainWindow):
         self.issue_panel.message.connect(lambda t: self.statusBar().showMessage(t, 8000))
         self.issue_panel.feature_info = self._feature_info
 
-        self.split = QSplitter(Qt.Horizontal)
-        self.split.addWidget(self.view)
-        self.split.addWidget(self.issue_panel)
-        self.split.setStretchFactor(0, 3)
-        self.split.setStretchFactor(1, 2)
-        self.split.setSizes([860, 540])
+        from .canvas import Canvas
+        # výkres přes celou plochu, seznam chyb jako plovoucí (sbalitelná) karta vpravo
+        self.split = Canvas(self.view, self.issue_panel)
 
         self.zadani = ZadaniTab(lambda: self.drawing)
         self.zadani.rulesChanged.connect(self._rules_changed)
@@ -359,25 +356,31 @@ class MainWindow(QMainWindow):
         self.a_exp_pdf.setIconText("Protokol PDF")
         self.a_open.setIconText("Otevřít")
 
+        # ---- svislá lišta vlevo (jako mapové aplikace): stránky nahoře, akce, dole nastavení a nabídka ☰
         tb = QToolBar("Hlavní panel")
         tb.setObjectName("hlavni_panel")
         tb.setMovable(False)
-        tb.setIconSize(QSize(18, 18))
-        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        tb.addAction(self.a_open)
+        tb.setFloatable(False)
+        tb.setOrientation(Qt.Vertical)
+        tb.setIconSize(QSize(22, 22))
+        tb.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        from PySide6.QtGui import QActionGroup
+        self.page_group = QActionGroup(self)
+        self.page_group.setExclusive(True)
+        self.a_page = {}
+        for key, text, tip in (("uvod", "Úvod", "Úvodní stránka – stav projektu a další krok"),
+                               ("vykres", "Výkres", "Výkres a seznam chyb"),
+                               ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady")):
+            act = QAction(text, self)
+            act.setCheckable(True)
+            act.setToolTip(tip)
+            act.triggered.connect(lambda _c=False, k=key: self.show_page(k))
+            self.page_group.addAction(act)
+            tb.addAction(act)
+            self.a_page[key] = act
         tb.addSeparator()
-        tb.addAction(self.a_check)
-        tb.addAction(self.a_recheck)
-        tb.addAction(self.a_ready)
-        tb.addAction(self.a_settings)
-        tb.addSeparator()
-        tb.addAction(self.a_wip)
-        tb.addAction(self.a_region)
-        tb.addSeparator()
-        tb.addAction(self.a_fit)
-        tb.addAction(self.a_labels)
-        tb.addAction(self.a_sketch)
-        tb.addSeparator()
+        for a in (self.a_open, self.a_check, self.a_recheck, self.a_ready):
+            tb.addAction(a)
         tb.addAction(self.a_exp_pdf)
         a_por = self.poradce_dock.toggleViewAction()
         self.a_poradce = a_por
@@ -385,24 +388,99 @@ class MainWindow(QMainWindow):
         a_por.setShortcut(QKeySequence("Ctrl+K"))
         a_por.setToolTip("Zeptejte se na cokoli – odpověď z návodů aplikace (Ctrl+K, diktování Win+H)")
         tb.addAction(a_por)
-        self.addToolBar(tb)
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        tb.addWidget(spacer)
+        tb.addAction(self.a_settings)
+        # klasická nabídka (Soubor, Zobrazení, Kontrola, Nápověda) schovaná pod ☰
+        self.a_menu = QAction("Nabídka", self)
+        self.a_menu.setToolTip("Všechny funkce: Soubor, Zobrazení, Kontrola, Nápověda (Alt)")
+        menu_all = QMenu(self)
+        for ma in self.menuBar().actions():
+            if ma.menu() is not None:
+                menu_all.addMenu(ma.menu())
+        self.a_menu.setMenu(menu_all)
+        self.a_menu.triggered.connect(lambda: self._popup_main_menu())
+        tb.addAction(self.a_menu)
+        self.addToolBar(Qt.LeftToolBarArea, tb)
         self.toolbar = tb
-        # méně časté přepínače jen jako ikona (text je v tooltipu) – lišta se vejde i na menší monitor
-        for a in (self.a_wip, self.a_region, self.a_fit, self.a_labels, self.a_sketch):
-            b = tb.widgetForAction(a)
+        self.menuBar().hide()
+        for act in self.findChildren(QAction):  # zkratky z (schované) nabídky dál fungují
+            if not act.shortcut().isEmpty():
+                self.addAction(act)
+        # krátké popisky pod ikonou (celé znění je v tooltipu)
+        for act, short in ((self.a_open, "Otevřít"), (self.a_check, "Kontrola"), (self.a_recheck, "Znovu"),
+                           (self.a_ready, "Odevzdat"), (self.a_exp_pdf, "Protokol"), (a_por, "Poradce"), (self.a_settings, "Nastavení"),
+                           (self.a_menu, "Nabídka")):
+            act.setIconText(short)
+            btn = tb.widgetForAction(act)
+            if btn is not None:
+                full = act.text().replace("&", "").rstrip("…")
+                btn.setToolTip(full + (f" – {act.toolTip()}" if act.toolTip() and act.toolTip() != act.text()
+                                       else ""))
+        for btn in tb.findChildren(QToolButton):
+            btn.setMinimumWidth(66)
+        # nástroje pohledu jako plovoucí lišta nad výkresem (jako ovládání mapy)
+        vt = QToolBar("Pohled")
+        vt.setObjectName("plovouci_lista")
+        vt.setOrientation(Qt.Vertical)
+        vt.setIconSize(QSize(20, 20))
+        vt.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        a_layers = self.layers_dock.toggleViewAction()
+        a_layers.setText("Vrstvy")
+        a_layers.setToolTip("Panel vrstev – zapnutí a vypnutí vrstev výkresu")
+        self.a_layers_panel = a_layers
+        for act in (self.a_fit, self.a_labels, a_layers, self.a_region, self.a_wip, self.a_sketch):
+            vt.addAction(act)
+            b = vt.widgetForAction(act)
             if b is not None:
-                b.setToolButtonStyle(Qt.ToolButtonIconOnly)
-                b.setToolTip(a.text().replace("&", "") + (f" – {a.toolTip()}" if a.toolTip() and
-                                                            a.toolTip() != a.text() else ""))
+                b.setToolTip(act.text().replace("&", "").rstrip("…") + (
+                    f" – {act.toolTip()}" if act.toolTip() and act.toolTip() != act.text() else ""))
+        from .canvas import _shadow
+        _shadow(vt, 18, 50)
+        self.view_tools = vt
+        self.split.add_overlay(vt, "vlevo_nahore")
+        from .prikazy import CommandSearch
+        self.cmd_search = CommandSearch(self)
+        _shadow(self.cmd_search, 18, 45)
+        self.split.add_overlay(self.cmd_search, "nahore")
+        from .minimap import Minimap
+        self.minimap = Minimap(self.view)
+        _shadow(self.minimap, 18, 50)
+        self.split.add_overlay(self.minimap, "vlevo_dole")
+        self.minimap.hide()  # ukáže se, až bude načtený výkres
         # hlavní akce je zvýrazněná (bílá ikona na modrém tlačítku)
         btn = tb.widgetForAction(self.a_check)
         if btn is not None:
             btn.setMenu(self._check_menu())
             btn.setPopupMode(QToolButton.MenuButtonPopup)
             btn.setObjectName("primarni")
+            btn.setMinimumWidth(78)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+        mb = tb.widgetForAction(self.a_menu)
+        if mb is not None:
+            mb.setPopupMode(QToolButton.InstantPopup)
+        self.tabs.tabBar().hide()  # stránky přepíná lišta vlevo
+        self._sync_page_buttons()
         self._apply_icons()
+
+    def show_page(self, key: str):
+        w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani}.get(key)
+        if w is not None:
+            self.tabs.setCurrentWidget(w)
+
+    def _sync_page_buttons(self):
+        if not hasattr(self, "a_page"):
+            return
+        w = self.tabs.currentWidget()
+        key = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else "zadani"
+        self.a_page[key].setChecked(True)
+
+    def _popup_main_menu(self):
+        btn = self.toolbar.widgetForAction(self.a_menu)
+        if btn is not None and self.a_menu.menu() is not None:
+            self.a_menu.menu().popup(btn.mapToGlobal(btn.rect().topRight()))
 
     def _apply_icons(self):
         from .theme import icon, themed
@@ -415,6 +493,12 @@ class MainWindow(QMainWindow):
                         (getattr(self, "a_poradce", None), "poradce")):
             if a is not None:
                 a.setIcon(icon(name))
+        for key, act in getattr(self, "a_page", {}).items():
+            act.setIcon(icon(key, themed("#2563EB") if act.isChecked() else themed("#6B7280")))
+        if getattr(self, "a_menu", None) is not None:
+            self.a_menu.setIcon(icon("menu"))
+        if getattr(self, "a_layers_panel", None) is not None:
+            self.a_layers_panel.setIcon(icon("vrstvy"))
         if getattr(self, "tabs", None) is not None:
             for i in range(self.tabs.count()):
                 w = self.tabs.widget(i)
@@ -433,16 +517,19 @@ class MainWindow(QMainWindow):
         from .theme import apply_theme
         apply_theme(QApplication.instance(), bool(on))
         self._apply_icons()
-        self.settings.setValue("zobrazeni/tmavy", bool(on))
+        self.settings.setValue("zobrazeni/vzhled", "tmavy" if on else "svetly")
         self.issue_panel.model.layoutChanged.emit()
 
     def _restore_geometry(self):
         g = self.settings.value("okno/geometrie")
         if g is not None:
             self.restoreGeometry(g)
-        s = self.settings.value("okno/stav")
+        s = self.settings.value("okno/stav2")  # (stav z dřívějšího vzhledu s lištou nahoře se nepoužije)
         if s is not None:
             self.restoreState(s)
+        if getattr(self, "toolbar", None) is not None:
+            self.addToolBar(Qt.LeftToolBarArea, self.toolbar)  # lišta vždy vlevo
+            self.toolbar.show()
         light = self.settings.value("zobrazeni/svetle_pozadi", False, type=bool)
         self.a_light.setChecked(light)
         self.a_mslook.setChecked(self.settings.value("zobrazeni/jako_microstation", True, type=bool))
@@ -455,7 +542,7 @@ class MainWindow(QMainWindow):
         if self.task is not None and self.task.is_running():
             self.task.cancel()
         self.settings.setValue("okno/geometrie", self.saveGeometry())
-        self.settings.setValue("okno/stav", self.saveState())
+        self.settings.setValue("okno/stav2", self.saveState())
         self.settings.setValue("zobrazeni/svetle_pozadi", self.a_light.isChecked())
         self.settings.setValue("zobrazeni/jako_microstation", self.a_mslook.isChecked())
         if self.project is not None:
@@ -677,6 +764,7 @@ class MainWindow(QMainWindow):
     def _tab_changed(self, index: int):
         """Panel vrstev patří k výkresu – na záložce Zadání jen zabírá místo."""
         if hasattr(self, "toolbar"):
+            self._sync_page_buttons()
             self._apply_icons()  # ikona vybrané záložky v barvě zvýraznění
         if not hasattr(self, "layers_dock"):
             return
@@ -939,6 +1027,7 @@ class MainWindow(QMainWindow):
         self.issues = issues
         self.view.set_issues(issues)
         self.issue_panel.set_issues(issues, summary or "")
+        self.split.set_issue_count(sum(1 for i in issues if i.state == "nová"))
         if not issues and not summary:
             self._checked_once = False
         elif issues and summary:

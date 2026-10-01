@@ -6,7 +6,7 @@ from collections import Counter
 
 from PySide6.QtCore import (QAbstractTableModel, QItemSelectionModel, QModelIndex, QSortFilterProxyModel,
                             Qt, Signal)
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPixmap
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFrame, QGroupBox, QHBoxLayout,
                                QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMenu,
                                QPushButton, QSplitter, QStyle, QStyledItemDelegate, QTableView, QVBoxLayout,
@@ -80,6 +80,106 @@ class BadgeDelegate(QStyledItemDelegate):
         painter.drawRoundedRect(r, h / 2, h / 2)
         painter.setPen(col)
         painter.drawText(r, Qt.AlignCenter, text)
+        painter.restore()
+
+
+_GROUP_ICON = {"Topologie": "sk_topologie", "Atributy": "sk_atributy", "Kartografie": "sk_kartografie",
+               "Geometrie": "sk_geometrie"}
+
+
+class CardDelegate(QStyledItemDelegate):
+    """Řádek seznamu chyb jako karta: ikona skupiny, popis, typ a vrstva, stav – jako v mapových aplikacích."""
+
+    HEIGHT = 64
+
+    def __init__(self, panel):
+        super().__init__(panel.table)
+        self.panel = panel
+        self._icons: dict[tuple, object] = {}
+
+    def sizeHint(self, option, index):  # noqa: N802
+        from PySide6.QtCore import QSize
+        return QSize(option.rect.width(), self.HEIGHT)
+
+    def _icon(self, name: str, color: str):
+        key = (name, color)
+        if key not in self._icons:
+            from .theme import icon
+            self._icons[key] = icon(name, color, 40).pixmap(20, 20)
+        return self._icons[key]
+
+    def paint(self, painter, option, index):
+        from PySide6.QtCore import QRectF
+
+        from .theme import themed
+        src = self.panel.proxy.mapToSource(index)
+        iss: Issue = self.panel.model.issues[src.row()]
+        r = QRectF(option.rect).adjusted(4, 3, -4, -3)
+        selected = bool(option.state & QStyle.State_Selected)
+        hover = bool(option.state & QStyle.State_MouseOver)
+        sev = QColor(SEVERITY_COLORS.get(iss.severity, QColor(128, 128, 128)))
+        done = iss.state != "nová"
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        bg = QColor(themed("#E8F0FE") if selected else themed("#F8FAFC") if hover else themed("#FFFFFF"))
+        painter.setPen(QPen(QColor(themed("#2563EB") if selected else themed("#E3E7EE")), 1.4 if selected else 1))
+        painter.setBrush(bg)
+        painter.drawRoundedRect(r, 10, 10)
+        # ikona skupiny v kroužku barvy závažnosti
+        c = QRectF(r.left() + 10, r.center().y() - 17, 34, 34)
+        ring = QColor(sev if not done else QColor(150, 150, 155))
+        fill = QColor(ring)
+        fill.setAlpha(36)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(fill)
+        painter.drawEllipse(c)
+        grp = check_group(iss.check_id)
+        pm = self._icon(_GROUP_ICON.get(grp, "sk_topologie"), ring.name())
+        painter.drawPixmap(int(c.center().x() - 10), int(c.center().y() - 10), pm)
+        # texty
+        x0 = c.right() + 10
+        right_w = 96
+        f = QFont(option.font)
+        f.setPointSizeF(f.pointSizeF() + 0.3)
+        f.setBold(True)
+        f.setStrikeOut(done and iss.state == "opraveno")
+        painter.setFont(f)
+        fm = painter.fontMetrics()
+        top = QRectF(x0, r.top() + 9, r.right() - x0 - right_w - 6, fm.height())
+        painter.setPen(QColor(themed("#9CA3AF") if done else themed("#111827")))
+        painter.drawText(top, Qt.AlignLeft | Qt.AlignVCenter, fm.elidedText(iss.message, Qt.ElideRight,
+                                                                            int(top.width())))
+        f2 = QFont(option.font)
+        f2.setPointSizeF(max(7.5, f2.pointSizeF() - 0.6))
+        painter.setFont(f2)
+        fm2 = painter.fontMetrics()
+        sub = f"#{iss.number} · {iss.check_name}" + (f" · {iss.layer}" if iss.layer else "")
+        bot = QRectF(x0, top.bottom() + 4, r.right() - x0 - 10, fm2.height())
+        painter.setPen(QColor(themed("#6B7280")))
+        painter.drawText(bot, Qt.AlignLeft | Qt.AlignVCenter, fm2.elidedText(sub, Qt.ElideRight, int(bot.width())))
+        # štítek vpravo nahoře: stav (nová/opraveno/ignorováno), jinak závažnost
+        if iss.state == "opraveno":
+            label, col = "✓ opraveno", QColor(22, 163, 74)
+        elif iss.state == "ignorovat":
+            label, col = "✕ ignorováno", QColor(120, 120, 130)
+        elif iss.nove:
+            label, col = "★ nová", QColor(124, 58, 237)
+        else:
+            label, col = iss.severity.value, sev
+        fb = QFont(option.font)
+        fb.setBold(True)
+        fb.setPointSizeF(max(7.5, fb.pointSizeF() - 1))
+        painter.setFont(fb)
+        fmb = painter.fontMetrics()
+        bw, bh = fmb.horizontalAdvance(label) + 16, fmb.height() + 4
+        br = QRectF(r.right() - bw - 10, r.top() + 8, bw, bh)
+        pill = QColor(col)
+        pill.setAlpha(34)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(pill)
+        painter.drawRoundedRect(br, bh / 2, bh / 2)
+        painter.setPen(col)
+        painter.drawText(br, Qt.AlignCenter, label)
         painter.restore()
 
 
@@ -293,8 +393,9 @@ class IssuePanel(QWidget):
         self.summary.setObjectName("souhrn")
         self.summary.setWordWrap(True)
         lay.addWidget(self.summary)
-        qrow = QHBoxLayout()
-        qrow.setSpacing(4)
+        from .flow import FlowLayout
+        chips = QWidget()
+        qrow = FlowLayout(chips, 4)  # rychlé filtry se zalamují do řádků (úzký plovoucí panel)
         self.quick: dict[object, QPushButton] = {}
         for key, label, tip in QUICK_FILTERS:
             b = QPushButton(label)
@@ -305,22 +406,28 @@ class IssuePanel(QWidget):
             b.clicked.connect(lambda _c=False, k=key: self.set_quick(k))
             self.quick[key] = b
             qrow.addWidget(b)
-        qrow.addStretch(1)
+        lay.addWidget(chips)
+        qrow = QHBoxLayout()
+        qrow.setSpacing(4)
         self.b_filter = QPushButton("Filtr ▾")
         self.b_filter.setCheckable(True)
         self.b_filter.setToolTip("Podrobný filtr: typy kontrol, závažnost, vrstva, skrytí opravených")
         qrow.addWidget(self.b_filter)
+        self.b_view = QPushButton("▤")
+        self.b_view.setFixedWidth(34)
+        self.b_view.clicked.connect(lambda: self.set_card_mode(not self.card_mode))
+        qrow.addWidget(self.b_view)
         self.b_help = QPushButton("?")
         self.b_help.setToolTip("Co to znamená – vysvětlení vybraného typu chyby s obrázkem (a dalších pojmů)")
         self.b_help.setFixedWidth(34)
         self.b_help.clicked.connect(self.explain)
         qrow.addWidget(self.b_help)
-        lay.addLayout(qrow)
         self.search = QLineEdit()
         self.search.setPlaceholderText("🔍  Hledat v popisu, vrstvě, čísle chyby…")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filters_changed)
-        lay.addWidget(self.search)
+        qrow.insertWidget(0, self.search, 1)
+        lay.addLayout(qrow)
 
         split = QSplitter(Qt.Vertical)
         lay.addWidget(split, 1)
@@ -393,17 +500,21 @@ class IssuePanel(QWidget):
         hh.setStretchLastSection(False)
         for c, w in enumerate((44, 98, 96, 285, 205, 130, 104, 104)):  # typ kontroly vidět i v užším panelu
             self.table.setColumnWidth(c, w)
+        self._cards = CardDelegate(self)
+        self.set_card_mode(True)
         self.table.selectionModel().currentRowChanged.connect(self._current_changed)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._table_menu)
         tl.addWidget(self.table, 1)
 
         nav = QHBoxLayout()
-        self.b_prev = QPushButton("◀ Předchozí")
+        self.b_prev = QPushButton("◀")
+        self.b_prev.setFixedWidth(40)
         self.b_prev.setShortcut("F7")
         self.b_prev.setToolTip("Předchozí chyba (F7)")
         self.b_prev.clicked.connect(lambda: self.step(-1))
-        self.b_next = QPushButton("Další ▶")
+        self.b_next = QPushButton("▶")
+        self.b_next.setFixedWidth(40)
         self.b_next.setShortcut("F8")
         self.b_next.setToolTip("Další chyba (F8)")
         self.b_next.clicked.connect(lambda: self.step(1))
@@ -454,6 +565,32 @@ class IssuePanel(QWidget):
         split.setSizes([230, 520])
 
     # ------------------------------------------------------------ data
+    def set_card_mode(self, on: bool):
+        """Karty (výchozí, přehledné) nebo tabulka se sloupci (řazení podle sloupců, souřadnice)."""
+        self.card_mode = on
+        t = self.table
+        t.setMouseTracking(on)
+        t.setAlternatingRowColors(not on)
+        t.horizontalHeader().setVisible(not on)
+        t.verticalHeader().setDefaultSectionSize(CardDelegate.HEIGHT if on else 30)
+        for c in range(len(COLUMNS)):
+            t.setColumnHidden(c, on and c != C_DESC)
+        if on:
+            t.setItemDelegateForColumn(C_DESC, self._cards)
+            t.horizontalHeader().setSectionResizeMode(C_DESC, QHeaderView.Stretch)
+            t.setObjectName("karty_chyb")
+        else:
+            t.setItemDelegateForColumn(C_DESC, None)
+            t.horizontalHeader().setSectionResizeMode(C_DESC, QHeaderView.Interactive)
+            t.setColumnWidth(C_DESC, 285)
+            t.setObjectName("")
+        t.style().unpolish(t)
+        t.style().polish(t)
+        if hasattr(self, "b_view"):
+            self.b_view.setText("▤" if on else "☰")
+            self.b_view.setToolTip("Přepnout na tabulku se sloupci (řazení, souřadnice)" if on
+                                   else "Přepnout na karty")
+
     def set_issues(self, issues: list[Issue], summary: str = ""):
         prev_hidden = set(self.proxy.hidden_types)
         self.model.set_issues(issues)

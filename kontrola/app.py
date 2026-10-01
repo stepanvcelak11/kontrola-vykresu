@@ -21,7 +21,9 @@ def main(argv: list[str] | None = None) -> int:
     if tr.load(QLocale(QLocale.Czech), "qtbase", "_", QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
         app.installTranslator(tr)
     from .ui.theme import apply_theme
-    apply_theme(app, QSettings("KontrolaVykresu", "KontrolaVykresu").value("zobrazeni/tmavy", False, type=bool))
+    # tmavý (profesionální) vzhled je výchozí; světlý jde přepnout v Zobrazení → Tmavý režim
+    vzhled = QSettings("KontrolaVykresu", "KontrolaVykresu").value("zobrazeni/vzhled", "tmavy")
+    apply_theme(app, vzhled != "svetly")
     from PySide6.QtGui import QIcon
 
     from .resources import resource_path

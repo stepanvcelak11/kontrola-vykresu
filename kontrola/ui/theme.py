@@ -36,6 +36,14 @@ _ICONS = {
     "vyrez": '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/>',
     "odevzdat": '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
     "poradce": '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    "sk_topologie": '<circle cx="5" cy="18" r="2.2"/><circle cx="12" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/>'
+                    '<path d="M6.2 16l4.7-8M13.1 8l4.7 8M7.2 18h9.6"/>',
+    "sk_atributy": '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8" r="1.4"/>',
+    "sk_kartografie": '<path d="M5 19L12 4l7 15"/><path d="M8 13h8"/>',
+    "sk_geometrie": '<path d="M3 17l5-9 6 6 7-10"/><circle cx="8" cy="8" r="1.6"/><circle cx="14" cy="14" r="1.6"/>',
+    "vrstvy": '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+    "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    "hledat": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/>',
     "uvod": '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
     "vykres": '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
     "zadani": '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
@@ -58,7 +66,7 @@ DARK_MAP = {
     "#78350F": "#FDE68A", "#DC2626": "#F87171", "#B45309": "#FBBF24", "#4B5563": "#C0C4CC", "#C0C4CC": "#5A5E66",
     "#F4F6FA": "#17181C", "#E3E7EE": "#34373F", "#CBD2DC": "#4A4E58", "#F1F4F9": "#2C2F36",
     "#F8FAFC": "#26282E", "#111827": "#E8EAED", "#E8F0FE": "#1F3354", "#EEF2FF": "#232B45",
-    "#C7D2FE": "#3A4A7A", "#0F172A": "#0B0C0F",
+    "#C7D2FE": "#3A4A7A", "#0F172A": "#0B0C0F", "#1E40AE": "#BFDBFE",
 }
 _dark = False
 
@@ -232,6 +240,31 @@ QFrame#hero {{ border: none; border-radius: 16px;
 QFrame#hero QLabel {{ color: white; background: transparent; }}
 QFrame#hero QLabel#uvod_podnadpis {{ color: #E0ECFF; }}
 QLabel#souhrn {{ color: #374151; }}
+QToolBar#hlavni_panel {{ background: {PANEL}; border: none; border-right: 1px solid {BORDER}; padding: 6px 4px;
+    spacing: 2px; }}
+QToolBar#hlavni_panel QToolButton {{ padding: 5px 2px; margin: 1px 4px; border-radius: 10px; font-size: 8.5pt; }}
+QToolBar#hlavni_panel QToolButton:checked {{ background: {ACCENT_SOFT}; color: #1E40AE; border: 1px solid #C7D2FE;
+    font-weight: 700; }}
+QTableView#karty_chyb {{ background: transparent; border: none; }}
+QTableView#karty_chyb::item, QTableView#karty_chyb::item:hover, QTableView#karty_chyb::item:selected {{
+    background: transparent; border: none; }}
+QToolBar#hlavni_panel QToolButton#primarni {{ min-width: 66px; padding-right: 12px; }}
+QToolButton#primarni::menu-button {{ border: none; background: transparent; width: 12px;
+    border-top-right-radius: 10px; border-bottom-right-radius: 10px; }}
+QToolButton#primarni::menu-button:hover {{ background: rgba(255, 255, 255, 40); }}
+QToolButton#primarni::menu-arrow {{ image: url("{{SIPKA_BILA}}"); width: 8px; height: 8px; }}
+QToolButton::menu-indicator {{ image: none; width: 0; }}
+QToolBar#plovouci_lista {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 12px; padding: 4px;
+    spacing: 2px; }}
+QToolBar#plovouci_lista QToolButton {{ padding: 6px; border-radius: 8px; }}
+QLineEdit#hledat_prikaz {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 19px;
+    padding: 8px 16px; font-size: 10pt; min-height: 22px; }}
+QLineEdit#hledat_prikaz:focus {{ border: 1.5px solid {ACCENT}; }}
+QFrame#minimapa {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; }}
+QFrame#plovouci_panel {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 16px; }}
+QPushButton#plovouci_tlacitko {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 12px;
+    font-weight: 700; color: #374151; padding: 0 6px; }}
+QPushButton#plovouci_tlacitko:hover {{ background: {ACCENT_SOFT}; color: {ACCENT_HOVER}; border-color: #C7D2FE; }}
 """
 
 
@@ -246,7 +279,7 @@ def _arrow_files() -> dict[str, str]:
     d.mkdir(exist_ok=True)
     out = {}
     for name, pts in (("dolu", [(2, 5), (8, 11), (14, 5)]), ("nahoru", [(2, 11), (8, 5), (14, 11)])):
-        for state, col in (("", themed("#4B5563")), ("_off", themed("#C0C4CC"))):
+        for state, col in (("", themed("#4B5563")), ("_off", themed("#C0C4CC")), ("_bila", "#FFFFFF")):
             f = d / f"sipka_{name}{state}{'_tmava' if _dark else ''}.png"
             if not f.exists():
                 pm = QPixmap(32, 32)
@@ -323,11 +356,15 @@ def apply_theme(app, dark: bool = False) -> None:
     if f.family() in ("", "Sans Serif", "MS Shell Dlg 2") or f.pointSizeF() < 9.5:
         import sys
         if sys.platform == "win32":
-            f = QFont("Segoe UI")
+            from PySide6.QtGui import QFontDatabase
+            fams = set(QFontDatabase.families())
+            # Windows 11: modernější Segoe UI Variable, jinak klasické Segoe UI
+            f = QFont("Segoe UI Variable Text" if "Segoe UI Variable Text" in fams else "Segoe UI")
         f.setPointSizeF(9.75)
     app.setFont(f)
     try:
-        css = STYLESHEET + _arrow_css(_arrow_files())
+        files = _arrow_files()
+        css = (STYLESHEET + _arrow_css(files)).replace("{SIPKA_BILA}", files["dolu_bila"])
     except OSError:  # bez zápisu do dočasné složky zůstanou výchozí šipky
-        css = STYLESHEET
+        css = STYLESHEET.replace('image: url("{SIPKA_BILA}");', "")
     app.setStyleSheet(_to_dark(css) if dark else css)

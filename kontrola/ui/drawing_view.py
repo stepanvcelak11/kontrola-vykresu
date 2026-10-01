@@ -864,12 +864,51 @@ class DrawingView(QGraphicsView):
         if rect.width() > cur.width() * 0.5:  # shluk je jen hustý – stačí přiblížit 3× na jeho střed
             rect = QRectF(0, 0, cur.width() / 3, cur.height() / 3)
             rect.moveCenter(QPointF(sum(xs) / len(xs), sum(ys) / len(ys)))
-        self.fitInView(rect, Qt.KeepAspectRatio)
+        self._fit_rect(rect, animate=True)
         self.request_declutter()
+
+    inset_left = 0  # kolik pixelů vlevo/vpravo zakrývají plovoucí panely (výkres se centruje do zbytku)
+    inset_right = 0
+    animate_zoom = True
+
+    def _fit_rect(self, rect: QRectF, animate: bool = False):
+        """Jako fitInView, ale do části okna, kterou nezakrývají plovoucí panely; volitelně plynule."""
+        from PySide6.QtGui import QTransform
+        vp = self.viewport().rect()
+        W, H = max(vp.width(), 1), max(vp.height(), 1)
+        L = min(self.inset_left, W // 3)
+        R = min(self.inset_right, W // 2)
+        aw = max(80, W - L - R)
+        s = min(aw / max(rect.width(), 1e-9), H / max(rect.height(), 1e-9))
+        target = QPointF(rect.center().x() + (W / 2 - (L + aw / 2)) / s, rect.center().y())
+        if not (animate and self.animate_zoom and self.isVisible()):
+            self.setTransform(QTransform.fromScale(s, s))
+            self.centerOn(target)
+            return
+        from PySide6.QtCore import QEasingCurve, QVariantAnimation
+        s0 = self.transform().m11() or s
+        c0 = self.mapToScene(vp.center())
+        if getattr(self, "_zoom_anim", None) is not None:
+            self._zoom_anim.stop()
+        an = QVariantAnimation(self)
+        an.setDuration(260)
+        an.setEasingCurve(QEasingCurve.OutCubic)
+        an.setStartValue(0.0)
+        an.setEndValue(1.0)
+
+        def step(t):
+            t = float(t)
+            sc = s0 * (s / s0) ** t  # měřítko se mění geometricky – plynulé i při velkém přiblížení
+            self.setTransform(QTransform.fromScale(sc, sc))
+            self.centerOn(QPointF(c0.x() + (target.x() - c0.x()) * t, c0.y() + (target.y() - c0.y()) * t))
+        an.valueChanged.connect(step)
+        an.finished.connect(self.request_declutter)
+        self._zoom_anim = an
+        an.start()
 
     def zoom_to(self, x: float, y: float, span: float = 15.0):
         c = self.to_scene(x, y)
-        self.fitInView(QRectF(c.x() - span / 2, c.y() - span / 2, span, span), Qt.KeepAspectRatio)
+        self._fit_rect(QRectF(c.x() - span / 2, c.y() - span / 2, span, span), animate=True)
 
     def _add_feature_outline(self, path: QPainterPath, f: Feature):
         """Obrys prvku pro zvýraznění: čára/plocha přímo, text jako obdélník, bod jako kroužek."""
@@ -902,7 +941,7 @@ class DrawingView(QGraphicsView):
                 span = max(span, (b[2] - b[0]) * 1.4, (b[3] - b[1]) * 1.4)
             span = min(span, 200.0)
         rect = QRectF(c.x() - span / 2, c.y() - span / 2, span, span)
-        self.fitInView(rect, Qt.KeepAspectRatio)
+        self._fit_rect(rect, animate=True)
 
     # ---------------------------------------------------------------- navigace
     def fit_all(self):
@@ -911,8 +950,8 @@ class DrawingView(QGraphicsView):
             rect = self.scene().itemsBoundingRect()
         if rect.width() <= 0 and rect.height() <= 0:
             return
-        self.fitInView(rect.adjusted(-rect.width() * 0.03, -rect.height() * 0.03,
-                                     rect.width() * 0.03, rect.height() * 0.03), Qt.KeepAspectRatio)
+        self._fit_rect(rect.adjusted(-rect.width() * 0.03, -rect.height() * 0.03,
+                                     rect.width() * 0.03, rect.height() * 0.03))
 
     def current_scale(self) -> float:
         return self.transform().m11()

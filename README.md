@@ -113,6 +113,21 @@ python -m pytest -q tests\test_zakladni_kontroly.py
 V aplikaci otevřete **Kontrola → Nastavení kontrol**. Tam jde nastavit toleranci, zapnout
 nebo vypnout jednotlivé kontroly, změnit jejich závažnost a parametry.
 
+### Vzhled okna
+
+* **Výkres přes celé okno** – ovládání se nad ním „vznáší“ jako v mapových aplikacích.
+* **Svislá lišta vlevo**: Úvod, Výkres, Zadání, Otevřít, Kontrola (šipka = sady kontrol), Znovu, Odevzdat,
+  Protokol, Poradce; dole Nastavení a **Nabídka ☰** se všemi funkcemi (Soubor, Zobrazení, Kontrola, Nápověda).
+  Klávesové zkratky platí dál.
+* **Plovoucí panel chyb** vpravo: chyby jako **karty** s ikonou typu (topologie, atributy, kartografie,
+  geometrie), popisem, typem kontroly a vrstvou; tlačítkem ▤ se přepne na tabulku se sloupci. Panel jde sbalit
+  (›) – zůstane jen tlačítko s počtem chyb.
+* **Co chcete udělat? (Ctrl+F)** – pole nahoře najde a spustí funkci podle názvu (i bez diakritiky).
+* **Nástroje pohledu** vlevo nahoře (celý výkres, popisky, vrstvy, výřez, rozpracovaný, náčrt) a **minimapa**
+  vlevo dole s tečkami chyb – klik nebo tažení posune pohled. Přiblížení na chybu je plynulé a výkres se
+  centruje do části, kterou nezakrývá panel.
+* **Tmavý vzhled je výchozí**; světlý jde zapnout v Nabídka → Zobrazení → Tmavý režim.
+
 ### Krok 3: panel chyb s kroužky, popisky a filtry
 
 Otevřete ukázkový výkres a stiskněte F5.
