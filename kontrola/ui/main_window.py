@@ -234,6 +234,8 @@ class MainWindow(QMainWindow):
                                   "Když hlídáte výkres a uložíte ho v MicroStationu, vpravo dole se ukáže, kolik "
                                   "chyb ubylo a kolik zbývá", checkable=True)
         self.a_notify.setChecked(self.settings.value("upozorneni/zapnuto", True, type=bool))
+        self.a_undo = self._act("Zpět (stav chyby)", lambda: self.issue_panel.undo(), "Ctrl+Z",
+                                "Vrátí poslední Opraveno / Ignorovat – když se kliknutí nepovedlo")
         self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+Shift+H",
                                 "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
         self.a_focus = self._act("Režim soustředění", self.set_focus_mode, "F11",
@@ -298,6 +300,18 @@ class MainWindow(QMainWindow):
             self.accent_group.addAction(a)
             m_acc.addAction(a)
             self.a_accent[key] = a
+        m_font = m_view.addMenu("Velikost písma")
+        from .theme import FONT_SCALES, font_scale_name
+        self.font_group = QActionGroup(self)
+        self.a_font = {}
+        for key, (label, _k) in FONT_SCALES.items():
+            a = QAction(label, self, checkable=True)
+            a.setChecked(key == font_scale_name())
+            a.setToolTip(f"Velikost písma celé aplikace: {label.lower()}")
+            a.triggered.connect(lambda _c=False, k=key: self.set_font_scale(k))
+            self.font_group.addAction(a)
+            m_font.addAction(a)
+            self.a_font[key] = a
         m_view.addAction(self.a_labels)
         m_view.addAction(self.a_heat)
         m_view.addAction(self.a_focus)
@@ -330,6 +344,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_repair)
         m_check.addSeparator()
         m_check.addAction(self.a_fixguide)
+        m_check.addAction(self.a_undo)
         m_check.addAction(self.a_mini)
         m_check.addAction(self.a_notify)
         m_check.addAction(self.a_timeline)
@@ -554,6 +569,22 @@ class MainWindow(QMainWindow):
         self._apply_icons()
         self.settings.setValue("zobrazeni/vzhled", "tmavy" if on else "svetly")
         self.issue_panel.model.layoutChanged.emit()
+
+    def set_font_scale(self, key: str):
+        """Velikost písma celé aplikace (menší / normální / větší / největší) – uloží se."""
+        from PySide6.QtWidgets import QApplication
+
+        from .theme import apply_theme, is_dark
+        from .theme import set_font_scale as _set
+        _set(key)
+        apply_theme(QApplication.instance(), is_dark())
+        self._apply_icons()
+        self.settings.setValue("zobrazeni/pismo", key)
+        self.issue_panel.set_card_mode(self.issue_panel.card_mode)  # výška řádků podle písma
+        if key in getattr(self, "a_font", {}):
+            self.a_font[key].setChecked(True)
+        self.issue_panel.model.layoutChanged.emit()
+        self.split._layout()
 
     def set_accent(self, key: str):
         """Barva vzhledu (modrá / zelená / fialová / oranžová) – uloží se."""

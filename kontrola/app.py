@@ -39,8 +39,10 @@ def main(argv: list[str] | None = None) -> int:
     from .ui.theme import apply_theme
     # tmavý (profesionální) vzhled je výchozí; světlý jde přepnout v Zobrazení → Tmavý režim
     vzhled = QSettings("KontrolaVykresu", "KontrolaVykresu").value("zobrazeni/vzhled", "tmavy")
-    from .ui.theme import set_accent
-    set_accent(str(QSettings("KontrolaVykresu", "KontrolaVykresu").value("zobrazeni/barva", "modra")))
+    from .ui.theme import set_accent, set_font_scale
+    _st = QSettings("KontrolaVykresu", "KontrolaVykresu")
+    set_accent(str(_st.value("zobrazeni/barva", "modra")))
+    set_font_scale(str(_st.value("zobrazeni/pismo", "normalni")))
     apply_theme(app, vzhled != "svetly")
     from PySide6.QtGui import QIcon
 

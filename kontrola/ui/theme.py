@@ -79,6 +79,30 @@ ACCENTS = {"modra": ("Modrá", None), "zelena": ("Zelená", 158), "fialova": ("F
 _accent = "modra"
 
 
+# velikost písma celé aplikace (pro menší displeje / horší zrak)
+FONT_SCALES = {"mensi": ("Menší", 0.9), "normalni": ("Normální", 1.0), "vetsi": ("Větší", 1.15),
+               "nejvetsi": ("Největší", 1.3)}
+_font_scale = "normalni"
+_base_font: QFont | None = None
+
+
+def set_font_scale(name: str) -> None:
+    global _font_scale
+    _font_scale = name if name in FONT_SCALES else "normalni"
+
+
+def font_scale_name() -> str:
+    return _font_scale
+
+
+def _scale_pt(css: str) -> str:
+    k = FONT_SCALES[_font_scale][1]
+    if k == 1.0:
+        return css
+    import re
+    return re.sub(r"(\d+(?:\.\d+)?)pt\b", lambda m: f"{float(m.group(1)) * k:.2f}pt", css)
+
+
 def set_accent(name: str) -> None:
     global _accent
     _accent = name if name in ACCENTS else "modra"
@@ -265,6 +289,7 @@ QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 3px; }}
 QSlider::handle:horizontal {{ background: {PANEL}; border: 2px solid {ACCENT}; width: 14px; margin: -5px 0;
     border-radius: 8px; }}
 
+QScrollArea#navod_oblast, QWidget#navod_obsah {{ background: transparent; }}
 QLabel#krok_nadpis {{ font-size: 11.5pt; font-weight: 800; }}
 QLabel#uvod_nadpis {{ font-size: 21pt; font-weight: 800; }}
 QLabel#uvod_podnadpis {{ color: {MUTED}; font-size: 10pt; }}
@@ -394,8 +419,12 @@ def apply_theme(app, dark: bool = False) -> None:
     pal.setColor(QPalette.PlaceholderText, QColor(themed("#9CA3AF")))
     pal.setColor(QPalette.Mid, QColor(themed(MUTED)))
     app.setPalette(pal)
-    f = app.font()
-    if f.family() in ("", "Sans Serif", "MS Shell Dlg 2") or f.pointSizeF() < 9.5:
+    global _base_font
+    if _base_font is not None:
+        f = QFont(_base_font)
+    else:
+        f = app.font()
+    if _base_font is None and (f.family() in ("", "Sans Serif", "MS Shell Dlg 2") or f.pointSizeF() < 9.5):
         import sys
         if sys.platform == "win32":
             from PySide6.QtGui import QFontDatabase
@@ -403,10 +432,13 @@ def apply_theme(app, dark: bool = False) -> None:
             # Windows 11: modernější Segoe UI Variable, jinak klasické Segoe UI
             f = QFont("Segoe UI Variable Text" if "Segoe UI Variable Text" in fams else "Segoe UI")
         f.setPointSizeF(9.75)
+    if _base_font is None:
+        _base_font = QFont(f)
+    f.setPointSizeF(_base_font.pointSizeF() * FONT_SCALES[_font_scale][1])
     app.setFont(f)
     try:
         files = _arrow_files()
         css = (STYLESHEET + _arrow_css(files)).replace("{SIPKA_BILA}", files["dolu_bila"])
     except OSError:  # bez zápisu do dočasné složky zůstanou výchozí šipky
         css = STYLESHEET.replace('image: url("{SIPKA_BILA}");', "")
-    app.setStyleSheet(_to_accent(_to_dark(css) if dark else css))
+    app.setStyleSheet(_scale_pt(_to_accent(_to_dark(css) if dark else css)))

@@ -97,9 +97,17 @@ class CardDelegate(QStyledItemDelegate):
         self.panel = panel
         self._icons: dict[tuple, object] = {}
 
+    @classmethod
+    def height(cls) -> int:
+        """Výška karty podle písma (větší písmo v Zobrazení → Velikost písma = vyšší karty)."""
+        from PySide6.QtGui import QFontMetrics
+        from PySide6.QtWidgets import QApplication
+        fm = QFontMetrics(QApplication.font())
+        return max(cls.HEIGHT, int(fm.height() * 2 + 30))
+
     def sizeHint(self, option, index):  # noqa: N802
         from PySide6.QtCore import QSize
-        return QSize(option.rect.width(), self.HEIGHT)
+        return QSize(option.rect.width(), self.height())
 
     def _icon(self, name: str, color: str):
         key = (name, color)
@@ -341,6 +349,7 @@ class IssuePanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.near: dict[int, list[int]] = {}  # číslo chyby → čísla chyb na stejném místě
+        self._undo: list[list[tuple[Issue, str]]] = []  # historie změn stavu pro Zpět (Ctrl+Z)
         self.model = IssueModel(self)
         self.proxy = IssueFilter(self)
         self.proxy.setSourceModel(self.model)
@@ -543,7 +552,20 @@ class IssuePanel(QWidget):
         self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.LinksAccessibleByMouse)
         self.hint.linkActivated.connect(lambda h: self.select_issue(int(h)) if h.isdigit() else None)
         self.hint.setVisible(False)
-        tl.addWidget(self.hint)
+        # návod + obrázek v posuvné oblasti, aby dlouhý text nezmenšil seznam chyb na pár řádků
+        from PySide6.QtWidgets import QScrollArea
+        self.hint_box = QScrollArea()
+        self.hint_box.setObjectName("navod_oblast")
+        self.hint_box.setWidgetResizable(True)
+        self.hint_box.setFrameShape(QFrame.NoFrame)
+        self.hint_box.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        hb = QWidget()
+        hb.setObjectName("navod_obsah")
+        hl = QVBoxLayout(hb)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(6)
+        hl.addWidget(self.hint)
+        tl.addWidget(self.hint_box)
         # obrázek „jak to má vypadat“ k typu chyby (stejný jako ve vysvětlení „?“)
         self.ilustrace = QLabel()
         self.ilustrace.setObjectName("ilustrace")
@@ -551,7 +573,10 @@ class IssuePanel(QWidget):
         self.ilustrace.setToolTip("Jak to má vypadat – klikněte na „?“ pro celé vysvětlení")
         self.ilustrace.setVisible(False)
         self._ilu_cache: dict[str, object] = {}
-        tl.addWidget(self.ilustrace)
+        hl.addWidget(self.ilustrace)
+        hl.addStretch(1)
+        self.hint_box.setWidget(hb)
+        self.hint_box.setVisible(False)
         frow = QHBoxLayout()
         self.b_find = QPushButton("Najít v MicroStationu")
         self.b_find.setToolTip("Zkopíruje příkaz, který v MicroStationu vycentruje pohled na místo chyby. "
@@ -585,7 +610,10 @@ class IssuePanel(QWidget):
         t.setMouseTracking(on)
         t.setAlternatingRowColors(not on)
         t.horizontalHeader().setVisible(not on)
-        t.verticalHeader().setDefaultSectionSize(CardDelegate.HEIGHT if on else 30)
+        from PySide6.QtGui import QFontMetrics
+        from PySide6.QtWidgets import QApplication
+        t.verticalHeader().setDefaultSectionSize(CardDelegate.height() if on else
+                                                 max(30, QFontMetrics(QApplication.font()).height() + 12))
         for c in range(len(COLUMNS)):
             t.setColumnHidden(c, on and c != C_DESC)
         if on:
@@ -630,6 +658,7 @@ class IssuePanel(QWidget):
     def set_issues(self, issues: list[Issue], summary: str = ""):
         prev_hidden = set(self.proxy.hidden_types)
         self.near = self._neighbours(issues, self.NEAR_M, self.NEAR_SAME_FEATURE_M)
+        self._undo = []
         self.model.set_issues(issues)
         n_new = sum(1 for i in issues if i.nove and i.state == "nová")
         b_new = self.quick.get("nove")
@@ -830,6 +859,15 @@ class IssuePanel(QWidget):
         else:
             self.ilustrace.setPixmap(pm)
             self.ilustrace.setVisible(True)
+        self._fit_hint_box()
+
+    def _fit_hint_box(self):
+        vis = not self.hint.isHidden() or not self.ilustrace.isHidden()
+        self.hint_box.setVisible(vis)
+        if vis:
+            need = self.hint_box.widget().sizeHint().height() + 2
+            cap = max(120, int(self.height() * 0.26))
+            self.hint_box.setFixedHeight(min(need, cap))
 
     def _current_changed(self, cur, prev):
         if cur.isValid():
@@ -863,6 +901,7 @@ class IssuePanel(QWidget):
             self.note.setEnabled(False)
             self.note.clear()
             self.hint.setVisible(False)
+            self._fit_hint_box()
             self.b_find.setEnabled(False)
             self.b_copyxy.setEnabled(False)
 
@@ -919,6 +958,9 @@ class IssuePanel(QWidget):
             self.message.emit("Nejdřív vyberte chybu v seznamu (klikněte na řádek).")
             return
         changed = False
+        before = [(iss, iss.state) for iss in sel if iss.state != state]
+        if before:
+            self._undo = (self._undo + [before])[-100:]
         for iss in sel:
             if iss.state != state:
                 iss.state = state
@@ -935,6 +977,26 @@ class IssuePanel(QWidget):
         self.message.emit(f"Chyba {nums} {what}. Zbývá opravit: {left}.")
         if state != "nová" and len(sel) == 1:
             self.next_open()
+
+    def can_undo(self) -> bool:
+        return bool(self._undo)
+
+    def undo(self):
+        """Vrátí poslední změnu stavu (Opraveno / Ignorovat / Vrátit) a vybere tu chybu."""
+        if not self._undo:
+            self.message.emit("Není co vracet.")
+            return
+        last = self._undo.pop()
+        for iss, old in last:
+            iss.state = old
+            self.model.refresh_row(self.model.row_of(iss.number))
+        self.stateChanged.emit()
+        if self.proxy.hide_done:
+            self._filters_changed()
+        self._update_cards()
+        self.select_issue(last[0][0].number)
+        nums = ", ".join(f"#{i.number}" for i, _ in last[:5]) + ("…" if len(last) > 5 else "")
+        self.message.emit(f"Vráceno zpět: {nums} je znovu „{last[0][1]}“.")
 
     def next_open(self):
         """Přejde na další chybu, která ještě není opravená ani ignorovaná."""

@@ -953,3 +953,40 @@ def test_souvisejici_chyby_na_stejnem_miste(window):
     assert "Hned vedle" in p.hint.text() and "#2" in p.hint.text()
     p.hint.linkActivated.emit("3")
     assert p.current_issue().number == 3
+
+
+def test_zpet_stav_chyby(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 1, 30)
+    p = w.issue_panel
+    p.select_issue(w.issues[0].number)
+    first = p.current_issue()
+    p.set_state("opraveno")
+    assert first.state == "opraveno" and p.current_issue() is not first
+    p.set_state("ignorovat")
+    second = [i for i in w.issues if i.state == "ignorovat"][0]
+    w.a_undo.trigger()
+    assert second.state == "nová" and p.current_issue() is second
+    w.a_undo.trigger()
+    assert first.state == "nová" and p.current_issue() is first
+    w.a_undo.trigger()  # prázdná historie nic nerozbije
+    assert not p.can_undo()
+
+
+def test_velikost_pisma(window):
+    from PySide6.QtWidgets import QApplication
+
+    from kontrola.ui import theme
+    w = window
+    base = QApplication.font().pointSizeF()
+    h0 = w.issue_panel.table.verticalHeader().defaultSectionSize()
+    try:
+        w.a_font["nejvetsi"].trigger()
+        assert abs(QApplication.font().pointSizeF() - base * 1.3) < 0.2
+        assert w.issue_panel.table.verticalHeader().defaultSectionSize() >= h0
+        assert w.settings.value("zobrazeni/pismo") == "nejvetsi"
+    finally:
+        w.set_font_scale("normalni")
+    assert abs(QApplication.font().pointSizeF() - base) < 0.05 and theme.font_scale_name() == "normalni"
