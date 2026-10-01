@@ -952,8 +952,8 @@ class IssuePanel(QWidget):
         self.table.scrollTo(idx)
 
     # ------------------------------------------------------------ stav
-    def set_state(self, state: str):
-        sel = self.selected_issues()
+    def set_state(self, state: str, issues: list[Issue] | None = None):
+        sel = self.selected_issues() if issues is None else list(issues)
         if not sel:
             self.message.emit("Nejdřív vyberte chybu v seznamu (klikněte na řádek).")
             return
@@ -974,8 +974,9 @@ class IssuePanel(QWidget):
         what = {"opraveno": "označena jako opravená", "ignorovat": "ignorována", "nová": "vrácena k opravě"}[state]
         left = sum(1 for i in self.model.issues if i.state == "nová")
         nums = ", ".join(f"#{i.number}" for i in sel[:5]) + ("…" if len(sel) > 5 else "")
-        self.message.emit(f"Chyba {nums} {what}. Zbývá opravit: {left}.")
-        if state != "nová" and len(sel) == 1:
+        self.message.emit(f"Chyba {nums} {what}. Zbývá opravit: {left}."
+                          + (" (Vrátit: Ctrl+Z)" if issues is not None and len(sel) > 1 else ""))
+        if state != "nová" and len(sel) == 1 and issues is None:
             self.next_open()
 
     def can_undo(self) -> bool:
@@ -1023,6 +1024,17 @@ class IssuePanel(QWidget):
         m.addAction("Označit jako opraveno", lambda: self.set_state("opraveno"))
         m.addAction("Ignorovat", lambda: self.set_state("ignorovat"))
         m.addAction("Vrátit na „nová“", lambda: self.set_state("nová"))
+        cur = self.current_issue()
+        if cur is not None:  # hromadně – např. všechny „volné konce na okraji“ najednou (Ctrl+Z vrátí)
+            same = [i for i in self.model.issues if i.check_id == cur.check_id and i.state == "nová"]
+            on_layer = [i for i in self.model.issues if i.layer == cur.layer and i.state == "nová"]
+            m.addSeparator()
+            if len(same) > 1:
+                m.addAction(f"Ignorovat všechny „{cur.check_name}“ ({len(same)})",
+                            lambda: self.set_state("ignorovat", same))
+            if cur.layer and len(on_layer) > 1:
+                m.addAction(f"Ignorovat vše na vrstvě „{cur.layer}“ ({len(on_layer)})",
+                            lambda: self.set_state("ignorovat", on_layer))
         m.addSeparator()
         m.addAction("Jen tento typ", self._only_current)
         m.addAction("Zobrazit vše", self.show_all)

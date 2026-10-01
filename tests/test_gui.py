@@ -1056,3 +1056,16 @@ def test_co_je_noveho(window):
     finally:
         if geo is not None:
             s.setValue("okno/geometrie", geo)
+
+
+def test_hromadne_ignorovat_a_zpet(window):
+    from kontrola.checks.base import Issue, Severity
+    w = window
+    mk = lambda n, cid, layer: Issue(cid, cid, Severity.CHYBA, f"chyba {n}", n * 10.0, 0, layer=layer, number=n)
+    issues = [mk(1, "a", "L1"), mk(2, "a", "L2"), mk(3, "b", "L1"), mk(4, "a", "L1")]
+    p = w.issue_panel
+    p.set_issues(issues)
+    p.set_state("ignorovat", [i for i in issues if i.check_id == "a"])
+    assert [i.state for i in issues] == ["ignorovat", "ignorovat", "nová", "ignorovat"]
+    p.undo()  # jedno Ctrl+Z vrátí celou hromadnou změnu
+    assert all(i.state == "nová" for i in issues)

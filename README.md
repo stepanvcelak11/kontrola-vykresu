@@ -145,6 +145,8 @@ nebo vypnout jednotlivé kontroly, změnit jejich závažnost a parametry.
   text v celé aplikaci a karty chyb se přizpůsobí.
 * **Zpět (Ctrl+Z)** – vrátí poslední ✓ Opraveno / ✕ Ignorovat, když se kliknutí nepovedlo (v textovém poli
   Ctrl+Z dál vrací psaní).
+* **Hromadně** (pravé tlačítko na chybě): *Ignorovat všechny „typ“* nebo *Ignorovat vše na vrstvě* – jedním
+  Ctrl+Z se vrátí celé.
 * **⧉ Hned vedle jsou další chyby** – u vybrané chyby návod vypíše chyby do 10 cm (nebo na stejném prvku
   do 50 cm) s odkazy; často mají jednu příčinu a po opravě zmizí spolu. Karta má odznak ⧉ +N.
 * **Úvodní okénko** hned po spuštění .exe a **aktualizace jedním klikem** – při nové verzi stačí

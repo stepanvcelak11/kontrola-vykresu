@@ -17,6 +17,7 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "mají jednu příčinu.",
         "<b>Zpět (Ctrl+Z)</b> vrátí omylem kliknuté Opraveno / Ignorovat.",
         "<b>Velikost písma</b> celé aplikace v Nabídka → Zobrazení.",
+        "<b>Hromadně ignorovat</b> všechny chyby jednoho typu nebo vrstvy (pravé tlačítko na chybě).",
         "<b>Seznam k opravě na tisk</b> (Ctrl+P) má u každé skupiny chyb obrázek „chyba / správně“.",
     ]),
     (2, "1. října 2026 – dopoledne", [
