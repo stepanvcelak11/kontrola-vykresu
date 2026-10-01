@@ -248,3 +248,34 @@ def test_vlastnosti_prvku_a_hledani():
     k.usecka((50, 50), (60, 60))
     assert len(U.vyber_podobne(msp, [l])) == 2  # obě úsečky ve vrstvě 0
     assert U.vyber_podobne(msp, [c], ("typ",)) == [c]
+
+
+def test_rozdeleni_ohrada_omerne_miry_koty():
+    doc, msp, h, k = _novy()
+    l = k.usecka((0, 0), (10, 0))
+    a, b = U.rozdel(msp, h, l, (4, 0.3))
+    assert a.dxf.end.isclose((4, 0, 0)) and b.dxf.start.isclose((4, 0, 0)) and len(msp) == 2
+    with pytest.raises(ValueError):
+        U.rozdel(msp, h, a, (0, 0))
+    p = k.polylinie([(0, 10), (10, 10), (10, 20)])
+    p1, p2 = U.rozdel(msp, h, p, (10, 15))
+    assert [tuple(q) for q in p1.get_points("xy")] == [(0, 10), (10, 10), (10, 15)]
+    assert [tuple(q) for q in p2.get_points("xy")] == [(10, 15), (10, 20)]
+    ob = k.oblouk_3body((10, 0), (0, 10), (-10, 0))
+    o1, o2 = U.rozdel(msp, h, ob, (0, 10))
+    assert abs(o1.dxf.end_angle - 90) < 1e-9 and abs(o2.dxf.start_angle - 90) < 1e-9
+    ix = U.IndexVyberu(msp)
+    vyb = ix.ohrada([(-1, -1), (5, -1), (5, 1), (-1, 1)])
+    assert vyb == [a]
+    assert set(ix.ohrada([(-1, -1), (5, -1), (5, 1), (-1, 1)], protinajici=True)) >= {a, b}
+    # oměrné míry: 4.00 a 6.00, text rovnoběžně se stranou a nad ní
+    t = U.popis_delek(msp, h, [a, b], 1.0)
+    assert sorted(x.dxf.text for x in t) == ["4.00", "6.00"]
+    assert all(abs(x.dxf.rotation) < 1e-9 and x.dxf.align_point.y > 0 for x in t)
+    tv = U.popis_delek(msp, h, [U.nastav_vlastnosti(msp, h, a, {"start": (4, 0), "end": (0, 0)})], 1.0)
+    assert abs(tv[0].dxf.rotation) < 1e-9  # obrácená úsečka – text pořád čitelný
+    c = k.kruznice((50, 50), 7)
+    kp = U.kota_polomeru(msp, h, c, (57, 50))
+    assert abs(kp.get_measurement() - 7) < 1e-9
+    ku = U.kota_uhlu(msp, h, (0, 0), (10, 0), (0, 10), (5, 5))
+    assert abs(math.degrees(ku.get_measurement()) - 90) < 1e-6 or abs(ku.get_measurement() - 90) < 1e-6

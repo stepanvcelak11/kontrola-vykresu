@@ -1910,3 +1910,27 @@ def test_vypocty_zapisnik_editor(window, tmp_path):
     assert zp.do_seznamu() > 100
     v.seznam.body[:] = puvodni
     v._after_change()
+
+
+def test_cad_rozdel_ohrada_omerne_miry(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    c.view.zoom_all()
+    c.proved("rozděl")
+    ln = next(iter(c.prostor.query("LINE")))
+    c._posli((ln, (4.0, 0.0)))
+    c.zrus()
+    assert len(list(c.prostor.query("LINE"))) == 2
+    for t in ("ohrada", "x=-1 y=-1", "x=5 y=-1", "x=5 y=1", "x=-1 y=1", ""):
+        c.zadej(t)
+    assert len(c.vyber) == 1
+    c.proved("vše")
+    for t in ("om", "2"):
+        c.zadej(t)
+    assert sorted(t.dxf.text for t in c.prostor.query("TEXT")) == ["4.00", "6.00"]
+    for t in ("ku", "x=10 y=0", "x=0 y=0", "x=0 y=10", "x=5 y=5"):
+        c.zadej(t)
+    assert any(e.dxftype() == "DIMENSION" for e in c.prostor)

@@ -743,6 +743,14 @@ class IndexVyberu:
                 best, bd = e, d
         return best
 
+    def ohrada(self, body, protinajici: bool = False) -> list:
+        """Výběr ohradou (mnohoúhelník): prvky celé uvnitř, nebo i protnuté (MicroStation „Fence“)."""
+        from shapely.geometry import Polygon
+        poly = Polygon([_xy(p) for p in body])
+        if not poly.is_valid or poly.area <= 0:
+            raise ValueError("Ohrada musí být mnohoúhelník aspoň ze tří bodů.")
+        return [e for e, g, _bb in self.polozky if (poly.intersects(g) if protinajici else poly.contains(g))]
+
     def okno(self, x0, y0, x1, y1, protinajici: bool = False) -> list:
         from shapely.geometry import box
         b = box(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
@@ -1018,3 +1026,117 @@ def nahrad_text(msp, h: Historie, co: str, cim: str) -> int:
     if nove:
         h.proved(f"Nahrazení „{co}“ → „{cim}“", nove, stare)
     return len(nove)
+
+
+# ------------------------------------------------------------------ rozdělení, ohrada, oměrné míry, kóty
+def rozdel(msp, h: Historie, e, bod) -> list:
+    """Rozdělí úsečku, oblouk nebo polylinii v bodě (nejbližší bod na prvku) na dva prvky."""
+    px, py = _xy(bod)
+    t = e.dxftype()
+    if t == "LINE":
+        s, k = e.dxf.start, e.dxf.end
+        dx, dy = k.x - s.x, k.y - s.y
+        tt = ((px - s.x) * dx + (py - s.y) * dy) / (dx * dx + dy * dy)
+        if not 1e-9 < tt < 1 - 1e-9:
+            raise ValueError("Bod rozdělení musí ležet uvnitř úsečky.")
+        m = (s.x + tt * dx, s.y + tt * dy, s.z)
+        a, b = _kopie(e), _kopie(e)
+        a.dxf.end, b.dxf.start = m, m
+    elif t == "ARC":
+        c = e.dxf.center
+        u = math.degrees(math.atan2(py - c.y, px - c.x)) % 360
+        a0, a1 = e.dxf.start_angle % 360, e.dxf.end_angle % 360
+        if not 1e-9 < (u - a0) % 360 < (a1 - a0) % 360 - 1e-9:
+            raise ValueError("Bod rozdělení musí ležet uvnitř oblouku.")
+        a, b = _kopie(e), _kopie(e)
+        a.dxf.end_angle, b.dxf.start_angle = u, u
+    elif t == "LWPOLYLINE" and not e.closed:
+        pts = [(x, y, bb) for x, y, bb in e.get_points("xyb")]
+        best = None
+        for i in range(len(pts) - 1):
+            (x1, y1, _b), (x2, y2, _b2) = pts[i], pts[i + 1]
+            dx, dy = x2 - x1, y2 - y1
+            ll = dx * dx + dy * dy
+            if ll == 0:
+                continue
+            tt = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / ll))
+            d = math.hypot(x1 + tt * dx - px, y1 + tt * dy - py)
+            if best is None or d < best[0]:
+                best = (d, i, tt, (x1 + tt * dx, y1 + tt * dy))
+        if best is None or any(abs(p[2]) > 1e-12 for p in pts[best[1]:best[1] + 1]):
+            raise ValueError("Polylinii s oblouky rozdělte nejdřív příkazem rozpoj.")
+        _d, i, tt, m = best
+        if tt <= 1e-9 or tt >= 1 - 1e-9:
+            prvni, druha = pts[:i + 1 + (tt >= 1 - 1e-9)], pts[i + (tt >= 1 - 1e-9):]
+        else:
+            prvni, druha = pts[:i + 1] + [(m[0], m[1], 0.0)], [(m[0], m[1], 0.0)] + pts[i + 1:]
+        if len(prvni) < 2 or len(druha) < 2:
+            raise ValueError("Bod rozdělení je na konci polylinie.")
+        attrs = {k: e.dxf.get(k) for k in ("layer", "color", "linetype", "lineweight") if e.dxf.hasattr(k)}
+        a = msp.add_lwpolyline([(x, y, 0, 0, bb) for x, y, bb in prvni], format="xyseb", dxfattribs=attrs)
+        b = msp.add_lwpolyline([(x, y, 0, 0, bb) for x, y, bb in druha], format="xyseb", dxfattribs=attrs)
+        h.proved("Rozdělení", [a, b], [e])
+        return [a, b]
+    else:
+        raise ValueError("Rozdělit jde úsečka, oblouk nebo otevřená polylinie.")
+    msp.add_entity(a)
+    msp.add_entity(b)
+    h.proved("Rozdělení", [a, b], [e])
+    return [a, b]
+
+
+def popis_delek(msp, h: Historie, ents, vyska: float, des: int = 2, vrstva: str | None = None,
+                odsazeni: float = 0.4, attrs: dict | None = None) -> list:
+    """Oměrné míry: délka každé strany úsečky / polylinie jako text rovnoběžně se stranou nad jejím středem."""
+    from ezdxf.enums import TextEntityAlignment
+    nove = []
+    for e in ents:
+        if e.dxftype() == "LINE":
+            usek = [(_xy(e.dxf.start), _xy(e.dxf.end))]
+        elif e.dxftype() == "LWPOLYLINE":
+            p = [(x, y) for x, y in e.get_points("xy")]
+            if e.closed:
+                p.append(p[0])
+            usek = list(zip(p[:-1], p[1:]))
+        else:
+            continue
+        for (x1, y1), (x2, y2) in usek:
+            d = math.hypot(x2 - x1, y2 - y1)
+            if d < 1e-9:
+                continue
+            uhel = math.degrees(math.atan2(y2 - y1, x2 - x1))
+            if uhel > 90 or uhel <= -90:  # text vždy čitelný (ne vzhůru nohama)
+                uhel += 180 if uhel <= -90 else -180
+            nx, ny = -math.sin(math.radians(uhel)), math.cos(math.radians(uhel))
+            mx, my = (x1 + x2) / 2 + nx * vyska * odsazeni, (y1 + y2) / 2 + ny * vyska * odsazeni
+            a = dict(attrs or {})
+            a["layer"] = vrstva or e.dxf.get("layer", "0")
+            t = msp.add_text(f"{d:.{des}f}", height=vyska, rotation=uhel, dxfattribs=a)
+            t.set_placement((mx, my), align=TextEntityAlignment.BOTTOM_CENTER)
+            nove.append(t)
+    if not nove:
+        raise ValueError("Vyberte úsečky nebo polylinie.")
+    h.proved("Oměrné míry", nove)
+    return nove
+
+
+def kota_uhlu(msp, h: Historie, vrchol, p1, p2, poloha, vyska_textu: float = 2.5, attrs: dict | None = None):
+    d = msp.add_angular_dim_3p(base=_xy(poloha), center=_xy(vrchol), p1=_xy(p1), p2=_xy(p2),
+                               override={"dimtxt": vyska_textu, "dimasz": vyska_textu * 0.8},
+                               dxfattribs=attrs or {})
+    d.render()
+    h.proved("Úhlová kóta", [d.dimension])
+    return d.dimension
+
+
+def kota_polomeru(msp, h: Historie, e, bod, vyska_textu: float = 2.5, attrs: dict | None = None):
+    if e.dxftype() not in ("CIRCLE", "ARC"):
+        raise ValueError("Kóta poloměru jde jen na kružnici nebo oblouk.")
+    c = e.dxf.center
+    px, py = _xy(bod)
+    uhel = math.degrees(math.atan2(py - c.y, px - c.x))
+    d = msp.add_radius_dim(center=(c.x, c.y), radius=e.dxf.radius, angle=uhel,
+                           override={"dimtxt": vyska_textu, "dimasz": vyska_textu * 0.8}, dxfattribs=attrs or {})
+    d.render()
+    h.proved("Kóta poloměru", [d.dimension])
+    return d.dimension

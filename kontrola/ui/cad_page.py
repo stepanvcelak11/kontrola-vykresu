@@ -242,6 +242,9 @@ class CadPage(QWidget):
         "vlastnosti": "vlastnosti vybraného prvku (i dvojklik)", "podobné": "vybrat podobné (stejný typ a vrstva)",
         "najdi": "najít text („najdi 12/1“)", "nahraď": "nahradit text („nahraď staré / nové“)",
         "měř plochu": "výměra a obvod klikáním na body (Enter = konec)", "měř úhel": "úhel mezi třemi body",
+        "rozděl": "rozdělit prvek v bodě", "ohrada": "výběr ohradou (mnohoúhelník)",
+        "oměrné míry": "popis délek stran vybraných čar (oměrné míry)", "kóta úhlu": "úhlová kóta",
+        "kóta poloměru": "kóta poloměru kružnice / oblouku",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -264,7 +267,10 @@ class CadPage(QWidget):
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
         "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "mp": "měř plochu", "plocha bodů": "měř plochu",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
+        "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
+        "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
+        "kota polomeru": "kóta poloměru", "dimrad": "kóta poloměru", "kp": "kóta poloměru", "mp": "měř plochu", "plocha bodů": "měř plochu",
         "mer plochu": "měř plochu", "measure area": "měř plochu", "mu": "měř úhel", "mer uhel": "měř úhel",
         "uhel": "měř úhel", "úhel": "měř úhel", "pr": "vlastnosti", "props": "vlastnosti",
         "podobne": "podobné", "similar": "podobné", "find": "najdi", "nahrad": "nahraď", "replace": "nahraď", "plot": "tisk", "print": "tisk",
@@ -1994,6 +2000,55 @@ class CadPage(QWidget):
         po_smeru = ((u1 - u2) % math.tau) / GON
         vnitrni = min(po_smeru, 400 - po_smeru)
         self.vypis(f"Úhel {po_smeru:.4f} g po směru hodin ({po_smeru * 0.9:.4f}°), vnitřní {vnitrni:.4f} g")
+
+    # ------------------------------------------------------------ rozdělení, ohrada, oměrné míry, kóty
+    def n_rozdel(self):
+        while True:
+            e, k = yield Pozadavek("prvek", "Rozdělit – klikněte na prvek v místě rozdělení (Esc = konec):")
+            bod = self.view.kurzor if self.view.uchyt is not None and self.view.kurzor else k
+            try:
+                U.rozdel(self.prostor, self.historie_zmen, e, bod)
+            except ValueError as ex:
+                self.vypis(f"⚠ {ex}")
+
+    def n_ohrada(self):
+        body = [(yield self._bod_req("Ohrada – první bod:"))]
+        while True:
+            q = yield self._bod_req("Další bod (Enter = vybrat uvnitř, p = vybrat i protnuté):", body[-1], True,
+                                    ("p",))
+            if q is None or q == "p":
+                break
+            body.append(q)
+            self.view.zvyraznene = [_linie(body + [body[0]])]
+        self.vyber = self.index.ohrada(body, protinajici=(q == "p"))
+        self._zvyrazni()
+        self.vypis(f"Ohrada: vybráno {len(self.vyber)} prvků.")
+
+    def n_omerne_miry(self):
+        ents = yield from self._vyber_req("Oměrné míry")
+        p = next((q for q in self._predvolby if "oměrn" in (q.nazev or "").lower()), None)
+        attrs = {}
+        vrstva = None
+        if p is not None:
+            self.kresleni.nastav_predvolbu(p)
+            attrs = self.kresleni._attr(text=True)
+            vrstva = p.vrstva
+        vys = (p.vyska if p is not None and p.vyska else None) or self.vyska_textu
+        v = yield Pozadavek("cislo", f"Výška textu [{vys:g}]:", vychozi=vys)
+        nove = U.popis_delek(self.prostor, self.historie_zmen, ents, v, vrstva=vrstva or self.kresleni.vrstva,
+                             attrs={k: x for k, x in attrs.items() if k != "layer"})
+        self.vypis(f"Popsáno {len(nove)} délek" + (f" (hladina {vrstva} podle zadání)" if vrstva else "") + ".")
+
+    def n_kota_uhlu(self):
+        a = yield self._bod_req("Úhlová kóta – bod na prvním rameni:")
+        v = yield self._bod_req("Vrchol:", a)
+        b = yield self._bod_req("Bod na druhém rameni:", v)
+        p = yield self._bod_req("Poloha kótovacího oblouku:", v)
+        U.kota_uhlu(self.prostor, self.historie_zmen, v, a, b, p, self.vyska_textu, self.kresleni._attr())
+
+    def n_kota_polomeru(self):
+        e, k = yield Pozadavek("prvek", "Kóta poloměru – klikněte na kružnici nebo oblouk:")
+        U.kota_polomeru(self.prostor, self.historie_zmen, e, k, self.vyska_textu, self.kresleni._attr())
 
 
 def _linie(body):

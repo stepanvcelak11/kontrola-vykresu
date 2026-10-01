@@ -12,8 +12,9 @@ import re
 from dataclasses import dataclass
 
 TYPY = {"konec": "koncový bod", "stred": "střed", "prusecik": "průsečík", "kolmice": "kolmice",
-        "tecna": "tečna", "stred_kruznice": "střed kružnice", "bod": "bod"}
-PRIORITA = {"konec": 0, "prusecik": 1, "bod": 1, "stred_kruznice": 2, "stred": 2, "kolmice": 3, "tecna": 3}
+        "tecna": "tečna", "stred_kruznice": "střed kružnice", "bod": "bod", "nejblizsi": "nejbližší na prvku"}
+PRIORITA = {"konec": 0, "prusecik": 1, "bod": 1, "stred_kruznice": 2, "stred": 2, "kolmice": 3, "tecna": 3,
+            "nejblizsi": 9}
 
 
 @dataclass
@@ -296,6 +297,17 @@ class Uchyty:
                     else:
                         pts = _prusecik_oo(a, b)
                     kand += [Uchyt("prusecik", px, py, a.handle) for px, py in pts]
+        if "nejblizsi" in z:  # nejbližší bod na prvku (MicroStation „Nearest“) – jen když nic lepšího
+            for u in segs:
+                dx, dy = u.x2 - u.x1, u.y2 - u.y1
+                ll = dx * dx + dy * dy
+                if ll > 0:
+                    t = max(0.0, min(1.0, ((x - u.x1) * dx + (y - u.y1) * dy) / ll))
+                    kand.append(Uchyt("nejblizsi", u.x1 + t * dx, u.y1 + t * dy, u.handle))
+            for o in arcs:
+                a = math.atan2(y - o.cy, x - o.cx)
+                if o.obsahuje(a):
+                    kand.append(Uchyt("nejblizsi", *o.bod(a), o.handle))
         best, best_key = None, None
         for k in kand:
             d = math.hypot(k.x - x, k.y - y)
