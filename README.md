@@ -323,6 +323,27 @@ Stránka **Výpočty** v levé liště (vlastní implementace, nic z Gromy se ne
   kvality 3–7: 0,14 / 0,26 / 0,50 / 1,00 / 2,00 m, mezní polohová odchylka 2·√2·m_xy) jsou výchozí
   hodnoty – ověřte je v platném znění katastrální vyhlášky.
 
+## CAD – kreslení v DXF (jako MicroStation, fáze 1)
+
+Stránka **CAD** v levé liště. DXF je jediný formát: čte se, zapisuje a používá jako vlastní soubor
+(žádný vnitřní formát navíc, žádné DGN). Knihovny: ezdxf (MIT) pro DXF i vykreslení, PySide6/Qt (LGPL-3),
+obě zdarma pro vlastní použití.
+
+* **Otevřít DXF** – i poškozený soubor (oprava přes ezdxf.recover); v historii příkazů je zpráva: verze,
+  kódování, počty prvků, co CAD jen zachová beze změny, co se při načtení opravilo.
+* **Plátno:** věrné vykreslení (barvy, typy čar, texty, bloky, šrafy), kolečko = plynulý zoom ke kurzoru,
+  prostřední/pravé tlačítko = posun, **Celý výkres**.
+* **Kurzor se souřadnicemi S-JTSK** (u výkresu se zápornými souřadnicemi Y = −x, X = −y), jinak x/y.
+* **Úchyty (F3):** koncový bod, střed, průsečík, kolmice, tečna, střed kružnice, bod – značka u kurzoru
+  a název úchytu ve stavovém řádku. **Ortho (F8)** a **Polární (F10)** s krokem v gonech.
+* **Příkazový řádek:** `vzd` (vzdálenost, směrník, ΔY, ΔX), `celý`, `otevři`, `ulož`, `?`; souřadnice
+  `Y X` (S-JTSK), `x=… y=…`, `@dx,dy`, `@délka<směrník`; Esc zruší příkaz.
+* **Uložit / Uložit jako** – ASCII DXF, nový výkres R2000; neznámé entity a data zůstanou beze změny
+  (ověřeno testem: opakované otevření a uložení nic nemění ani neztrácí). Do starší verze se neukládá
+  (ztráta dat se odmítne).
+* **Propojení:** *Zkontrolovat* (CAD → Kontrola) uloží výkres a hned ho zkontroluje; *Otevřít výkres v CAD*
+  (nabídka Kontrola) otevře kontrolovaný DXF v CAD.
+
 ## Zadání z předmětu (MicroStation, Směrnice-výběr.xls)
 
 Ve složce [`podklady/zadani1-microstation/`](podklady/zadani1-microstation/) je zadání, učitelova

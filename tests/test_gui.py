@@ -1289,3 +1289,28 @@ def test_polarni_metoda_protokol_a_seznam(window, tmp_path, monkeypatch):
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
     assert d.to_list() > 100 and w.vypocty.seznam.najdi("1") is not None
     d.close()
+
+
+def test_cad_otevreni_mereni_a_propojeni(window, tmp_path):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w), 30)
+    w.a_open_cad.trigger()
+    c = w.cad
+    assert w.tabs.currentWidget() is c and c.dok is not None and c.view.scene().items()
+    assert "DXF" in c.historie.toPlainText()
+    # měření vzdálenosti z příkazového řádku (souřadnice DXF)
+    c.sjtsk = False
+    c.proved("vzd")
+    c.proved("x=0 y=0")
+    c.proved("@3,4")
+    assert "Vzdálenost 5.000" in c.historie.toPlainText()
+    c.proved("nesmysl")
+    assert "Neznámý příkaz" in c.historie.toPlainText()
+    c.proved("?")
+    # uložit jako a zkontrolovat v Kontrole (propojení CAD → Kontrola)
+    p = c.uloz(path=str(tmp_path / "z_cad.dxf"))
+    assert p.exists()
+    c.zkontroluj()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    assert w.tabs.currentWidget() is w.split

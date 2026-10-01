@@ -8,6 +8,11 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (5, "1. října 2026 – noc", [
+        "<b>CAD</b> (nová stránka v levé liště): DXF výkres na plátně, zoom a posun, souřadnice S-JTSK, "
+        "úchyty (koncový bod, střed, průsečík, kolmice, tečna), ortho a polární režim, příkazový řádek "
+        "(vzdálenost, souřadnice), uložení DXF beze ztrát a tlačítko Zkontrolovat (propojení s Kontrolou).",
+    ]),
     (4, "1. října 2026 – večer", [
         "<b>Výpočty</b> (nová stránka v levé liště): seznam souřadnic jako v Gromě – číslo, Y, X, Z, kód, "
         "kvalita; úpravy přímo v tabulce, hledání, filtr podle kódu, řazení kliknutím na záhlaví.",

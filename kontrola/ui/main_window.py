@@ -76,6 +76,9 @@ class MainWindow(QMainWindow):
         from .vypocty_page import VypoctyPage
         self.vypocty = VypoctyPage(self)
         self.tabs.addTab(self.vypocty, "Výpočty")
+        from .cad_page import CadPage
+        self.cad = CadPage(self)
+        self.tabs.addTab(self.cad, "CAD")
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
 
@@ -244,6 +247,8 @@ class MainWindow(QMainWindow):
                                 "Vrátí poslední krok: na stránce Výpočty změnu seznamu bodů, jinak Opraveno / "
                                 "Ignorovat u chyby")
         self.a_redo = self._act("Znovu", self.redo_dispatch, "Ctrl+Y", "Znovu provede vrácený krok (Výpočty)")
+        self.a_open_cad = self._act("Otevřít výkres v CAD", self.open_in_cad, None,
+                                    "Otevře právě kontrolovaný výkres DXF na stránce CAD (kreslení a opravy)")
         self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+Shift+H",
                                 "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
         self.a_focus = self._act("Režim soustředění", self.set_focus_mode, "F11",
@@ -353,6 +358,7 @@ class MainWindow(QMainWindow):
         m_check.addSeparator()
         m_check.addAction(self.a_fixguide)
         m_check.addAction(self.a_undo)
+        m_check.addAction(self.a_open_cad)
         m_check.addAction(self.a_mini)
         m_check.addAction(self.a_notify)
         m_check.addAction(self.a_timeline)
@@ -429,7 +435,8 @@ class MainWindow(QMainWindow):
         for key, text, tip in (("uvod", "Úvod", "Úvodní stránka – stav projektu a další krok"),
                                ("vykres", "Výkres", "Výkres a seznam chyb"),
                                ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady"),
-                               ("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)")):
+                               ("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)"),
+                               ("cad", "CAD", "Kreslení v DXF (jako MicroStation)")):
             act = QAction(text, self)
             act.setCheckable(True)
             act.setToolTip(tip)
@@ -527,7 +534,7 @@ class MainWindow(QMainWindow):
 
     def show_page(self, key: str):
         w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani,
-             "vypocty": getattr(self, "vypocty", None)}.get(key)
+             "vypocty": getattr(self, "vypocty", None), "cad": getattr(self, "cad", None)}.get(key)
         if w is not None:
             from .crash import step
             step(f"stránka {key}")
@@ -538,7 +545,8 @@ class MainWindow(QMainWindow):
             return
         w = self.tabs.currentWidget()
         key = ("uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split
-               else "vypocty" if w is getattr(self, "vypocty", None) else "zadani")
+               else "vypocty" if w is getattr(self, "vypocty", None)
+               else "cad" if w is getattr(self, "cad", None) else "zadani")
         self.a_page[key].setChecked(True)
 
     def _popup_main_menu(self):
@@ -573,7 +581,8 @@ class MainWindow(QMainWindow):
             for i in range(self.tabs.count()):
                 w = self.tabs.widget(i)
                 name = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else \
-                    "zadani" if w is self.zadani else "vypocty" if w is getattr(self, "vypocty", None) else None
+                    "zadani" if w is self.zadani else "vypocty" if w is getattr(self, "vypocty", None) else \
+                    "cad" if w is getattr(self, "cad", None) else None
                 if name:
                     self.tabs.setTabIcon(i, icon(name, accent() if i == self.tabs.currentIndex()
                                                  else themed("#6B7280")))
@@ -1732,6 +1741,18 @@ class MainWindow(QMainWindow):
         install_and_restart(dest)
         self.close()
         QApplication.instance().quit()
+
+    def open_in_cad(self):
+        if self.drawing is None:
+            self.statusBar().showMessage("Nejdřív otevřete výkres.", 5000)
+            return
+        src = Path(self.drawing.source_path or self.drawing.path)
+        if src.suffix.lower() != ".dxf":
+            QMessageBox.information(self, "CAD", "CAD pracuje jen s DXF – tento výkres je "
+                                    f"{src.suffix.upper()[1:]}. Uložte ho v MicroStationu jako DXF.")
+            return
+        if self.cad.otevri(str(src)):
+            self.show_page("cad")
 
     def undo_dispatch(self):
         if self.tabs.currentWidget() is getattr(self, "vypocty", None):
