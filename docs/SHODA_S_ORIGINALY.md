@@ -33,7 +33,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Import zápisníku Leica GSI-8 / GSI-16 (gon, stupně, mil; mm–0,01 mm) | ✅ | Husovice přes GSI = stejné souřadnice jako ze .zap |
 | Další formáty totálních stanic (Trimble, Topcon, Sokkia) | ❌ | |
 | Body ze seznamu do výkresu (shodně se světem, hladiny a atributy podle zadání, kódy buněk) | ✅ | kontrola symbologie bez chyb |
-| Vyrovnání sítě MNČ | ❌ | |
+| Vyrovnání sítě MNČ (směry + délky, apriorní přesnosti, σ0, střední chyby, elipsy chyb, opravy) | ✅ | přesná síť vyjde přesně, se šumem shoda s nezávislou MNČ na 0,01 mm |
 
 ## CAD (náhrada MicroStationu pro 2D, jen DXF)
 

@@ -3,6 +3,7 @@ výpočet polární metody dávkou proti seznamu souřadnic projektu a vypočten
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -35,9 +36,11 @@ class ZapisnikPanel(QWidget):
         self.b_smaz = QPushButton("Smazat")
         self.b_vyp = QPushButton("Vypočítat (polární metoda)")
         self.b_vyp.setProperty("primarni", True)
+        self.b_vyr = QPushButton("Vyrovnat síť (MNČ)…")
+        self.b_vyr.setToolTip("Vyrovnání sítě ze všech směrů a délek zápisníku; pevné body ze seznamu souřadnic")
         self.b_do = QPushButton("Do seznamu bodů")
         self.b_do.setEnabled(False)
-        for b in (self.b_nacist, self.b_ulozit, self.b_st, self.b_zam, self.b_smaz, self.b_vyp, self.b_do):
+        for b in (self.b_nacist, self.b_ulozit, self.b_st, self.b_zam, self.b_smaz, self.b_vyp, self.b_vyr, self.b_do):
             bar.addWidget(b)
         bar.addStretch(1)
         lay.addLayout(bar)
@@ -82,6 +85,7 @@ class ZapisnikPanel(QWidget):
         self.b_smaz.clicked.connect(self.smaz)
         self.b_vyp.clicked.connect(self.vypocitej)
         self.b_do.clicked.connect(self.do_seznamu)
+        self.b_vyr.clicked.connect(lambda: self.vyrovnat())
         self.seznam_st.currentRowChanged.connect(self._zobraz)
         self.st_cislo.editingFinished.connect(self._st_zmena)
         self.st_vp.valueChanged.connect(self._st_zmena)
@@ -252,6 +256,59 @@ class ZapisnikPanel(QWidget):
         self.b_do.setEnabled(bool(nove))
         self.info.setText(f"Vypočteno {len(nove)} bodů." + (" Upozornění: " + "; ".join(upoz[:3]) if upoz else ""))
         return self.vysledek
+
+    def vyrovnat(self, sigma_smer_cc: float | None = None, sigma_delka_mm: float | None = None,
+                 sigma_ppm: float | None = None):
+        """Vyrovnání sítě MNČ ze zápisníku: směry a vodorovné délky (redukované do zobrazení)."""
+        from PySide6.QtWidgets import QInputDialog
+        from ..geodezie import vyrovnani as VR
+        from ..vypocet import krovak_scale
+        if not self.stanoviska:
+            self.info.setText("Zápisník je prázdný.")
+            return None
+        if sigma_smer_cc is None:
+            t, ok = QInputDialog.getText(self, "Vyrovnání sítě", "Apriorní střední chyby: směr [cc], délka [mm], "
+                                         "délka [ppm]:", text="10 3 2")
+            if not ok:
+                return None
+            try:
+                sigma_smer_cc, sigma_delka_mm, sigma_ppm = (float(x.replace(",", ".")) for x in t.split()[:3])
+            except ValueError:
+                self.info.setText("⚠ Zadejte tři čísla, např. 10 3 2.")
+                return None
+        pevne = {b.cislo: (b.y, b.x) for b in self.page.seznam.body}
+        if not pevne:
+            self.info.setText("⚠ V seznamu souřadnic nejsou pevné body.")
+            return None
+        # měřítko zobrazení + nadmořská výška z pevných bodů (stejně jako polární metoda)
+        ys = [v[0] for v in pevne.values()]
+        xs = [v[1] for v in pevne.values()]
+        zs = [b.z for b in self.page.seznam.body if b.z is not None]
+        m = krovak_scale(sum(ys) / len(ys), sum(xs) / len(xs), sum(zs) / len(zs) if zs else 0.0)
+        smery, delky = [], []
+        for st in Z.pro_vypocet(self.stanoviska):
+            for o in st.orient + st.detail:
+                smery.append(VR.Smer(st.bod, o.bod, o.hz))
+                delky.append(VR.Delka(st.bod, o.bod, o.sd * math.sin(o.z * VR.GON) * m))
+        # body, které jsou jen rajóny bez kontroly, síť nezpevní – do vyrovnání jdou jen body určené víckrát
+        pocet: dict[str, int] = {}
+        for s in smery:
+            pocet[s.cil] = pocet.get(s.cil, 0) + 1
+        sit = {b for b, n in pocet.items() if n >= 2 or b in pevne} | {s.st for s in smery}
+        smery = [s for s in smery if s.cil in sit]
+        delky = [d for d in delky if d.cil in sit]
+        try:
+            v = VR.vyrovnej(smery, delky, pevne, sigma_smer_cc, sigma_delka_mm, sigma_ppm)
+        except ValueError as e:
+            self.info.setText(f"⚠ {e}")
+            return None
+        text = "\n".join(VR.protokol(v, sigma_smer_cc, sigma_delka_mm, sigma_ppm))
+        self.vystup.setPlainText(text)
+        self.page.protokol_append(text.splitlines())
+        self.vyrovnani = v
+        self.info.setText(f"Vyrovnáno {len(v.souradnice)} bodů, σ0 = {v.sigma0:.2f}, nadbytečných měření "
+                          f"{v.redundance}. Body určené jen jednou (rajóny) spočítá polární metoda.")
+        return v
 
     def do_seznamu(self) -> int:
         from ..geodezie.body import Bod

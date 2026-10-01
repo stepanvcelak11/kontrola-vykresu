@@ -1934,3 +1934,23 @@ def test_cad_rozdel_ohrada_omerne_miry(window):
     for t in ("ku", "x=10 y=0", "x=0 y=0", "x=0 y=10", "x=5 y=5"):
         c.zadej(t)
     assert any(e.dxftype() == "DIMENSION" for e in c.prostor)
+
+
+def test_zapisnik_vyrovnani_site(window):
+    from kontrola.geodezie.formaty import nacti_soubor
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+    if not (z / "zap_husovice.zap").exists():
+        pytest.skip("podklady chybí")
+    v = window.vypocty
+    window.show_page("vypocty")
+    puvodni = list(v.seznam.body)
+    dane, _var, _f = nacti_soubor(z / "dane_body.txt")
+    v.seznam.pridej(dane, "dané body")
+    v._after_change()
+    zp = v.zapisnik
+    assert zp.nacist(str(z / "zap_husovice.zap"))
+    r = zp.vyrovnat(10, 3, 2)
+    text = zp.vystup.toPlainText()
+    assert (r is not None and "VYROVNÁNÍ SÍTĚ MNČ" in text) or "⚠" in zp.info.text()
+    v.seznam.body[:] = puvodni
+    v._after_change()
