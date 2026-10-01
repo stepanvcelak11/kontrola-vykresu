@@ -29,11 +29,9 @@ DRAWING_FILTER = ("Výkresy (*.dxf *.dgn *.dwg *.vfk *.shp *.geojson);;DXF (*.dx
 
 
 class MainWindow(QMainWindow):
-    _updateResult = Signal(object, str, bool)  # výsledek kontroly aktualizací z vlákna na pozadí
 
     def __init__(self, project: Project | None = None):
         super().__init__()
-        self._updateResult.connect(self._on_update_result)
         self.settings = QSettings("KontrolaVykresu", "KontrolaVykresu")
         self.project: Project | None = None
         self.drawing: Drawing | None = None
@@ -1665,18 +1663,27 @@ class MainWindow(QMainWindow):
         from ..aktualizace import fetch_latest
         self.settings.setValue("aktualizace/posledni", time.time())
 
+        # Vlákno na Qt vůbec nesahá (signál na okno, které se mezitím zavírá, uměl na Windows shodit
+        # celý proces): výsledek jen uloží a okno si ho vyzvedne časovačem v hlavním vlákně.
+        vysledek: dict = {}
+
         def work():
             try:
-                latest = fetch_latest()
-                err = ""
+                vysledek["v"] = (fetch_latest(), "")
             except Exception as exc:  # noqa: BLE001 – bez internetu apod.
-                latest, err = None, str(exc)
-            try:
-                self._updateResult.emit(latest, err, manual)
-            except RuntimeError:
-                pass  # okno se mezitím zavřelo – výsledek už nikoho nezajímá
+                vysledek["v"] = (None, str(exc))
 
         threading.Thread(target=work, daemon=True).start()
+        konec = time.time() + 30
+
+        def vyzvedni():
+            if "v" in vysledek:
+                latest, err = vysledek["v"]
+                self._on_update_result(latest, err, manual)
+            elif time.time() < konec:
+                QTimer.singleShot(200, self, vyzvedni)  # okno jako kontext: zavřené okno nic nevyzvedne
+
+        QTimer.singleShot(200, self, vyzvedni)
         if manual:
             self.statusBar().showMessage("Zjišťuji, jestli je novější verze…", 5000)
 

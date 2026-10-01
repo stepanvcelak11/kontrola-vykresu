@@ -109,6 +109,7 @@ class MobilDialog(QDialog):
 
     def closeEvent(self, e):  # noqa: N802
         self._t.stop()
+        self.server.na_akci = lambda *_a: None  # vlákna serveru už nesmí sahat na zavírané okno
         self.server.zastav()
         for sig in (self.win.issue_panel.issueSelected, self.win.issue_panel.stateChanged):
             try:
