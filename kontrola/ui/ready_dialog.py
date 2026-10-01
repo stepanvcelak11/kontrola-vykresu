@@ -146,10 +146,17 @@ class ReadyDialog(QDialog):
             lab = QLabel(f"{mark} {txt}")
             lab.setWordWrap(True)
             lay.addWidget(lab)
-        lay.addWidget(QLabel("<b>Průběh počtu chyb</b> (červeně chyby, oranžově varování)"))
+        hist = project.meta.get("historie", []) if project else []
         self.chart = HistoryChart()
-        self.chart.set_data(project.meta.get("historie", []) if project else [])
-        lay.addWidget(self.chart, 1)
+        self.chart.set_data(hist)
+        if len(hist) >= 2:
+            lay.addWidget(QLabel("<b>Průběh počtu chyb</b> (červeně chyby, oranžově varování)"))
+            lay.addWidget(self.chart, 1)
+        else:  # jeden sloupec nic neřekne – graf se ukáže od druhé kontroly
+            self.chart.hide()
+            lay.addWidget(QLabel("<b>Průběh počtu chyb</b> se ukáže od druhé kontroly – po opravě a nové "
+                                 "kontrole tu uvidíte, jak chyb ubývá."))
+            self.resize(720, 470)  # bez grafu stačí nižší okno
 
         self.odev_label = QLabel()
         self.odev_label.setWordWrap(True)
