@@ -1133,7 +1133,12 @@ def test_kazda_funkce_bez_padu(window, tmp_path, monkeypatch):
     orig_exec = QDialog.exec
 
     def fake_exec(self, *a, **k):
-        QTimer.singleShot(100, self.reject)
+        # časovač patří dialogu: zanikne s ním (singleShot s vázanou metodou by mohl doběhnout
+        # až po smazání dialogu – na Windows pak proces tiše spadne v některém z dalších testů)
+        t = QTimer(self)
+        t.setSingleShot(True)
+        t.timeout.connect(self.reject)
+        t.start(100)
         return orig_exec(self)
     monkeypatch.setattr(QDialog, "exec", fake_exec)
     monkeypatch.setattr(QMenu, "exec", lambda self, *a, **k: None)
@@ -1192,6 +1197,21 @@ def test_kazda_funkce_bez_padu(window, tmp_path, monkeypatch):
                 w.a_focus.setChecked(False)
         except Exception:  # noqa: BLE001
             errs.append((t, traceback.format_exc()[-1200:]))
+    # úklid uvnitř tohoto testu: zavřít okna, doběhnout odložená smazání a časovače, ať nic
+    # nepřeteče do dalších testů
+    import gc
+
+    from PySide6.QtCore import QElapsedTimer, QEvent
+    for tw in app.topLevelWidgets():
+        if tw is not w and tw.isVisible():
+            tw.close()
+    hodiny = QElapsedTimer()
+    hodiny.start()
+    while hodiny.elapsed() < 500:
+        app.sendPostedEvents(None, QEvent.DeferredDelete)
+        app.processEvents()
+    gc.collect()
+    app.processEvents()
     assert not errs, "\n\n".join(f"{t}:\n{e}" for t, e in errs)
 
 
