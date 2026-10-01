@@ -134,6 +134,18 @@ def oddil_opakovana(stanoviska: list[Station]) -> list[str]:
     return r
 
 
+def oddil_obousmerne(res: Result) -> list[str]:
+    r = _nadpis("ZPRACOVÁNÍ OBOUSMĚRNĚ MĚŘENÝCH DÉLEK")
+    r += [f"{'Bod A':<17} {'Bod B':<17} {'D Tam':>8} {'D Zpět':>8} {'Rozdíl':>7} {'D':>8} {'dH Tam':>8} "
+          f"{'dH Zpět':>8} {'Rozdíl':>7} {'dH':>8}", "-" * 105]
+    if not res.obousmerne:
+        return r + ["Žádné délky měřené tam i zpět."]
+    for o in res.obousmerne:
+        r.append(f"{o['a']:<17} {o['b']:<17} {o['d_tam']:>8.3f} {o['d_zpet']:>8.3f} {abs(o['d_rozdil']):>7.3f} "
+                 f"{o['d']:>8.3f} {o['dh_tam']:>8.3f} {o['dh_zpet']:>8.3f} {abs(o['dh_rozdil']):>7.3f} {o['dh']:>8.3f}")
+    return r
+
+
 def oddil_polarni(res: Result, kody_kvality: dict[str, int] | None = None) -> list[str]:
     kody_kvality = kody_kvality or {}
     r = _nadpis("POLÁRNÍ METODA DÁVKOU")
@@ -145,7 +157,7 @@ def oddil_polarni(res: Result, kody_kvality: dict[str, int] | None = None) -> li
               f"{'Bod':<17} {'Y':>12} {'X':>13} {'Z':>9} {'Kv.':>4}  Popis", CARA]
         for o in s["orientace"]:
             kp = o["kp"]
-            r.append(f"{o['bod']:<17} {abs(kp.a):>12.3f} {abs(kp.b):>13.3f} {_c(kp.z, 3, 9)}")
+            r.append(f"{o['bod']:<17} {abs(kp.a):>12.3f} {abs(kp.b):>13.3f} {_c(o.get('z', kp.z), 3, 9)}")
         r += [CARA, f"{'Bod':<17} {'Hz':>9} {'Váha':>5} {'Směrník':>9} {'V or.':>8} {'Délka':>9} "
                     f"{'V délky':>8} {'V přev.':>8}", CARA]
         for o in s["orientace"]:
@@ -206,6 +218,7 @@ def protokol_polarni(res: Result, stanoviska: list[Station], dane: list[ListPoin
     r += oddil_redukce(stanoviska)
     r += oddil_refrakce(stanoviska)
     r += oddil_opakovana(stanoviska)
+    r += oddil_obousmerne(res)
     r += oddil_polarni(res)
     r += oddil_kontroly(res)
     r += oddil_seznam(res)

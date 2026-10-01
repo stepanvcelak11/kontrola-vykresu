@@ -247,10 +247,12 @@ def vymera(body: list) -> float:
         pts = pts[:-1]
     if len(pts) < 3:
         return 0.0
+    # souřadnice vztažené k prvnímu bodu – u velkých čísel S-JTSK se jinak ztrácí přesnost odčítáním
+    y0, x0 = pts[0]
     s = 0.0
     for i in range(len(pts)):
-        y1, x1 = pts[i]
-        y2, x2 = pts[(i + 1) % len(pts)]
+        y1, x1 = pts[i][0] - y0, pts[i][1] - x0
+        y2, x2 = pts[(i + 1) % len(pts)][0] - y0, pts[(i + 1) % len(pts)][1] - x0
         s += y1 * x2 - y2 * x1
     return abs(s) / 2.0
 

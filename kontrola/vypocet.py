@@ -81,6 +81,7 @@ class Result:
     kontroly: list[Kontrola] = field(default_factory=list)
     posuny: dict[str, float] = field(default_factory=dict)  # orientační posun na stanovisku [g]
     protokol: list[dict] = field(default_factory=list)  # mezivýsledky po stanoviscích (pro výpočetní protokol)
+    obousmerne: list[dict] = field(default_factory=list)  # délky a převýšení měřené tam i zpět
 
 
 def _merge_faces(obs: list[Obs]) -> list[Obs]:
@@ -239,6 +240,22 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
                 sp.stanovisko = "niv"
                 break
 
+    # obousměrně měřené délky a převýšení mezi stanovisky (průměr tam/zpět se použije v orientaci)
+    obousmerne: list[dict] = []
+    prumer_d: dict[tuple[str, str], float] = {}
+    for i, a in enumerate(stations):
+        for b in stations[i + 1:]:
+            tam = next((o for o in a.orient + a.detail if short_numbers(o.bod) & short_numbers(b.bod)), None)
+            zpet = next((o for o in b.orient + b.detail if short_numbers(o.bod) & short_numbers(a.bod)), None)
+            if tam is None or zpet is None or tam.sd <= 0 or zpet.sd <= 0:
+                continue
+            d1, h1 = _dh(tam, a.vp, m)
+            d2, h2 = _dh(zpet, b.vp, m)
+            rec = {"a": a.bod, "b": b.bod, "d_tam": d1, "d_zpet": d2, "d_rozdil": d1 - d2, "d": (d1 + d2) / 2,
+                   "dh_tam": h1, "dh_zpet": h2, "dh_rozdil": h1 + h2, "dh": (h1 - h2) / 2}
+            obousmerne.append(rec)
+            prumer_d[(a.bod, b.bod)] = prumer_d[(b.bod, a.bod)] = rec["d"]
+
     body: list[Point] = []
     seen: set[str] = set()
     kontroly: list[Kontrola] = []
@@ -265,16 +282,23 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             posun = (smer - o.hz) % 400.0
             w = math.hypot(dy, dx)
             rows.append((o.bod, posun, w))
+            # výška orientačního bodu: u jiného stanoviska jeho vypočtená výška (z nivelace), jinak daná
+            zst = next((p.z for p in st_pts.values() if p.stanovisko == "niv"
+                        and short_numbers(p.bod) & short_numbers(o.bod)), None)
             orow = {"bod": o.bod, "hz": o.hz, "smernik": smer, "delka": w, "kp": kp, "v_delky": None,
-                    "v_prev": None, "obs": o}
+                    "v_prev": None, "obs": o, "z": zst if zst is not None else kp.z}
             orient_rows.append(orow)
             if o.sd > 0.5:  # délka na orientaci ověří, že jde opravdu o daný bod
                 dm, dh_o = _dh(o, st.vp, m)
+                ob = next((v for k, v in prumer_d.items() if k[0] == st.bod
+                           and short_numbers(k[1]) & short_numbers(o.bod)), None)
+                if ob is not None:
+                    dm = ob  # obousměrně měřená délka – průměr tam a zpět
                 dd = dm - w
                 orow["v_delky"] = -dd  # ze souřadnic − měřená
                 orow["delka_mer"] = dm
-                if kp.z and sp.z is not None:
-                    orow["v_prev"] = (kp.z - sp.z) - dh_o
+                if orow["z"] and sp.z is not None:
+                    orow["v_prev"] = (orow["z"] - sp.z) - dh_o
                 lim = max(0.03, 0.0002 * w)
                 kontroly.append(Kontrola("Délka na orientaci", st.bod, o.bod, f"{dd * 1000:+.0f} mm", abs(dd) <= lim,
                                          f"měřená vodorovná délka {dm:.3f} m, ze souřadnic {w:.3f} m"
@@ -351,7 +375,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
                                  f"{dxy * 1000:.0f} mm" + (f", výška {dz * 1000:+.0f} mm" if dz is not None else ""),
                                  dxy <= 0.05 and (dz is None or abs(dz) <= 0.05),
                                  "rozdíl dvou nezávislých určení téhož bodu z různých stanovisek"))
-    return Result(body, st_pts, m, msgs, kontroly, posuny, protokol)
+    return Result(body, st_pts, m, msgs, kontroly, posuny, protokol, obousmerne)
 
 
 @dataclass
