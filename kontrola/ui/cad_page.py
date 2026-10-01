@@ -229,6 +229,7 @@ class CadPage(QWidget):
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
         "vše": "vybrat vše", "zpět": "vrátit poslední změnu (Ctrl+Z)", "vpřed": "znovu provést (Ctrl+Y)",
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
+        "vrstvy": "správce vrstev",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -249,7 +250,7 @@ class CadPage(QWidget):
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
     VYBEROVE = {"smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj"}
 
@@ -295,6 +296,9 @@ class CadPage(QWidget):
         self.vrstvy.setMinimumWidth(140)
         self.vrstvy.setToolTip("Aktuální vrstva pro nové prvky")
         bar.addWidget(self.vrstvy)
+        self.b_vrstvy = QPushButton("Vrstvy…")
+        self.b_vrstvy.setToolTip("Správce vrstev: zapnutí, zámek, barva, typ čáry, nová, přejmenovat, smazat")
+        bar.addWidget(self.b_vrstvy)
         bar.addStretch(1)
         self.title = QLabel("Žádný výkres")
         bar.addWidget(self.title)
@@ -367,6 +371,7 @@ class CadPage(QWidget):
         self.b_undo.clicked.connect(self.undo)
         self.b_redo.clicked.connect(self.redo)
         self.b_check.clicked.connect(self.zkontroluj)
+        self.b_vrstvy.clicked.connect(lambda: self.spravce_vrstev())
         self.vrstvy.currentTextChanged.connect(self._vrstva_zmenena)
         self.prikaz.returnPressed.connect(self._enter)
         self.view.mouseMoved.connect(self._pohyb)
@@ -484,8 +489,37 @@ class CadPage(QWidget):
 
     def _obnov_indexy(self):
         msp = self.dok.msp
-        self.view.uchyty = Uchyty(msp)
+        skryte, zamcene = set(), set()
+        for ly in self.dok.doc.layers:
+            if ly.is_off() or ly.is_frozen():
+                skryte.add(ly.dxf.name)
+            if ly.is_locked():
+                zamcene.add(ly.dxf.name)
+        viditelne = [e for e in msp if e.dxf.get("layer", "0") not in skryte]
+        self.view.uchyty = Uchyty(viditelne)
         self.index = U.IndexVyberu(msp)
+        nevybiratelne = skryte | zamcene
+        if nevybiratelne:
+            self.index.polozky = [p for p in self.index.polozky if p[0].dxf.get("layer", "0") not in nevybiratelne]
+
+    def spravce_vrstev(self, modal: bool = True):
+        if self.dok is None:
+            return None
+        from .cad_vrstvy import VrstvyDialog
+        d = VrstvyDialog(self)
+        if modal:
+            d.exec()
+        return d
+
+    def vrstvy_zmeneny(self):
+        """Změna tabulky vrstev (zapnutí, zámek, barva…): překreslit, obnovit výběr a seznam vrstev."""
+        if self.historie_zmen is not None:
+            self.historie_zmen.zmena += 1
+        self._vykresli()
+        self.vyber = [e for e in self.vyber if self.index and self.index.geometrie(e) is not None]
+        self._zvyrazni()
+        self._napln_vrstvy()
+        self._titulek()
 
     def _po_zmene(self, pridano=(), odebrano=()):
         """Překreslí jen změněné prvky a obnoví úchyty a index výběru."""
@@ -510,7 +544,7 @@ class CadPage(QWidget):
         self.b_redo.setEnabled(bool(h and h.vpred))
         for b in self.nastroje.values():
             b.setEnabled(self.dok is not None)
-        for b in (self.b_save, self.b_saveas, self.b_check, self.b_all):
+        for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy):
             b.setEnabled(self.dok is not None)
 
     def _zahodit_zmeny(self) -> bool:
@@ -879,6 +913,8 @@ class CadPage(QWidget):
             self.vyber = list(self.dok.msp)
             self._zvyrazni()
             self.vypis(f"Vybráno {len(self.vyber)} prvků.")
+        elif cmd == "vrstvy":
+            self.spravce_vrstev()
         elif cmd == "vrstva":
             self._vrstva(arg)
         elif cmd == "barva":

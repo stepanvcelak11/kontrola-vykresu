@@ -45,7 +45,8 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Kreslení: bod, úsečka, polylinie, obdélník, oblouk (3 body), kružnice, elipsa, křivka, text, šrafa, kóta | ✅ |
 | Úpravy: výběr (klik, okno, protínající okno), posun, kopie (i v řadě), otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, spojení, rozpojení, mazání, vlastnosti (vrstva, barva) | ✅ |
 | Zpět/Vpřed bez omezení | ✅ |
-| Vrstvy (barva, styl, tloušťka, zámek, zapnutí), typy čar, bloky (buňky) | 🟡 aktuální vrstva a přesun do vrstvy; správce vrstev a bloky chybí |
+| Vrstvy: správce (zapnutí, zmrazení, zámek, barva, typ čáry, tloušťka, nová, přejmenovat, smazat, aktuální, výběr prvků vrstvy) | ✅ |
+| Bloky (buňky): vložení, tvorba, knihovna | ❌ |
 | Výběr podle vrstvy/vlastností, hledání prvků | 🟡 hromadná změna vrstvy a barvy; výběr podle vlastností chybí |
 | Geodetické funkce (body ze seznamu s čísly a kódy, kódovník, výměry, mřížka, transformace výkresu) | ❌ |
 | Rastry s georeferencí, podkladový DXF (reference) | ❌ |

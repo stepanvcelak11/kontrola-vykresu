@@ -1408,3 +1408,43 @@ def test_vypocet_ze_souboru_gsi(window, tmp_path):
     assert d.result is not None and len(d.result.body) > 100
     assert any("GSI: stanovisko 4001 – orientace na" in t for t in d._gsi_zpravy)
     d.close()
+
+
+def test_cad_spravce_vrstev(window, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "@10,0", ""):
+        c.zadej(t)
+    d = c.spravce_vrstev(modal=False)
+    assert d.nova("HRANICE") == "HRANICE" and "HRANICE" in c.dok.doc.layers
+    assert d.nova("HRANICE") is None  # už existuje
+    # řádek vrstvy 0 → zamknout: úsečku pak nejde vybrat
+    r0 = next(r for r in range(d.tab.rowCount()) if d._jmeno(r) == "0")
+    d.tab.item(r0, 3).setCheckState(Qt.Checked)
+    assert c.dok.doc.layers.get("0").is_locked()
+    c.view.zoom_all()
+    assert c.vyber_v_bode(5, 0) is None
+    d.tab.item(r0, 3).setCheckState(Qt.Unchecked)
+    assert c.vyber_v_bode(5, 0) is not None
+    # přejmenování a smazání prázdné vrstvy, aktuální vrstva
+    rh = next(r for r in range(d.tab.rowCount()) if d._jmeno(r) == "HRANICE")
+    d.tab.selectRow(rh)
+    assert d.prejmenuj("HRANICE_PARCEL") and "HRANICE_PARCEL" in c.dok.doc.layers
+    rh = next(r for r in range(d.tab.rowCount()) if d._jmeno(r) == "HRANICE_PARCEL")
+    d.tab.selectRow(rh)
+    d.aktualni()
+    assert c.kresleni.vrstva == "HRANICE_PARCEL"
+    assert not d.smaz()  # aktuální vrstvu nejde smazat
+    r0 = next(r for r in range(d.tab.rowCount()) if d._jmeno(r) == "0")
+    d.tab.selectRow(r0)
+    assert not d.smaz()
+    # vypnutí vrstvy 0 – prvek zmizí z výběru i úchytů
+    d.tab.item(r0, 1).setCheckState(Qt.Unchecked)
+    assert c.dok.doc.layers.get("0").is_off() and c.vyber_v_bode(5, 0) is None
+    assert c.neulozeno
+    d.close()
