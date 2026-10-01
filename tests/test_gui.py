@@ -1632,3 +1632,62 @@ def test_cad_atributy_ze_zadani_kontrola_a_uprava(window):
     finally:
         w.project.rules = puvodni
         w.cad.obnov_predvolby()
+
+
+def test_cad_reference_a_modely(window, tmp_path):
+    import ezdxf
+    podklad = ezdxf.new("R2000", setup=True)
+    podklad.modelspace().add_line((0, 0), (100, 0))
+    podklad.modelspace().add_circle((50, 50), 10)
+    pf = tmp_path / "podklad.dxf"
+    podklad.saveas(pf)
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    d = c.spravce_referenci(modal=False)
+    r = d.pripojit(str(pf))
+    assert r is not None and d.tab.rowCount() == 1
+    assert r.nazev in c._ref_skupiny and c._ref_skupiny[r.nazev].childItems()
+    # na referenci se dá přichytit, ale nedá se vybrat
+    c.view.zoom_all()
+    u = c.view.uchyty.najdi(100.2, 0.1, 1.0)
+    assert u is not None and u.typ == "konec" and (u.x, u.y) == (100, 0)
+    assert c.vyber_v_bode(50, 0) is None
+    # posun reference v tabulce (výkres není v S-JTSK → přímo x, y)
+    d.tab.item(0, 2).setText("1000")
+    assert r.vlozeni == (1000.0, 0.0) and r.inserty[0].dxf.insert.x == 1000
+    assert c.view.uchyty.najdi(1100.1, 0.1, 1.0) is not None
+    # kopie z reference do výkresu a Zpět
+    nove = d.kopirovat()
+    assert len(nove) == 2 and nove[0].dxf.start.x == 1000
+    c.undo()
+    assert sum(1 for e in c.prostor if e.dxftype() == "LINE") == 0
+    # uložit a znovu otevřít – reference zůstane
+    p = c.uloz(path=str(tmp_path / "s_referenci.dxf"))
+    d.close()
+    c.otevri(str(p))
+    assert len(c.reference) == 1 and c.reference[0].doc is not None and c.reference[0].vlozeni == (1000.0, 0.0)
+    # odpojit a Zpět
+    d = c.spravce_referenci(modal=False)
+    d.odpojit()
+    assert not c.reference[0].pripojena and not c._ref_skupiny
+    c.undo()
+    assert c.reference[0].pripojena and c._ref_skupiny
+    d.close()
+    # modely: nový list, výřez v měřítku, přepnutí zpět
+    for t in ("u", "x=0 y=0", "@50,0", ""):
+        c.zadej(t)
+    assert c.novy_list("Výkres A3") == "Výkres A3"
+    assert c.prostor.name == "Výkres A3" and not c._je_model()
+    for t in ("výřez", "x=20 y=20", "x=220 y=170", "500", ""):
+        c.zadej(t)
+    vps = [e for e in c.prostor if e.dxftype() == "VIEWPORT" and e.dxf.get("id", 0) != 1]  # 1 = výřez listu
+    assert len(vps) == 1 and abs(vps[0].dxf.view_height - 150 * 500 / 1000) < 1e-9
+    c.undo()
+    assert not [e for e in c.prostor if e.dxftype() == "VIEWPORT" and e.dxf.get("id", 0) != 1]
+    c.redo()
+    c.modely.setCurrentText("Model")
+    assert c._je_model() and any(e.dxftype() == "LINE" for e in c.prostor)
+    p = c.uloz(path=str(tmp_path / "s_listem.dxf"))
+    d2 = ezdxf.readfile(p)
+    assert "Výkres A3" in d2.layout_names() and len(d2.layouts.get("Výkres A3").query("VIEWPORT")) >= 1

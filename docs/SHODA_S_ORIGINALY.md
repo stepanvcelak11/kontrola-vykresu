@@ -51,7 +51,9 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Výběr podle vrstvy/vlastností, hledání prvků | 🟡 hromadná změna vrstvy a barvy; výběr podle vlastností chybí |
 | Výkres podle zadání: vrstvy, typy čar, písma a buňky ze Směrnice / zadání / vzorového výkresu; druh prvku → atributy se nastaví samy (ověřeno kontrolou symbologie na obou zadáních); tahák s key-in pro MicroStation | ✅ |
 | Geodetické funkce (kódovník bodů, mřížka, transformace výkresu) | ❌ |
-| Rastry s georeferencí, podkladový DXF (reference) | ❌ |
-| Tisk, rámečky, razítka, PDF, layouty | ❌ |
+| Reference: připojení DXF podkladu (XREF) s polohou, měřítkem, natočením; zobrazení pod výkresem, úchyty na referenci, kopie prvků z reference, odpojení se Zpět | ✅ |
+| Modely: Model a výkresové listy (A3), výřezy modelu v měřítku | ✅ |
+| Rastrové reference s georeferencí (world file) | ❌ |
+| Tisk, rámečky, razítka, PDF | ❌ (listy a výřezy už jsou) |
 | Makra, dávky, pluginy | ❌ |
 | Výkon na statisících prvků | ❌ |

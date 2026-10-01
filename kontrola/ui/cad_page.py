@@ -229,6 +229,8 @@ class CadPage(QWidget):
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
         "vše": "vybrat vše", "zpět": "vrátit poslední změnu (Ctrl+Z)", "vpřed": "znovu provést (Ctrl+Y)",
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
+        "model": "přepnout model / list („model List 1“)", "list": "nový výkresový list („list Výkres A3“)",
+        "výřez": "výřez modelu na listu v měřítku", "reference": "správce referencí (připojit DXF podklad)",
         "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -250,7 +252,8 @@ class CadPage(QWidget):
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "b": "blok", "block": "blok",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "mv": "výřez", "viewport": "výřez",
+        "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
         "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
     VYBEROVE = {"smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
@@ -297,6 +300,14 @@ class CadPage(QWidget):
         self.vrstvy.setMinimumWidth(140)
         self.vrstvy.setToolTip("Aktuální vrstva pro nové prvky")
         bar.addWidget(self.vrstvy)
+        bar.addWidget(QLabel("Model:"))
+        self.modely = QComboBox()
+        self.modely.setMinimumWidth(120)
+        self.modely.setToolTip("Model výkresu nebo list (výkresový list s výřezy, rámečkem a razítkem)")
+        bar.addWidget(self.modely)
+        self.b_ref = QPushButton("Reference…")
+        self.b_ref.setToolTip("Připojit jiný výkres DXF jako podklad (jen pro čtení, přichytávání, kopírování)")
+        bar.addWidget(self.b_ref)
         self.b_vrstvy = QPushButton("Vrstvy…")
         self.b_vrstvy.setToolTip("Správce vrstev: zapnutí, zámek, barva, typ čáry, nová, přejmenovat, smazat")
         bar.addWidget(self.b_vrstvy)
@@ -400,6 +411,8 @@ class CadPage(QWidget):
         self.b_redo.clicked.connect(self.redo)
         self.b_check.clicked.connect(self.zkontroluj)
         self.b_vrstvy.clicked.connect(lambda: self.spravce_vrstev())
+        self.b_ref.clicked.connect(lambda: self.spravce_referenci())
+        self.modely.currentTextChanged.connect(lambda t: self.nastav_model(t) if t else None)
         self.b_novy_zadani.clicked.connect(lambda: self.novy_podle_zadani())
         self.predvolby_cb.currentIndexChanged.connect(self._predvolba_zmenena)
         self.b_na_vyber.clicked.connect(self.predvolba_na_vyber)
@@ -441,8 +454,16 @@ class CadPage(QWidget):
     def nastav_dokument(self, dok: CadDokument):
         self.zrus(tise=True)
         self.dok = dok
+        self.prostor = dok.msp  # aktuální model (Model nebo list)
+        self._historie_prostoru = {}
         self.historie_zmen = U.Historie(dok.msp)
         self.kresleni = U.Kresleni(dok.msp, self.historie_zmen)
+        self._historie_prostoru[dok.msp.name] = (self.historie_zmen, self.kresleni)
+        from ..cad import reference as R
+        self.reference = R.najdi(dok.doc, dok.path.parent if dok.path else None)
+        for r in self.reference:
+            if r.chyba:
+                self.vypis(f"⚠ Reference {r.cesta.name}: {r.chyba}")
         if self.predvolba is not None:
             self.kresleni.nastav_predvolbu(self.predvolba)
         self._ulozena_zmena = 0
@@ -454,6 +475,7 @@ class CadPage(QWidget):
         self.sjtsk = bool(ext and ext[2] < 0 and ext[3] < 0)  # S-JTSK z MicroStationu: záporné x, y
         self.vypis(z.text())
         self._napln_vrstvy()
+        self._napln_modely()
         self.view.zoom_all()
         self._aktualizuj_tlacitka()
 
@@ -536,13 +558,13 @@ class CadPage(QWidget):
         k = self.kresleni
         nove = []
         if ostatni:
-            nove += U.zmen_vlastnosti(self.dok.msp, self.historie_zmen, ostatni, **k._attr())
+            nove += U.zmen_vlastnosti(self.prostor, self.historie_zmen, ostatni, **k._attr())
             self._po_zmene(nove, ostatni)
         if texty:
             a = k._attr(text=True)
             if p.vyska:
                 a["height"] = p.vyska
-            nt = U.zmen_vlastnosti(self.dok.msp, self.historie_zmen, texty, **a)
+            nt = U.zmen_vlastnosti(self.prostor, self.historie_zmen, texty, **a)
             self._po_zmene(nt, texty)
             nove += nt
         self.vyber = nove
@@ -624,20 +646,144 @@ class CadPage(QWidget):
         self._polozky = {}
         if self.dok is None:
             return
-        self._kresli_entity(self.dok.msp, cely=True)
+        if not self._je_model():
+            self._kresli_papir()
+        self._kresli_entity(self.prostor, cely=True)
+        self._kresli_reference()
+        if not self._je_model():
+            self._kresli_ramecky_vyrezu()
         self._obnov_indexy()
 
-    def _frontend(self):
+    def _kresli_papir(self):
+        """List: bílý okraj papíru a tečkovaně tisknutelná oblast (jako list v MicroStationu)."""
+        from PySide6.QtGui import QBrush, QPen
+        sc = self.view.scene()
+        try:
+            (x0, y0), (x1, y1) = self.prostor.get_paper_limits()
+            w, h = float(x1 - x0), float(y1 - y0)
+        except Exception:  # noqa: BLE001
+            x0, y0, w, h = 0.0, 0.0, 420.0, 297.0
+        if w <= 0 or h <= 0:
+            x0, y0, w, h = 0.0, 0.0, 420.0, 297.0
+        pen = QPen(QColor("#9CA3AF"), 0)
+        r = sc.addRect(QRectF(x0, y0, w, h), pen, QBrush(QColor("#15171C")))
+        r.setZValue(-30)
+
+    def _kresli_ramecky_vyrezu(self):
+        from PySide6.QtGui import QPen
+        sc = self.view.scene()
+        pen = QPen(QColor("#60A5FA"), 0, Qt.DashLine)
+        for vp in self.prostor.query("VIEWPORT"):
+            if vp.dxf.get("id", 0) == 1:
+                continue
+            c, w, h = vp.dxf.center, vp.dxf.width, vp.dxf.height
+            it = sc.addRect(QRectF(c.x - w / 2, c.y - h / 2, w, h), pen)
+            it.setZValue(50)
+
+    # ------------------------------------------------------------ modely (Model + listy)
+    def _napln_modely(self):
+        self.modely.blockSignals(True)
+        self.modely.clear()
+        if self.dok is not None:
+            self.modely.addItems(self.dok.doc.layout_names_in_taborder())
+            self.modely.setCurrentText(self.prostor.name)
+        self.modely.blockSignals(False)
+
+    def nastav_model(self, nazev: str) -> bool:
+        if self.dok is None or nazev == getattr(self.prostor, "name", None):
+            return False
+        try:
+            lay = self.dok.doc.layouts.get(nazev)
+        except Exception:  # noqa: BLE001
+            self.vypis(f"Model {nazev} ve výkresu není.")
+            return False
+        self.zrus(tise=True)
+        zmena = self.historie_zmen.zmena if self.historie_zmen else 0
+        self.prostor = lay
+        if lay.name not in self._historie_prostoru:
+            h = U.Historie(lay)
+            h.zmena = zmena
+            k = U.Kresleni(lay, h)
+            if self.kresleni is not None:
+                k.vrstva = self.kresleni.vrstva
+            self._historie_prostoru[lay.name] = (h, k)
+        h, k = self._historie_prostoru[lay.name]
+        h.zmena = max(h.zmena, zmena)
+        self.historie_zmen, self.kresleni = h, k
+        if self.predvolba is not None:
+            k.nastav_predvolbu(self.predvolba)
+        self.vyber = []
+        self._vykresli()
+        self.view.zoom_all()
+        self._napln_modely()
+        self._aktualizuj_tlacitka()
+        self.vypis(f"Model: {lay.name}" + ("" if self._je_model() else " (list – souřadnice v mm na papíře)"))
+        return True
+
+    def novy_list(self, nazev: str | None = None) -> str | None:
+        if self.dok is None:
+            return None
+        nazev = (nazev or "").strip() or f"List {len(self.dok.doc.layout_names()) }"
+        if nazev in self.dok.doc.layout_names():
+            self.vypis(f"List {nazev} už existuje.")
+            return None
+        lay = self.dok.doc.layouts.new(nazev)
+        try:
+            lay.page_setup(size=(420, 297), margins=(10, 10, 10, 10), units="mm")  # A3 na šířku
+        except Exception:  # noqa: BLE001
+            pass
+        if self.historie_zmen is not None:
+            self.historie_zmen.zmena += 1
+        self._napln_modely()
+        self.nastav_model(nazev)
+        return nazev
+
+    def _je_model(self) -> bool:
+        return self.dok is not None and self.prostor is self.dok.msp
+
+    def _kresli_reference(self):
+        """Reference pod výkresem: poloprůhledně, nejdou vybrat ani upravit (jako v MicroStationu)."""
+        from PySide6.QtGui import QTransform
+        from PySide6.QtWidgets import QGraphicsItemGroup
+        sc = self.view.scene()
+        self._ref_skupiny = {}
+        if not self._je_model():
+            return
+        for r in getattr(self, "reference", []):
+            if not r.viditelna or r.doc is None or not r.pripojena:
+                continue
+            pred = set(id(i) for i in sc.items())
+            try:
+                fe = self._frontend(r.doc, r.doc.modelspace())
+                fe.draw_layout(r.doc.modelspace(), finalize=False)
+            except Exception as e:  # noqa: BLE001
+                self.vypis(f"⚠ Reference {r.cesta.name} nejde zobrazit: {e}")
+                continue
+            nove = [i for i in sc.items() if id(i) not in pred]
+            g = QGraphicsItemGroup()
+            sc.addItem(g)
+            for it in nove:
+                g.addToGroup(it)
+            g.setTransform(QTransform(*r.qt_matice()[:4], *r.qt_matice()[4:]))
+            g.setOpacity(0.55)
+            g.setZValue(-10)
+            self._ref_skupiny[r.nazev] = g
+
+    def _frontend(self, doc=None, layout=None):
         from ezdxf.addons.drawing import Frontend, RenderContext
         from ezdxf.addons.drawing.config import Configuration
         from ezdxf.addons.drawing.pyqt import PyQtBackend
-        ctx = RenderContext(self.dok.doc)
-        ctx.set_current_layout(self.dok.msp)
+        doc = doc or self.dok.doc
+        ctx = RenderContext(doc)
+        ctx.set_current_layout(layout or self.prostor)
         try:
             ctx.current_layout_properties.set_colors("#000000")
         except Exception:  # noqa: BLE001
             pass
-        return Frontend(ctx, PyQtBackend(self.view.scene()), config=Configuration())
+        from ezdxf.addons.drawing.config import BackgroundPolicy
+        # tmavé pozadí i na listech – jinak by ezdxf počítal s bílým papírem a bílé čáry by kreslil černě
+        cfg = Configuration(background_policy=BackgroundPolicy.BLACK)
+        return Frontend(ctx, PyQtBackend(self.view.scene()), config=cfg)
 
     def _kresli_entity(self, entity, cely: bool = False):
         from ezdxf.addons.drawing.pyqt import CorrespondingDXFEntity, CorrespondingDXFParentStack
@@ -646,7 +792,7 @@ class CadPage(QWidget):
         try:
             fe = self._frontend()
             if cely:
-                fe.draw_layout(self.dok.msp, finalize=True)
+                fe.draw_layout(self.prostor, finalize=True)
             else:
                 fe.draw_entities(entity)
         except Exception as e:  # noqa: BLE001 – i z poškozeného výkresu ukázat, co jde
@@ -660,7 +806,7 @@ class CadPage(QWidget):
                 self._polozky.setdefault(id(e), []).append(it)
 
     def _obnov_indexy(self):
-        msp = self.dok.msp
+        msp = self.prostor
         skryte, zamcene = set(), set()
         for ly in self.dok.doc.layers:
             if ly.is_off() or ly.is_frozen():
@@ -668,6 +814,10 @@ class CadPage(QWidget):
             if ly.is_locked():
                 zamcene.add(ly.dxf.name)
         viditelne = [e for e in msp if e.dxf.get("layer", "0") not in skryte]
+        if self._je_model():
+            for r in getattr(self, "reference", []):
+                if r.viditelna and r.uchyty and r.pripojena:
+                    viditelne += r.prvky_pro_uchyty()
         self.view.uchyty = Uchyty(viditelne)
         self.index = U.IndexVyberu(msp)
         nevybiratelne = skryte | zamcene
@@ -695,6 +845,14 @@ class CadPage(QWidget):
 
     def _po_zmene(self, pridano=(), odebrano=()):
         """Překreslí jen změněné prvky a obnoví úchyty a index výběru."""
+        xref = {r.nazev for r in getattr(self, "reference", [])}
+        zmenene = list(pridano) + list(odebrano)
+        if any(e.dxftype() == "VIEWPORT" for e in zmenene) or (
+                xref and any(e.dxftype() == "INSERT" and e.dxf.name in xref for e in zmenene)):
+            self._vykresli()  # připojení / odpojení reference (i přes Zpět) → překreslit podklad
+            self._titulek()
+            self._aktualizuj_tlacitka()
+            return
         sc = self.view.scene()
         for e in odebrano:
             for it in self._polozky.pop(id(e), []):
@@ -716,7 +874,8 @@ class CadPage(QWidget):
         self.b_redo.setEnabled(bool(h and h.vpred))
         for b in self.nastroje.values():
             b.setEnabled(self.dok is not None)
-        for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy, self.b_na_vyber):
+        for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy, self.b_na_vyber, self.b_ref,
+                  self.modely):
             b.setEnabled(self.dok is not None)
 
     def _zahodit_zmeny(self) -> bool:
@@ -1082,11 +1241,20 @@ class CadPage(QWidget):
         elif self.dok is None:
             self.vypis("Nejdřív otevřete výkres nebo začněte nový (tlačítko Nový).")
         elif cmd == "vše":
-            self.vyber = list(self.dok.msp)
+            self.vyber = list(self.prostor)
             self._zvyrazni()
             self.vypis(f"Vybráno {len(self.vyber)} prvků.")
         elif cmd == "vrstvy":
             self.spravce_vrstev()
+        elif cmd == "reference":
+            self.spravce_referenci()
+        elif cmd == "model":
+            if not arg:
+                self.vypis("Modely: " + ", ".join(self.dok.doc.layout_names_in_taborder()))
+            else:
+                self.nastav_model(arg.strip())
+        elif cmd == "list":
+            self.novy_list(arg)
         elif cmd == "atributy":
             self.atributy_zadani()
         elif cmd == "prvek":
@@ -1117,7 +1285,7 @@ class CadPage(QWidget):
             self.vypis(f"Nová vrstva {name}.")
         if self.vyber:
             ents = list(self.vyber)
-            nove = U.zmen_vlastnosti(self.dok.msp, self.historie_zmen, ents, layer=name)
+            nove = U.zmen_vlastnosti(self.prostor, self.historie_zmen, ents, layer=name)
             self._po_zmene(nove, ents)
             self.vyber = nove
             self._zvyrazni()
@@ -1137,7 +1305,7 @@ class CadPage(QWidget):
             return
         if self.vyber:
             ents = list(self.vyber)
-            nove = U.zmen_vlastnosti(self.dok.msp, self.historie_zmen, ents, color=c)
+            nove = U.zmen_vlastnosti(self.prostor, self.historie_zmen, ents, color=c)
             self._po_zmene(nove, ents)
             self.vyber = nove
             self._zvyrazni()
@@ -1316,7 +1484,7 @@ class CadPage(QWidget):
         ents = yield from self._vyber_req("Posun")
         a = yield self._bod_req("Bod odkud:")
         b = yield self._bod_req("Bod kam:", a)
-        self._hotovo_vyber(U.posun(self.dok.msp, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1]))
+        self._hotovo_vyber(U.posun(self.prostor, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1]))
 
     def n_kopie(self):
         ents = yield from self._vyber_req("Kopie")
@@ -1330,28 +1498,28 @@ class CadPage(QWidget):
                 c = yield self._bod_req("Vzdálenost mezi kopiemi – bod první kopie:", a)
                 if int(n) < 1:
                     raise ValueError("Počet kopií musí být aspoň 1.")
-                U.kopie_vicenasobna(self.dok.msp, self.historie_zmen, ents, c[0] - a[0], c[1] - a[1], int(n))
+                U.kopie_vicenasobna(self.prostor, self.historie_zmen, ents, c[0] - a[0], c[1] - a[1], int(n))
                 return
-            U.posun(self.dok.msp, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1], kopie=True)
+            U.posun(self.prostor, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1], kopie=True)
 
     def n_otoc(self):
         ents = yield from self._vyber_req("Otočení")
         s = yield self._bod_req("Střed otočení:")
         u = yield Pozadavek("uhel", "Úhel otočení v gonech (+ proti směru hodin) nebo klikněte směr:", ref=s)
-        self._hotovo_vyber(U.otoc(self.dok.msp, self.historie_zmen, ents, s, u * GON))
+        self._hotovo_vyber(U.otoc(self.prostor, self.historie_zmen, ents, s, u * GON))
 
     def n_meritko(self):
         ents = yield from self._vyber_req("Měřítko")
         s = yield self._bod_req("Základní bod:")
         k = yield Pozadavek("cislo", "Měřítko (např. 2 = dvojnásobek, 0.5 = polovina):")
-        self._hotovo_vyber(U.meritko(self.dok.msp, self.historie_zmen, ents, s, k))
+        self._hotovo_vyber(U.meritko(self.prostor, self.historie_zmen, ents, s, k))
 
     def n_zrcadli(self):
         ents = yield from self._vyber_req("Zrcadlení")
         a = yield self._bod_req("První bod osy:")
         b = yield self._bod_req("Druhý bod osy:", a)
         z = yield Pozadavek("text", "Ponechat původní prvky? [n] (a/n):", vychozi="n")
-        self._hotovo_vyber(U.zrcadli(self.dok.msp, self.historie_zmen, ents, a, b,
+        self._hotovo_vyber(U.zrcadli(self.prostor, self.historie_zmen, ents, a, b,
                                      kopie=z.strip().lower() in ("a", "ano", "y")))
 
     def n_rovnobezka(self):
@@ -1360,13 +1528,13 @@ class CadPage(QWidget):
             r = yield Pozadavek("prvek", "Klikněte na prvek (Esc = konec):")
             e = r[0]
             s = yield self._bod_req("Na kterou stranu (klikněte):")
-            U.rovnobezka(self.dok.msp, self.historie_zmen, e, d, s)
+            U.rovnobezka(self.prostor, self.historie_zmen, e, d, s)
 
     def n_orez(self):
         while True:
             e, k = yield Pozadavek("prvek", "Ořez – klikněte na část, která se má odstranit (Esc = konec):")
             try:
-                U.orez(self.dok.msp, self.historie_zmen, e, k, list(self.dok.msp))
+                U.orez(self.prostor, self.historie_zmen, e, k, list(self.prostor))
             except ValueError as ex:
                 self.vypis(f"⚠ {ex}")
 
@@ -1374,7 +1542,7 @@ class CadPage(QWidget):
         while True:
             e, k = yield Pozadavek("prvek", "Prodloužení – klikněte na úsečku u konce, který prodloužit (Esc = konec):")
             try:
-                U.prodluz(self.dok.msp, self.historie_zmen, e, k, list(self.dok.msp))
+                U.prodluz(self.prostor, self.historie_zmen, e, k, list(self.prostor))
             except ValueError as ex:
                 self.vypis(f"⚠ {ex}")
 
@@ -1382,17 +1550,17 @@ class CadPage(QWidget):
         r = yield Pozadavek("cislo", "Poloměr zaoblení [0 = ostrý roh]:", vychozi=0.0)
         e1, k1 = yield Pozadavek("prvek", "První úsečka (klikněte na část, která zůstane):")
         e2, k2 = yield Pozadavek("prvek", "Druhá úsečka:")
-        U.zaobli(self.dok.msp, self.historie_zmen, e1, k1, e2, k2, r)
+        U.zaobli(self.prostor, self.historie_zmen, e1, k1, e2, k2, r)
 
     def n_rozpoj(self):
         ents = yield from self._vyber_req("Rozpojit")
-        nove = U.rozpoj(self.dok.msp, self.historie_zmen, ents)
+        nove = U.rozpoj(self.prostor, self.historie_zmen, ents)
         self.vypis(f"Rozpojeno na {len(nove)} prvků.")
         self.vyber = []
 
     def n_spoj(self):
         ents = yield from self._vyber_req("Spojit")
-        p = U.spoj(self.dok.msp, self.historie_zmen, ents, tol=max(1e-6, self._tol() / 100))
+        p = U.spoj(self.prostor, self.historie_zmen, ents, tol=max(1e-6, self._tol() / 100))
         self._hotovo_vyber([p])
         self.vypis("Spojeno do " + ("uzavřené " if p.closed else "") + "polylinie.")
 
@@ -1403,7 +1571,7 @@ class CadPage(QWidget):
         if nazev in self.dok.doc.blocks:
             raise ValueError(f"Blok {nazev} už existuje.")
         b = yield self._bod_req("Základní (vkládací) bod bloku:")
-        ins = U.vytvor_blok(self.dok.doc, self.dok.msp, self.historie_zmen, ents, nazev, b)
+        ins = U.vytvor_blok(self.dok.doc, self.prostor, self.historie_zmen, ents, nazev, b)
         self._hotovo_vyber([ins])
         self.vypis(f"Blok {nazev} vytvořen z {len(ents)} prvků.")
 
@@ -1429,7 +1597,70 @@ class CadPage(QWidget):
             p = yield self._bod_req("Vkládací bod (Enter = konec):", volitelne=True)
             if p is None:
                 return
-            U.vloz_blok(self.dok.doc, self.dok.msp, self.historie_zmen, nazev, p, m, u, self.kresleni.vrstva)
+            U.vloz_blok(self.dok.doc, self.prostor, self.historie_zmen, nazev, p, m, u, self.kresleni.vrstva)
+
+    # ------------------------------------------------------------ výřez na listu
+    def n_vyrez(self):
+        if self._je_model():
+            raise ValueError("Výřez se vkládá na list – přepněte model na list (nebo „list“ vytvoří nový).")
+        a = yield self._bod_req("Výřez – první roh na listu [mm]:")
+        b = yield self._bod_req("Protější roh:", a)
+        rs = self._pravidla()
+        vych = float(rs.meritko) if rs is not None and rs.meritko else 500.0
+        m = yield Pozadavek("cislo", f"Měřítko 1: [{vych:g}]:", vychozi=vych)
+        if m <= 0:
+            raise ValueError("Měřítko musí být kladné.")
+        ext = self.dok.rozsah()
+        vych_s = ((ext[0] + ext[2]) / 2, (ext[1] + ext[3]) / 2) if ext else (0.0, 0.0)
+        c = yield Pozadavek("text", "Střed výřezu v modelu (Y X nebo Enter = střed kresby):", vychozi="")
+        if c.strip():
+            stred = zadani_bodu(c, None, self.sjtsk)
+        else:
+            stred = vych_s
+        w, hgt = abs(b[0] - a[0]), abs(b[1] - a[1])
+        if w < 1 or hgt < 1:
+            raise ValueError("Výřez je příliš malý.")
+        vp = self.prostor.add_viewport(center=((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), size=(w, hgt),
+                                       view_center_point=stred, view_height=hgt * m / 1000.0,
+                                       dxfattribs={"layer": self.kresleni.vrstva})
+        self.historie_zmen.proved("Výřez", [vp])
+        self.vypis(f"Výřez {w:.0f}×{hgt:.0f} mm v měřítku 1:{m:g}.")
+
+    # ------------------------------------------------------------ reference
+    def spravce_referenci(self, modal: bool = True):
+        if self.dok is None:
+            return None
+        from .cad_reference import ReferenceDialog
+        d = ReferenceDialog(self)
+        if modal:
+            d.exec()
+        return d
+
+    def pripoj_referenci(self, cesta, vlozeni=(0.0, 0.0), meritko=1.0, natoceni=0.0):
+        from ..cad import reference as R
+        if not self._je_model():
+            self.nastav_model("Model")
+        zaklad = self.dok.path.parent if self.dok.path else None
+        r = R.pripoj(self.dok.doc, self.historie_zmen, cesta, zaklad, vlozeni, meritko, natoceni)
+        self.reference.append(r)
+        self.reference_zmeneny()
+        self.vypis(f"Reference {r.cesta.name} připojena ({len(r.doc.modelspace())} prvků).")
+        return r
+
+    def reference_zmeneny(self):
+        """Poloha, viditelnost nebo seznam referencí se změnil → zapsat do vložení a překreslit."""
+        for r in self.reference:
+            for ins in r.inserty:
+                if ins.dxf.owner is None:
+                    continue
+                ins.dxf.insert = (r.vlozeni[0], r.vlozeni[1], 0)
+                for k in ("xscale", "yscale", "zscale"):
+                    ins.dxf.set(k, r.meritko)
+                ins.dxf.rotation = r.natoceni
+        if self.historie_zmen is not None:
+            self.historie_zmen.zmena += 1
+        self._vykresli()
+        self._titulek()
 
 
 def _linie(body):
