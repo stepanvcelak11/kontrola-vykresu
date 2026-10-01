@@ -231,7 +231,7 @@ class CadPage(QWidget):
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
         "model": "přepnout model / list („model List 1“)", "list": "nový výkresový list („list Výkres A3“)",
         "výřez": "výřez modelu na listu v měřítku", "reference": "správce referencí (připojit DXF podklad)",
-        "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
+        "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
@@ -252,7 +252,8 @@ class CadPage(QWidget):
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "mv": "výřez", "viewport": "výřez",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "plot": "tisk", "print": "tisk",
+        "pdf": "tisk", "razitko": "razítko", "mv": "výřez", "viewport": "výřez",
         "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
         "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
@@ -288,11 +289,13 @@ class CadPage(QWidget):
         self.b_undo.setToolTip("Zpět (Ctrl+Z)")
         self.b_redo = QPushButton("↷")
         self.b_redo.setToolTip("Vpřed (Ctrl+Y)")
+        self.b_tisk = QPushButton("Tisk do PDF…")
+        self.b_tisk.setToolTip("Vytisknout model v měřítku nebo list do PDF (vektorově, na bílý papír)")
         self.b_check = QPushButton("Zkontrolovat")
         self.b_check.setToolTip("Uloží výkres a zkontroluje ho v Kontrole výkresu (chyby se ukážou na stránce "
                                 "Výkres)")
         for b in (self.b_open, self.b_new, self.b_save, self.b_saveas, self.b_all, self.b_undo, self.b_redo,
-                  self.b_check):
+                  self.b_tisk, self.b_check):
             bar.addWidget(b)
         bar.addSpacing(12)
         bar.addWidget(QLabel("Vrstva:"))
@@ -410,6 +413,7 @@ class CadPage(QWidget):
         self.b_undo.clicked.connect(self.undo)
         self.b_redo.clicked.connect(self.redo)
         self.b_check.clicked.connect(self.zkontroluj)
+        self.b_tisk.clicked.connect(lambda: self.tisk_pdf())
         self.b_vrstvy.clicked.connect(lambda: self.spravce_vrstev())
         self.b_ref.clicked.connect(lambda: self.spravce_referenci())
         self.modely.currentTextChanged.connect(lambda t: self.nastav_model(t) if t else None)
@@ -875,7 +879,7 @@ class CadPage(QWidget):
         for b in self.nastroje.values():
             b.setEnabled(self.dok is not None)
         for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy, self.b_na_vyber, self.b_ref,
-                  self.modely):
+                  self.modely, self.b_tisk):
             b.setEnabled(self.dok is not None)
 
     def _zahodit_zmeny(self) -> bool:
@@ -1246,6 +1250,10 @@ class CadPage(QWidget):
             self.vypis(f"Vybráno {len(self.vyber)} prvků.")
         elif cmd == "vrstvy":
             self.spravce_vrstev()
+        elif cmd == "tisk":
+            self.tisk_pdf()
+        elif cmd == "razítko":
+            self.razitko()
         elif cmd == "reference":
             self.spravce_referenci()
         elif cmd == "model":
@@ -1625,6 +1633,37 @@ class CadPage(QWidget):
                                        dxfattribs={"layer": self.kresleni.vrstva})
         self.historie_zmen.proved("Výřez", [vp])
         self.vypis(f"Výřez {w:.0f}×{hgt:.0f} mm v měřítku 1:{m:g}.")
+
+    # ------------------------------------------------------------ tisk
+    def tisk_pdf(self, modal: bool = True):
+        if self.dok is None:
+            return None
+        from .cad_tisk import TiskDialog
+        d = TiskDialog(self)
+        if modal:
+            d.exec()
+        return d
+
+    def razitko(self, udaje: dict | None = None):
+        from ..cad import tisk as T
+        if self._je_model():
+            self.vypis("Razítko se dává na list – přepněte Model na list nebo vytvořte nový příkazem „list“.")
+            return []
+        rs = self._pravidla()
+        u = {"Název": self.dok.path.stem if self.dok.path else "",
+             "Měřítko": f"1:{rs.meritko}" if rs is not None and rs.meritko else ""}
+        pr = getattr(self.win, "project", None) if self.win is not None else None
+        if pr is not None:
+            u["Zpracoval"] = (pr.meta.get("autor") or pr.meta.get("student") or "") if hasattr(pr, "meta") else ""
+        u.update(udaje or {})
+        try:
+            nove = T.ramecek_a_razitko(self.prostor, self.historie_zmen, u)
+        except ValueError as e:
+            self.vypis(f"⚠ {e}")
+            return []
+        self._po_zmene(nove, [])
+        self.vypis("Rámeček a razítko nakresleny (texty upravíte dvojklikem / příkazem text).")
+        return nove
 
     # ------------------------------------------------------------ reference
     def spravce_referenci(self, modal: bool = True):

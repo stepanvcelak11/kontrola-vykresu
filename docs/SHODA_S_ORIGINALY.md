@@ -54,6 +54,6 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Reference: připojení DXF podkladu (XREF) s polohou, měřítkem, natočením; zobrazení pod výkresem, úchyty na referenci, kopie prvků z reference, odpojení se Zpět | ✅ |
 | Modely: Model a výkresové listy (A3), výřezy modelu v měřítku | ✅ |
 | Rastrové reference s georeferencí (world file) | ❌ |
-| Tisk, rámečky, razítka, PDF | ❌ (listy a výřezy už jsou) |
+| Tisk do PDF: model v měřítku 1:N (A4–A0, ověřeno: 100 m v 1:1000 = 100 mm), list 1:1, bílá → černá; rámeček a razítko na list | ✅ |
 | Makra, dávky, pluginy | ❌ |
 | Výkon na statisících prvků | ❌ |

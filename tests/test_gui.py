@@ -1691,3 +1691,24 @@ def test_cad_reference_a_modely(window, tmp_path):
     p = c.uloz(path=str(tmp_path / "s_listem.dxf"))
     d2 = ezdxf.readfile(p)
     assert "Výkres A3" in d2.layout_names() and len(d2.layouts.get("Výkres A3").query("VIEWPORT")) >= 1
+
+
+def test_cad_tisk_a_razitko(window, tmp_path):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("kr", "x=50 y=50", "20", ""):
+        c.zadej(t)
+    d = c.tisk_pdf(modal=False)
+    d.soubor.setText(str(tmp_path / "model.pdf"))
+    d.meritko.setValue(500)
+    d.tisk()
+    assert (tmp_path / "model.pdf").stat().st_size > 500 and d.vysledek["meritko"] == 500
+    c.novy_list("Mapa")
+    assert c.razitko({"Název": "Zkušební mapa"})
+    d = c.tisk_pdf(modal=False)
+    d.soubor.setText(str(tmp_path / "list.pdf"))
+    d.tisk()
+    assert (tmp_path / "list.pdf").exists() and d.vysledek["meritko"] == 1.0
+    c.modely.setCurrentText("Model")
+    assert c.razitko() == []
