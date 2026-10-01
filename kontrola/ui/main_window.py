@@ -366,6 +366,9 @@ class MainWindow(QMainWindow):
         m_help = self.menuBar().addMenu("&Nápověda")
         m_help.addAction(self._act("Co aplikace umí…", self.show_features, None, "Přehled všech funkcí"))
         m_help.addAction(self._act("Průvodce…", self.show_guide, None, "Krok za krokem od zadání k odevzdání"))
+        self.a_news = self._act("Co je nového…", lambda: self.show_news(force=True), None,
+                                "Novinky v posledních verzích aplikace")
+        m_help.addAction(self.a_news)
         m_help.addAction(self._act("Co znamenají chyby (s obrázky)…", self.show_help, "F1",
                                    "Vysvětlení jednotlivých typů chyb a pojmů"))
         m_help.addAction(self._act("Rychlé tipy – MicroStation (rovnoběžka, kolmice…)", self.show_tips, "Ctrl+T",
@@ -1554,6 +1557,42 @@ class MainWindow(QMainWindow):
 
     def _set_autoupdate(self, on: bool):
         self.settings.setValue("aktualizace/kontrolovat", bool(on))
+
+    def maybe_show_news(self):
+        """Po aktualizaci jednou ukáže, co je nového (při prvním spuštění vůbec ne – tam je průvodce)."""
+        from .. import novinky
+        if novinky.unseen(self.settings):
+            self.show_news()
+        else:
+            novinky.mark_seen(self.settings)
+
+    def show_news(self, force: bool = False):
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayout
+
+        from .. import novinky
+        items = novinky.NOVINKY if force else novinky.unseen(self.settings)
+        if not items:
+            return None
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Co je nového")
+        dlg.resize(620, 520)
+        lay = QVBoxLayout(dlg)
+        tb = QTextBrowser()
+        tb.setOpenExternalLinks(True)
+        tb.setHtml("<h2 style='margin:0'>Co je nového</h2>" + novinky.html(items)
+                   + "<p style='color:gray'>Všechny funkce najdete v Nápověda → Co aplikace umí, "
+                     "nebo je vyhledejte polem nahoře (Ctrl+F).</p>")
+        lay.addWidget(tb)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok)
+        bb.button(QDialogButtonBox.Ok).setText("Rozumím")
+        bb.button(QDialogButtonBox.Ok).setMinimumWidth(110)
+        bb.accepted.connect(dlg.accept)
+        lay.addWidget(bb)
+        novinky.mark_seen(self.settings)
+        dlg.setAttribute(Qt.WA_DeleteOnClose)
+        dlg.show()
+        self._news_dlg = dlg
+        return dlg
 
     def maybe_check_updates(self):
         """Při spuštění: nejvýš jednou denně, jen u sestaveného .exe a když to uživatel nevypnul."""

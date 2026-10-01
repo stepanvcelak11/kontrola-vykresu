@@ -1029,3 +1029,26 @@ def test_opravy_z_revize(window):
     w._focus_bar.b_ok.click()
     assert "Hotovo" in w._focus_bar.title.text()
     w.a_focus.setChecked(False)
+
+
+def test_co_je_noveho(window):
+    from kontrola import novinky
+    w = window
+    s = w.settings
+    s.remove(novinky.KEY)
+    geo = s.value("okno/geometrie")
+    s.remove("okno/geometrie")
+    try:
+        assert novinky.unseen(s) == []  # úplně první spuštění: nic (je tu průvodce)
+        w.maybe_show_news()
+        assert int(s.value(novinky.KEY)) == novinky.latest_id()
+        s.setValue(novinky.KEY, novinky.latest_id() - 1)  # po aktualizaci
+        w.maybe_show_news()
+        dlg = w._news_dlg
+        assert dlg.isVisible() and int(s.value(novinky.KEY)) == novinky.latest_id()
+        dlg.close()
+        assert w.show_news(force=True) is not None
+        w._news_dlg.close()
+    finally:
+        if geo is not None:
+            s.setValue("okno/geometrie", geo)

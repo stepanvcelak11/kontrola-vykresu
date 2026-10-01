@@ -62,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     _splash(close=True)
     if not win.settings.value("pruvodce/skryt", False, type=bool):
         QTimer.singleShot(400, win.show_guide)  # průvodce při prvním spuštění
+    QTimer.singleShot(1500, win.maybe_show_news)  # po aktualizaci jednou „Co je nového“
     QTimer.singleShot(3000, win.maybe_check_updates)
     for a in argv[1:]:
         if not a.startswith("-"):
