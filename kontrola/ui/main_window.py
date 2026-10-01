@@ -881,6 +881,7 @@ class MainWindow(QMainWindow):
             self.info_label.setText("Kontrola byla zrušena.")
             return
         carry_states(self.project.issue_states(), res.issues, recheck=callable(after))
+        self._mark_new(res.issues)
         from .ready_dialog import record_history
         record_history(self.project, res.issues)
         self.issue_panel.history.set_data(self.project.meta.get("historie", []))
@@ -918,6 +919,21 @@ class MainWindow(QMainWindow):
         self.project.refresh_drawing_copy()
         self.load_drawing_file(path, add_to_project=False, keep_view=True,
                                after=lambda d: self.run_checks(after=compare_text))
+
+    def _mark_new(self, issues: list[Issue]):
+        """Označí chyby, které přibyly od minulé kontroly téhož výkresu (★ nová)."""
+        from collections import Counter
+        # (výkres se může načíst z kopie v projektu i z původního místa – porovná se název souboru)
+        cur = Path(self.drawing.source_path or self.drawing.path).name.lower() if self.drawing is not None else None
+        prev_name, prev_keys = getattr(self, "_last_check", (None, None))
+        if prev_keys is not None and prev_name == cur:
+            left = Counter(prev_keys)
+            for iss in issues:
+                if left[iss.key] > 0:
+                    left[iss.key] -= 1
+                else:
+                    iss.nove = True
+        self._last_check = (cur, [i.key for i in issues])
 
     def set_issues(self, issues: list[Issue], summary: str | None = None):
         self.issues = issues

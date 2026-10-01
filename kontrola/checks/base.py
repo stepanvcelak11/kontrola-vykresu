@@ -98,6 +98,7 @@ class Issue:
     number: int = 0
     state: str = "nová"
     note: str = ""
+    nove: bool = False  # přibyla od minulé kontroly téhož výkresu (neukládá se)
 
     def label(self) -> str:
         """Krátký popisek ke kroužku ve výkresu (celé znění je v seznamu a v tooltipu)."""

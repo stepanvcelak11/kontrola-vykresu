@@ -746,3 +746,28 @@ def test_shluky_kroužku(window):
     w.view.highlight_issue(3, zoom=False)
     w.view._declutter()
     assert not w.view.markers[3].cluster_hidden  # vybraná chyba se ukáže
+
+
+def test_nove_chyby_od_minule_kontroly(window, tmp_path):
+    import ezdxf
+    w = window
+    p = tmp_path / "v.dxf"
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    msp.add_line((0, 0), (10, 0), dxfattribs={"layer": "A"})
+    msp.add_line((10, 0), (10, 10), dxfattribs={"layer": "A"})
+    doc.saveas(p)
+    w.load_drawing_file(p)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    w.run_checks()
+    assert w._wait(lambda: _idle(w) and w.issues, 30)
+    assert not any(i.nove for i in w.issues)
+    first = {i.key for i in w.issues}
+    msp.add_line((10.005, 10), (20, 10), dxfattribs={"layer": "A"})  # nedotažení o 5 mm
+    doc.saveas(p)
+    w.recheck(p, silent=True)
+    assert w._wait(lambda: _idle(w) and any(i.nove for i in w.issues), 30)
+    assert all((i.key not in first) == i.nove for i in w.issues)
+    w.issue_panel.set_quick("nove")
+    shown = w.issue_panel.proxy.rowCount()
+    assert shown == sum(i.nove for i in w.issues) and shown > 0

@@ -111,7 +111,8 @@ class IssueModel(QAbstractTableModel):
         c = index.column()
         done = iss.state != "nová"
         if role == Qt.DisplayRole:
-            return [str(iss.number), iss.severity.value, STATE_LABEL.get(iss.state, iss.state), iss.message,
+            state = "★ nová" if (iss.nove and iss.state == "nová") else STATE_LABEL.get(iss.state, iss.state)
+            return [str(iss.number), iss.severity.value, state, iss.message,
                     iss.check_name, iss.layer, fmt_coord(iss.x), fmt_coord(iss.y)][c]
         if role == Qt.UserRole:  # řazení
             return [iss.number, iss.severity.rank, ISSUE_STATES.index(iss.state) if iss.state in ISSUE_STATES else 0,
@@ -124,7 +125,7 @@ class IssueModel(QAbstractTableModel):
             if c == C_SEV:
                 return QBrush(SEVERITY_COLORS.get(iss.severity))
             if c == C_STATE:
-                return QBrush(QColor(107, 114, 128))
+                return QBrush(QColor(124, 58, 237) if iss.nove else QColor(107, 114, 128))
         if role == Qt.FontRole and done:
             f = QFont()
             if c == C_STATE:
@@ -173,7 +174,8 @@ QUICK_FILTERS = ((None, "Vše", "Zobrazit všechny nálezy"),
                  ("Atributy", "Atributy", "Jen atributy – vrstva, barva, styl, písmo (kontrola GISoft)"),
                  ("Kartografie", "Kartografie", "Jak mapa vypadá: popisy přes sebe, přes čáry, vzhůru nohama, "
                                                 "čísla daleko od bodů"),
-                 ("Geometrie", "Geometrie", "Zbytečné lomové body, špičky, nepatrné a úzké plochy"))
+                 ("Geometrie", "Geometrie", "Zbytečné lomové body, špičky, nepatrné a úzké plochy"),
+                 ("nove", "★ Nové", "Jen chyby, které přibyly od minulé kontroly (co se opravou nově rozbilo)"))
 
 
 class IssueFilter(QSortFilterProxyModel):
@@ -199,6 +201,9 @@ class IssueFilter(QSortFilterProxyModel):
             return False
         if self.group == "chyby":
             if iss.severity == Severity.INFO:
+                return False
+        elif self.group == "nove":
+            if not iss.nove:
                 return False
         elif self.group and check_group(iss.check_id) != self.group:
             return False
@@ -305,8 +310,9 @@ class IssuePanel(QWidget):
         self.b_filter.setCheckable(True)
         self.b_filter.setToolTip("Podrobný filtr: typy kontrol, závažnost, vrstva, skrytí opravených")
         qrow.addWidget(self.b_filter)
-        self.b_help = QPushButton("? Co to znamená")
-        self.b_help.setToolTip("Vysvětlení vybraného typu chyby s obrázkem (a dalších pojmů)")
+        self.b_help = QPushButton("?")
+        self.b_help.setToolTip("Co to znamená – vysvětlení vybraného typu chyby s obrázkem (a dalších pojmů)")
+        self.b_help.setFixedWidth(34)
         self.b_help.clicked.connect(self.explain)
         qrow.addWidget(self.b_help)
         lay.addLayout(qrow)
@@ -451,6 +457,13 @@ class IssuePanel(QWidget):
     def set_issues(self, issues: list[Issue], summary: str = ""):
         prev_hidden = set(self.proxy.hidden_types)
         self.model.set_issues(issues)
+        n_new = sum(1 for i in issues if i.nove and i.state == "nová")
+        b_new = self.quick.get("nove")
+        if b_new is not None:  # „★ Nové“ jen když od minulé kontroly něco přibylo
+            b_new.setVisible(n_new > 0)
+            b_new.setText(f"★ Nové ({n_new})")
+            if not n_new and self.proxy.group == "nove":
+                self.set_quick(None)
         self._current_changed(QModelIndex(), QModelIndex())  # nový seznam – starý návod a tlačítka pryč
         self._updating = True
         self.types.clear()
