@@ -233,7 +233,7 @@ class CadPage(QWidget):
         "kopie": "kopírovat výběr (i vícekrát)", "otoč": "otočit výběr", "měřítko": "změnit velikost výběru",
         "zrcadli": "zrcadlit výběr", "rovnoběžka": "rovnoběžka (offset)", "ořež": "oříznout k průsečíkům",
         "prodluž": "prodloužit úsečku k prvku", "zaobli": "zaoblit / spojit roh dvou úseček",
-        "zkos": "zkosit roh dvou úseček (Chamfer)", "vlož vrchol": "vložit vrchol do strany polylinie",
+        "zkos": "zkosit roh dvou úseček (Chamfer)", "pole": "pole kopií výběru – obdélníkové nebo kruhové (Array)", "vlož vrchol": "vložit vrchol do strany polylinie",
         "smaž vrchol": "smazat vrchol polylinie", "posuň vrchol": "posunout vrchol (Modify Element)",
         "rozpoj": "rozpojit polylinie, bloky, kóty", "spoj": "spojit navazující prvky do polylinie",
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
@@ -267,7 +267,7 @@ class CadPage(QWidget):
         "otoc": "otoč", "sc": "měřítko", "scale": "měřítko", "meritko": "měřítko", "mi": "zrcadli",
         "mirror": "zrcadli", "of": "rovnoběžka", "offset": "rovnoběžka", "rovnobezka": "rovnoběžka",
         "tr": "ořež", "trim": "ořež", "orez": "ořež", "ex": "prodluž", "extend": "prodluž",
-        "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "cha": "zkos", "chamfer": "zkos",
+        "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "cha": "zkos", "chamfer": "zkos", "ar": "pole", "array": "pole",
         "zkoseni": "zkos", "zkosení": "zkos", "iv": "vlož vrchol", "insert vertex": "vlož vrchol",
         "vloz vrchol": "vlož vrchol", "dv": "smaž vrchol", "delete vertex": "smaž vrchol",
         "smaz vrchol": "smaž vrchol", "mo": "posuň vrchol", "modify": "posuň vrchol", "posun vrchol": "posuň vrchol", "x": "rozpoj", "explode": "rozpoj",
@@ -288,7 +288,7 @@ class CadPage(QWidget):
         "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
         "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
-    VYBEROVE = {"smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
+    VYBEROVE = {"pole", "smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
 
     def __init__(self, win=None, parent=None):
         super().__init__(parent)
@@ -1795,6 +1795,25 @@ class CadPage(QWidget):
                 U.kopie_vicenasobna(self.prostor, self.historie_zmen, ents, c[0] - a[0], c[1] - a[1], int(n))
                 return
             U.posun(self.prostor, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1], kopie=True)
+
+    def n_pole(self):
+        ents = yield from self._vyber_req("Pole")
+        druh = yield Pozadavek("text", "Druh pole – o = obdélníkové, k = kruhové:", vychozi="o")
+        if (druh or "o").strip().lower().startswith("k"):
+            s = yield self._bod_req("Střed kruhového pole:")
+            n = yield Pozadavek("cislo", "Počet položek (včetně originálu):", vychozi=4)
+            u = yield Pozadavek("uhel", "Úhel mezi položkami v gonech (+ proti směru hodin):", vychozi=400 / max(int(n), 1),
+                                ref=s)
+            ot = yield Pozadavek("text", "Otáčet položky? a / n:", vychozi="a")
+            nove = U.pole_kruhove(self.prostor, self.historie_zmen, ents, s, int(n), u * GON,
+                                  not (ot or "a").strip().lower().startswith("n"))
+        else:
+            r = yield Pozadavek("cislo", "Počet řádků:", vychozi=1)
+            k = yield Pozadavek("cislo", "Počet sloupců:", vychozi=3)
+            dx = yield Pozadavek("cislo", "Rozestup sloupců (x):", vychozi=10.0)
+            dy = yield Pozadavek("cislo", "Rozestup řádků (y):", vychozi=10.0)
+            nove = U.pole_obdelnikove(self.prostor, self.historie_zmen, ents, int(r), int(k), dx, dy)
+        self.vypis(f"Pole: {len(nove)} nových prvků.")
 
     def n_otoc(self):
         ents = yield from self._vyber_req("Otočení")

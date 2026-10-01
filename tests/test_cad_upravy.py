@@ -313,3 +313,24 @@ def test_zkoseni_a_vrcholy():
     for _ in range(3):  # posun vrcholu, nakreslení úsečky, vložení vrcholu
         h.krok_zpet()
     assert l.dxf.owner is not None
+
+
+def test_pole_obdelnikove_a_kruhove():
+    doc, msp, h, k = _novy()
+    c = k.kruznice((0, 0), 1)
+    nove = U.pole_obdelnikove(msp, h, [c], 2, 3, 10, 5)
+    assert len(nove) == 5
+    assert sorted((e.dxf.center.x, e.dxf.center.y) for e in msp.query("CIRCLE")) == [
+        (0, 0), (0, 5), (10, 0), (10, 5), (20, 0), (20, 5)]
+    h.krok_zpet()
+    assert len(msp.query("CIRCLE")) == 1
+    l = k.usecka((10, 0), (12, 0))
+    nove = U.pole_kruhove(msp, h, [l], (0, 0), 4, math.pi / 2)
+    konce = sorted((round(e.dxf.start.x, 9) + 0.0, round(e.dxf.start.y, 9) + 0.0) for e in msp.query("LINE"))
+    assert konce == [(-10, 0), (0, -10), (0, 10), (10, 0)]
+    assert any(abs(e.dxf.end.y - 12) < 1e-9 for e in nove)  # otočené i prvky
+    h.krok_zpet()
+    nove = U.pole_kruhove(msp, h, [l], (0, 0), 2, math.pi, otacet=False)
+    assert (nove[0].dxf.start.x, nove[0].dxf.end.x) == pytest.approx((-12, -10))  # jen posun
+    with pytest.raises(ValueError):
+        U.pole_obdelnikove(msp, h, [l], 1, 1, 1, 1)

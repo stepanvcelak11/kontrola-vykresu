@@ -2084,3 +2084,22 @@ def test_qtrig_z_cloudu_a_ze_souboru(window, tmp_path, monkeypatch):
         p.zapisnik.nastav(p.zapisnik.stanoviska[:n])
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_pole(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("kr", "x=0 y=0", "1"):
+        c.zadej(t)
+    c.zrus()
+    c.proved("vše")
+    c.proved("ar")
+    for t in ("o", "1", "4", "5", "0"):
+        c.zadej(t)
+    assert len(c.prostor.query("CIRCLE")) == 4
+    c.proved("vše")
+    c.proved("array")
+    for t in ("k", "x=100 y=0", "3", "", "a"):
+        c.zadej(t)
+    assert len(c.prostor.query("CIRCLE")) == 12

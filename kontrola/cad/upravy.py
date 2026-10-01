@@ -290,6 +290,56 @@ def kopie_vicenasobna(msp, h, ents, dx, dy, pocet: int):
     return nove
 
 
+def pole_obdelnikove(msp, h, ents, radky: int, sloupce: int, dx: float, dy: float, natoceni_rad: float = 0.0):
+    """Obdélníkové pole kopií (Construct Array, Rectangular): řádky × sloupce, rozestupy dx, dy, natočení pole."""
+    if radky < 1 or sloupce < 1 or radky * sloupce < 2:
+        raise ValueError("Pole musí mít aspoň dvě položky.")
+    if radky * sloupce > 10000:
+        raise ValueError("Pole je příliš velké (víc než 10 000 kopií).")
+    c, s_ = math.cos(natoceni_rad), math.sin(natoceni_rad)
+    nove = []
+    for r in range(radky):
+        for k in range(sloupce):
+            if r == 0 and k == 0:
+                continue  # originál zůstává
+            ox, oy = k * dx, r * dy
+            m = Matrix44.translate(ox * c - oy * s_, ox * s_ + oy * c, 0)
+            for e in ents:
+                q = _kopie(e)
+                q.transform(m)
+                msp.add_entity(q)
+                nove.append(q)
+    h.proved(f"Pole {radky}×{sloupce}", nove)
+    return nove
+
+
+def pole_kruhove(msp, h, ents, stred, pocet: int, uhel_mezi_rad: float, otacet: bool = True):
+    """Kruhové (polární) pole kopií kolem středu (Construct Array, Polar). ``pocet`` včetně originálu."""
+    if pocet < 2:
+        raise ValueError("Pole musí mít aspoň dvě položky.")
+    if pocet > 10000:
+        raise ValueError("Pole je příliš velké (víc než 10 000 kopií).")
+    cx, cy = _xy(stred)
+    nove = []
+    for i in range(1, pocet):
+        u = uhel_mezi_rad * i
+        if otacet:
+            m = Matrix44.chain(Matrix44.translate(-cx, -cy, 0), Matrix44.z_rotate(u), Matrix44.translate(cx, cy, 0))
+        for e in ents:
+            q = _kopie(e)
+            if not otacet:  # posun bez otočení prvku (vztažný bod = střed obálky prvku)
+                g = geometrie(e)
+                px, py = (g.centroid.x, g.centroid.y) if g is not None else (cx, cy)
+                vx, vy = px - cx, py - cy
+                m = Matrix44.translate(vx * math.cos(u) - vy * math.sin(u) - vx,
+                                       vx * math.sin(u) + vy * math.cos(u) - vy, 0)
+            q.transform(m)
+            msp.add_entity(q)
+            nove.append(q)
+    h.proved(f"Kruhové pole {pocet}×", nove)
+    return nove
+
+
 def otoc(msp, h, ents, stred, uhel_rad, kopie=False):
     cx, cy = _xy(stred)
     m = Matrix44.chain(Matrix44.translate(-cx, -cy, 0), Matrix44.z_rotate(uhel_rad), Matrix44.translate(cx, cy, 0))
