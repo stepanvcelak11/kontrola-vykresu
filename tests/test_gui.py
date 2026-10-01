@@ -1113,3 +1113,83 @@ def test_hlaseni_o_problemu(window, tmp_path, monkeypatch):
     saved = list((tmp_path / "plocha").glob("KontrolaVykresu_hlaseni_*.txt"))
     assert saved and "Poslední kroky" in saved[0].read_text(encoding="utf-8")
     dlg.close()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_kazda_funkce_bez_padu(window, tmp_path, monkeypatch):
+    """Spustí každou akci okna (dialogy se samy zavřou) – žádná nesmí skončit výjimkou."""
+    import sys
+    import traceback
+
+    from PySide6.QtCore import QTimer
+    from PySide6.QtGui import QAction, QDesktopServices
+    from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QInputDialog, QMenu, QMessageBox,
+                                   QProgressDialog)
+    w = window
+    errs = []
+    cur = {"t": ""}
+    monkeypatch.setattr(sys, "excepthook", lambda t, e, tb: errs.append(
+        (cur["t"], "".join(traceback.format_exception(t, e, tb))[-1200:])))
+    orig_exec = QDialog.exec
+
+    def fake_exec(self, *a, **k):
+        QTimer.singleShot(100, self.reject)
+        return orig_exec(self)
+    monkeypatch.setattr(QDialog, "exec", fake_exec)
+    monkeypatch.setattr(QMenu, "exec", lambda self, *a, **k: None)
+    for n in ("question", "information", "warning", "critical"):
+        monkeypatch.setattr(QMessageBox, n, staticmethod(lambda *a, **k: QMessageBox.No))
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.No)
+    monkeypatch.setattr(QMessageBox, "about", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(QDesktopServices, "openUrl", staticmethod(lambda *a, **k: True))
+    monkeypatch.setattr(QProgressDialog, "exec", lambda self: 0)
+    cnt = {"n": 0}
+
+    def save_name(*a, **k):
+        cnt["n"] += 1
+        flt = ((a[3] if len(a) > 3 else k.get("filter", "")) or "").lower()
+        ext = next((e for e in (".pdf", ".xlsx", ".csv", ".html", ".dxf", ".log", ".kontrola", ".txt", ".lve")
+                    if e[1:] in flt), ".pdf")
+        return (str(tmp_path / f"out{cnt['n']}{ext}"), "")
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(save_name))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: ("", "")))
+    monkeypatch.setattr(QFileDialog, "getOpenFileNames", staticmethod(lambda *a, **k: ([], "")))
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: ""))
+    for n, v in (("getText", ("", False)), ("getItem", ("", False)), ("getInt", (0, False)),
+                 ("getDouble", (0.0, False))):
+        monkeypatch.setattr(QInputDialog, n, staticmethod(lambda *a, v=v, **k: v))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "data"))
+    import shutil
+    kopie = tmp_path / "vykres" / UKAZKA.name  # funkce zapisují vedle výkresu – ne do repozitáře
+    kopie.parent.mkdir()
+    shutil.copy(UKAZKA, kopie)
+    w.load_drawing_file(kopie)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    app = QApplication.instance()
+    skip = ("Konec", "Ukončit", "Aktualizovat", "Zavřít")
+    acts = [a for a in w.findChildren(QAction) if a.text() and a.menu() is None and not a.isSeparator()]
+    assert len(acts) > 60
+    for a in acts:
+        t = a.text().replace("&", "")
+        if any(s in t for s in skip):
+            continue
+        cur["t"] = t
+        try:
+            if a.isCheckable():
+                a.toggle()
+                w._wait(lambda: _idle(w), 30)
+                a.toggle()
+            else:
+                a.trigger()
+            w._wait(lambda: _idle(w), 60)
+            for _ in range(3):
+                app.processEvents()
+            for tw in app.topLevelWidgets():
+                if tw is not w and tw.isVisible():
+                    tw.close()
+            if w.split.focus_mode:
+                w.a_focus.setChecked(False)
+        except Exception:  # noqa: BLE001
+            errs.append((t, traceback.format_exc()[-1200:]))
+    assert not errs, "\n\n".join(f"{t}:\n{e}" for t, e in errs)

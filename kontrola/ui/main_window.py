@@ -1647,7 +1647,10 @@ class MainWindow(QMainWindow):
                 err = ""
             except Exception as exc:  # noqa: BLE001 – bez internetu apod.
                 latest, err = None, str(exc)
-            self._updateResult.emit(latest, err, manual)
+            try:
+                self._updateResult.emit(latest, err, manual)
+            except RuntimeError:
+                pass  # okno se mezitím zavřelo – výsledek už nikoho nezajímá
 
         threading.Thread(target=work, daemon=True).start()
         if manual:
