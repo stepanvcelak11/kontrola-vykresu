@@ -510,22 +510,30 @@ def u_oddeleni(s, h):
     parc = _radky_bodu(s, h.get("body") or "")
     if len(parc) < 3:
         raise ChybaVstupu("Zadejte body parcely po obvodu (aspoň tři).")
-    a, b = _bod(s, h, "a", "bod A hranice"), _bod(s, h, "b", "bod B hranice")
-    _ruzne(a, b)
     cil = _cislo(h, "vymera", "oddělovanou výměru")
+    bodem = (h.get("zpusob") or "").startswith("dělicí čarou z bodu")
+    a = _bod(s, h, "a", "bod A" + ("" if bodem else " hranice"))
     try:
-        cast, t = V.oddeleni_rovnobezne(parc, a, b, cil)
+        if bodem:
+            cast, q = V.oddeleni_bodem(parc, a, cil)
+        else:
+            b = _bod(s, h, "b", "bod B hranice")
+            _ruzne(a, b)
+            cast, t = V.oddeleni_rovnobezne(parc, a, b, cil)
     except ValueError as e:
         raise ChybaVstupu(str(e)) from None
     pre = (h.get("predpona") or "").strip() or "D"
-    prot = _hlavicka("Oddělení části parcely rovnoběžně s hranicí")
+    prot = _hlavicka("Oddělení části parcely " + ("dělicí čarou z bodu" if bodem else "rovnoběžně s hranicí"))
     prot += [f"parcela {' – '.join(p.cislo for p in parc)}: výměra {_f(V.vymera(parc), 2)} m²",
-             f"oddělit {_f(cil, 2)} m² rovnoběžně s hranicí {a.cislo}–{b.cislo}: dělicí čára ve vzdálenosti "
-             f"{_f(t)} m", f"oddělená část: {_f(V.vymera(cast), 2)} m², body:"]
+             (f"oddělit {_f(cil, 2)} m² dělicí čarou z bodu {a.cislo} (po obvodu v pořadí bodů): druhý konec "
+              f"Y = {_f(q.y)}, X = {_f(q.x)}, délka dělicí čáry {_f(V.delka(a, q))} m") if bodem else
+             (f"oddělit {_f(cil, 2)} m² rovnoběžně s hranicí {a.cislo}–{b.cislo}: dělicí čára ve vzdálenosti "
+              f"{_f(t)} m"), f"oddělená část: {_f(V.vymera(cast), 2)} m², body:"]
     nove, i = [], 0
+    zname = parc + [a]  # bod A může ležet na straně parcely
     for p in cast:
-        if any(abs(p.y - q.y) < 1e-6 and abs(p.x - q.x) < 1e-6 for q in parc):
-            c = next(q.cislo for q in parc if abs(p.y - q.y) < 1e-6 and abs(p.x - q.x) < 1e-6)
+        if any(abs(p.y - q.y) < 1e-6 and abs(p.x - q.x) < 1e-6 for q in zname):
+            c = next(q.cislo for q in zname if abs(p.y - q.y) < 1e-6 and abs(p.x - q.x) < 1e-6)
             prot.append(f"  {c:<14} Y = {_f(p.y)}   X = {_f(p.x)}  (daný)")
         else:
             i += 1
@@ -632,9 +640,12 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
       Pole("oddily", "Oddíly (řádek: cílový bod převýšení délka)", "radky"),
       Pole("mez", "Mezní odchylka [mm/√km]", "m", "40")], u_nivelace),
-    ("Oddělení parcely", "Oddělí část zadané výměry dělicí čarou rovnoběžnou s hranicí A–B.",
-     [Pole("body", "Body parcely po obvodu (čísla)", "radky"), Pole("a", "Hranice – bod A"),
-      Pole("b", "Hranice – bod B"), Pole("vymera", "Oddělit výměru [m²]", "m"),
+    ("Oddělení parcely", "Oddělí část zadané výměry dělicí čarou rovnoběžnou s hranicí A–B, nebo dělicí čarou "
+     "vedenou bodem A na hranici.",
+     [Pole("zpusob", "Způsob", "volba", "rovnoběžně s hranicí A–B",
+           ("rovnoběžně s hranicí A–B", "dělicí čarou z bodu A")),
+      Pole("body", "Body parcely po obvodu (čísla)", "radky"), Pole("a", "Bod A (hranice / dělicí čára)"),
+      Pole("b", "Hranice – bod B (jen rovnoběžně)"), Pole("vymera", "Oddělit výměru [m²]", "m"),
       Pole("predpona", "Předpona nových bodů", "text", "D")], u_oddeleni),
     ("Převod S-JTSK ↔ WGS84", "Zeměpisné souřadnice bodů (s odkazem na mapy.cz) a opačně, přesnost ≈ 1 m.",
      [Pole("smer", "Směr", "volba", "S-JTSK → WGS84", ("S-JTSK → WGS84", "WGS84 → S-JTSK")),

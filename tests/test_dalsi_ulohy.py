@@ -189,6 +189,10 @@ def test_ulohy_formulare_polygon_a_wgs():
     # oddělení čtverce 10×10 na polovinu
     r = u_oddeleni(s, {"body": "P1 P4 P2 P3", "a": "P1", "b": "P4", "vymera": "50", "predpona": "D"})
     assert len(r.nove) == 2 and all(abs(n.x - 5) < 1e-6 for n in r.nove)
+    # dělicí čarou z rohu P1: polovina čtverce → úhlopříčka do P2 (jediný nový bod není, P2 je daný)
+    r = u_oddeleni(s, {"zpusob": "dělicí čarou z bodu A", "body": "P1 P4 P2 P3", "a": "P1", "vymera": "25"})
+    assert len(r.nove) == 1 and (r.nove[0].y, r.nove[0].x) == pytest.approx((10, 5))
+    assert "dělicí čarou z bodu" in r.protokol[0] + "".join(r.protokol)
 
 
 def test_oddeleni_bodem():
