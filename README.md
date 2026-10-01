@@ -131,6 +131,8 @@ Otevřete ukázkový výkres a stiskněte F5.
 * Chyba označená jako opravená, která se při opakované kontrole znovu objeví, se vrátí do stavu
   „nová“. Ignorované chyby zůstanou ignorované.
 
+* Při oddálení se kroužky, které by se překrývaly, sloučí do jednoho **s počtem chyb** (barvou nejzávažnější). Klik na něj výkres na shluk přiblíží; po přiblížení se shluk sám rozpadne.
+
 ### Rozpracovaný výkres a kontrola jen části výkresu
 
 * **Rozpracovaný výkres** (tlačítko v horní liště, menu Kontrola): výkres ještě není hotový,

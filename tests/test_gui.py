@@ -722,3 +722,27 @@ def test_uvod_bez_pravidel_nabidne_cizi_vykres(window):
     assert w.project.config.settings("spicka").zapnuto
     w.home.refresh()
     assert "Zadání" in w.home.next_btn.text()
+
+
+@pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
+def test_shluky_kroužku(window):
+    from kontrola.checks.base import Issue, Severity
+    w = window
+    w.load_drawing_file(UKAZKA)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    x0, y0, x1, y1 = w.drawing.bounds()
+    iss = [Issue("visici_konce", "Visící konec", Severity.VAROVANI, f"konec {k}", x0 + 1 + k * 0.01, y0 + 1)
+           for k in range(5)] + [Issue("duplicity", "Duplicita", Severity.CHYBA, "dup", x0 + 1, y0 + 1.02),
+                                 Issue("duplicity", "Duplicita", Severity.CHYBA, "dál", x1 - 1, y1 - 1)]
+    for n, i in enumerate(iss, 1):
+        i.number = n
+    w.view.set_issues(iss)
+    w.view.fit_all()
+    w.view._declutter()
+    leaders = [m for m in w.view.markers.values() if m.cluster_n > 1]
+    assert len(leaders) == 1 and leaders[0].cluster_n == 6
+    assert leaders[0].issue.severity == Severity.CHYBA  # shluk vede nejzávažnější chyba
+    assert sum(m.cluster_hidden for m in w.view.markers.values()) == 5
+    w.view.highlight_issue(3, zoom=False)
+    w.view._declutter()
+    assert not w.view.markers[3].cluster_hidden  # vybraná chyba se ukáže

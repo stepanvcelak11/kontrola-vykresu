@@ -153,6 +153,8 @@ class IssueMarker(QGraphicsItem):
         lab = issue.label()
         self._label = lab if len(lab) <= 46 else lab[:44].rstrip(" ,:–") + "…"  # celé znění je v tooltipu
         self.label_on = True  # vypne se, když by se popisek překrýval s jiným (viz DrawingView._declutter)
+        self.cluster_n = 1  # vedoucí kroužek shluku: kolik chyb shluk obsahuje
+        self.cluster_hidden = False  # schovaný ve shluku (ukáže se po přiblížení)
         fm = QFontMetricsF(self._font)
         self._label_w = fm.horizontalAdvance(self._label) + 10
         self._label_h = fm.height() + 4
@@ -174,9 +176,17 @@ class IssueMarker(QGraphicsItem):
 
     def shape(self) -> QPainterPath:
         p = QPainterPath()
+        if self.cluster_hidden:
+            return p
         r = self.RADIUS + 4
         p.addEllipse(QPointF(0, 0), r, r)
         return p
+
+    def set_cluster(self, n: int, hidden: bool):
+        if n != self.cluster_n or hidden != self.cluster_hidden:
+            self.prepareGeometryChange()
+            self.cluster_n, self.cluster_hidden = n, hidden
+            self.update()
 
     def set_label_on(self, on: bool):
         if on != self.label_on:
@@ -195,9 +205,23 @@ class IssueMarker(QGraphicsItem):
             self.update()
 
     def paint(self, painter: QPainter, option, widget=None):
+        if self.cluster_hidden:
+            return
         painter.setRenderHint(QPainter.Antialiasing, True)
         c = self.color()
         r = self.RADIUS
+        if self.cluster_n > 1:  # shluk: větší kroužek s počtem chyb
+            rr = r + 4
+            painter.setPen(QPen(QColor(255, 255, 255), 2.5))
+            painter.setBrush(c)
+            painter.drawEllipse(QPointF(0, 0), rr, rr)
+            f = QFont(self._font)
+            f.setBold(True)
+            f.setPointSizeF(8.5 if self.cluster_n < 100 else 7.5)
+            painter.setFont(f)
+            painter.setPen(QColor(255, 255, 255))
+            painter.drawText(QRectF(-rr, -rr, 2 * rr, 2 * rr), Qt.AlignCenter, str(self.cluster_n))
+            return
         if self.highlighted:
             halo = QColor(255, 255, 0, 200)
             painter.setPen(QPen(halo, 7))
@@ -452,6 +476,8 @@ class DrawingView(QGraphicsView):
         items = [m for m in self.markers.values() if m.isVisible()]
         items.sort(key=lambda m: (m.issue.state != "nová", m.issue.severity.rank, m.issue.number))
         pos = {id(m): self.mapFromScene(m.scenePos()) for m in items}
+        self._cluster(items, pos)
+        items = [m for m in items if not m.cluster_hidden]
         # popisek nesmí zakrýt žádný kroužek (ani méně závažné chyby) – jinak se výkres slije
         # (závažnější chyby mají přednost: popisek chyby smí překrýt kroužek méně závažného nálezu)
         circles = [(id(m), m.issue.severity.rank,
@@ -464,7 +490,7 @@ class DrawingView(QGraphicsView):
                 m.set_label_on(False)
                 continue
             lr = m.label_rect().translated(p.x(), p.y())
-            ok = (m.issue.state == "nová" and m.issue.severity != Severity.INFO  # info jen kroužek + tooltip
+            ok = (m.cluster_n == 1 and m.issue.state == "nová" and m.issue.severity != Severity.INFO  # info jen kroužek + tooltip
                   and shown < self.MAX_LABELS
                   and not any(lr.intersects(o) for o in placed)
                   and not any(k != id(m) and rank <= m.issue.severity.rank and lr.intersects(c)
@@ -473,6 +499,36 @@ class DrawingView(QGraphicsView):
             if ok:
                 placed.append(lr)
                 shown += 1
+
+    CLUSTER_PX = 18.0  # kroužky blíž než tolik pixelů se slijí – ukáže se jeden s počtem
+    CLUSTER_MIN = 3
+
+    def _cluster(self, items: list, pos: dict):
+        """Překrývající se kroužky se při oddálení sloučí do jednoho s počtem chyb (vedoucí = nejzávažnější)."""
+        groups: list[tuple[QPointF, list]] = []
+        lim2 = self.CLUSTER_PX ** 2
+        for m in items:  # items jsou seřazené od nejzávažnější chyby → ta vede shluk
+            p = pos[id(m)]
+            for c, ms in groups:
+                if (c.x() - p.x()) ** 2 + (c.y() - p.y()) ** 2 <= lim2:
+                    ms.append(m)
+                    break
+            else:
+                groups.append((p, [m]))
+        self._clusters = {}
+        for _c, ms in groups:
+            if len(ms) >= self.CLUSTER_MIN and not any(m.highlighted for m in ms):
+                ms[0].set_cluster(len(ms), False)
+                for m in ms[1:]:
+                    m.set_cluster(1, True)
+                self._clusters[id(ms[0])] = ms
+            else:
+                for m in ms:
+                    m.set_cluster(1, False)
+
+    def cluster_members(self, leader) -> list:
+        """Chyby ve shluku vedoucího kroužku (pro přiblížení po kliknutí)."""
+        return getattr(self, "_clusters", {}).get(id(leader), [leader])
 
     def drawForeground(self, painter: QPainter, rect: QRectF):  # noqa: N802
         """Prázdný výkres: nápověda uprostřed okna."""
@@ -677,6 +733,7 @@ class DrawingView(QGraphicsView):
             self._highlight = None
         for n, m in self.markers.items():
             m.set_highlighted(n == number)
+        self.request_declutter()  # vybraná chyba nesmí zůstat schovaná ve shluku
         if number is None or number not in self.markers:
             return
         m = self.markers[number]
@@ -779,6 +836,22 @@ class DrawingView(QGraphicsView):
             if it.scene() is not None:
                 it.scene().removeItem(it)
         self._overlay = []
+
+    def zoom_to_markers(self, markers: list):
+        """Přiblíží výkres tak, aby se kroužky shluku rozestoupily."""
+        pts = [m.scenePos() for m in markers]
+        if not pts:
+            return
+        xs, ys = [p.x() for p in pts], [p.y() for p in pts]
+        w, h = max(xs) - min(xs), max(ys) - min(ys)
+        span = max(w, h, 1e-6)
+        rect = QRectF(min(xs) - span * 0.4, min(ys) - span * 0.4, w + span * 0.8, h + span * 0.8)
+        cur = self.mapToScene(self.viewport().rect()).boundingRect()
+        if rect.width() > cur.width() * 0.5:  # shluk je jen hustý – stačí přiblížit 3× na jeho střed
+            rect = QRectF(0, 0, cur.width() / 3, cur.height() / 3)
+            rect.moveCenter(QPointF(sum(xs) / len(xs), sum(ys) / len(ys)))
+        self.fitInView(rect, Qt.KeepAspectRatio)
+        self.request_declutter()
 
     def zoom_to(self, x: float, y: float, span: float = 15.0):
         c = self.to_scene(x, y)
@@ -887,8 +960,11 @@ class DrawingView(QGraphicsView):
             if not was_pan and event.button() == Qt.LeftButton:
                 hit = False
                 for item in self.items(event.position().toPoint()):
-                    if isinstance(item, IssueMarker) and item.isVisible():
-                        self.markerClicked.emit(item.issue.number)
+                    if isinstance(item, IssueMarker) and item.isVisible() and not item.cluster_hidden:
+                        if item.cluster_n > 1:
+                            self.zoom_to_markers(self.cluster_members(item))
+                        else:
+                            self.markerClicked.emit(item.issue.number)
                         hit = True
                         break
                 if not hit and self.drawing is not None:
