@@ -998,3 +998,34 @@ def test_co_aplikace_umi_akce_existuji(window):
         for name, _d, act in items:
             if act and act.startswith("a_"):
                 assert getattr(window, act, None) is not None, (name, act)
+
+
+def test_opravy_z_revize(window):
+    """Tepelná mapa po Opraveno, kopírování v okně Další chyba, „Hotovo“ v režimu soustředění."""
+    from PySide6.QtWidgets import QApplication
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    w.a_heat.setChecked(True)
+    for i in w.issues:
+        if i.state == "nová" and i is not w.issues[0]:
+            i.state = "opraveno"
+    w.issue_panel.select_issue(w.issues[0].number)
+    w.issue_panel.set_state("opraveno")  # poslední otevřená chyba
+    assert w.view._heat_item is None  # nic neopraveného → žádná skvrna
+    # okno Další chyba: kopírování a hned další chyba nesmí spadnout na smazaném tlačítku
+    w.issue_panel.set_state("nová")
+    w.show_mini()
+    m = w._mini
+    btns = [m.keyrow.itemAt(k).widget() for k in range(m.keyrow.count())]
+    if btns:
+        btns[0].click()
+        m.refresh()
+        w._wait(lambda: False, 1.5)
+        QApplication.processEvents()
+    # režim soustředění: po opravě poslední chyby „Hotovo“
+    w.a_focus.setChecked(True)
+    w._focus_bar.b_ok.click()
+    assert "Hotovo" in w._focus_bar.title.text()
+    w.a_focus.setChecked(False)

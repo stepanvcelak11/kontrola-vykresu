@@ -68,7 +68,7 @@ class MiniOkno(QWidget):
         old = btn.text()
         btn.setText("Zkopírováno ✓")
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(1200, lambda: btn.setText(old))
+        QTimer.singleShot(1200, btn, lambda: btn.setText(old))  # btn jako kontext: smazané tlačítko se přeskočí
 
     def refresh(self):
         iss = self.win.issue_panel.current_issue()

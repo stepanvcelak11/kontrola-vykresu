@@ -57,7 +57,7 @@ class FocusBar(QFrame):
     def refresh(self):
         iss = self.win.issue_panel.current_issue()
         todo = sum(1 for i in self.win.issues if i.state == "nová")
-        if iss is None:
+        if iss is None or (todo == 0 and iss.state != "nová"):
             if todo == 0 and self.win.issues:
                 self.title.setText("<span style='font-size:15pt;font-weight:800'>Hotovo – vše opraveno 🎉</span>")
             else:

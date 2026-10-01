@@ -995,8 +995,11 @@ class IssuePanel(QWidget):
             self._filters_changed()
         self._update_cards()
         self.select_issue(last[0][0].number)
+        cur = self.current_issue()
+        hidden = cur is None or cur.number != last[0][0].number
         nums = ", ".join(f"#{i.number}" for i, _ in last[:5]) + ("…" if len(last) > 5 else "")
-        self.message.emit(f"Vráceno zpět: {nums} je znovu „{last[0][1]}“.")
+        self.message.emit(f"Vráceno zpět: {nums} je znovu „{last[0][1]}“."
+                          + (" (Chybu teď skrývá filtr seznamu.)" if hidden else ""))
 
     def next_open(self):
         """Přejde na další chybu, která ještě není opravená ani ignorovaná."""

@@ -1417,6 +1417,7 @@ class MainWindow(QMainWindow):
             self.show_page("vykres")
             docks = [d for d in self.findChildren(QDockWidget) if d.isVisible()]
             self._focus_saved = {"panel": self.split.panel_visible, "status": self.statusBar().isVisible(),
+                                 "toolbar": self.toolbar.isVisible(),
                                  "docks": docks,
                                  "over": [w for w, _ in self.split.overlays if w.isVisible() and w is not bar]}
             self.split.focus_mode = True
@@ -1444,7 +1445,7 @@ class MainWindow(QMainWindow):
             self.split.focus_mode = False
             self._focus_esc.setEnabled(False)
             bar.hide()
-            self.toolbar.show()
+            self.toolbar.setVisible(sv.get("toolbar", True))
             self.statusBar().setVisible(sv.get("status", True))
             for d in sv.get("docks", []):
                 d.show()
@@ -1910,6 +1911,9 @@ class MainWindow(QMainWindow):
 
     def _on_states_changed(self):
         self.view.refresh_markers()
+        self.view.refresh_heatmap()  # opravené chyby z tepelné mapy zmizí
+        if self.split.focus_mode and getattr(self, "_focus_bar", None) is not None:
+            self._focus_bar.refresh()
         if self.project is not None:
             self.project.store_issues(self.issues)
             self.project.save()

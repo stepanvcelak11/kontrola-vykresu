@@ -11,7 +11,7 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-VZOR = re.compile(r"^(?P<prijmeni>[A-Za-z]+)_(?P<cz>\d+)_a(?P<a>\d+)_t(?P<t>\d+)$")
+VZOR = re.compile(r"^(?P<prijmeni>[A-Za-z]+)_(?P<cz>\d+)_a(?P<a>\d+)_t(?P<t>\d+)$", re.IGNORECASE)
 # jen soubory, které se o vzor zjevně pokoušejí (Příjmení_číslo…); jiné zadání (např. Husovice_…) se neřeší
 POKUS = re.compile(r"^[^\W\d_]+_\d+(?:_|$)", re.UNICODE)
 
