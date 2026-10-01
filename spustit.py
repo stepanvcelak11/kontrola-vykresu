@@ -9,6 +9,8 @@ import sys
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] in ("zkontroluj", "check"):
+        from kontrola.app import _splash
+        _splash(close=True)  # bez okna – úvodní okénko hned pryč
         from kontrola.cli import main as cli_main
         raise SystemExit(cli_main(sys.argv[1:]))
     from kontrola.app import main

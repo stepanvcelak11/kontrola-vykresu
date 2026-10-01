@@ -5,8 +5,24 @@ from __future__ import annotations
 import sys
 
 
+def _splash(text: str | None = None, close: bool = False) -> None:
+    """Úvodní okénko sestaveného .exe (PyInstaller); ze zdrojových kódů neexistuje."""
+    try:
+        import pyi_splash  # type: ignore
+    except ImportError:
+        return
+    try:
+        if close:
+            pyi_splash.close()
+        elif text:
+            pyi_splash.update_text(text)
+    except Exception:  # noqa: BLE001 – okénko je jen ozdoba, nesmí zastavit start
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
+    _splash("Spouštím…")
     from PySide6.QtCore import QLibraryInfo, QLocale, QSettings, QTimer, QTranslator
     from PySide6.QtWidgets import QApplication
 
@@ -36,8 +52,10 @@ def main(argv: list[str] | None = None) -> int:
             pass
     from .ui import crash
     crash.install(lambda: QApplication.activeWindow())
+    _splash("Načítám poslední projekt…")
     win = MainWindow()
     win.show()
+    _splash(close=True)
     if not win.settings.value("pruvodce/skryt", False, type=bool):
         QTimer.singleShot(400, win.show_guide)  # průvodce při prvním spuštění
     QTimer.singleShot(3000, win.maybe_check_updates)

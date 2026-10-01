@@ -38,9 +38,23 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# úvodní okénko hned po dvojkliku (než se program rozbalí) – zavře ho aplikace, až ukáže hlavní okno
+splash = Splash(
+    "kontrola/resources/splash.png",
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=(36, 262),
+    text_size=10,
+    text_color="white",
+    minify_script=True,
+    always_on_top=False,
+)
+
 exe = EXE(
     pyz,
     a.scripts,
+    splash,
+    splash.binaries,
     a.binaries,
     a.datas,
     [],

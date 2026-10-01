@@ -1425,7 +1425,14 @@ class MainWindow(QMainWindow):
                         f"(<a href='{RELEASES_URL}'>co je nového</a>)<br><br>"
                         "Stažený soubor stačí spustit místo starého; projekty a nastavení zůstanou.")
             box.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            import sys
+            b_now = None
+            if getattr(sys, "frozen", False) and sys.platform == "win32":
+                b_now = box.addButton("Aktualizovat teď", QMessageBox.AcceptRole)
+                box.addButton("Později", QMessageBox.RejectRole)
             box.exec()
+            if b_now is not None and box.clickedButton() is b_now:
+                self.update_now()
         elif manual:
             if err:
                 QMessageBox.information(self, "Aktualizace", f"Nepodařilo se spojit s GitHubem ({err}).")
@@ -1434,6 +1441,42 @@ class MainWindow(QMainWindow):
                                         f"přes git. Poslední zveřejněné sestavení: č. {latest or '?'}.")
             else:
                 QMessageBox.information(self, "Aktualizace", f"Máte nejnovější verzi ({version_text()}).")
+
+    def update_now(self):
+        """Stáhne novou verzi, nahradí .exe a program spustí znovu (projekty a nastavení zůstanou)."""
+        import tempfile
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QApplication, QProgressDialog
+
+        from ..aktualizace import download, install_and_restart
+        dlg = QProgressDialog("Stahuji novou verzi…", "Zrušit", 0, 100, self)
+        dlg.setWindowTitle("Aktualizace")
+        dlg.setMinimumDuration(0)
+        dlg.setAutoClose(False)
+        dest = Path(tempfile.gettempdir()) / "KontrolaVykresu_nova.exe"
+        cancelled = {"v": False}
+        dlg.canceled.connect(lambda: cancelled.update(v=True))
+
+        def prog(done, total):
+            if total:
+                dlg.setValue(int(done * 100 / total))
+            QApplication.processEvents()
+            if cancelled["v"]:
+                raise OSError("zrušeno")
+        try:
+            download(dest, prog)
+        except Exception as exc:  # noqa: BLE001
+            dlg.close()
+            if not cancelled["v"]:
+                QMessageBox.warning(self, "Aktualizace", f"Novou verzi se nepodařilo stáhnout ({exc}).")
+            return
+        dlg.close()
+        if self.project is not None:
+            self.project.save()
+        install_and_restart(dest)
+        self.close()
+        QApplication.instance().quit()
 
     def _open_logs(self):
         from PySide6.QtCore import QUrl
