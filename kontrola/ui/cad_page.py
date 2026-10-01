@@ -245,6 +245,7 @@ class CadPage(QWidget):
         "rozděl": "rozdělit prvek v bodě", "ohrada": "výběr ohradou (mnohoúhelník)",
         "oměrné míry": "popis délek stran vybraných čar (oměrné míry)", "kóta úhlu": "úhlová kóta",
         "kóta poloměru": "kóta poloměru kružnice / oblouku",
+        "převezmi atributy": "aktivní atributy podle prvku (Match)", "změň atributy": "aktivní atributy na prvky",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -267,7 +268,9 @@ class CadPage(QWidget):
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
         "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "ma": "převezmi atributy", "match": "převezmi atributy",
+        "prevezmi atributy": "převezmi atributy", "ca": "změň atributy", "change": "změň atributy",
+        "zmen atributy": "změň atributy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
         "kota polomeru": "kóta poloměru", "dimrad": "kóta poloměru", "kp": "kóta poloměru", "mp": "měř plochu", "plocha bodů": "měř plochu",
@@ -2049,6 +2052,52 @@ class CadPage(QWidget):
     def n_kota_polomeru(self):
         e, k = yield Pozadavek("prvek", "Kóta poloměru – klikněte na kružnici nebo oblouk:")
         U.kota_polomeru(self.prostor, self.historie_zmen, e, k, self.vyska_textu, self.kresleni._attr())
+
+    # ------------------------------------------------------------ převzetí a změna atributů (Match / Change)
+    def n_prevezmi_atributy(self):
+        e, _k = yield Pozadavek("prvek", "Převzít atributy – klikněte na vzorový prvek:")
+        k, d = self.kresleni, e.dxf
+        k.vrstva = d.get("layer", "0")
+        if k.vrstva not in self.dok.doc.layers:
+            self.dok.doc.layers.add(k.vrstva)
+        k.barva = d.get("color", 256)
+        k.ms_barva = k.ms_barvy_prvku.get(d.handle)
+        if e.dxftype() in ("TEXT", "MTEXT"):
+            k.textovy_styl = d.get("style", None)
+            self.vyska_textu = d.height if e.dxftype() == "TEXT" else d.char_height
+            k.vyska_textu = self.vyska_textu
+            k.sirka_faktor = d.get("width", 1.0) if e.dxftype() == "TEXT" else 1.0
+        else:
+            k.typ_cary = d.get("linetype", "BYLAYER")
+            k.tloustka = d.get("lineweight", -1)
+        self._napln_vrstvy()
+        self.vypis("Aktivní atributy převzaty: " + self.aktivni_atributy())
+
+    def _atributy_aktivni(self, e) -> dict:
+        k = self.kresleni
+        a = {"layer": k.vrstva, "color": k.barva}
+        if e.dxftype() in ("TEXT", "MTEXT"):
+            if k.textovy_styl:
+                a["style"] = k.textovy_styl
+            if e.dxftype() == "TEXT" and k.vyska_textu:
+                a["height"] = k.vyska_textu
+        elif e.dxftype() not in ("INSERT", "POINT"):
+            a["linetype"] = k.typ_cary
+            a["lineweight"] = k.tloustka
+        return a
+
+    def n_zmen_atributy(self):
+        if self.vyber:
+            ents = list(self.vyber)
+            nove = []
+            for e in ents:
+                nove += U.zmen_vlastnosti(self.prostor, self.historie_zmen, [e], **self._atributy_aktivni(e))
+            self.vyber = nove
+            self.vypis(f"Atributy změněny u {len(nove)} prvků.")
+            return
+        while True:
+            e, _k = yield Pozadavek("prvek", "Změnit atributy – klikněte na prvek (Esc = konec):")
+            U.zmen_vlastnosti(self.prostor, self.historie_zmen, [e], **self._atributy_aktivni(e))
 
 
 def _linie(body):

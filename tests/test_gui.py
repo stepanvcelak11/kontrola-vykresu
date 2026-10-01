@@ -1954,3 +1954,24 @@ def test_zapisnik_vyrovnani_site(window):
     assert (r is not None and "VYROVNÁNÍ SÍTĚ MNČ" in text) or "⚠" in zp.info.text()
     v.seznam.body[:] = puvodni
     v._after_change()
+
+
+def test_cad_prevzeti_a_zmena_atributu(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.proved("lv=VZOR;co=3;lc=2;wt=2")
+    for t in ("u", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    c.proved("lv=0;co=1;lc=0;wt=0")
+    for t in ("u", "x=0 y=5", "x=10 y=5", ""):
+        c.zadej(t)
+    vzor = next(e for e in c.prostor.query("LINE") if e.dxf.layer == "VZOR")
+    c.proved("ma")
+    c._posli((vzor, (5, 0)))
+    assert c.kresleni.vrstva == "VZOR" and c.aktivni.text().startswith("Hladina VZOR · Barva 3")
+    druha = next(e for e in c.prostor.query("LINE") if e.dxf.layer == "0")
+    c.proved("ca")
+    c._posli((druha, (5, 5)))
+    c.zrus()
+    assert all(e.dxf.layer == "VZOR" and e.dxf.linetype == "DGN Style 2" for e in c.prostor.query("LINE"))
