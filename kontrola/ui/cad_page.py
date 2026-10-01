@@ -246,6 +246,7 @@ class CadPage(QWidget):
         "oměrné míry": "popis délek stran vybraných čar (oměrné míry)", "kóta úhlu": "úhlová kóta",
         "kóta poloměru": "kóta poloměru kružnice / oblouku",
         "převezmi atributy": "aktivní atributy podle prvku (Match)", "změň atributy": "aktivní atributy na prvky",
+        "knihovna buněk": "načíst buňky (bloky) a styly z jiného DXF (knihovna od učitele)",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -268,7 +269,8 @@ class CadPage(QWidget):
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
         "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "ma": "převezmi atributy", "match": "převezmi atributy",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "knihovna": "knihovna buněk", "rc": "knihovna buněk",
+        "knihovna bunek": "knihovna buněk", "cells": "knihovna buněk", "ma": "převezmi atributy", "match": "převezmi atributy",
         "prevezmi atributy": "převezmi atributy", "ca": "změň atributy", "change": "změň atributy",
         "zmen atributy": "změň atributy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
@@ -645,6 +647,25 @@ class CadPage(QWidget):
         uhel = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
         RA.pripoj(self.dok.doc, self.prostor, self.historie_zmen, cesta, zaklad, a, sirka, uhel)
         self.vypis(f"Rastr připojen, šířka {sirka:.2f} m.")
+
+    def knihovna_bunek(self, cesta: str | None = None) -> list[str]:
+        """Buňky (bloky), typy čar a textové styly z jiného DXF – jako připojení knihovny buněk v MicroStationu."""
+        from ..cad.zadani import prevezmi_bloky, prevezmi_styly
+        if self.dok is None:
+            return []
+        if cesta is None:
+            cesta, _ = QFileDialog.getOpenFileName(self, "Knihovna buněk (DXF)", "", "DXF (*.dxf);;Typy čar (*.lin)")
+            if not cesta:
+                return []
+        styly = prevezmi_styly(self.dok.doc, [cesta])
+        bloky = prevezmi_bloky(self.dok.doc, [cesta]) if cesta.lower().endswith(".dxf") else []
+        if self.historie_zmen is not None:
+            self.historie_zmen.zmena += 1
+        self._titulek()
+        self.vypis(f"Z knihovny {Path(cesta).name}: {len(bloky)} buněk"
+                   + (f" ({', '.join(bloky[:15])}{'…' if len(bloky) > 15 else ''})" if bloky else "")
+                   + (f", {len(styly)} stylů" if styly else "") + ". Vložení příkazem „vlož“.")
+        return bloky
 
     def body_ze_seznamu(self, modal: bool = True):
         if self.dok is None:
@@ -1405,6 +1426,8 @@ class CadPage(QWidget):
             self.tisk_pdf()
         elif cmd == "body":
             self.body_ze_seznamu()
+        elif cmd == "knihovna buněk":
+            self.knihovna_bunek()
         elif cmd == "rastr":
             self.pripoj_rastr()
         elif cmd == "vlastnosti":

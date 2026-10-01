@@ -49,7 +49,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Zpět/Vpřed bez omezení | ✅ |
 | Vrstvy: správce (zapnutí, zmrazení, zámek, barva, typ čáry, tloušťka, nová, přejmenovat, smazat, aktuální, výběr prvků vrstvy) | ✅ |
 | Bloky (buňky): tvorba z výběru, vložení s měřítkem a natočením, rozpojení | ✅ |
-| Knihovna buněk (sdílené bloky mezi výkresy) | ❌ |
+| Knihovna buněk: buňky, typy čar a styly textu z jiného DXF nebo .lin (příkaz „knihovna“) | ✅ |
 | Vlastnosti prvku (dvojklik: vrstva, barva, styl, tloušťka, souřadnice, poloměr, text…), výběr podobných, výběr prvků vrstvy, najít a nahradit text | ✅ |
 | Výkres podle zadání: vrstvy, typy čar, písma a buňky ze Směrnice / zadání / vzorového výkresu; druh prvku → atributy se nastaví samy (ověřeno kontrolou symbologie na obou zadáních); tahák s key-in pro MicroStation | ✅ |
 | Geodetické funkce (kódovník bodů, mřížka, transformace výkresu) | ❌ |

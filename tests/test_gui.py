@@ -1975,3 +1975,19 @@ def test_cad_prevzeti_a_zmena_atributu(window):
     c._posli((druha, (5, 5)))
     c.zrus()
     assert all(e.dxf.layer == "VZOR" and e.dxf.linetype == "DGN Style 2" for e in c.prostor.query("LINE"))
+
+
+def test_cad_knihovna_bunek(window, tmp_path):
+    import ezdxf
+    knih = ezdxf.new("R2000")
+    knih.blocks.new("3.13").add_circle((0, 0), 0.5)
+    knih.blocks.new("4.05").add_line((-1, 0), (1, 0))
+    f = tmp_path / "bunky.dxf"
+    knih.saveas(f)
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    assert set(c.knihovna_bunek(str(f))) == {"3.13", "4.05"}
+    for t in ("vlož", "4.05", "1", "0", "x=10 y=10", ""):
+        c.zadej(t)
+    assert [e.dxf.name for e in c.prostor.query("INSERT")] == ["4.05"]
