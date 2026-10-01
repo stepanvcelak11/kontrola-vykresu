@@ -77,7 +77,7 @@ class MiniOkno(QWidget):
             if it.widget():
                 it.widget().hide()  # deleteLater smaže až později – staré tlačítko nesmí zůstat vidět
                 it.widget().deleteLater()
-        todo = sum(1 for i in self.win.issues if i.state == "nová")
+        todo = sum(1 for i in self.win.issues if i.state == "nová" and i.severity.value != "info")
         self.count.setText(f"Zbývá opravit: {todo}")
         if iss is None:
             self.head.setText("<b>Vyberte chybu</b> v seznamu nebo stiskněte ▶.")

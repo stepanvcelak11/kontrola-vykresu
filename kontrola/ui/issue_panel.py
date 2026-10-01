@@ -972,7 +972,7 @@ class IssuePanel(QWidget):
                 self._filters_changed()
         self._update_cards()
         what = {"opraveno": "označena jako opravená", "ignorovat": "ignorována", "nová": "vrácena k opravě"}[state]
-        left = sum(1 for i in self.model.issues if i.state == "nová")
+        left = sum(1 for i in self.model.issues if i.state == "nová" and i.severity != Severity.INFO)
         nums = ", ".join(f"#{i.number}" for i in sel[:5]) + ("…" if len(sel) > 5 else "")
         self.message.emit(f"Chyba {nums} {what}. Zbývá opravit: {left}."
                           + (" (Vrátit: Ctrl+Z)" if issues is not None and len(sel) > 1 else ""))

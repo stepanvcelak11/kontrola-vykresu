@@ -1087,7 +1087,7 @@ class MainWindow(QMainWindow):
             msg = (f"Opakovaná kontrola: {len(res.issues)} problémů (předtím {len(old)}). {cmp.text()}")
             if silent:
                 self.statusBar().showMessage("Výkres se změnil – " + msg, 15000)
-                todo = sum(1 for i in res.issues if i.state == "nová")
+                todo = sum(1 for i in res.issues if i.state == "nová" and i.severity.value != "info")
                 self.notify("Výkres zkontrolován po uložení",
                             f"Opraveno {cmp.fixed}, nové {cmp.new}, zbývá opravit {todo}.")
             else:
@@ -1117,7 +1117,7 @@ class MainWindow(QMainWindow):
         self.issues = issues
         self.view.set_issues(issues)
         self.issue_panel.set_issues(issues, summary or "")
-        self.split.set_issue_count(sum(1 for i in issues if i.state == "nová"))
+        self.split.set_issue_count(sum(1 for i in issues if i.state == "nová" and i.severity.value != "info"))
         if not issues and not summary:
             self._checked_once = False
         elif issues and summary:
@@ -1971,6 +1971,7 @@ class MainWindow(QMainWindow):
     def _on_states_changed(self):
         self.view.refresh_markers()
         self.view.refresh_heatmap()  # opravené chyby z tepelné mapy zmizí
+        self.split.set_issue_count(sum(1 for i in self.issues if i.state == "nová" and i.severity.value != "info"))
         if self.split.focus_mode and getattr(self, "_focus_bar", None) is not None:
             self._focus_bar.refresh()
         if self.project is not None:

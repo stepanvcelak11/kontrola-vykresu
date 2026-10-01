@@ -1069,3 +1069,16 @@ def test_hromadne_ignorovat_a_zpet(window):
     assert [i.state for i in issues] == ["ignorovat", "ignorovat", "nová", "ignorovat"]
     p.undo()  # jedno Ctrl+Z vrátí celou hromadnou změnu
     assert all(i.state == "nová" for i in issues)
+
+
+def test_pocet_na_tlacitku_chyby(window):
+    w = window
+    w.load_drawing_file(UKAZKA)
+    w.a_check.trigger()
+    assert w._wait(lambda: _idle(w) and len(w.issues) > 0, 30)
+    k = lambda: sum(1 for i in w.issues if i.state == "nová" and i.severity.value != "info")
+    assert f"({k()})" in w.split.b_show.text()
+    first = next(i for i in w.issues if i.severity.value != "info")
+    w.issue_panel.select_issue(first.number)
+    w.issue_panel.set_state("opraveno")
+    assert f"({k()})" in w.split.b_show.text()
