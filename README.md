@@ -129,7 +129,7 @@ nebo vypnout jednotlivé kontroly, změnit jejich závažnost a parametry.
 * **Tmavý vzhled je výchozí**; světlý jde zapnout v Nabídka → Zobrazení → Tmavý režim.
 * **Barva vzhledu** (Nabídka → Zobrazení → Barva vzhledu): modrá, zelená, fialová nebo oranžová –
   přebarví tlačítka, výběr a lištu; barvy chyb (červená, oranžová, modrá) zůstávají.
-* **Tepelná mapa chyb (Ctrl+H)** – průhledné žluto-červené skvrny ukážou, kde je ve výkrese nejvíc
+* **Tepelná mapa chyb (Ctrl+Shift+H)** – průhledné žluto-červené skvrny ukážou, kde je ve výkrese nejvíc
   neopravených chyb (chyby váží víc než varování a info). Řídí se filtrem panelu.
 * **Režim soustředění (F11)** – schová lišty, panely i minimapu; zůstane jen výkres a dole jedna chyba
   velkým písmem s tlačítky ◀ / ✓ Opraveno / Další ▶. Esc nebo ✕ Konec vrátí okno, jak bylo.

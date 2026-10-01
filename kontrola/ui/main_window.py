@@ -234,7 +234,7 @@ class MainWindow(QMainWindow):
                                   "Když hlídáte výkres a uložíte ho v MicroStationu, vpravo dole se ukáže, kolik "
                                   "chyb ubylo a kolik zbývá", checkable=True)
         self.a_notify.setChecked(self.settings.value("upozorneni/zapnuto", True, type=bool))
-        self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+H",
+        self.a_heat = self._act("Tepelná mapa chyb", self.view.set_heatmap, "Ctrl+Shift+H",
                                 "Barevně ukáže, kde je ve výkrese nejvíc neopravených chyb", checkable=True)
         self.a_focus = self._act("Režim soustředění", self.set_focus_mode, "F11",
                                  "Jen výkres a jedna chyba velkým písmem – Opraveno / Další, Esc ukončí",

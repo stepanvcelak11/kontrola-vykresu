@@ -925,3 +925,14 @@ def test_barva_vzhledu(window):
     finally:
         w.set_accent("modra")
     assert theme.ACCENT in QApplication.instance().styleSheet() or theme.is_dark()
+
+
+def test_zadne_dvojite_zkratky(window):
+    from PySide6.QtGui import QAction, QKeySequence
+    seen = {}
+    for a in window.findChildren(QAction):
+        sc = a.shortcut().toString(QKeySequence.PortableText)
+        if sc:
+            seen.setdefault(sc, set()).add(a.text())
+    dup = {k: v for k, v in seen.items() if len(v) > 1}
+    assert not dup, dup
