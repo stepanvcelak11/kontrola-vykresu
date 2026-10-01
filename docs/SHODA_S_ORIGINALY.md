@@ -48,7 +48,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Vrstvy: správce (zapnutí, zmrazení, zámek, barva, typ čáry, tloušťka, nová, přejmenovat, smazat, aktuální, výběr prvků vrstvy) | ✅ |
 | Bloky (buňky): tvorba z výběru, vložení s měřítkem a natočením, rozpojení | ✅ |
 | Knihovna buněk (sdílené bloky mezi výkresy) | ❌ |
-| Výběr podle vrstvy/vlastností, hledání prvků | 🟡 hromadná změna vrstvy a barvy; výběr podle vlastností chybí |
+| Vlastnosti prvku (dvojklik: vrstva, barva, styl, tloušťka, souřadnice, poloměr, text…), výběr podobných, výběr prvků vrstvy, najít a nahradit text | ✅ |
 | Výkres podle zadání: vrstvy, typy čar, písma a buňky ze Směrnice / zadání / vzorového výkresu; druh prvku → atributy se nastaví samy (ověřeno kontrolou symbologie na obou zadáních); tahák s key-in pro MicroStation | ✅ |
 | Geodetické funkce (kódovník bodů, mřížka, transformace výkresu) | ❌ |
 | Reference: připojení DXF podkladu (XREF) s polohou, měřítkem, natočením; zobrazení pod výkresem, úchyty na referenci, kopie prvků z reference, odpojení se Zpět | ✅ |
@@ -57,3 +57,9 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Tisk do PDF: model v měřítku 1:N (A4–A0, ověřeno: 100 m v 1:1000 = 100 mm), list 1:1, bílá → černá; rámeček a razítko na list | ✅ |
 | Makra, dávky, pluginy | ❌ |
 | Výkon na statisících prvků | ❌ |
+
+## Plán dál
+
+1. Dokončit nejčastěji používané funkce Gromy a MicroStationu, pak méně používané
+   (uživatel programy projde a řekne, co není potřeba).
+2. **Potom: náhrada programu Kokeš** (přání uživatele – až bude Groma a MicroStation hotové).

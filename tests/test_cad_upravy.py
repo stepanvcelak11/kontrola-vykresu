@@ -220,3 +220,31 @@ def test_bloky():
     casti = U.rozpoj(msp, h, [ins])
     c = next(e for e in casti if e.dxftype() == "CIRCLE")
     assert c.dxf.center.isclose((101, 100, 0))
+
+
+def test_vlastnosti_prvku_a_hledani():
+    doc, msp, h, k = _novy()
+    l = k.usecka((0, 0), (3, 4))
+    v = dict((a, c) for a, _b, c in U.vlastnosti(l))
+    assert v["_delka"] == 5 and v["start"] == (0, 0)
+    n = U.nastav_vlastnosti(msp, h, l, {"end": (6, 8), "color": 1, "layer": "NOVA", "_delka": 99})
+    assert n.dxf.end.isclose((6, 8, 0)) and n.dxf.color == 1 and "NOVA" in doc.layers and len(msp) == 1
+    h.krok_zpet()
+    assert list(msp) == [l]
+    c = k.kruznice((0, 0), 2)
+    with pytest.raises(ValueError):
+        U.nastav_vlastnosti(msp, h, c, {"radius": 0})
+    t1 = k.text((0, 0), "Parcela 12", 2)
+    k.text((0, 5), "parcela 13", 2)
+    t = U.nastav_vlastnosti(msp, h, t1, {"text": "Parcela 12/1", "height": 3.0})
+    assert t.dxf.text == "Parcela 12/1" and t.dxf.height == 3.0
+    assert len(U.najdi_text(msp, "PARCELA")) == 2
+    assert U.nahrad_text(msp, h, "Parcela", "Pozemek") == 1
+    assert sorted(e.dxf.text for e in msp.query("TEXT")) == ["Pozemek 12/1", "parcela 13"]
+    h.krok_zpet()
+    assert sorted(e.dxf.text for e in msp.query("TEXT")) == ["Parcela 12/1", "parcela 13"]
+    p = k.polylinie([(0, 0), (10, 0), (10, 10), (0, 10)], uzavrena=True)
+    assert dict((a, c) for a, _b, c in U.vlastnosti(p))["_vymera"] == pytest.approx(100)
+    k.usecka((50, 50), (60, 60))
+    assert len(U.vyber_podobne(msp, [l])) == 2  # obě úsečky ve vrstvě 0
+    assert U.vyber_podobne(msp, [c], ("typ",)) == [c]

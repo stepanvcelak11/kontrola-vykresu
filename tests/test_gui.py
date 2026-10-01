@@ -1712,3 +1712,27 @@ def test_cad_tisk_a_razitko(window, tmp_path):
     assert (tmp_path / "list.pdf").exists() and d.vysledek["meritko"] == 1.0
     c.modely.setCurrentText("Model")
     assert c.razitko() == []
+
+
+def test_cad_vlastnosti_prvku_hledani(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=3 y=4", "", "t", "x=10 y=10", "2", "0", "Parcela 12", ""):
+        c.zadej(t)
+    ln = next(e for e in c.prostor if e.dxftype() == "LINE")
+    d = c.vlastnosti_prvku(ln, modal=False)
+    d.pole["end"].setText("6 8")
+    d.pole["color"].setText("1")
+    d.pouzit()
+    n = next(e for e in c.prostor if e.dxftype() == "LINE")
+    assert n.dxf.end.isclose((6, 8, 0)) and n.dxf.color == 1
+    c.undo()
+    assert next(e for e in c.prostor if e.dxftype() == "LINE").dxf.end.isclose((3, 4, 0))
+    c.proved("najdi parcela")
+    assert len(c.vyber) == 1 and c.vyber[0].dxftype() == "TEXT"
+    c.proved("nahraď Parcela / Pozemek")
+    assert next(e for e in c.prostor if e.dxftype() == "TEXT").dxf.text == "Pozemek 12"
+    c.vyber = [next(e for e in c.prostor if e.dxftype() == "LINE")]
+    c.proved("podobné")
+    assert len(c.vyber) == 1

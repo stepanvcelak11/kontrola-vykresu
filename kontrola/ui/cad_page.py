@@ -40,6 +40,7 @@ class Pozadavek:
 class CadView(QGraphicsView):
     mouseMoved = Signal(float, float)  # souřadnice DXF (po úchytu / ortho)
     clicked = Signal(float, float)
+    doubleClicked = Signal(float, float)
     windowSelected = Signal(float, float, float, float)  # x0, y0, x1, y1 (zprava doleva = protínající)
 
     def __init__(self, parent=None):
@@ -96,6 +97,12 @@ class CadView(QGraphicsView):
             self.clicked.emit(*self.kurzor)
             return
         super().mousePressEvent(e)
+
+    def mouseDoubleClickEvent(self, e):  # noqa: N802
+        if e.button() == Qt.LeftButton and self.mys is not None:
+            self.doubleClicked.emit(*self.mys)
+            return
+        super().mouseDoubleClickEvent(e)
 
     def mouseReleaseEvent(self, e):  # noqa: N802
         if self._pan is not None:
@@ -231,6 +238,8 @@ class CadPage(QWidget):
         "info": "vlastnosti vybraného prvku", "výměra": "výměra a obvod vybraného uzavřeného prvku",
         "model": "přepnout model / list („model List 1“)", "list": "nový výkresový list („list Výkres A3“)",
         "výřez": "výřez modelu na listu v měřítku", "reference": "správce referencí (připojit DXF podklad)",
+        "vlastnosti": "vlastnosti vybraného prvku (i dvojklik)", "podobné": "vybrat podobné (stejný typ a vrstva)",
+        "najdi": "najít text („najdi 12/1“)", "nahraď": "nahradit text („nahraď staré / nové“)",
         "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -252,7 +261,8 @@ class CadPage(QWidget):
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "x": "rozpoj", "explode": "rozpoj",
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "plot": "tisk", "print": "tisk",
+        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "pr": "vlastnosti", "props": "vlastnosti",
+        "podobne": "podobné", "similar": "podobné", "find": "najdi", "nahrad": "nahraď", "replace": "nahraď", "plot": "tisk", "print": "tisk",
         "pdf": "tisk", "razitko": "razítko", "mv": "výřez", "viewport": "výřez",
         "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
         "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
@@ -427,6 +437,7 @@ class CadPage(QWidget):
         self.view.mouseMoved.connect(self._pohyb)
         self.view.clicked.connect(self._klik)
         self.view.windowSelected.connect(self._okno)
+        self.view.doubleClicked.connect(self._dvojklik)
         self.b_uchyty.toggled.connect(lambda on: setattr(self.view, "uchyty_on", on))
         self.b_ortho.toggled.connect(self._ortho)
         self.b_polar.toggled.connect(self._polar)
@@ -1252,6 +1263,46 @@ class CadPage(QWidget):
             self.spravce_vrstev()
         elif cmd == "tisk":
             self.tisk_pdf()
+        elif cmd == "vlastnosti":
+            if len(self.vyber) != 1:
+                self.vypis("Vyberte jeden prvek (nebo na něj dvakrát klikněte).")
+            else:
+                self.vlastnosti_prvku(self.vyber[0])
+        elif cmd == "podobné":
+            if not self.vyber:
+                self.vypis("Vyberte vzorový prvek, pak „podobné“ vybere všechny stejného typu ve stejné vrstvě.")
+            else:
+                self.vyber = U.vyber_podobne(self.prostor, self.vyber)
+                self._zvyrazni()
+                self.vypis(f"Vybráno {len(self.vyber)} podobných prvků.")
+        elif cmd == "najdi":
+            nal = U.najdi_text(self.prostor, arg) if arg else []
+            self.vyber = nal
+            self._zvyrazni()
+            if nal:
+                from PySide6.QtCore import QRectF
+                g = [self.index.geometrie(e) for e in nal if self.index]
+                b = [x.bounds for x in g if x is not None]
+                if b:
+                    x0, y0 = min(q[0] for q in b), min(q[1] for q in b)
+                    x1, y1 = max(q[2] for q in b), max(q[3] for q in b)
+                    m = max(x1 - x0, y1 - y0, 5.0)
+                    self.view.zoom_all(QRectF(x0 - m, y0 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m))
+            self.vypis(f"Nalezeno {len(nal)} textů s „{arg}“." if arg else "Zadejte „najdi hledaný text“.")
+        elif cmd == "nahraď":
+            if "/" not in arg:
+                self.vypis("Zadejte „nahraď staré / nové“.")
+            else:
+                co, cim = (x.strip() for x in arg.split("/", 1))
+                try:
+                    n = U.nahrad_text(self.prostor, self.historie_zmen, co, cim)
+                except ValueError as e:
+                    self.vypis(f"⚠ {e}")
+                else:
+                    op = self.historie_zmen.zpet[-1] if n else None
+                    if op is not None:
+                        self._po_zmene(op.pridano, op.odebrano)
+                    self.vypis(f"Nahrazeno v {n} textech.")
         elif cmd == "razítko":
             self.razitko()
         elif cmd == "reference":
@@ -1633,6 +1684,21 @@ class CadPage(QWidget):
                                        dxfattribs={"layer": self.kresleni.vrstva})
         self.historie_zmen.proved("Výřez", [vp])
         self.vypis(f"Výřez {w:.0f}×{hgt:.0f} mm v měřítku 1:{m:g}.")
+
+    # ------------------------------------------------------------ vlastnosti prvku
+    def _dvojklik(self, x, y):
+        if self._gen is not None or self.index is None:
+            return
+        e = self.index.najdi(x, y, self._tol())
+        if e is not None:
+            self.vlastnosti_prvku(e)
+
+    def vlastnosti_prvku(self, e, modal: bool = True):
+        from .cad_vlastnosti import VlastnostiDialog
+        d = VlastnostiDialog(self, e)
+        if modal:
+            d.exec()
+        return d
 
     # ------------------------------------------------------------ tisk
     def tisk_pdf(self, modal: bool = True):

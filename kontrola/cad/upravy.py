@@ -889,3 +889,122 @@ def bloky(doc) -> list[str]:
     """Uživatelské bloky (bez anonymních *D, *U, rozvržení)."""
     return sorted((b.name for b in doc.blocks if not b.name.startswith("*") and not b.is_any_layout),
                   key=str.lower)
+
+
+# ------------------------------------------------------------------ vlastnosti prvku, hledání
+NAZVY_TYPU = {"LINE": "úsečka", "LWPOLYLINE": "polylinie", "POLYLINE": "polylinie", "CIRCLE": "kružnice",
+              "ARC": "oblouk", "ELLIPSE": "elipsa", "SPLINE": "křivka", "TEXT": "text", "MTEXT": "odstavec textu",
+              "POINT": "bod", "INSERT": "buňka (blok)", "HATCH": "šrafa", "DIMENSION": "kóta", "SOLID": "plocha",
+              "VIEWPORT": "výřez"}
+
+
+def vlastnosti(e) -> list[tuple[str, str, object]]:
+    """[(klíč, popis, hodnota)] – co jde u prvku zobrazit a upravit. Souřadnice v DXF (x, y)."""
+    t = e.dxftype()
+    d = e.dxf
+    out = [("layer", "Vrstva", d.get("layer", "0")), ("color", "Barva (ACI, 256 = dle vrstvy)", d.get("color", 256))]
+    if t not in ("TEXT", "MTEXT", "INSERT", "POINT"):
+        out += [("linetype", "Typ čáry", d.get("linetype", "BYLAYER")),
+                ("lineweight", "Tloušťka [1/100 mm, −1 dle vrstvy]", d.get("lineweight", -1))]
+    if t == "LINE":
+        s, k = d.start, d.end
+        out += [("start", "Začátek", (s.x, s.y)), ("end", "Konec", (k.x, k.y)),
+                ("_delka", "Délka", math.hypot(k.x - s.x, k.y - s.y))]
+    elif t in ("CIRCLE", "ARC"):
+        out += [("center", "Střed", (d.center.x, d.center.y)), ("radius", "Poloměr", d.radius)]
+        if t == "ARC":
+            out += [("start_angle", "Počáteční úhel [°]", d.start_angle), ("end_angle", "Koncový úhel [°]", d.end_angle)]
+    elif t in ("TEXT", "MTEXT"):
+        out += [("text", "Text", e.plain_text() if t == "MTEXT" else d.text),
+                ("height" if t == "TEXT" else "char_height", "Výška písma", d.height if t == "TEXT" else d.char_height),
+                ("rotation", "Natočení [°]", d.get("rotation", 0.0)), ("style", "Textový styl", d.get("style", "Standard")),
+                ("insert", "Poloha", (d.insert.x, d.insert.y))]
+    elif t == "POINT":
+        out += [("location", "Poloha", (d.location.x, d.location.y))]
+    elif t == "INSERT":
+        out += [("name", "Buňka", d.name), ("insert", "Poloha", (d.insert.x, d.insert.y)),
+                ("xscale", "Měřítko", d.get("xscale", 1.0)), ("rotation", "Natočení [°]", d.get("rotation", 0.0))]
+    elif t == "LWPOLYLINE":
+        g = geometrie(e)
+        out += [("_vrcholy", "Vrcholů", len(e)), ("closed", "Uzavřená", bool(e.closed)),
+                ("_delka", "Délka", g.length if g is not None else 0.0)]
+        if e.closed:
+            from shapely.geometry import Polygon
+            out.append(("_vymera", "Výměra [m²]", Polygon(g.coords).area if g is not None else 0.0))
+    return out
+
+
+def nastav_vlastnosti(msp, h: Historie, e, zmeny: dict):
+    """Změní vlastnosti prvku (kopie s úpravou → jednotné Zpět). Klíče jako ve ``vlastnosti``."""
+    zmeny = {k: v for k, v in zmeny.items() if not k.startswith("_")}
+    if not zmeny:
+        return e
+    c = _kopie(e)
+    t = e.dxftype()
+    for k, v in zmeny.items():
+        if k in ("start", "end", "center", "insert", "location"):
+            x, y = _xy(v)
+            z = c.dxf.get(k).z if c.dxf.hasattr(k) else 0.0
+            c.dxf.set(k, (x, y, z))
+        elif k == "text" and t == "MTEXT":
+            c.text = str(v)
+        elif k == "closed":
+            c.closed = bool(v)
+        elif k in ("radius", "height", "char_height", "xscale") and float(v) <= 0:
+            raise ValueError("Hodnota musí být kladná.")
+        elif k == "xscale":
+            for kk in ("xscale", "yscale", "zscale"):
+                c.dxf.set(kk, float(v))
+        elif k == "name" and str(v) not in msp.doc.blocks:
+            raise ValueError(f"Buňka {v} ve výkresu není.")
+        elif k == "layer" and str(v) not in msp.doc.layers:
+            msp.doc.layers.add(str(v))
+            c.dxf.layer = str(v)
+        elif k == "linetype" and str(v).upper() not in ("BYLAYER", "BYBLOCK") and str(v) not in msp.doc.linetypes:
+            raise ValueError(f"Typ čáry {v} ve výkresu není.")
+        else:
+            c.dxf.set(k, v)
+    msp.add_entity(c)
+    h.proved("Vlastnosti prvku", [c], [e])
+    return c
+
+
+def vyber_podobne(msp, vzory, podle: tuple[str, ...] = ("typ", "vrstva")) -> list:
+    """Prvky stejného typu / vrstvy / barvy jako vzor (výběr podle vlastností)."""
+    klice = set()
+    for v in vzory:
+        klice.add(tuple(v.dxftype() if p == "typ" else v.dxf.get({"vrstva": "layer", "barva": "color"}[p])
+                        for p in podle))
+    return [e for e in msp if tuple(e.dxftype() if p == "typ" else e.dxf.get({"vrstva": "layer", "barva": "color"}[p])
+                                    for p in podle) in klice]
+
+
+def najdi_text(msp, hledany: str) -> list:
+    t = hledany.lower()
+    out = []
+    for e in msp.query("TEXT MTEXT"):
+        s = e.plain_text() if e.dxftype() == "MTEXT" else e.dxf.text
+        if t in (s or "").lower():
+            out.append(e)
+    return out
+
+
+def nahrad_text(msp, h: Historie, co: str, cim: str) -> int:
+    """Nahradí text ve všech textech výkresu (rozlišuje velikost písmen jako MicroStation)."""
+    if not co:
+        raise ValueError("Zadejte hledaný text.")
+    stare, nove = [], []
+    for e in list(msp.query("TEXT MTEXT")):
+        s = e.text if e.dxftype() == "MTEXT" else e.dxf.text
+        if co in (s or ""):
+            c = _kopie(e)
+            if e.dxftype() == "MTEXT":
+                c.text = s.replace(co, cim)
+            else:
+                c.dxf.text = s.replace(co, cim)
+            msp.add_entity(c)
+            stare.append(e)
+            nove.append(c)
+    if nove:
+        h.proved(f"Nahrazení „{co}“ → „{cim}“", nove, stare)
+    return len(nove)
