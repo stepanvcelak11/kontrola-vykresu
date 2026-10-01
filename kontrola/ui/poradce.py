@@ -243,8 +243,11 @@ class PoradcePanel(QWidget):
                     "a <b>Co znamenají chyby</b>.</p>")
         else:
             t, h, s = res[0]
-            out += f"<div style='background:#EFF6FF;border-radius:6px;padding:6px'><b>{escape(t)}</b> " \
-                   f"<span style='color:#6B7280'>({escape(s)})</span><br>{h}</div>"
+            from .theme import themed
+            # barvy podle vzhledu: v tmavém režimu tmavé pozadí a světlé písmo (jinak by text nešel přečíst)
+            out += (f"<table width='100%' cellpadding='8' style='background:{themed('#EFF6FF')};"
+                    f"color:{themed('#1F2937')}'><tr><td><b>{escape(t)}</b> "
+                    f"<span style='color:{themed('#6B7280')}'>({escape(s)})</span><br>{h}</td></tr></table>")
             if len(res) > 1:
                 out += "<p style='color:#6B7280'>Podobné: " + ", ".join(escape(r[0]) for r in res[1:]) + "</p>"
         self._html.append(out)

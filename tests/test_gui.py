@@ -1468,3 +1468,18 @@ def test_cad_bloky(window):
     c.proved("vlož")
     c.zadej("NENI")
     assert "⚠" in c.historie.toPlainText()
+
+
+def test_poradce_citelny_v_tmavem_vzhledu(window):
+    from kontrola.ui import theme
+    puvodni = theme.is_dark()
+    try:
+        theme._dark = True
+        p = window.poradce
+        p.q.setText("volný konec")
+        p.ask()
+        html = "".join(p._html)
+        assert "#EFF6FF" not in html and theme.DARK_MAP["#EFF6FF"] in html
+        assert theme.DARK_MAP["#1F2937"] in html  # světlé písmo na tmavém pozadí
+    finally:
+        theme._dark = puvodni
