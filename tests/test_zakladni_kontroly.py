@@ -365,3 +365,20 @@ def test_zdvojeny_vrchol(make_dxf):
         msp.add_line((30, 30), (30, 30), dxfattribs={"layer": "A"})
     d = make_dxf(build, name="zdvoj.dxf")
     assert [(i.x, i.y) for i in check(d, "zdvojeny_vrchol")] == [(5.0, 0.0), (5.00001, 10.0)]
+
+
+def test_vychozi_vrstva(make_dxf):
+    def build(msp, doc):
+        msp.add_line((0, 0), (10, 0), dxfattribs={"layer": "PLOT"})
+        msp.add_line((0, 5), (10, 5), dxfattribs={"layer": "BUDOVY"})
+        msp.add_line((0, 9), (10, 9), dxfattribs={"layer": "0"})
+    d = make_dxf(build, name="vychozi.dxf")
+    iss = check(d, "vychozi_vrstva")
+    assert len(iss) == 1 and iss[0].layer == "0"
+    # s pravidly to hlídá „Vrstva není ve Směrnici“ → tady se nehlásí
+    assert not check(d, "vychozi_vrstva", rules=RuleSet(pravidla=[Rule(kod="1", nazev="x", hladina="0")]))
+
+    def jen_nula(msp, doc):  # nevrstvený výkres (vše na 0) se nehlásí
+        msp.add_line((0, 0), (10, 0))
+        msp.add_line((0, 5), (10, 5), dxfattribs={"layer": "A"})
+    assert not check(make_dxf(jen_nula, name="nula.dxf"), "vychozi_vrstva")

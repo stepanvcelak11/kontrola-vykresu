@@ -317,3 +317,30 @@ class FormatPopisu(Check):
                 if _vzor_popisu(f.text) != main:
                     yield ctx.issue(self, f, f"Popis „{f.text.strip()[:20]}“ má jiný tvar než ostatní na vrstvě "
                                              f"(obvykle např. „{example[:20]}“)")
+
+
+VYCHOZI_VRSTVY = {"0", "default", "výchozí", "vychozi"}
+
+
+@register
+class VychoziVrstva(Check):
+    id = "vychozi_vrstva"
+    nazev = "Prvek na výchozí vrstvě (Default / 0)"
+    skupina = "Atributy"
+    popis = ("Prvek zůstal na výchozí vrstvě Default (v DXF „0“), i když výkres jinak používá vlastní vrstvy – "
+             "v MicroStationu se zapomnělo přepnout aktivní vrstvu. Hlásí se jen u výkresu s aspoň dvěma "
+             "dalšími vrstvami. S pravidly ze Směrnice to hlídá kontrola „Vrstva není ve Směrnici“, tahle se pak "
+             "přeskočí.")
+    vychozi_zavaznost = Severity.VAROVANI
+
+    def run(self, ctx: CheckContext):
+        if getattr(ctx.rules, "pravidla", None):
+            return  # s pravidly hlásí špatnou vrstvu „Vrstva není ve Směrnici“ – nehlásit dvakrát
+        feats = list(ctx.features())
+        on_default = [f for f in feats if f.layer.strip().lower() in VYCHOZI_VRSTVY]
+        others = {f.layer for f in feats if f.layer.strip().lower() not in VYCHOZI_VRSTVY}
+        if not on_default or len(others) < 2:
+            return
+        for f in on_default:
+            yield ctx.issue(self, f, f"{f.geom_type.value.capitalize()} je na výchozí vrstvě „{f.layer}“ – "
+                                     "patří na vrstvu podle obsahu")

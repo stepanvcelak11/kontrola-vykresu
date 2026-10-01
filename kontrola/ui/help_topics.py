@@ -249,6 +249,11 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Zbytečně rozdělená čára",
         "Dvě stejné čáry navazují v přímém směru a v místě napojení nic není – mohla by to být jedna.<br><br>"
         "<b>Oprava:</b> nepovinné; čáry lze spojit (Vytvořit složený řetězec / Spojit prvky)."),
+    "vychozi_vrstva": (
+        "Prvek na výchozí vrstvě",
+        "Prvek je na vrstvě <b>Default</b> (v DXF <b>0</b>) – v MicroStationu se před kreslením nepřepnula "
+        "aktivní vrstva. Učitel ho bere jako prvek na špatné vrstvě.<br><br><b>Oprava:</b> vyberte prvek a "
+        "změňte mu vrstvu (Změnit atributy prvku → Level); příště nejdřív zvolte aktivní vrstvu."),
     "maly_text": (
         "Nečitelně malý text",
         "Text je po vytištění v měřítku výkresu menší než zadaná mez a nepůjde přečíst.<br><br><b>Oprava:</b> "
