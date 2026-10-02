@@ -48,7 +48,8 @@ Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnet
 2. Stáhněte aplikaci jako ZIP: [kontrola-vykresu-main.zip](https://github.com/stepanvcelak11/kontrola-vykresu/archive/refs/heads/main.zip)
    a rozbalte ho (pravé tlačítko → Extrahovat vše).
 3. Ve složce dvakrát klikněte na **`spustit_python.bat`**. Poprvé se několik minut připravují knihovny,
-   další spuštění je rychlé. Novou verzi získáte stažením ZIPu znovu (složku `.venv` můžete přenést).
+   další spuštění je rychlé. Novou verzi aplikace sama nabídne při spuštění (nejvýš jednou denně), nebo
+   ☰ → Nápověda → Zkontrolovat aktualizace: stáhne se, nainstaluje (i knihovny) a aplikace se spustí znovu.
 
 ### Z Pythonu (Windows, Python 3.11 nebo novější)
 

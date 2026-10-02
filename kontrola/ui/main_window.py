@@ -1782,8 +1782,9 @@ class MainWindow(QMainWindow):
         """Při spuštění: nejvýš jednou denně, jen u sestaveného .exe a když to uživatel nevypnul."""
         import time
 
-        from ..aktualizace import BUILD
-        if BUILD is None or not self.settings.value("aktualizace/kontrolovat", True, type=bool):
+        from ..aktualizace import BUILD, je_zdrojova_instalace
+        if (BUILD is None and not je_zdrojova_instalace()) or not self.settings.value(
+                "aktualizace/kontrolovat", True, type=bool):
             return
         last = float(self.settings.value("aktualizace/posledni", 0) or 0)
         if time.time() - last < 86400:
@@ -1794,8 +1795,9 @@ class MainWindow(QMainWindow):
         import threading
         import time
 
-        from ..aktualizace import fetch_latest
+        from ..aktualizace import fetch_latest, fetch_latest_sha, je_zdrojova_instalace
         self.settings.setValue("aktualizace/posledni", time.time())
+        zdroje = je_zdrojova_instalace()
 
         # Vlákno na Qt vůbec nesahá (signál na okno, které se mezitím zavírá, uměl na Windows shodit
         # celý proces): výsledek jen uloží a okno si ho vyzvedne časovačem v hlavním vlákně.
@@ -1803,7 +1805,7 @@ class MainWindow(QMainWindow):
 
         def work():
             try:
-                vysledek["v"] = (fetch_latest(), "")
+                vysledek["v"] = ((fetch_latest_sha() if zdroje else fetch_latest()), "")
             except Exception as exc:  # noqa: BLE001 – bez internetu apod.
                 vysledek["v"] = (None, str(exc))
 
@@ -1813,7 +1815,10 @@ class MainWindow(QMainWindow):
         def vyzvedni():
             if "v" in vysledek:
                 latest, err = vysledek["v"]
-                self._on_update_result(latest, err, manual)
+                if zdroje:
+                    self._on_source_update_result(latest, err, manual)
+                else:
+                    self._on_update_result(latest, err, manual)
             elif time.time() < konec:
                 QTimer.singleShot(200, self, vyzvedni)  # okno jako kontext: zavřené okno nic nevyzvedne
 
@@ -1849,6 +1854,69 @@ class MainWindow(QMainWindow):
                                         f"přes git. Poslední zveřejněné sestavení: č. {latest or '?'}.")
             else:
                 QMessageBox.information(self, "Aktualizace", f"Máte nejnovější verzi ({version_text()}).")
+
+    def _on_source_update_result(self, sha: str, err: str, manual: bool):
+        """Spuštěno ze staženého ZIPu: nová verze = jiný poslední commit na GitHubu."""
+        from ..aktualizace import nainstalovana_sha
+        if err or not sha:
+            if manual:
+                QMessageBox.information(self, "Aktualizace", f"Nepodařilo se spojit s GitHubem ({err or '?'}).")
+            return
+        if sha == nainstalovana_sha():
+            if manual:
+                QMessageBox.information(self, "Aktualizace", "Máte nejnovější verzi.")
+            return
+        r = QMessageBox.question(self, "Nová verze", "Na GitHubu je novější verze aplikace.\n\nAktualizovat teď? "
+                                 "Stáhne se a nainstaluje sama (asi minutu), pak se aplikace spustí znovu. "
+                                 "Projekty a nastavení zůstanou.", QMessageBox.Yes | QMessageBox.No)
+        if r == QMessageBox.Yes:
+            self.update_source_now(sha)
+
+    def update_source_now(self, sha: str = ""):
+        """Aktualizace při spuštění ze zdrojů: stáhne ZIP z GitHubu, přepíše soubory, doinstaluje knihovny
+        a spustí aplikaci znovu. Práce běží ve vlákně, okno jen ukazuje průběh."""
+        import threading
+        import time
+
+        from PySide6.QtWidgets import QApplication, QProgressDialog
+
+        from ..aktualizace import aktualizuj_zdroje, restartuj_zdroje
+        if self.project is not None:
+            self.project.save()
+        dlg = QProgressDialog("Stahuji novou verzi…", None, 0, 0, self)
+        dlg.setWindowTitle("Aktualizace")
+        dlg.setMinimumDuration(0)
+        dlg.show()
+        stav: dict = {"krok": "stahuji"}
+        texty = {"stahuji": "Stahuji novou verzi…", "rozbaluji": "Instaluji novou verzi…",
+                 "knihovny": "Kontroluji knihovny (může to trvat několik minut)…"}
+
+        def work():
+            try:
+                stav["pip"] = aktualizuj_zdroje(sha=sha, progress=lambda k: stav.update(krok=k))
+                stav["ok"] = True
+            except Exception as exc:  # noqa: BLE001
+                stav["chyba"] = str(exc)
+
+        threading.Thread(target=work, daemon=True).start()
+        konec = time.time() + 1900
+
+        def sleduj():
+            dlg.setLabelText(texty.get(stav.get("krok"), ""))
+            if "ok" in stav:
+                dlg.close()
+                QMessageBox.information(self, "Aktualizace", "Hotovo – aplikace se teď spustí znovu.")
+                restartuj_zdroje()
+                QApplication.quit()
+            elif "chyba" in stav:
+                dlg.close()
+                QMessageBox.warning(self, "Aktualizace", f"Aktualizace se nepovedla ({stav['chyba']}).\n\n"
+                                    "Stará verze zůstala funkční jen částečně, pokud se soubory už přepsaly – "
+                                    "zkuste aktualizaci znovu (Nápověda → Zkontrolovat aktualizace).")
+            elif time.time() < konec:
+                QTimer.singleShot(300, self, sleduj)
+
+        QTimer.singleShot(300, self, sleduj)
 
     def update_now(self):
         """Stáhne novou verzi, nahradí .exe a program spustí znovu (projekty a nastavení zůstanou)."""
