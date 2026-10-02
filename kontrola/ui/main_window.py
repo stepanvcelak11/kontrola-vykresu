@@ -274,6 +274,9 @@ class MainWindow(QMainWindow):
                                    "přidané, odebrané a upravené prvky barevně ve výkresu")
         self.a_teacher = self._act("Porovnat s protokolem učitele…", self.compare_teacher, None,
                                    "Načíst protokol od učitele (GISoft / MGEO .log) a porovnat s nálezy programu")
+        self.a_mgeo_cfg = self._act("Nastavení topologie od učitele (MGEO .clean.xml)…", self.nacti_mgeo_cleaner, None,
+                                    "Převzít tolerance, min. délku čáry, volné konce a vrstvy z konfigurace "
+                                    "MGEO Cleaner, kterou učitel kontroluje topologii")
         self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
                                    "Spočítat body ze zápisníku totální stanice a porovnat s vaším seznamem z Gromy")
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
@@ -372,6 +375,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_compare)
         m_check.addAction(self.a_vypocet)
         m_check.addAction(self.a_teacher)
+        m_check.addAction(self.a_mgeo_cfg)
         m_check.addSeparator()
         m_check.addAction(self.a_watch)
         m_check.addAction(self.a_wip)
@@ -890,6 +894,29 @@ class MainWindow(QMainWindow):
         except OSError:
             pass
         ProtokolDialog(rows, summary, prot.topologie, self).exec()
+
+    def nacti_mgeo_cleaner(self, path: str | None = None):
+        if path is None:
+            path, _ = QFileDialog.getOpenFileName(self, "Nastavení topologie od učitele", "",
+                                                  "MGEO Cleaner (*.clean.xml *.xml);;Vše (*)")
+        if not path:
+            return None
+        from .. import mgeo_cleaner as M
+        try:
+            n = M.nacti(path)
+        except ValueError as exc:
+            QMessageBox.warning(self, APP_NAME, str(exc))
+            return None
+        zmeny = M.pouzij(self.project.config, n)
+        try:
+            self.project.add_attachment("dokumenty", path)
+            self.project.save()
+        except OSError:
+            pass
+        self.statusBar().showMessage("Topologie podle učitele: " + ", ".join(zmeny), 10000)
+        if self.drawing is not None:
+            self.run_checks()
+        return zmeny
 
     def show_vypocet(self):
         from .vypocet_dialog import VypocetDialog
