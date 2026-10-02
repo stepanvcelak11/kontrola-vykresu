@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen
-from PySide6.QtWidgets import (QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QToolButton,
                                QVBoxLayout, QWidget)
 
@@ -531,7 +531,7 @@ class CadPage(QWidget):
         from .cad_panely import PaletaNastroju, PanelHladin, PanelVlastnosti
         from .theme import ACCENT, is_dark
         self.paleta = PaletaNastroju(self.PRIKAZY, "#D1D5DB" if is_dark() else "#374151", ACCENT)
-        self.paleta.nastroj.connect(self.proved)
+        self.paleta.nastroj.connect(self._z_palety)
         self.nastroje: dict[str, QToolButton] = dict(self.paleta.tlacitka)
         self.view = CadView()
         self.view.setCursor(Qt.CrossCursor)
@@ -1435,7 +1435,7 @@ class CadPage(QWidget):
         g = U.skupina(e) if getattr(self, "zamek_skupin", True) else None
         if g is not None:  # zámek skupin: klik na prvek vybere celou skupinu (Graphic Group lock)
             cleny = [x for x in U.cleny_skupiny(self.prostor, g) if self.index.geometrie(x) is not None] or [e]
-        if e in self.vyber:
+        if e in self.vyber and (pridat or len(self.vyber) == len(cleny)):
             for x in cleny:
                 if x in self.vyber:
                     self.vyber.remove(x)
@@ -1452,6 +1452,8 @@ class CadPage(QWidget):
         if self._req is not None and self._req.typ not in ("vyber",):
             return
         nove = self.index.okno(x0, y0, x1, y1, protinajici=x1 < x0)
+        if self._req is None and not (QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier)):
+            self.vyber = []  # nový výběr oknem (Ctrl = přidat k výběru)
         for e in nove:
             if e not in self.vyber:
                 self.vyber.append(e)
@@ -1520,7 +1522,11 @@ class CadPage(QWidget):
             self._bod_mereni(x, y)
             return
         mx, my = self.view.mys or (x, y)
-        self.vyber_v_bode(mx, my)
+        # jako v MicroStationu: klik vybere prvek (nahradí výběr), Ctrl+klik přidá / ubere, klik do prázdna zruší
+        pridat = bool(QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
+        if self.vyber_v_bode(mx, my, pridat=pridat) is None and not pridat and self.vyber:
+            self.vyber = []
+            self._zvyrazni()
 
     def _bod(self, x, y):
         """Bod zadaný z příkazového řádku."""
@@ -2212,6 +2218,89 @@ class CadPage(QWidget):
             self.kresleni.text(p, t, v, a)
             r = math.radians(a)
             p = (p[0] + math.sin(r) * v * 1.6, p[1] - math.cos(r) * v * 1.6)  # další řádek pod
+
+    def _z_palety(self, cmd: str):
+        if cmd == "text" and self.dok is not None:
+            self.text_dialog()
+        else:
+            self.proved(cmd)
+
+    def text_dialog(self, modal: bool = True):
+        """Okno pro text (jako Text Editor v MicroStationu): text na více řádků, výška, natočení, zarovnání;
+        pak se text umístí kliknutím s náhledem rámečku."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout
+        if self.dok is None:
+            return None
+        d = QDialog(self)
+        d.setWindowTitle("Text")
+        f = QFormLayout(d)
+        txt = QPlainTextEdit()
+        txt.setPlaceholderText("Text (víc řádků = víc textů pod sebou)")
+        txt.setMinimumSize(360, 90)
+        f.addRow("Text:", txt)
+        vys = QDoubleSpinBox()
+        vys.setRange(0.01, 1000)
+        vys.setDecimals(3)
+        vys.setSuffix(" m")
+        p = self.predvolba
+        vys.setValue(self.kresleni.vyska_textu or (p.vyska if p is not None and p.vyska else self.vyska_textu))
+        f.addRow("Výška:", vys)
+        nat = QDoubleSpinBox()
+        nat.setRange(-360, 360)
+        nat.setDecimals(2)
+        nat.setSuffix(" °")
+        f.addRow("Natočení:", nat)
+        zar = QComboBox()
+        for jm, kod in (("vlevo dole (výchozí)", None), ("vlevo uprostřed", "MIDDLE_LEFT"), ("na střed", "MIDDLE_CENTER"),
+                        ("vpravo dole", "BOTTOM_RIGHT"), ("vlevo nahoře", "TOP_LEFT"), ("střed dole", "BOTTOM_CENTER")):
+            zar.addItem(jm, kod)
+        i = zar.findData(self.kresleni.zarovnani)
+        zar.setCurrentIndex(max(0, i))
+        f.addRow("Zarovnání:", zar)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Umístit")
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        f.addRow(bb)
+        d.txt, d.vys, d.nat, d.zar = txt, vys, nat, zar  # pro testy
+        if not modal:
+            return d
+        if d.exec():
+            self.umisti_text(txt.toPlainText(), vys.value(), nat.value(), zar.currentData())
+        return d
+
+    def umisti_text(self, text: str, vyska: float, natoceni: float = 0.0, zarovnani=None):
+        radky = [r for r in (text or "").splitlines() if r.strip()]
+        if not radky:
+            self.vypis("Prázdný text – nic se neumístí.")
+            return
+        self.vyska_textu = vyska
+        self.kresleni.zarovnani = zarovnani
+        self._posledni_prikaz = "text"
+        self._spust(self._n_umisti_text(radky, vyska, natoceni))
+
+    def _n_umisti_text(self, radky, v, a):
+        r = math.radians(a)
+        sirka = max(len(t) for t in radky) * v * 0.75 * (self.kresleni.sirka_faktor or 1.0)
+        krok = v * 1.6
+
+        def ramecek(x, y):
+            from shapely.geometry import LineString
+            out = []
+            for i in range(len(radky)):
+                ox, oy = x + math.sin(r) * krok * i, y - math.cos(r) * krok * i
+                pts = [(0, 0), (sirka, 0), (sirka, v), (0, v), (0, 0)]
+                out.append(LineString([(ox + px * math.cos(r) - py * math.sin(r), oy + px * math.sin(r) + py * math.cos(r))
+                                       for px, py in pts]))
+            return out
+
+        while True:
+            p = yield self._bod_req(f"Umístit text „{radky[0][:30]}“ – klikněte bod (Enter = konec):", volitelne=True,
+                                    nahled=ramecek)
+            if p is None:
+                return
+            for i, t in enumerate(radky):
+                self.kresleni.text((p[0] + math.sin(r) * krok * i, p[1] - math.cos(r) * krok * i), t, v, a)
 
     def n_popisek(self):
         body = [(yield self._bod_req("Popisek – hrot šipky (bod, na který popisek ukazuje):"))]

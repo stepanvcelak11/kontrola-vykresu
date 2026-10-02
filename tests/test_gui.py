@@ -2188,6 +2188,21 @@ def test_cad_lista_atributu_nahled_a_reset(window):
     assert c.kresleni.vrstva == "B" and c.dok.doc.layers.get("B").is_on()
 
 
+def test_cad_text_z_okna(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    d = c.text_dialog(modal=False)
+    assert d is not None and d.vys.value() > 0
+    c.umisti_text("Dřevovýroba\nč. p. 12", 1.5, 0.0, None)
+    assert c.view.nahled is not None and len(c.view.nahled(0, 0)) == 2  # náhled rámečku obou řádků
+    for t in ("x=10 y=20", ""):
+        c.zadej(t)
+    texty = sorted(e.dxf.text for e in c.prostor.query("TEXT"))
+    assert texty == ["Dřevovýroba", "č. p. 12"]
+    assert all(e.dxf.height == 1.5 for e in c.prostor.query("TEXT"))
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")
