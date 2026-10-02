@@ -217,6 +217,38 @@ class Kresleni:
             e.set_placement(_xy(p))
         return self._hotovo("Text", e)
 
+    def popisek(self, body, text: str, vyska: float = 2.5, sipka: bool = True):
+        """Popisek s odkazovou čárou (Place Note): čára od šipky přes zlomy, text na konci vodorovně.
+
+        ``body`` = [hrot šipky, …, konec čáry]; text se zarovná vlevo / vpravo podle směru posledního úseku.
+        Šipka, čára a text jsou jedna operace (jedno Zpět)."""
+        pts = _bez_duplicit(body)
+        if len(pts) < 2:
+            raise ValueError("Odkazová čára potřebuje aspoň dva různé body.")
+        if not text:
+            raise ValueError("Prázdný text.")
+        if vyska <= EPS:
+            raise ValueError("Výška textu musí být kladná.")
+        from ezdxf.enums import TextEntityAlignment
+        ents = [self.msp.add_lwpolyline(pts, format="xy", dxfattribs=self._attr())]
+        if sipka:
+            (x0, y0), (x1, y1) = pts[0], pts[1]
+            d = math.hypot(x1 - x0, y1 - y0)
+            ux, uy = (x1 - x0) / d, (y1 - y0) / d
+            dl, sir = min(vyska, d / 2), min(vyska, d / 2) / 3
+            bx, by = x0 + ux * dl, y0 + uy * dl
+            ents.append(self.msp.add_solid([(x0, y0), (bx - uy * sir, by + ux * sir), (bx + uy * sir, by - ux * sir)],
+                                           dxfattribs={k: v for k, v in self._attr().items()
+                                                       if k in ("layer", "color")}))
+        (xa, ya), (xb, yb) = pts[-2], pts[-1]
+        vpravo = xb >= xa
+        mezera = vyska * 0.5
+        t = self.msp.add_text(text, height=vyska, dxfattribs=self._attr(text=True))
+        t.set_placement((xb + (mezera if vpravo else -mezera), yb),
+                        align=TextEntityAlignment.MIDDLE_LEFT if vpravo else TextEntityAlignment.MIDDLE_RIGHT)
+        ents.append(t)
+        return self._hotovo("Popisek", ents)
+
     def sraf(self, hranice, vzor: str = "SOLID", meritko: float = 1.0):
         """Šrafa uvnitř uzavřeného prvku (uzavřená polylinie, kružnice, elipsa)."""
         h = self.msp.add_hatch(color=self.barva if self.barva != 256 else 256, dxfattribs={"layer": self.vrstva})

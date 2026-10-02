@@ -334,3 +334,17 @@ def test_pole_obdelnikove_a_kruhove():
     assert (nove[0].dxf.start.x, nove[0].dxf.end.x) == pytest.approx((-12, -10))  # jen posun
     with pytest.raises(ValueError):
         U.pole_obdelnikove(msp, h, [l], 1, 1, 1, 1)
+
+
+def test_popisek_s_odkazovou_carou():
+    doc, msp, h, k = _novy()
+    car, sip, txt = k.popisek([(0, 0), (5, 5), (12, 5)], "kamenný sloup", 1.0)
+    assert car.dxftype() == "LWPOLYLINE" and len(car) == 3
+    assert sip.dxftype() == "SOLID" and txt.dxf.text == "kamenný sloup"
+    assert txt.dxf.align_point.x == pytest.approx(12.5)  # vpravo od konce čáry
+    h.krok_zpet()
+    assert len(msp) == 0  # jedno Zpět smaže celý popisek
+    *_c, txt = k.popisek([(0, 0), (-5, 2)], "vlevo", 1.0)
+    assert txt.dxf.align_point.x == pytest.approx(-5.5)
+    with pytest.raises(ValueError):
+        k.popisek([(0, 0)], "x")

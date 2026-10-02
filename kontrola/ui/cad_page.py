@@ -233,7 +233,7 @@ class CadPage(QWidget):
         "kopie": "kopírovat výběr (i vícekrát)", "otoč": "otočit výběr", "měřítko": "změnit velikost výběru",
         "zrcadli": "zrcadlit výběr", "rovnoběžka": "rovnoběžka (offset)", "ořež": "oříznout k průsečíkům",
         "prodluž": "prodloužit úsečku k prvku", "zaobli": "zaoblit / spojit roh dvou úseček",
-        "zkos": "zkosit roh dvou úseček (Chamfer)", "pole": "pole kopií výběru – obdélníkové nebo kruhové (Array)", "vlož vrchol": "vložit vrchol do strany polylinie",
+        "zkos": "zkosit roh dvou úseček (Chamfer)", "popisek": "popisek s odkazovou čárou a šipkou (Place Note)", "pole": "pole kopií výběru – obdélníkové nebo kruhové (Array)", "vlož vrchol": "vložit vrchol do strany polylinie",
         "smaž vrchol": "smazat vrchol polylinie", "posuň vrchol": "posunout vrchol (Modify Element)",
         "rozpoj": "rozpojit polylinie, bloky, kóty", "spoj": "spojit navazující prvky do polylinie",
         "vrstva": "aktuální vrstva / přesun výběru do vrstvy", "barva": "barva (0–256) nových prvků / výběru",
@@ -267,7 +267,7 @@ class CadPage(QWidget):
         "otoc": "otoč", "sc": "měřítko", "scale": "měřítko", "meritko": "měřítko", "mi": "zrcadli",
         "mirror": "zrcadli", "of": "rovnoběžka", "offset": "rovnoběžka", "rovnobezka": "rovnoběžka",
         "tr": "ořež", "trim": "ořež", "orez": "ořež", "ex": "prodluž", "extend": "prodluž",
-        "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "cha": "zkos", "chamfer": "zkos", "ar": "pole", "array": "pole",
+        "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "cha": "zkos", "chamfer": "zkos", "note": "popisek", "le": "popisek", "leader": "popisek", "ar": "pole", "array": "pole",
         "zkoseni": "zkos", "zkosení": "zkos", "iv": "vlož vrchol", "insert vertex": "vlož vrchol",
         "vloz vrchol": "vlož vrchol", "dv": "smaž vrchol", "delete vertex": "smaž vrchol",
         "smaz vrchol": "smaž vrchol", "mo": "posuň vrchol", "modify": "posuň vrchol", "posun vrchol": "posuň vrchol", "x": "rozpoj", "explode": "rozpoj",
@@ -1746,6 +1746,19 @@ class CadPage(QWidget):
             self.kresleni.text(p, t, v, a)
             r = math.radians(a)
             p = (p[0] + math.sin(r) * v * 1.6, p[1] - math.cos(r) * v * 1.6)  # další řádek pod
+
+    def n_popisek(self):
+        body = [(yield self._bod_req("Popisek – hrot šipky (bod, na který popisek ukazuje):"))]
+        while True:
+            q = yield self._bod_req("Další bod odkazové čáry (Enter = konec čáry):", body[-1], len(body) > 1)
+            if q is None:
+                break
+            body.append(q)
+            self.view.zvyraznene = [_linie(body)]
+        v = yield Pozadavek("cislo", f"Výška textu [{self.vyska_textu}]:", vychozi=self.vyska_textu)
+        self.vyska_textu = v
+        t = yield Pozadavek("text", "Text popisku:")
+        self.kresleni.popisek(body, t, v)
 
     def n_srafa(self):
         e, _k = yield Pozadavek("prvek", "Šrafa – klikněte na uzavřenou polylinii nebo kružnici:")

@@ -2103,3 +2103,13 @@ def test_cad_pole(window):
     for t in ("k", "x=100 y=0", "3", "", "a"):
         c.zadej(t)
     assert len(c.prostor.query("CIRCLE")) == 12
+
+
+def test_cad_popisek(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("note", "x=0 y=0", "x=5 y=5", "x=10 y=5", "", "1", "plot 2.03"):
+        c.zadej(t)
+    assert [t.dxf.text for t in c.prostor.query("TEXT")] == ["plot 2.03"]
+    assert len(c.prostor.query("SOLID")) == 1
