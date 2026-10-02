@@ -1259,6 +1259,38 @@ def vyber_podobne(msp, vzory, podle: tuple[str, ...] = ("typ", "vrstva")) -> lis
                                     for p in podle) in klice]
 
 
+def vyber_podle(msp, text: str) -> tuple[list, str]:
+    """Výběr podle atributů (Select By Attributes) z textu: „58“ nebo „hladina 58“, „barva 3“,
+    „styl DGN Style 2“, „typ text“, i kombinace oddělené středníkem („hladina 58; typ text“).
+    Vrací (prvky, popis podmínky)."""
+    import re
+    podminky = []
+    for cast in [c.strip() for c in re.split(r"[;,]", text) if c.strip()]:
+        m = re.match(r"(hladina|vrstva|level|lv|barva|color|co|styl|lc|typ|type)\s*=?\s*(.+)$", cast, re.IGNORECASE)
+        klic, hodnota = (m.group(1).lower(), m.group(2).strip()) if m else ("hladina", cast)
+        if klic in ("hladina", "vrstva", "level", "lv"):
+            podminky.append((f"hladina {hodnota}", lambda e, h=hodnota: e.dxf.get("layer", "0").lower() == h.lower()))
+        elif klic in ("barva", "color", "co"):
+            try:
+                b = int(hodnota)
+            except ValueError:
+                raise ValueError(f"Barva musí být číslo: „{hodnota}“.") from None
+            podminky.append((f"barva {b}", lambda e, b=b: e.dxf.get("color", 256) == b))
+        elif klic in ("styl", "lc"):
+            podminky.append((f"styl {hodnota}",
+                             lambda e, h=hodnota: str(e.dxf.get("linetype", "BYLAYER")).lower() == h.lower()))
+        else:
+            typy = {k for k, v in NAZVY_TYPU.items() if v.lower().startswith(hodnota.lower())
+                    or k.lower() == hodnota.lower()}
+            if not typy:
+                raise ValueError(f"Neznámý druh prvku „{hodnota}“ (např. úsečka, polylinie, text, bod, buňka).")
+            podminky.append((f"typ {hodnota}", lambda e, t=typy: e.dxftype() in t))
+    if not podminky:
+        raise ValueError("Zadejte podmínku, např. „vyber 58“, „vyber barva 3“, „vyber typ text; hladina 59“.")
+    vysl = [e for e in msp if e.dxftype() != "VIEWPORT" and all(f(e) for _p, f in podminky)]
+    return vysl, " a ".join(p for p, _f in podminky)
+
+
 def najdi_text(msp, hledany: str) -> list:
     t = hledany.lower()
     out = []

@@ -247,6 +247,7 @@ class CadPage(QWidget):
     PRIKAZY = {
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
+        "vyber": "výběr podle atributů („vyber 58“, „vyber barva 3“, „vyber typ text; hladina 59“)",
         "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
         "předchozí pohled": "vrátit předchozí pohled (View Previous)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
         "otevři": "otevřít DXF", "ulož": "uložit DXF", "nápověda": "seznam příkazů",
@@ -279,6 +280,7 @@ class CadPage(QWidget):
     ALIASY = {
         "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
         "pasteclip": "vlož ze schránky", "vloz ze schranky": "vlož ze schránky", "paste": "vlož ze schránky",
+        "sel": "vyber", "select": "vyber", "výběr": "vyber", "vyber podle": "vyber", "sba": "vyber",
         "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
         "wa": "přiblížit", "vp": "předchozí pohled", "view previous": "předchozí pohled",
         "predchozi pohled": "předchozí pohled", "zpět pohled": "předchozí pohled",
@@ -1521,6 +1523,14 @@ class CadPage(QWidget):
                 self.vypis("Vyberte jeden prvek (nebo na něj dvakrát klikněte).")
             else:
                 self.vlastnosti_prvku(self.vyber[0])
+        elif cmd == "vyber":
+            try:
+                self.vyber, popis = U.vyber_podle(self.prostor, arg)
+            except ValueError as e:
+                self.vypis(f"⚠ {e}")
+                return
+            self._zvyrazni()
+            self.vypis(f"Vybráno {len(self.vyber)} prvků ({popis}).")
         elif cmd == "podobné":
             if not self.vyber:
                 self.vypis("Vyberte vzorový prvek, pak „podobné“ vybere všechny stejného typu ve stejné vrstvě.")

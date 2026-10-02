@@ -362,3 +362,22 @@ def test_kruznice_a_oblouky_dalsi_zpusoby():
     assert (a.dxf.start_angle, a.dxf.end_angle) == pytest.approx((90, 0))
     with pytest.raises(ValueError):
         k.kruznice_3body((0, 0), (1, 1), (2, 2))
+
+
+def test_vyber_podle_atributu():
+    doc, msp, h, k = _novy()
+    doc.layers.add("58")
+    k.vrstva = "58"
+    k.usecka((0, 0), (1, 0))
+    k.text((0, 0), "a", 1)
+    k.vrstva = "0"
+    k.barva = 3
+    k.usecka((0, 0), (2, 0))
+    assert len(U.vyber_podle(msp, "58")[0]) == 2
+    assert len(U.vyber_podle(msp, "hladina 58; typ text")[0]) == 1
+    assert len(U.vyber_podle(msp, "barva 3")[0]) == 1
+    assert len(U.vyber_podle(msp, "typ úsečka")[0]) == 2
+    with pytest.raises(ValueError):
+        U.vyber_podle(msp, "typ nesmysl")
+    with pytest.raises(ValueError):
+        U.vyber_podle(msp, "")

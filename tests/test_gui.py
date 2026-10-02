@@ -2266,3 +2266,13 @@ def test_cad_schranka_mezi_vykresy(window):
     assert len(c.vyber) == 1
     c.undo()
     assert not list(c.prostor.query("LINE"))
+
+
+def test_cad_vyber_podle_atributu(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("lv=58", "u", "x=0 y=0", "x=1 y=0", "", "lv=0", "u", "x=0 y=1", "x=1 y=1", ""):
+        c.zadej(t)
+    c.proved("vyber hladina 58; typ úsečka")
+    assert len(c.vyber) == 1 and c.vyber[0].dxf.layer == "58"
