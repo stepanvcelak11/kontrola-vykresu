@@ -114,8 +114,13 @@ def _styles(ole) -> dict[int, str]:
         for m in _STYLE.finditer(d):
             sid, = struct.unpack("<i", m.group(1))
             name = m.group(2).decode("utf-16-le")
-            if -1_000_000 < sid < 0 and re.search(r"\d", name) and d[m.start() - 4:m.start()] == b"\0\0\0\0":
-                out.setdefault(sid, name)
+            if not -1_000_000 < sid < 0:
+                continue
+            pred = d[m.start() - 8:m.start()]
+            # záznam stylu: 4 nulové bajty (+ název s číslem kódu), nebo „00000000 02000000“ (i názvy
+            # bez čísla – „VCHOD“); jiné výskyty jsou náhodné shody v binárních datech
+            if pred == b"\0\0\0\0\x02\0\0\0" or (pred[4:] == b"\0\0\0\0" and re.search(r"\d", name)):
+                out.setdefault(sid, name.strip())
     return out
 
 
@@ -285,10 +290,10 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
     def close_cell():
         nonlocal cell, cell_pts
         if cell is not None:
-            e, name, x, y, rot = cell
+            e, name, x, y, rot, meritko = cell
             if cell_pts and struct.unpack_from("<I", e, 16)[0] == 0:
                 e = e[:16] + cell_pts[0][16:20] + e[20:48] + cell_pts[0][48:60] + e[60:]
-            add(Point(x, y), GeomType.BOD, "INSERT", e, block_name=name or "buňka", rotation=rot)
+            add(Point(x, y), GeomType.BOD, "INSERT", e, block_name=name or "buňka", rotation=rot, scale=meritko)
         cell, cell_pts = None, []
 
     pending = 0  # kolik následujících prvků ještě patří do buňky / složeného prvku (počet z hlavičky)
@@ -321,8 +326,8 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
         if t == 2 and not comp:
             pending = struct.unpack_from("<I", e, 108)[0]
             name = _cell_name(e[180:]) if len(e) > 180 else None
-            x, y, rot = _cell_origin(e, s)
-            cell = (e, name, x, y, rot)
+            x, y, rot, sx, sy = _cell_origin(e, s)
+            cell = (e, name, x, y, rot, (sx, sy))
             continue
         if comp and chain is not None and geo is not None and geo[0] in ("line", "arc"):
             pts = geo[1]
@@ -461,16 +466,21 @@ def _just_point(x: float, y: float, length: float, height: float, rot: float, ju
     return x + dx * math.cos(rot) - dy * math.sin(rot), y + dx * math.sin(rot) + dy * math.cos(rot)
 
 
-def _cell_origin(e: bytes, s: float) -> tuple[float, float, float]:
+def _cell_origin(e: bytes, s: float) -> tuple[float, float, float, float, float]:
+    """Počátek, natočení a měřítko buňky z její matice (x, y, úhel [°], měřítko x, měřítko y)."""
     # 2D buňka: matice 2×2 na +148, počátek na +180; 3D: matice 3×3 na +164, počátek na +236
     attr, = struct.unpack_from("<I", e, 12)
-    if 4 + attr * 2 >= 260:
-        m00, m01 = struct.unpack_from("<2d", e, 164)
-        x, y = struct.unpack_from("<2d", e, 236)
-        return x * s, y * s, math.degrees(math.atan2(-m01, m00)) % 360
     try:
-        m00, m01 = struct.unpack_from("<2d", e, 148)
-        x, y = struct.unpack_from("<2d", e, 180)
-        return x * s, y * s, math.degrees(math.atan2(-m01, m00)) % 360
+        if 4 + attr * 2 >= 260:
+            m = struct.unpack_from("<9d", e, 164)
+            m00, m01, m10, m11 = m[0], m[1], m[3], m[4]
+            x, y = struct.unpack_from("<2d", e, 236)
+        else:
+            m00, m01, m10, m11 = struct.unpack_from("<4d", e, 148)
+            x, y = struct.unpack_from("<2d", e, 180)
     except struct.error:
-        return 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 1.0, 1.0
+    sx, sy = math.hypot(m00, m01), math.hypot(m10, m11)
+    sx = round(sx, 9) if 1e-9 < sx < 1e6 else 1.0
+    sy = round(sy, 9) if 1e-9 < sy < 1e6 else 1.0
+    return x * s, y * s, math.degrees(math.atan2(-m01, m00)) % 360, sx, sy

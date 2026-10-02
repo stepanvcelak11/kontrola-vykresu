@@ -1,0 +1,77 @@
+Zpracováno programem 'Kontrola a zmìna symbologie' firmy GISoft (www.gisoft.cz)
+Verze programu: 13.4.3
+
+Podmínky zpracování
+-------------------
+Reim zpracování:               Kontrola symbologie
+Vıkres:                         U:\_O\Jez_vut.001\Microstation\Cviceni-opakovani.2018\Kontrola-atributy\GEO.dgn
+Soubor pravidel:                U:\_kontroly\GEO-Slezáková.csv
+Mìøítko vıkresu:                1:500
+Pøesnost porovnání:             0.12
+
+Uivatelské poznámky
+--------------------
+
+Vısledky zpracování
+-------------------
+
+Ve vıkresu bylo nalezeno 8 typù chyb - celkem 19 prvkù.
+
+Poèet vıskytù a atributy chybnıch prvkù
+---------------------------------------
+1      Objekt: ID [12]
+       Název vrstvy: Vrstva 7, Èíslo vrstvy: 7, Typ prvku: Lomená èára
+       Barva: 5, Styl: 2.123  PL VP (Mìøítko(!): 0.5), Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+
+1      Objekt: ID [12]
+       Název vrstvy: Vrstva 7, Èíslo vrstvy: 7, Typ prvku: Lomená èára
+       Barva: 5, Styl(!): 2.123 (Mìøítko(!): 0.5), Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+
+4      Objekt: ID [24]
+       Název vrstvy: Vrstva 10, Èíslo vrstvy: 10, Typ prvku: Úseèka
+       Barva(!): 16, Styl: 0, Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+
+1      Objekt: ID [12]
+       Název vrstvy: Vrstva 10, Èíslo vrstvy: 10, Typ prvku(!): Lomená èára
+       Barva(!): 5, Styl(!): 2.123  PL VP (Mìøítko: 0.5), Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+
+3      Objekt: ID [68]
+       Název vrstvy: Vrstva 27, Èíslo vrstvy: 27, Typ prvku: Buòka
+       Barva: 41, Styl: 0, Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+       Název buòky: 6.20, Mìøítko(!): (0.5, 0.5)
+       Úhel: 0.0
+
+3      Objekt: Není objekt
+       Název vrstvy: Vrstva 27, Èíslo vrstvy: 27, Typ prvku: Buòka
+       Barva: 42, Styl: 0, Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+       Název buòky(!): 3.130, Mìøítko(!): (0.5, 0.5)
+       Úhel: 0.0
+
+3      Objekt: ID [121]
+       Název vrstvy: Vrstva 40, Èíslo vrstvy: 40, Typ prvku: Text
+       Barva: 75, Styl: 0, Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+       Font: cs_Working (1), Vıška(!): 0.75, Šíøka(!): 0.75
+       Zarovnání: Vlevo dole, Sklon: 0.0, Úhel: 0.0
+       Pohl. závislost: Ano
+
+3      Objekt: ID [129]
+       Název vrstvy: Vrstva 50, Èíslo vrstvy(!): 50, Typ prvku: Text
+       Barva: 78, Styl: 0, Tlouška: 0
+       Tøída: Primární, Prùhlednost: 0, Priorita: 0
+       Font: cs_Working (1), Vıška: 1.5, Šíøka: 1.5
+       Zarovnání: Vlevo dole, Sklon: 0.0, Úhel: 40.27930677
+       Pohl. závislost: Ano
+
+------------------------------------------------------------------------------------------------
+Celkem chyb: 19    
+
+Poèátek zpracování:  19.03.2018  16:16:14
+Konec zpracování:    19.03.2018  16:16:17
+================================================================================================

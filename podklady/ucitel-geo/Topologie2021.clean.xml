@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Header type="CONFIG" version="1.0.6" filetype="CLEANER">
+  <Description>Cleaner Application Configuration File</Description>
+  <Config name="COMMON">
+    <Vars>
+      <Struct name="G_dlgData">
+        <Var name="ZacistovaneVrstvy" type="char"></Var>
+        <Var name="VrstvyZnacek" type="char"></Var>
+        <Var name="cleanColors" type="char"></Var>
+        <Var name="cleanWeights" type="char"></Var>
+        <Var name="cleanLineStyles" type="char"></Var>
+        <Var name="PouzitVrstvuDuplicit" type="boolean">0</Var>
+        <Var name="VrstvaDuplicitnichElName" type="char">0</Var>
+        <Var name="isLevelName" type="int">0</Var>
+        <Var name="ToleranceZacisteni" type="float">-1</Var>
+        <Var name="KoeficientDelkyNedotahu" type="float">1</Var>
+        <Var name="VektorizacniTolerance" type="float">-1</Var>
+        <Var name="VektorizovatOblouky" type="boolean">0</Var>
+        <Var name="AutoVektTolerance" type="boolean">1</Var>
+        <Var name="ZachovatBodoveCary" type="int">1</Var>
+        <Var name="ZachovatSmerCar" type="boolean">1</Var>
+        <Var name="DelitPresneVrcholy" type="int">0</Var>
+        <Var name="UpravovatKonceOblouku" type="boolean">0</Var>
+        <Var name="OznacitVolneKonce" type="boolean">1</Var>
+        <Var name="VolneKonceNaZnackach" type="int">1</Var>
+        <Var name="OznacitZnackyMimoVrcholyCar" type="boolean">0</Var>
+        <Var name="roundPrecisionCheck" type="int">-1</Var>
+        <Var name="roundPrecisionClean" type="int">2</Var>
+        <Var name="markShortLines" type="int">2</Var>
+        <Var name="MinimalniDelkaCar" type="float">-1</Var>
+        <Var name="SouborProHlaseni" type="char">u:\Jez_vut.003\Geoprog.stu\Zap_2019Z\Microstation\New\_Geprog2019Z-topologie.log</Var>
+        <Var name="TolerancePretahu" type="float">-1</Var>
+        <Var name="writeRepairErrs" type="int">0</Var>
+        <Var name="keepPrevErrs" type="int">0</Var>
+        <Var name="cellLevelsOnVertex" type="char"></Var>
+        <Var name="noMarkDuplicateElem" type="boolean">0</Var>
+        <Var name="solveOnlyShortLines" type="boolean">0</Var>
+        <Var name="levelDefine" type="int">0</Var>
+        <Var name="noSplitIntersect" type="int">1</Var>
+        <Var name="cleanTolerance" type="float">0.01</Var>
+        <Var name="vectorTolerance" type="float">0.01</Var>
+        <Var name="minLineLength" type="float">0.09</Var>
+        <Var name="intersectTolerance" type="float">0.02</Var>
+      </Struct>
+      <Array name="G_dgnFilesP" dimension="[1]">
+        <Struct name="0">
+          <Var name="fileName" type="char">Aktivní</Var>
+          <Array name="levels" dimension="[0]"></Array>
+        </Struct>
+      </Array>
+      <Array name="ProcessLevels" dimension="[63]">
+        <Struct name="0">
+          <Var name="level" type="char">1</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="1">
+          <Var name="level" type="char">2</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="2">
+          <Var name="level" type="char">3</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="3">
+          <Var name="level" type="char">4</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="4">
+          <Var name="level" type="char">5</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="5">
+          <Var name="level" type="char">6</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="6">
+          <Var name="level" type="char">7</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="7">
+          <Var name="level" type="char">8</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="8">
+          <Var name="level" type="char">9</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="9">
+          <Var name="level" type="char">10</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="10">
+          <Var name="level" type="char">11</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="11">
+          <Var name="level" type="char">12</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="12">
+          <Var name="level" type="char">13</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="13">
+          <Var name="level" type="char">14</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="14">
+          <Var name="level" type="char">15</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="15">
+          <Var name="level" type="char">16</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="16">
+          <Var name="level" type="char">17</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="17">
+          <Var name="level" type="char">18</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="18">
+          <Var name="level" type="char">19</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="19">
+          <Var name="level" type="char">20</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="20">
+          <Var name="level" type="char">21</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="21">
+          <Var name="level" type="char">22</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="22">
+          <Var name="level" type="char">23</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="23">
+          <Var name="level" type="char">24</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="24">
+          <Var name="level" type="char">25</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="25">
+          <Var name="level" type="char">26</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="26">
+          <Var name="level" type="char">27</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="27">
+          <Var name="level" type="char">28</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="28">
+          <Var name="level" type="char">29</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="29">
+          <Var name="level" type="char">30</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="30">
+          <Var name="level" type="char">31</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="31">
+          <Var name="level" type="char">32</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="32">
+          <Var name="level" type="char">33</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="33">
+          <Var name="level" type="char">34</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="34">
+          <Var name="level" type="char">35</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="35">
+          <Var name="level" type="char">36</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="36">
+          <Var name="level" type="char">37</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="37">
+          <Var name="level" type="char">38</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="38">
+          <Var name="level" type="char">39</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="39">
+          <Var name="level" type="char">40</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="40">
+          <Var name="level" type="char">41</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="41">
+          <Var name="level" type="char">42</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="42">
+          <Var name="level" type="char">43</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="43">
+          <Var name="level" type="char">44</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="44">
+          <Var name="level" type="char">45</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="45">
+          <Var name="level" type="char">46</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="46">
+          <Var name="level" type="char">47</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="47">
+          <Var name="level" type="char">48</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="48">
+          <Var name="level" type="char">49</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="49">
+          <Var name="level" type="char">50</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="50">
+          <Var name="level" type="char">51</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="51">
+          <Var name="level" type="char">52</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="52">
+          <Var name="level" type="char">53</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="53">
+          <Var name="level" type="char">54</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="54">
+          <Var name="level" type="char">55</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="55">
+          <Var name="level" type="char">56</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="56">
+          <Var name="level" type="char">57</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="57">
+          <Var name="level" type="char">59</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="58">
+          <Var name="level" type="char">60</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="59">
+          <Var name="level" type="char">61</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="60">
+          <Var name="level" type="char">62</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="61">
+          <Var name="level" type="char">63</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+        <Struct name="62">
+          <Var name="level" type="char">58</Var>
+          <Var name="isLevelName" type="int">0</Var>
+        </Struct>
+      </Array>
+      <Array name="CellOnVertexLevels" dimension="[0]"></Array>
+      <Array name="CellLevels" dimension="[0]"></Array>
+    </Vars>
+  </Config>
+</Header>
