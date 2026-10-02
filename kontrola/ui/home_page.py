@@ -87,7 +87,8 @@ class StepCard(QFrame):
         self.set_state(None)
 
     def set_state(self, done: bool | None):
-        col = {True: "#16A34A", False: "#2563EB", None: "#9CA3AF"}[done]
+        from .theme import accent
+        col = {True: "#16A34A", False: accent("#2563EB"), None: "#9CA3AF"}[done]
         self.badge.setText("✓" if done else str(self.number))
         self.badge.setStyleSheet(f"background:{col}; color:white; border-radius:15px; font-weight:700;")
         self.setStyleSheet(f"QFrame#karta {{ border-top: 3px solid {col}; }}")
@@ -139,7 +140,8 @@ class HomePage(QScrollArea):
         self.next_step.setStyleSheet("font-size:10.5pt; font-weight:500;")
         self.next_btn = QPushButton()
         self.next_btn.setCursor(Qt.PointingHandCursor)
-        self.next_btn.setStyleSheet("QPushButton { background: white; color: #1D4ED8; border: none; border-radius: 8px;"
+        from .theme import accent
+        self.next_btn.setStyleSheet("QPushButton { background: white; color: " + accent("#1D4ED8") + "; border: none; border-radius: 8px;"
                                     " padding: 7px 16px; font-weight: 700; } QPushButton:hover { background: #EFF6FF; }")
         self.next_btn.clicked.connect(lambda: self._next_action() if self._next_action else None)
         self._next_action = None
@@ -236,13 +238,14 @@ class HomePage(QScrollArea):
         all_b = QPushButton("Co všechno aplikace umí →")
         all_b.setFlat(True)
         all_b.setCursor(Qt.PointingHandCursor)
-        all_b.setStyleSheet("color:#2563EB; text-align:right;")
+        from .theme import accent
+        all_b.setStyleSheet(f"color:{accent('#2563EB')}; text-align:right;")
         all_b.clicked.connect(win.show_features)
         from .theme import icon
         for k, (text, slot, ic) in enumerate(items):
             b = QPushButton(text)
             b.setObjectName("nastroj")
-            b.setIcon(icon(ic, "#2563EB"))
+            b.setIcon(icon(ic, accent("#2563EB")))
             b.setIconSize(QSize(18, 18))
             b.setCursor(Qt.PointingHandCursor)
             b.setMinimumHeight(36)

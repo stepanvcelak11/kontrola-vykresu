@@ -42,6 +42,13 @@ spustit. Windows může upozornit na neznámého vydavatele: *Další informace 
 Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnete přes
 *Code → Download ZIP*). Program si můžete sestavit i sami, viz [Sestavení .exe](#sestavení-exe).
 
+### Webová verze (bez instalace)
+
+**https://stepanvcelak11.github.io/kontrola-vykresu/** – kontrola výkresu DXF/DGN přímo v prohlížeči (i na mobilu),
+s pravidly ze Zadání 1, vlastní Směrnicí (xls, xlsx, csv, ods, doc, docx, YAML) a seznamem souřadnic. Výpočet běží
+v prohlížeči (Python přes Pyodide), soubory se nikam neodesílají. Kreslení (CAD) a výpočty jsou zatím jen v desktopové
+verzi. Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
+
 ### Bez .exe – když Windows program zablokuje (Inteligentní řízení aplikací)
 
 1. Nainstalujte **Python 3.12** z **Microsoft Store** (vyhledejte „Python 3.12“, Získat).
