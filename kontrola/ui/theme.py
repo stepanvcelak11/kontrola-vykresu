@@ -310,6 +310,11 @@ QFrame#hero {{ border: none; border-radius: 16px;
 QFrame#hero QLabel {{ color: white; background: transparent; }}
 QFrame#hero QLabel#uvod_podnadpis {{ color: #E0ECFF; }}
 QLabel#souhrn {{ color: #374151; }}
+QScrollArea#cad_paleta QToolButton {{ padding: 2px; margin: 0; border-radius: 6px; }}
+QScrollArea#cad_paleta, QScrollArea#cad_paleta > QWidget > QWidget {{ background: {PANEL}; }}
+QLabel#cad_paleta_nadpis {{ color: {MUTED}; font-size: 8pt; font-weight: 600; padding: 6px 2px 1px 2px; }}
+QLabel#cad_vyzva {{ font-weight: 600; color: {ACCENT}; }}
+QLabel#cad_titulek {{ font-weight: 600; }}
 QToolBar#hlavni_panel {{ background: {PANEL}; border: none; border-right: 1px solid {BORDER}; padding: 6px 4px;
     spacing: 2px; }}
 QToolBar#hlavni_panel QToolButton {{ padding: 5px 2px; margin: 1px 4px; border-radius: 10px; font-size: 8.5pt; }}

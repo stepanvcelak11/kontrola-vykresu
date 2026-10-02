@@ -15,8 +15,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QToolButton,
                                QVBoxLayout, QWidget)
@@ -36,6 +36,25 @@ class Pozadavek:
     slova: tuple = ()
     ref: tuple | None = None  # bod, od kterého vede gumička (a od kterého se měří délka kliknutím)
     vychozi: object = None
+
+
+def _citelne_pero(it) -> None:
+    """ezdxf kreslí tenké čáry kosmetickým perem širokým setiny pixelu – na tmavém pozadí skoro neviditelné.
+    Tenké čáry dostanou 1 px, tlusté úměrně víc (jako zobrazení tlouštěk v MicroStationu)."""
+    pen_fn = getattr(it, "pen", None)
+    if pen_fn is None:
+        return
+    try:
+        p = pen_fn()
+    except TypeError:
+        return
+    if not p.isCosmetic():
+        return
+    w = p.widthF()
+    nova = 1.0 if w < 0.45 else min(8.0, max(1.5, round(w * 2.35 * 2) / 2))
+    if abs(nova - w) > 1e-6:
+        p.setWidthF(nova)
+        it.setPen(p)
 
 
 class CadView(QGraphicsView):
@@ -364,114 +383,157 @@ class CadPage(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
+        # ---- hlavní lišta: soubor, zpět/vpřed, tisk, kontrola, model, reference, zadání
         bar = QHBoxLayout()
-        bar.setContentsMargins(10, 6, 10, 6)
-        self.b_open = QPushButton("Otevřít DXF…")
+        bar.setContentsMargins(8, 5, 8, 3)
+        bar.setSpacing(4)
+        self.b_open = QPushButton("Otevřít…")
+        self.b_open.setToolTip("Otevřít výkres DXF (Ctrl+O)")
         self.b_new = QPushButton("Nový")
         self.b_save = QPushButton("Uložit")
+        self.b_save.setToolTip("Uložit DXF (Ctrl+S)")
         self.b_saveas = QPushButton("Uložit jako…")
         self.b_all = QPushButton("Celý výkres")
-        self.b_undo = QPushButton("↶")
+        self.b_undo = QPushButton("↶ Zpět")
         self.b_undo.setToolTip("Zpět (Ctrl+Z)")
-        self.b_redo = QPushButton("↷")
+        self.b_redo = QPushButton("↷ Vpřed")
         self.b_redo.setToolTip("Vpřed (Ctrl+Y)")
         self.b_tisk = QPushButton("Tisk do PDF…")
         self.b_tisk.setToolTip("Vytisknout model v měřítku nebo list do PDF (vektorově, na bílý papír)")
         self.b_check = QPushButton("Zkontrolovat")
+        self.b_check.setObjectName("primary")
         self.b_check.setToolTip("Uloží výkres a zkontroluje ho v Kontrole výkresu (chyby se ukážou na stránce "
                                 "Výkres)")
-        for b in (self.b_open, self.b_new, self.b_save, self.b_saveas, self.b_all, self.b_undo, self.b_redo,
-                  self.b_tisk, self.b_check):
-            bar.addWidget(b)
-        bar.addSpacing(12)
-        bar.addWidget(QLabel("Vrstva:"))
-        self.vrstvy = QComboBox()
-        self.vrstvy.setMinimumWidth(140)
-        self.vrstvy.setToolTip("Aktuální vrstva pro nové prvky")
-        bar.addWidget(self.vrstvy)
+        for i, b in enumerate((self.b_open, self.b_new, self.b_save, self.b_saveas, None, self.b_undo, self.b_redo,
+                               None, self.b_tisk, self.b_check)):
+            if b is None:
+                bar.addSpacing(10)
+            else:
+                bar.addWidget(b)
+        bar.addSpacing(10)
         bar.addWidget(QLabel("Model:"))
         self.modely = QComboBox()
-        self.modely.setMinimumWidth(120)
+        self.modely.setMinimumWidth(110)
         self.modely.setToolTip("Model výkresu nebo list (výkresový list s výřezy, rámečkem a razítkem)")
         bar.addWidget(self.modely)
         self.b_ref = QPushButton("Reference…")
         self.b_ref.setToolTip("Připojit jiný výkres DXF jako podklad (jen pro čtení, přichytávání, kopírování)")
         bar.addWidget(self.b_ref)
-        self.b_vrstvy = QPushButton("Vrstvy…")
-        self.b_vrstvy.setToolTip("Správce vrstev: zapnutí, zámek, barva, typ čáry, nová, přejmenovat, smazat")
+        self.b_vrstvy = QPushButton("Hladiny…")
+        self.b_vrstvy.setToolTip("Správce hladin: zapnutí, zámek, barva, typ čáry, nová, přejmenovat, smazat")
         bar.addWidget(self.b_vrstvy)
-        bar.addStretch(1)
-        self.title = QLabel("Žádný výkres")
-        bar.addWidget(self.title)
-        lay.addLayout(bar)
-        # nástroje
-        tools = QHBoxLayout()
-        tools.setContentsMargins(10, 0, 10, 4)
-        self.nastroje: dict[str, QToolButton] = {}
-        for cmd, label in (("úsečka", "Úsečka"), ("polylinie", "Polylinie"), ("obdélník", "Obdélník"),
-                           ("kružnice", "Kružnice"), ("oblouk", "Oblouk"), ("elipsa", "Elipsa"),
-                           ("křivka", "Křivka"), ("bod", "Bod"), ("text", "Text"), ("šrafa", "Šrafa"),
-                           ("kóta", "Kóta"), (None, None), ("posun", "Posun"), ("kopie", "Kopie"),
-                           ("otoč", "Otoč"), ("měřítko", "Měřítko"), ("zrcadli", "Zrcadli"),
-                           ("rovnoběžka", "Rovnoběžka"), ("ořež", "Ořež"), ("prodluž", "Prodluž"),
-                           ("zaobli", "Zaobli"), ("spoj", "Spoj"), ("rozpoj", "Rozpoj"), ("smaž", "Smaž")):
-            if cmd is None:
-                tools.addSpacing(14)
-                continue
-            b = QToolButton()
-            b.setText(label)
-            b.setToolTip(self.PRIKAZY[cmd])
-            b.clicked.connect(lambda _=False, c=cmd: self.proved(c))
-            tools.addWidget(b)
-            self.nastroje[cmd] = b
-        tools.addStretch(1)
-        lay.addLayout(tools)
-        zrow = QHBoxLayout()
-        zrow.setContentsMargins(10, 0, 10, 4)
+        # zadání (méně časté akce v nabídce)
         self.b_novy_zadani = QPushButton("Nový podle zadání")
-        self.b_novy_zadani.setToolTip("Založí výkres se všemi vrstvami, styly čar, písmy a buňkami podle pravidel "
+        self.b_novy_zadani.setToolTip("Založí výkres se všemi hladinami, styly čar, písmy a buňkami podle pravidel "
                                       "ze zadání (Zadání → Pravidla, Směrnice, vzorový výkres)")
-        zrow.addWidget(self.b_novy_zadani)
-        zrow.addWidget(QLabel("Kreslím:"))
-        self.predvolby_cb = QComboBox()
-        self.predvolby_cb.setMinimumWidth(360)
-        self.predvolby_cb.setToolTip("Druh prvku ze zadání – vrstva, barva, styl, tloušťka a písmo se nastaví samy")
-        zrow.addWidget(self.predvolby_cb, 1)
-        self.b_na_vyber = QPushButton("Použít na výběr")
-        self.b_na_vyber.setToolTip("Vybraným prvkům nastaví atributy zvoleného druhu prvku")
-        zrow.addWidget(self.b_na_vyber)
         self.b_body = QPushButton("Body ze seznamu…")
         self.b_body.setToolTip("Vložit body ze seznamu souřadnic (Výpočty nebo soubor) na jejich souřadnice, "
                                "s čísly a výškami v hladinách podle zadání")
-        zrow.addWidget(self.b_body)
         self.b_atributy = QPushButton("Atributy ze zadání…")
         self.b_atributy.setToolTip("Zkontrolovat a upravit atributy, které aplikace načetla ze zadání (vrstva, "
                                    "barva, styl, tloušťka, písmo…) a ověřit, že nakreslené prvky projdou kontrolou")
-        zrow.addWidget(self.b_atributy)
         self.b_tahak = QPushButton("Tahák atributů…")
         self.b_tahak.setToolTip("Přehled atributů všech prvků ze zadání s řádky key-in pro MicroStation (HTML, "
                                 "dá se vytisknout)")
-        zrow.addWidget(self.b_tahak)
+        from PySide6.QtWidgets import QMenu
+        self.b_zadani = QToolButton()
+        self.b_zadani.setText("Zadání ▾")
+        self.b_zadani.setToolTip("Výkres podle zadání, body ze seznamu, atributy a tahák")
+        self.b_zadani.setPopupMode(QToolButton.InstantPopup)
+        mz = QMenu(self.b_zadani)
+        for btn in (self.b_novy_zadani, self.b_body, self.b_atributy, self.b_tahak):
+            act = mz.addAction(btn.text())
+            act.setToolTip(btn.toolTip())
+            act.triggered.connect(btn.click)
+            act.setData(btn)
+        mz.aboutToShow.connect(lambda m=mz: [a.setEnabled(a.data().isEnabled()) for a in m.actions()])
+        self.b_zadani.setMenu(mz)
+        bar.addWidget(self.b_zadani)
+        bar.addStretch(1)
+        self.title = QLabel("Žádný výkres")
+        self.title.setObjectName("cad_titulek")
+        bar.addWidget(self.title)
+        lay.addLayout(bar)
+        # ---- lišta atributů (jako Attributes v MicroStationu): hladina, barva, styl, tloušťka, druh prvku
+        arow = QHBoxLayout()
+        arow.setContentsMargins(8, 2, 8, 5)
+        arow.setSpacing(4)
+        arow.addWidget(QLabel("Hladina:"))
+        self.vrstvy = QComboBox()
+        self.vrstvy.setMinimumWidth(130)
+        self.vrstvy.setToolTip("Aktivní hladina pro nové prvky; s vybranými prvky je do ní přesune")
+        arow.addWidget(self.vrstvy)
+        arow.addWidget(QLabel("Barva:"))
+        self.b_barva = QPushButton("dle hl.")
+        self.b_barva.setToolTip("Aktivní barva 0–255 z tabulky barev MicroStationu (s výběrem změní vybrané prvky)")
+        self.b_barva.setMinimumWidth(80)
+        arow.addWidget(self.b_barva)
+        arow.addWidget(QLabel("Styl:"))
+        self.styl_cb = QComboBox()
+        self.styl_cb.setMinimumWidth(130)
+        self.styl_cb.setToolTip("Styl čáry 0–7 nebo vlastní styl (kód) – pro nové prvky, s výběrem změní vybrané")
+        arow.addWidget(self.styl_cb)
+        arow.addWidget(QLabel("Tloušťka:"))
+        self.tl_cb = QComboBox()
+        self.tl_cb.setMinimumWidth(110)
+        self.tl_cb.setToolTip("Tloušťka čáry wt 0–31 (převod na mm podle zadání)")
+        arow.addWidget(self.tl_cb)
+        arow.addSpacing(10)
+        arow.addWidget(QLabel("Kreslím:"))
+        self.predvolby_cb = QComboBox()
+        self.predvolby_cb.setMinimumWidth(260)
+        self.predvolby_cb.setToolTip("Druh prvku ze zadání – hladina, barva, styl, tloušťka a písmo se nastaví samy")
+        arow.addWidget(self.predvolby_cb, 1)
+        self.b_na_vyber = QPushButton("Použít na výběr")
+        self.b_na_vyber.setToolTip("Vybraným prvkům nastaví atributy zvoleného druhu prvku")
+        arow.addWidget(self.b_na_vyber)
         self.predvolba_info = QLabel()
         self.predvolba_info.setObjectName("predvolba_info")
-        zrow.addWidget(self.predvolba_info, 1)
-        lay.addLayout(zrow)
+        self.predvolba_info.setMaximumWidth(420)
+        arow.addWidget(self.predvolba_info)
+        lay.addLayout(arow)
         self._predvolby: list = []
+        # ---- střed: paleta nástrojů | výkres | hladiny a vlastnosti
+        from PySide6.QtWidgets import QSplitter, QTabWidget
+
+        from .cad_panely import PaletaNastroju, PanelHladin, PanelVlastnosti
+        from .theme import ACCENT, is_dark
+        self.paleta = PaletaNastroju(self.PRIKAZY, "#D1D5DB" if is_dark() else "#374151", ACCENT)
+        self.paleta.nastroj.connect(self.proved)
+        self.nastroje: dict[str, QToolButton] = dict(self.paleta.tlacitka)
         self.view = CadView()
         self.view.setCursor(Qt.CrossCursor)
-        lay.addWidget(self.view, 1)
+        self.panel = QTabWidget()
+        self.panel.setObjectName("cad_panel")
+        self.panel_hladin = PanelHladin()
+        self.panel_hladin.zobrazeni.connect(self._hladina_zobrazeni_panel)
+        self.panel_hladin.aktivni.connect(self._hladina_aktivni_panel)
+        self.panel_vlastnosti = PanelVlastnosti()
+        self.panel.addTab(self.panel_vlastnosti, "Vlastnosti")
+        self.panel.addTab(self.panel_hladin, "Hladiny")
+        self.panel.setMinimumWidth(220)
+        stred = QSplitter(Qt.Horizontal)
+        stred.addWidget(self.paleta)
+        stred.addWidget(self.view)
+        stred.addWidget(self.panel)
+        stred.setStretchFactor(1, 1)
+        stred.setCollapsible(1, False)
+        stred.setSizes([self.paleta.width(), 1000, 260])
+        self.stred = stred
+        lay.addWidget(stred, 1)
         self.historie = QPlainTextEdit()
         self.historie.setReadOnly(True)
-        self.historie.setMaximumHeight(90)
+        self.historie.setMaximumHeight(86)
         self.historie.setObjectName("cad_historie")
         lay.addWidget(self.historie)
         crow = QHBoxLayout()
-        crow.setContentsMargins(10, 4, 10, 6)
+        crow.setContentsMargins(8, 4, 8, 5)
         self.vyzva = QLabel("Příkaz:")
+        self.vyzva.setObjectName("cad_vyzva")
         crow.addWidget(self.vyzva)
         self.prikaz = QLineEdit()
         self.prikaz.setObjectName("cad_prikaz")
-        self.prikaz.setPlaceholderText("Příkaz (u, pl, kr, m, tr, ?) nebo souřadnice „Y X“, „@dx,dy“, "
+        self.prikaz.setPlaceholderText("Příkaz (u, pl, kr, m, ?) nebo souřadnice „Y X“, „@dx,dy“, "
                                        "„@délka<směrník“ – Enter")
         crow.addWidget(self.prikaz, 1)
         self.b_uchyty = QPushButton("Úchyty")
@@ -493,11 +555,16 @@ class CadPage(QWidget):
         self.aktivni = QLabel("")
         self.aktivni.setObjectName("cad_aktivni")
         self.aktivni.setToolTip("Aktivní atributy pro nové prvky (jako v MicroStationu)")
+        self.aktivni.hide()  # zobrazuje je lišta atributů nahoře
         crow.addWidget(self.aktivni)
         self.coords = QLabel("Y –  X –")
-        self.coords.setMinimumWidth(320)
+        self.coords.setObjectName("cad_souradnice")
+        self.coords.setMinimumWidth(300)
         crow.addWidget(self.coords)
         lay.addLayout(crow)
+        self.b_barva.clicked.connect(self._vyber_barvy)
+        self.styl_cb.activated.connect(self._styl_z_listy)
+        self.tl_cb.activated.connect(self._tloustka_z_listy)
         # signály
         self.b_open.clicked.connect(lambda: self.otevri())
         self.b_new.clicked.connect(self.novy)
@@ -800,12 +867,97 @@ class CadPage(QWidget):
         return dok
 
     def _napln_vrstvy(self):
+        from .cad_panely import _klic, vzorek
         self.vrstvy.blockSignals(True)
         self.vrstvy.clear()
         if self.dok is not None:
-            self.vrstvy.addItems(sorted((ly.dxf.name for ly in self.dok.doc.layers), key=str.lower))
+            for ly in sorted(self.dok.doc.layers, key=lambda x: _klic(x.dxf.name)):
+                self.vrstvy.addItem(vzorek(self._rgb_hladiny(ly), 12), ly.dxf.name)
             self.vrstvy.setCurrentText(self.kresleni.vrstva)
         self.vrstvy.blockSignals(False)
+        self.panel_hladin.napln(self.dok.doc if self.dok else None, self.prostor if self.dok else None,
+                                self.kresleni.vrstva if self.kresleni else "", self._rgb_hladiny)
+        self._napln_styly()
+        self.aktivni_atributy()
+
+    def _rgb_hladiny(self, ly):
+        from ezdxf.colors import aci2rgb
+        try:
+            if ly.dxf.hasattr("true_color"):
+                tc = ly.dxf.true_color
+                return ((tc >> 16) & 255, (tc >> 8) & 255, tc & 255)
+            c = abs(int(ly.dxf.get("color", 7)))
+            return (255, 255, 255) if c == 7 else tuple(aci2rgb(c))
+        except Exception:  # noqa: BLE001
+            return (200, 200, 200)
+
+    def _napln_styly(self):
+        """Styly čar (dle hladiny, 0–7, vlastní styly výkresu) a tloušťky s náhledem."""
+        from .cad_ikony import ukazka_cary
+        from .theme import is_dark
+        barva = "#D1D5DB" if is_dark() else "#374151"
+        self.styl_cb.blockSignals(True)
+        self.styl_cb.clear()
+        self.styl_cb.addItem("dle hladiny", "dle")
+        for n in range(8):
+            self.styl_cb.addItem(ukazka_cary(str(n), 1.5, barva), str(n), str(n))
+        if self.dok is not None:
+            vlastni = sorted(lt.dxf.name for lt in self.dok.doc.linetypes
+                             if lt.dxf.name.upper() not in ("BYLAYER", "BYBLOCK", "CONTINUOUS")
+                             and not lt.dxf.name.upper().startswith("DGN STYLE"))
+            for jm in vlastni:
+                self.styl_cb.addItem(jm, jm)
+        self.styl_cb.setIconSize(QSize(60, 14))
+        self.styl_cb.blockSignals(False)
+        self.tl_cb.blockSignals(True)
+        self.tl_cb.clear()
+        self.tl_cb.addItem("dle hladiny", "dle")
+        for n in range(16):
+            self.tl_cb.addItem(ukazka_cary("0", 1 + n * 0.6, barva), str(n), str(n))
+        self.tl_cb.setIconSize(QSize(60, 14))
+        self.tl_cb.blockSignals(False)
+
+    def _vyber_barvy(self):
+        from ..cad import symbologie as S
+        from .cad_panely import BarvaDialog
+        if self.dok is None:
+            return
+        k = self.kresleni
+        akt = k.ms_barva if k.ms_barva is not None and k.barva != 256 else S.aci_na_ms(k.barva, self._pravidla())
+        d = BarvaDialog(S.tabulka(self._pravidla()), akt, self)
+        if d.exec() and d.vysledek is not None:
+            self._barva("dle" if d.vysledek == 256 else str(d.vysledek))
+
+    def _styl_z_listy(self, i: int):
+        v = self.styl_cb.itemData(i)
+        if v is not None and self.dok is not None:
+            self._styl_tloustka("styl", v)
+
+    def _tloustka_z_listy(self, i: int):
+        v = self.tl_cb.itemData(i)
+        if v is not None and self.dok is not None:
+            self._styl_tloustka("tloušťka", v)
+
+    def _hladina_zobrazeni_panel(self, jm: str, zapnout: bool):
+        if self.dok is None or jm not in self.dok.doc.layers:
+            return
+        ly = self.dok.doc.layers.get(jm)
+        if not zapnout and jm == self.kresleni.vrstva:
+            self.vypis("Aktivní hladinu nejde vypnout – nejdřív zvolte jinou aktivní hladinu (dvojklik).")
+            self._napln_vrstvy()
+            return
+        ly.on() if zapnout else ly.off()
+        self.vrstvy_zmeneny()
+
+    def _hladina_aktivni_panel(self, jm: str):
+        if self.kresleni is None or not jm:
+            return
+        self.kresleni.vrstva = jm
+        if self.dok is not None and jm in self.dok.doc.layers and self.dok.doc.layers.get(jm).is_off():
+            self.dok.doc.layers.get(jm).on()
+            self.vrstvy_zmeneny()
+        self.vypis(f"Aktivní hladina: {jm}")
+        self._napln_vrstvy()
 
     def _vrstva_zmenena(self, name: str):
         if self.kresleni is not None and name:
@@ -967,6 +1119,8 @@ class CadPage(QWidget):
                 self.vypis(f"⚠ Reference {r.cesta.name} nejde zobrazit: {e}")
                 continue
             nove = [i for i in sc.items() if id(i) not in pred]
+            for it in nove:
+                _citelne_pero(it)
             g = QGraphicsItemGroup()
             sc.addItem(g)
             for it in nove:
@@ -1007,6 +1161,7 @@ class CadPage(QWidget):
         for it in sc.items():
             if id(it) in pred:
                 continue
+            _citelne_pero(it)
             stack = it.data(CorrespondingDXFParentStack) or ()
             e = stack[0] if stack else it.data(CorrespondingDXFEntity)
             if e is not None:
@@ -1176,11 +1331,63 @@ class CadPage(QWidget):
 
     # ------------------------------------------------------------ výběr
     def _zvyrazni(self):
+        if getattr(self, "panel_vlastnosti", None) is not None:
+            self.panel_vlastnosti.ukaz(self.vyber, self._popis_vlastnosti)
         if self.index is None:
             self.view.zvyraznene = []
         else:
             self.view.zvyraznene = [g for g in (self.index.geometrie(e) for e in self.vyber) if g is not None]
         self.view.viewport().update()
+
+    def _popis_vlastnosti(self, e) -> str:
+        """HTML vlastností jednoho prvku (Element Information): atributy jako v MicroStationu a rozměry."""
+        from html import escape
+
+        from ..cad import symbologie as S
+        rs = self._pravidla()
+        d = e.dxf
+        k = self.kresleni
+        znama = k.ms_barvy_prvku.get(d.handle) if k is not None else None
+        b = znama if znama is not None else S.aci_na_ms(d.get("color", 256), rs)
+        w = S.lw_na_wt(d.get("lineweight", -1), rs)
+        jm = {"LINE": "Úsečka", "LWPOLYLINE": "Lomená čára" + (" (uzavřená)" if getattr(e, "closed", False) else ""),
+              "POLYLINE": "Lomená čára", "CIRCLE": "Kružnice", "ARC": "Oblouk", "ELLIPSE": "Elipsa",
+              "SPLINE": "Křivka", "POINT": "Bod", "TEXT": "Text", "MTEXT": "Text (víceřádkový)",
+              "INSERT": "Buňka", "HATCH": "Šrafa", "DIMENSION": "Kóta"}.get(e.dxftype(), e.dxftype())
+        r = [("Typ", jm), ("Hladina", d.get("layer", "0")), ("Barva", b if b is not None else "dle hladiny")]
+        if e.dxftype() not in ("TEXT", "MTEXT", "POINT"):
+            r += [("Styl", S.typ_na_styl(d.get("linetype", "BYLAYER"))), ("Tloušťka", w if w is not None else
+                                                                          "dle hladiny")]
+        g = self.index.geometrie(e) if self.index else None
+        if g is not None and g.geom_type in ("LineString", "MultiLineString") and g.length > 0:
+            r.append(("Délka", f"{g.length:.3f} m"))
+        if e.dxftype() in ("CIRCLE", "ARC"):
+            r.append(("Poloměr", f"{d.radius:.3f} m"))
+        if e.dxftype() == "LWPOLYLINE" and e.closed:
+            from shapely.geometry import Polygon
+            try:
+                pg = Polygon([p[:2] for p in e.get_points("xy")])
+                r.append(("Výměra", f"{pg.area:.2f} m²"))
+                r.append(("Obvod", f"{pg.length:.2f} m"))
+            except Exception:  # noqa: BLE001
+                pass
+        if e.dxftype() == "INSERT":
+            r += [("Název", d.name), ("Měřítko", f"{d.get('xscale', 1.0):g}"), ("Natočení", f"{d.get('rotation', 0):.2f}°")]
+        if e.dxftype() in ("TEXT", "MTEXT"):
+            r += [("Text", e.plain_text() if e.dxftype() == "MTEXT" else d.text),
+                  ("Výška", f"{(d.get('height', 0) if e.dxftype() == 'TEXT' else d.get('char_height', 0)):.3f} m"), ("Styl textu", d.get("style", ""))]
+        for klic in ("insert", "center", "location", "start"):
+            if d.hasattr(klic):
+                v = d.get(klic)
+                xy = (f"Y {-v[0]:.3f}, X {-v[1]:.3f}" if self.sjtsk else f"x {v[0]:.3f}, y {v[1]:.3f}")
+                r.append(("Poloha" if klic != "start" else "Začátek", xy))
+                break
+        g_ = U.skupina(e)
+        if g_ is not None:
+            r.append(("Skupina", g_))
+        radky = "".join(f"<tr><td style='color:#9CA3AF;padding-right:10px'>{escape(str(a))}</td>"
+                        f"<td>{escape(str(v))}</td></tr>" for a, v in r)
+        return f"<table>{radky}</table>"
 
     def _tol(self) -> float:
         return 8.0 / max(1e-12, abs(self.view.transform().m11()))
@@ -1400,6 +1607,8 @@ class CadPage(QWidget):
     # ------------------------------------------------------------ běh nástroje
     def _spust(self, gen):
         self._gen = gen
+        if getattr(self, "paleta", None) is not None:
+            self.paleta.oznac(self._posledni_prikaz)
         self._posli(None, prvni=True)
 
     def _posli(self, hodnota, prvni: bool = False):
@@ -1439,6 +1648,8 @@ class CadPage(QWidget):
     def _konec_nastroje(self):
         self._gen = None
         self._req = None
+        if getattr(self, "paleta", None) is not None:
+            self.paleta.oznac(None)
         self.view.gumicka = False
         self.view.vyber_oknem = True
         self.vyzva.setText("Příkaz:")
@@ -1677,6 +1888,27 @@ class CadPage(QWidget):
         t = (f"Hladina {k.vrstva} · Barva {b if b is not None else 'dle hl.'} · Styl {S.typ_na_styl(k.typ_cary)}"
              f" · Tloušťka {w if w is not None else 'dle hl.'}")
         self.aktivni.setText(t)
+        # lišta atributů ukazuje aktivní hodnoty
+        self.vrstvy.blockSignals(True)
+        self.vrstvy.setCurrentText(k.vrstva)
+        self.vrstvy.blockSignals(False)
+        if b is None or k.barva == 256:
+            self.b_barva.setText("dle hl.")
+            self.b_barva.setIcon(QIcon())
+        else:
+            from .cad_panely import vzorek
+            self.b_barva.setText(str(b))
+            self.b_barva.setIcon(vzorek(S.tabulka(rs).get(int(b), (128, 128, 128)), 12))
+        st = S.typ_na_styl(k.typ_cary)
+        for cb, val in ((self.styl_cb, "dle" if st == "dle hladiny" else st),
+                        (self.tl_cb, "dle" if w is None or k.tloustka == -1 else str(w))):
+            cb.blockSignals(True)
+            i = cb.findData(val)
+            if i < 0 and cb is self.styl_cb and val not in ("dle",):
+                cb.addItem(val, val)
+                i = cb.findData(val)
+            cb.setCurrentIndex(max(0, i))
+            cb.blockSignals(False)
         return t
 
     def _barva(self, arg: str):
