@@ -217,3 +217,65 @@ def protokol(v: VysledekVyrovnani, sigma_smer_cc: float, sigma_delka_mm: float, 
     if v.zpravy:
         r += ["", *("UPOZORNĚNÍ: " + z for z in v.zpravy)]
     return r
+
+
+# ------------------------------------------------------------------ nivelační síť
+@dataclass
+class Oddil:
+    od: str
+    do: str
+    dh: float  # měřené převýšení do − od [m]
+    delka: float  # délka oddílu [m] (váha 1/L)
+
+
+@dataclass
+class VysledekNivelace:
+    vysky: dict[str, float]
+    stredni_chyby: dict[str, float]  # [m]
+    opravy: list[tuple[Oddil, float]]  # oprava převýšení [m]
+    m0_km: float  # jednotková střední chyba na 1 km [m]
+    redundance: int
+
+
+def vyrovnej_nivelaci(oddily: list[Oddil], pevne: dict[str, float]) -> VysledekNivelace:
+    """Vyrovnání nivelační sítě MNČ (zprostředkující): neznámé výšky nových bodů, váhy p = 1/L[km]."""
+    if not oddily:
+        raise ValueError("Síť nemá žádný oddíl.")
+    if not pevne:
+        raise ValueError("Zadejte aspoň jeden výškově daný bod.")
+    body = {o.od for o in oddily} | {o.do for o in oddily}
+    nove = sorted(body - set(pevne), key=_klic)
+    ix = {b: i for i, b in enumerate(nove)}
+    m, n = len(oddily), len(nove)
+    if n == 0:
+        raise ValueError("V síti není žádný nový bod.")
+    A = np.zeros((m, n))
+    l = np.zeros(m)
+    P = np.zeros(m)
+    for r, o in enumerate(oddily):
+        if o.delka <= 0:
+            raise ValueError(f"Oddíl {o.od}–{o.do}: délka musí být kladná.")
+        konst = 0.0
+        if o.do in ix:
+            A[r, ix[o.do]] += 1
+        else:
+            konst += pevne[o.do]
+        if o.od in ix:
+            A[r, ix[o.od]] -= 1
+        else:
+            konst -= pevne[o.od]
+        l[r] = o.dh - konst  # A·H = dh − (pevné části)
+        P[r] = 1.0 / (o.delka / 1000.0)
+    N = A.T @ (A * P[:, None])
+    try:
+        Q = np.linalg.inv(N)
+    except np.linalg.LinAlgError:
+        raise ValueError("Síť je neurčitá – některý bod není připojen k danému bodu.") from None
+    h = Q @ (A.T @ (P * l))
+    v = A @ h - l
+    red = m - n
+    m0 = math.sqrt(float(v @ (P * v)) / red) if red > 0 else float("nan")
+    s0 = m0 if red > 0 else 0.0
+    return VysledekNivelace({b: float(h[i]) for b, i in ix.items()},
+                            {b: s0 * math.sqrt(Q[i, i]) for b, i in ix.items()},
+                            [(o, float(v[k])) for k, o in enumerate(oddily)], m0, red)

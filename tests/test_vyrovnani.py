@@ -98,3 +98,20 @@ def test_nedourcena_sit():
     pevne = {"A": (0.0, 0.0), "B": (100.0, 0.0)}
     with pytest.raises(ValueError):
         VR.vyrovnej([VR.Smer("A", "Z", 0.0)], [], pevne)
+
+
+def test_vyrovnani_nivelacni_site():
+    from kontrola.geodezie.vyrovnani import Oddil, vyrovnej_nivelaci
+    skutecne = {"A": 250.000, "1": 251.234, "2": 249.876, "B": 252.100}
+    pevne = {"A": 250.000, "B": 252.100}
+    oddily = [Oddil("A", "1", 1.234, 500), Oddil("1", "2", -1.358, 400), Oddil("2", "B", 2.224, 600),
+              Oddil("1", "B", 0.866, 700)]
+    r = vyrovnej_nivelaci(oddily, pevne)
+    for b in ("1", "2"):
+        assert abs(r.vysky[b] - skutecne[b]) < 1e-9  # bezchybná měření → přesně
+    oddily[0] = Oddil("A", "1", 1.238, 500)  # chyba 4 mm
+    r = vyrovnej_nivelaci(oddily, pevne)
+    assert r.redundance == 2 and r.m0_km > 0
+    assert abs(sum(v for _o, v in r.opravy)) > 0
+    with pytest.raises(ValueError):
+        vyrovnej_nivelaci([Oddil("X", "Y", 1, 100)], pevne)  # nepřipojené body
