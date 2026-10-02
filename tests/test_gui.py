@@ -2169,3 +2169,17 @@ def test_export_seznamu_dxf_kml(window, tmp_path):
     finally:
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_kruznice_tremi_body_a_oblouk_stredem(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("kr", "3", "x=0 y=5", "x=5 y=0", "x=0 y=-5"):
+        c.zadej(t)
+    c.zrus()
+    for t in ("a", "s", "x=0 y=0", "x=10 y=0", "x=0 y=4"):
+        c.zadej(t)
+    c.zrus()
+    assert abs(c.prostor.query("CIRCLE").first.dxf.radius - 5) < 1e-9
+    assert abs(c.prostor.query("ARC").first.dxf.end_angle - 90) < 1e-9

@@ -348,3 +348,17 @@ def test_popisek_s_odkazovou_carou():
     assert txt.dxf.align_point.x == pytest.approx(-5.5)
     with pytest.raises(ValueError):
         k.popisek([(0, 0)], "x")
+
+
+def test_kruznice_a_oblouky_dalsi_zpusoby():
+    doc, msp, h, k = _novy()
+    c = k.kruznice_3body((0, 5), (5, 0), (0, -5))
+    assert (c.dxf.center.x, c.dxf.center.y, c.dxf.radius) == pytest.approx((0, 0, 5))
+    c = k.kruznice_prumer((0, 0), (10, 0))
+    assert (c.dxf.center.x, c.dxf.radius) == pytest.approx((5, 5))
+    a = k.oblouk_stred((0, 0), (10, 0), (0, 3))
+    assert (a.dxf.radius, a.dxf.start_angle, a.dxf.end_angle) == pytest.approx((10, 0, 90))
+    a = k.oblouk_stred((0, 0), (10, 0), (0, 3), proti_smeru=False)
+    assert (a.dxf.start_angle, a.dxf.end_angle) == pytest.approx((90, 0))
+    with pytest.raises(ValueError):
+        k.kruznice_3body((0, 0), (1, 1), (2, 2))

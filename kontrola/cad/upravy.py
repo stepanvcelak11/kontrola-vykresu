@@ -170,6 +170,28 @@ class Kresleni:
             raise ValueError("Poloměr musí být kladný.")
         return self._hotovo("Kružnice", self.msp.add_circle(_xy(stred), r, dxfattribs=self._attr()))
 
+    def kruznice_3body(self, a, b, c):
+        s = stred_kruznice_3b(a, b, c)
+        if s is None:
+            raise ValueError("Tři body leží na přímce – kružnice neexistuje.")
+        return self.kruznice(s, _dist(s, a))
+
+    def kruznice_prumer(self, a, b):
+        if _dist(a, b) < EPS:
+            raise ValueError("Body průměru splývají.")
+        return self.kruznice(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), _dist(a, b) / 2)
+
+    def oblouk_stred(self, stred, a, c, proti_smeru: bool = True):
+        """Oblouk středem: začátek v bodě a (určuje poloměr), konec ve směru bodu c."""
+        r = _dist(stred, a)
+        if r <= EPS:
+            raise ValueError("Počáteční bod splývá se středem.")
+        ua, uc = math.degrees(_uhel(stred, a)), math.degrees(_uhel(stred, c))
+        st, ko = (ua, uc) if proti_smeru else (uc, ua)
+        if abs((ko - st) % 360) < 1e-9:
+            raise ValueError("Oblouk nulové délky.")
+        return self._hotovo("Oblouk", self.msp.add_arc(_xy(stred), r, st, ko, dxfattribs=self._attr()))
+
     def oblouk_3body(self, a, b, c):
         s = stred_kruznice_3b(a, b, c)
         if s is None:

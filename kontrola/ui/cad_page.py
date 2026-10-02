@@ -1708,12 +1708,33 @@ class CadPage(QWidget):
         self.kresleni.obdelnik(a, b)
 
     def n_kruznice(self):
-        s = yield self._bod_req("Kružnice – střed:")
+        s = yield self._bod_req("Kružnice – střed (3 = třemi body, p = průměrem):", slova=("3", "p"))
+        if s == "3":
+            a = yield self._bod_req("Kružnice třemi body – první bod:")
+            b = yield self._bod_req("Druhý bod:", a)
+            c = yield self._bod_req("Třetí bod:", b)
+            self.kresleni.kruznice_3body(a, b, c)
+            return
+        if s == "p":
+            a = yield self._bod_req("Kružnice průměrem – první bod:")
+            b = yield self._bod_req("Druhý konec průměru:", a)
+            self.kresleni.kruznice_prumer(a, b)
+            return
         r = yield Pozadavek("cislo", "Poloměr (číslo nebo klikněte bod na kružnici):", ref=s)
         self.kresleni.kruznice(s, r)
 
     def n_oblouk(self):
-        a = yield self._bod_req("Oblouk – počáteční bod:")
+        a = yield self._bod_req("Oblouk – počáteční bod (s = středem):", slova=("s",))
+        if a == "s":
+            st = yield self._bod_req("Oblouk středem – střed:")
+            z = yield self._bod_req("Počáteční bod (určuje poloměr):", st)
+            k = yield self._bod_req("Konec oblouku – směr (proti směru hodin, h = po směru):", st, slova=("h",))
+            if k == "h":
+                k = yield self._bod_req("Konec oblouku – směr (po směru hodin):", st)
+                self.kresleni.oblouk_stred(st, z, k, proti_smeru=False)
+            else:
+                self.kresleni.oblouk_stred(st, z, k)
+            return
         b = yield self._bod_req("Bod na oblouku:", a)
         c = yield self._bod_req("Koncový bod:", b)
         self.kresleni.oblouk_3body(a, b, c)
