@@ -245,6 +245,8 @@ class CadPage(QWidget):
     """Stránka CAD: výkres DXF, příkazový řádek, kreslení, úpravy a stav (souřadnice, úchyty, ortho…)."""
 
     PRIKAZY = {
+        "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
+        "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
         "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
         "předchozí pohled": "vrátit předchozí pohled (View Previous)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
         "otevři": "otevřít DXF", "ulož": "uložit DXF", "nápověda": "seznam příkazů",
@@ -275,6 +277,8 @@ class CadPage(QWidget):
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
+        "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
+        "pasteclip": "vlož ze schránky", "vloz ze schranky": "vlož ze schránky", "paste": "vlož ze schránky",
         "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
         "wa": "přiblížit", "vp": "předchozí pohled", "view previous": "předchozí pohled",
         "predchozi pohled": "předchozí pohled", "zpět pohled": "předchozí pohled",
@@ -314,7 +318,7 @@ class CadPage(QWidget):
         "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
         "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
-    VYBEROVE = {"pole", "smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
+    VYBEROVE = {"kopíruj do schránky", "pole", "smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
 
     def __init__(self, win=None, parent=None):
         super().__init__(parent)
@@ -500,12 +504,26 @@ class CadPage(QWidget):
         self.krok.valueChanged.connect(lambda v: setattr(self.view, "polar_krok", float(v)))
         from PySide6.QtGui import QKeySequence, QShortcut
         for key, fn in (("F3", self.b_uchyty.toggle), ("F8", self.b_ortho.toggle), ("F10", self.b_polar.toggle),
-                        ("Escape", self.zrus), ("Delete", lambda: self.proved("smaž"))):
+                        ("Escape", self.zrus), ("Delete", lambda: self.proved("smaž")),
+                        ("Ctrl+C", lambda: self._schranka_klavesa("kopíruj do schránky")),
+                        ("Ctrl+V", lambda: self._schranka_klavesa("vlož ze schránky"))):
             sc = QShortcut(QKeySequence(key), self)
             sc.setContext(Qt.WidgetWithChildrenShortcut)
             sc.activated.connect(fn)
         self._aktualizuj_tlacitka()
         self.vypis("CAD – otevřete DXF nebo začněte nový výkres. Příkazy: „?“")
+
+    def _schranka_klavesa(self, prikaz: str):
+        """Ctrl+C / Ctrl+V: v textovém poli se kopíruje text, jinak prvky výkresu."""
+        from PySide6.QtWidgets import QApplication, QLineEdit, QPlainTextEdit
+        f = QApplication.focusWidget()
+        if isinstance(f, (QLineEdit, QPlainTextEdit)):
+            if prikaz.startswith("kop"):
+                f.copy()
+            elif isinstance(f, QLineEdit) and not f.isReadOnly():
+                f.paste()
+            return
+        self.proved(prikaz)
 
     # ------------------------------------------------------------ režimy
     def _ortho(self, on):
@@ -1851,6 +1869,22 @@ class CadPage(QWidget):
         if vz.upper() != "SOLID":
             m = yield Pozadavek("cislo", "Měřítko vzoru [1]:", vychozi=1.0)
         self.kresleni.sraf(e, vz, m)
+
+    def n_kopiruj_do_schranky(self):
+        from ..cad import schranka as S
+        ents = yield from self._vyber_req("Kopírovat do schránky")
+        n = S.kopiruj(self.dok.doc, ents)
+        self.vypis(f"Do schránky zkopírováno {n} prvků – Ctrl+V je vloží (i do jiného výkresu) na stejné souřadnice.")
+
+    def n_vloz_ze_schranky(self):
+        from ..cad import schranka as S
+        if not self._je_model():
+            self.nastav_model("Model")
+        nove = S.vloz(self.dok.doc, self.prostor, self.historie_zmen)
+        self._hotovo_vyber(nove)
+        self.vypis(f"Vloženo {len(nove)} prvků ze schránky (vybrané – jde je hned posunout).")
+        return
+        yield  # generátor
 
     def n_priblizit(self):
         a = yield self._bod_req("Přiblížit oknem – první roh:")

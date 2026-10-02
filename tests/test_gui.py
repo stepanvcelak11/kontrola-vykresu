@@ -2246,3 +2246,23 @@ def test_cad_priblizit_oknem_a_predchozi_pohled(window):
     c.view.mapToScene(c.view.viewport().rect().center())
     c.proved("vp")
     assert abs(c.view.transform().m11() - m0) < 1e-9 * max(1.0, m0)
+
+
+def test_cad_schranka_mezi_vykresy(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.kresleni.vrstva = "0"
+    for t in ("u", "x=-600000 y=-1160000", "x=-600010 y=-1160000", ""):
+        c.zadej(t)
+    c.proved("vše")
+    c.view.setFocus()
+    c._schranka_klavesa("kopíruj do schránky")
+    c.novy()
+    c.view.setFocus()
+    c._schranka_klavesa("vlož ze schránky")
+    car = c.prostor.query("LINE").first
+    assert car is not None and (car.dxf.start.x, car.dxf.start.y) == (-600000, -1160000)
+    assert len(c.vyber) == 1
+    c.undo()
+    assert not list(c.prostor.query("LINE"))
