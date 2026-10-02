@@ -1272,6 +1272,15 @@ class CadPage(QWidget):
                 return
             self._posli(v)
         elif r.typ == "bod":
+            prima = self._prima_delka(t)
+            if prima is not None:
+                if isinstance(prima, str):
+                    self.vypis(prima)
+                    return
+                x, y = prima
+                self.vypis(f"> bod {(-x if self.sjtsk else x):.3f} {(-y if self.sjtsk else y):.3f}")
+                self._posli((x, y))
+                return
             try:
                 x, y = zadani_bodu(t, self.view.posledni, self.sjtsk, self._bod_seznamu)
             except ValueError as e:
@@ -1286,6 +1295,24 @@ class CadPage(QWidget):
             self.proved(t)
         else:
             self.vypis(r.vyzva)
+
+    def _prima_delka(self, t: str):
+        """Přímé zadání délky (jako AccuDraw): samotné číslo = bod v té vzdálenosti od posledního bodu
+        ve směru kurzoru (i se zapnutým pravoúhlým / polárním režimem). Vrací bod, chybovou hlášku, nebo None,
+        když nejde o samotné číslo."""
+        try:
+            d = float(t.strip().replace(",", "."))
+        except ValueError:
+            return None
+        if not math.isfinite(d) or d <= 0:
+            return "Délka musí být kladné číslo."
+        a, k = (self.view.posledni if self.view.gumicka else None), self.view.kurzor
+        if a is None:
+            return "Samotné číslo je délka od předchozího bodu – nejdřív zadejte první bod."
+        if k is None or math.hypot(k[0] - a[0], k[1] - a[1]) < 1e-12:
+            return "Najeďte myší směrem, kterým má délka vést, a zadejte ji znovu."
+        u = math.hypot(k[0] - a[0], k[1] - a[1])
+        return a[0] + (k[0] - a[0]) / u * d, a[1] + (k[1] - a[1]) / u * d
 
     def _je_prikaz(self, t: str) -> bool:
         slovo = (t.strip().split() or [""])[0].lower()

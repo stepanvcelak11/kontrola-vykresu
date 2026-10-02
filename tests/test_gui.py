@@ -2194,3 +2194,23 @@ def test_cad_retezova_kota(window):
     dims = list(c.prostor.query("DIMENSION"))
     assert len(dims) == 3
     assert all(abs(d.dxf.defpoint.y - 3) < 1e-9 for d in dims)  # všechny v jedné řadě
+
+
+def test_cad_prime_zadani_delky(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.zadej("u")
+    c.zadej("x=0 y=0")
+    c.view.kurzor = (3.0, 4.0)  # myš míří pod úhlem (3, 4)
+    c.zadej("10")
+    c.view.kurzor = (6.0, 100.0)
+    c.zadej("2,5")
+    c.zadej("")
+    car = sorted(((l.dxf.start.x, l.dxf.start.y), (l.dxf.end.x, l.dxf.end.y)) for l in c.prostor.query("LINE"))
+    assert car[0][1] == pytest.approx((6, 8))
+    assert car[1][1] == pytest.approx((6, 10.5))
+    c.zadej("kr")
+    c.zadej("5")  # u prvního bodu nástroje délka nedává smysl – nic se nestane
+    c.zrus()
+    assert not list(c.prostor.query("CIRCLE"))
