@@ -87,8 +87,15 @@ class GrafikaBodu(QWidget):
         self.b_mer = QPushButton("Měřit")
         self.b_mer.setCheckable(True)
         self.b_mer.setToolTip("Klikněte na dva body – vzdálenost, směrník, ΔY, ΔX a převýšení")
+        self.b_spoj = QPushButton("Spojnice")
+        self.b_spoj.setCheckable(True)
+        self.b_spoj.setToolTip("Klikněte na dva body – spojnice se přidá (na existující spojnici se smaže)")
+        self.b_kod = QPushButton("Spojit podle kódu…")
+        self.b_kod.setToolTip("Body se stejným kódem spojit lomenou čarou v pořadí čísel (plot, hrana, …)")
         bar.addWidget(self.b_cele)
         bar.addWidget(self.b_mer)
+        bar.addWidget(self.b_spoj)
+        bar.addWidget(self.b_kod)
         bar.addStretch(1)
         self.info = QLabel("Klik = výběr bodu (Ctrl = přidat), kolečko = zoom, pravé tlačítko = posun.")
         bar.addWidget(self.info)
@@ -99,6 +106,8 @@ class GrafikaBodu(QWidget):
         lay.addWidget(self.pohled, 1)
         self.b_cele.clicked.connect(self.cele)
         self.b_mer.toggled.connect(self._mod_mereni)
+        self.b_spoj.toggled.connect(self._mod_spojnice)
+        self.b_kod.clicked.connect(lambda: self.spojit_podle_kodu())
         self.pohled.klik.connect(self._klik)
         self._body: list = []
 
@@ -130,6 +139,11 @@ class GrafikaBodu(QWidget):
     # ------------------------------------------------------------ kreslení
     def _popisy(self, p: QPainter, s: float):
         vyb = set(self.vyber)
+        sp = getattr(self.page, "spojnice", None)
+        if sp is not None and len(sp):
+            p.setPen(QPen(QColor("#34D399"), 0))
+            for a, b in sp.platne(self.page.seznam):
+                p.drawLine(QPointF(-a.y, -a.x), QPointF(-b.y, -b.x))
         f = QFont()
         f.setPointSizeF(8.5)
         p.setFont(f)
@@ -173,6 +187,23 @@ class GrafikaBodu(QWidget):
 
     def _klik(self, x, y, ctrl):
         b = self.najdi(x, y)
+        if self.mod == "spojnice":
+            if b is None:  # klik do prázdna = konec lomené čáry
+                self.mereni = []
+                self.info.setText("Spojnice: klikněte na první bod")
+                self.pohled.viewport().update()
+                return
+            if self.mereni and self.mereni[0] is not b:
+                a = self.mereni[0]
+                je = self.page.spojnice.prepni(a.cislo, b.cislo)
+                self.page.uloz_spojnice()
+                self.info.setText(f"Spojnice {a.cislo} – {b.cislo} {'přidána' if je else 'smazána'}; "
+                                  f"pokračujte z bodu {b.cislo} (klik na prázdno = nová čára).")
+            else:
+                self.info.setText(f"Spojnice z bodu {b.cislo} → klikněte na další bod")
+            self.mereni = [b]
+            self.pohled.viewport().update()
+            return
         if self.mod == "mereni":
             if b is None:
                 return
@@ -206,10 +237,35 @@ class GrafikaBodu(QWidget):
         return t
 
     def _mod_mereni(self, on: bool):
+        if on and self.b_spoj.isChecked():
+            self.b_spoj.setChecked(False)
         self.mod = "mereni" if on else "vyber"
         self.mereni = []
         self.info.setText("Měření: klikněte na první bod" if on else "Klik = výběr bodu (Ctrl = přidat).")
         self.pohled.viewport().update()
+
+    def _mod_spojnice(self, on: bool):
+        if on and self.b_mer.isChecked():
+            self.b_mer.setChecked(False)
+        self.mod = "spojnice" if on else "vyber"
+        self.mereni = []
+        self.info.setText("Spojnice: klikněte na první bod" if on else "Klik = výběr bodu (Ctrl = přidat).")
+        self.pohled.viewport().update()
+
+    def spojit_podle_kodu(self, kod: str | None = None, uzavrit: bool = False) -> int:
+        if kod is None:
+            from PySide6.QtWidgets import QInputDialog
+            kody = self.page.seznam.kody()
+            if not kody:
+                self.info.setText("Body nemají kódy.")
+                return 0
+            kod, ok = QInputDialog.getItem(self, "Spojit podle kódu", "Kód bodů:", kody, 0, False)
+            if not ok or not kod:
+                return 0
+        n = self.page.spojnice.z_kodu(self.page.seznam.body, kod, uzavrit)
+        self.page.uloz_spojnice()
+        self.info.setText(f"Kód {kod}: přidáno {n} spojnic.")
+        return n
 
     def oznac(self, cisla: list[str]):
         """Výběr z tabulky → zvýraznit v grafice."""

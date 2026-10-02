@@ -315,6 +315,8 @@ class VypoctyPage(QWidget):
         super().__init__(parent)
         self.win = win
         self.seznam = SeznamBodu()
+        from ..geodezie.spojnice import Spojnice
+        self.spojnice = Spojnice()
         self._path: Path | None = None
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 12, 16, 12)
@@ -439,7 +441,18 @@ class VypoctyPage(QWidget):
                          True)
             self._path = self._path.with_name("seznam_bodu_obnoveny.json") if self._path else None
         self.model.seznam = self.seznam
+        from ..geodezie.spojnice import Spojnice
+        self.spojnice = Spojnice.nacti(self._path.with_name("spojnice.json")) if self._path else Spojnice()
         self._refresh()
+
+    def uloz_spojnice(self) -> None:
+        self.grafika.pohled.viewport().update()
+        if self._path is None:
+            return
+        try:
+            self.spojnice.uloz(self._path.with_name("spojnice.json"))
+        except OSError as e:
+            self.message(f"Spojnice nejde uložit: {e}", True)
 
     def protokol_append(self, radky: list[str]) -> None:
         """Každý výpočet se připíše do protokolu projektu (vypocty/protokol.txt) – nic se neztratí."""

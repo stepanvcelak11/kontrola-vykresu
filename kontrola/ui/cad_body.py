@@ -50,6 +50,14 @@ class BodyDialog(QDialog):
                 cb.setCurrentIndex(1)
             self.cb[klic] = cb
             f.addRow(popis + ":", cb)
+        self.cb_spoj = QComboBox()
+        self.cb_spoj.addItem("(nevkládat)", None)
+        self.cb_spoj.addItem("aktivní atributy", "aktivni")
+        for p in self._pv:
+            if p.geometrie in ("linie", None) and not p.blok:
+                self.cb_spoj.addItem(p.nazev, p)
+        self.cb_spoj.setToolTip("Spojnice nakreslené v grafice Výpočtů (mezi vkládanými body) jako úsečky")
+        f.addRow("Spojnice z grafiky:", self.cb_spoj)
         self.podle_kodu = QCheckBox("Bod s kódem buňky (např. 9.12) vložit jako buňku")
         self.podle_kodu.setChecked(True)
         self.preskocit = QCheckBox("Přeskočit body, jejichž číslo už ve výkresu je")
@@ -124,7 +132,16 @@ class BodyDialog(QDialog):
             k = self.page.kresleni
             n.znacka = Predvolba(nazev="aktivní", geometrie="bod", nastroj="bod", vrstva=k.vrstva, barva=k.barva)
         n.vyska_textu = self.page.vyska_textu
+        d = self.cb_spoj.currentData()
+        n.spojnice = d if d not in (None, "aktivni") else None
+        n.spojnice_aktivni = d == "aktivni"
         return n
+
+    def spojnice(self) -> list:
+        v = getattr(self.page.win, "vypocty", None) if self.page.win is not None else None
+        if v is None or self.zdroj.currentIndex() == 1:
+            return []
+        return v.spojnice.platne(v.seznam)
 
     def vlozit(self):
         pg = self.page
@@ -134,7 +151,8 @@ class BodyDialog(QDialog):
             return
         if not pg._je_model():
             pg.nastav_model("Model")
-        self.vysledek = vloz_body(pg.prostor, pg.historie_zmen, body, self.nastaveni(), self._pv, pg.kresleni)
+        self.vysledek = vloz_body(pg.prostor, pg.historie_zmen, body, self.nastaveni(), self._pv, pg.kresleni,
+                                  self.spojnice())
         pg._po_zmene(self.vysledek["prvky"], [])
         pg.sjtsk = True
         pg.view.zoom_all()

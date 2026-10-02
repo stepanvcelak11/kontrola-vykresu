@@ -23,6 +23,8 @@ class NastaveniBodu:
     vyska_textu: float = 1.0  # m, když předvolba výšku neurčuje
     des_vysky: int = 2
     preskocit_existujici: bool = True
+    spojnice: object | None = None  # Predvolba pro spojnice z grafiky (linie), None = nevkládat
+    spojnice_aktivni: bool = False  # spojnice aktivními atributy (když předvolba není)
 
 
 def _hleda(pv, *slova, geometrie=None):
@@ -58,7 +60,7 @@ def _predvolba_kodu(pv, kod: str, doc):
     return None, None
 
 
-def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None) -> dict:
+def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=()) -> dict:
     """Vloží body; vrací souhrn {vlozeno, preskoceno, bunky}. Vše jako jedna operace (jedno Zpět)."""
     from . import upravy as U
     doc = msp.doc
@@ -105,6 +107,14 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None) -> dict:
                 vys = pv_txt.vyska or nast.vyska_textu
                 k.zarovnani = None if pv_txt.zarovnani is None else pv_txt.zarovnani
                 nove.append(k.text((x + posun[0] * vys, y + posun[1] * vys), str(text), vys))
+        if spojnice and (nast.spojnice is not None or nast.spojnice_aktivni):
+            k.nastav_predvolbu(nast.spojnice if nast.spojnice is not None else puvodni[0])
+            if nast.spojnice is None:
+                k.vrstva = puvodni[1]
+            vlozene = {b.cislo for b in body}
+            for a, b in spojnice:  # dvojice bodů (Y, X kladné), jen mezi vkládanými body
+                if a.cislo in vlozene and b.cislo in vlozene:
+                    nove.append(k.usecka((-a.y, -a.x), (-b.y, -b.x)))
     finally:
         k.h = h
         k.nastav_predvolbu(puvodni[0])

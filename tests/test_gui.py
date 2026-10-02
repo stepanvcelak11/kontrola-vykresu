@@ -2113,3 +2113,42 @@ def test_cad_popisek(window):
         c.zadej(t)
     assert [t.dxf.text for t in c.prostor.query("TEXT")] == ["plot 2.03"]
     assert len(c.prostor.query("SOLID")) == 1
+
+
+def test_spojnice_v_grafice_a_do_cad(window):
+    from kontrola.geodezie.body import Bod
+    w = window
+    w.show_page("vypocty")
+    p = w.vypocty
+    puvodni, spoj = list(p.seznam.body), list(p.spojnice.dvojice)
+    try:
+        p.seznam.body[:] = [Bod("1", 600000, 1160000, kod="plot"), Bod("2", 600010, 1160000, kod="plot"),
+                            Bod("3", 600010, 1160010, kod="plot"), Bod("4", 600000, 1160010)]
+        p.spojnice.dvojice.clear()
+        p._after_change()
+        g = p.grafika
+        p.tabs.setCurrentWidget(g)
+        g.obnov()
+        assert g.spojit_podle_kodu("plot") == 2
+        g.b_spoj.setChecked(True)
+        for c in ("3", "4", "1"):
+            b = p.seznam.najdi(c)
+            g._klik(-b.y, -b.x, False)
+        assert len(p.spojnice) == 4
+        g._klik(0.0, 0.0, False)  # klik do prázdna = konec lomené čáry
+        g._klik(-600010, -1160010, False)  # 3 → 4 znovu = smazat
+        b4 = p.seznam.najdi("4")
+        g._klik(-b4.y, -b4.x, False)
+        assert len(p.spojnice) == 3
+        g.b_spoj.setChecked(False)
+        c = w.cad
+        w.show_page("cad")
+        c.novy()
+        d = c.body_ze_seznamu(modal=False)
+        d.cb_spoj.setCurrentIndex(d.cb_spoj.findData("aktivni"))
+        d.vlozit()
+        assert len(c.prostor.query("LINE")) == 3
+    finally:
+        p.seznam.body[:] = puvodni
+        p.spojnice.dvojice[:] = spoj
+        p._after_change()
