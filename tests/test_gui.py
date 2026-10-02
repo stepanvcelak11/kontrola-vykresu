@@ -2766,3 +2766,25 @@ def test_cad_georeference_rastru(window, tmp_path):
     a, d, b, e, cc, ff = RA.nacti_world_file(tmp_path / "nacrt.pgw")
     assert abs(a - 2) < 1e-6 and abs(cc - 1001) < 1e-6 and abs(ff - 2099) < 1e-6
     assert len(c.prostor.query("IMAGE")) == 1
+
+
+def test_cad_mracno_bodu(window, tmp_path):
+    import numpy as np
+    rng = np.random.default_rng(3)
+    xy = rng.uniform(0, 30, size=(3000, 2))
+    z = 250 + 0.2 * xy[:, 0]
+    f = tmp_path / "mracno.xyz"
+    f.write_text("\n".join(f"{-600000 + x:.3f} {-1160000 + y:.3f} {h:.3f}" for (x, y), h in zip(xy, z)), encoding="utf-8")
+    c, v = window.cad, window.vypocty
+    puvodni = list(v.seznam.body)
+    window.show_page("cad")
+    c.novy()
+    try:
+        assert c.nacti_mracno(str(f)) is not None
+        for t in ("1", "t", "vbs", "1"):
+            c.zadej(t)
+        assert len(c.prostor.query('POINT[layer=="MRACNO"]')) > 500
+        assert len(c.prostor.query('LWPOLYLINE[layer=="VRSTEVNICE_ZAKLADNI"]')) >= 4
+        assert any(b.cislo == "M1" for b in v.seznam.body)
+    finally:
+        v.seznam.body[:] = puvodni

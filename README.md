@@ -390,6 +390,9 @@ obě zdarma pro vlastní použití.
   zesílená každá n-tá, max. délka strany trojúhelníku (automaticky navržená), vyhlazení, popis zesílených
   vrstevnic s přerušením čáry, volitelně TIN jako 3D plošky; hladiny a vzhled podle zadání (je-li v něm druh
   „vrstevnice“), jinak VRSTEVNICE_ZAKLADNI / _ZESILENE / _POPIS. Vše jedno *Zpět*.
+* **Mračno bodů** (`mračno`, `las`): LAS (i 1.4, klasifikace terénu), XYZ / TXT / CSV, PLY (ASCII i binární);
+  prořídnutí do mřížky, výběr terénu (třída 2 z LAS, jinak nejnižší body bez vegetace a staveb), pak body do
+  výkresu (hladina MRACNO), vrstevnice nebo body do seznamu souřadnic (profil, kubatura). LAZ převeďte na LAS.
 * **Georeference rastru** (`georeference`, `warp`): klik na rastr, identické body v rastru → cílové souřadnice
   (Y X, `#číslo` ze seznamu, klik), shodnostní / podobnostní / afinní transformace s opravami a m0; poloha se uloží
   do world filu vedle obrázku (.jgw, .pgw, .tfw), takže rastr sedí i v QGIS, MicroStationu a AutoCADu.

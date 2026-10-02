@@ -348,6 +348,7 @@ class CadPage(QWidget):
         "knihovna buněk": "načíst buňky z knihovny MicroStationu (.CEL) nebo bloky a styly z jiného DXF",
         "vrstevnice": "model terénu: TIN a vrstevnice z výškových bodů (výběr nebo seznam souřadnic)",
         "profil": "podélný profil terénu po trase (čára ve výkresu) z výškových bodů",
+        "mračno": "mračno bodů (LAS, XYZ, PLY): prořídnutí, terén, body, vrstevnice nebo body do seznamu",
         "georeference": "transformace rastru podle identických bodů s opravami a m0, uložení world filu",
         "kódy": "kresba z kódů bodů seznamu souřadnic – linie, plochy a značky podle kódovníku a zadání",
         "kódovník": "kódovník: kód bodu → linie / plocha / značka, hladina a vzhled podle zadání",
@@ -401,7 +402,7 @@ class CadPage(QWidget):
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
         "kota polomeru": "kóta poloměru", "dimrad": "kóta poloměru", "kp": "kóta poloměru", "mp": "měř plochu", "plocha bodů": "měř plochu",
-        "warp": "georeference", "georef": "georeference", "transformace rastru": "georeference",
+        "mracno": "mračno", "las": "mračno", "point cloud": "mračno", "warp": "georeference", "georef": "georeference", "transformace rastru": "georeference",
         "kody": "kódy", "kresba z kodu": "kódy", "kresba z kódů": "kódy", "kodovnik": "kódovník",
         "tin": "vrstevnice", "profile": "profil", "podélný profil": "profil", "dtm": "vrstevnice", "contour": "vrstevnice", "contours": "vrstevnice",
         "mer plochu": "měř plochu", "measure area": "měř plochu", "mu": "měř úhel", "mer uhel": "měř úhel",
@@ -823,6 +824,63 @@ class CadPage(QWidget):
         self.vyber = nove
         self._zvyrazni()
         self.vypis(f"{len(nove)} prvků nastaveno na „{p.nazev}“.")
+
+    def nacti_mracno(self, cesta: str | None = None):
+        """Mračno bodů (XYZ, LAS, PLY) → prořídnutí / terén → body, vrstevnice nebo body do seznamu souřadnic."""
+        if self.dok is None:
+            return None
+        if cesta is None:
+            cesta, _ = QFileDialog.getOpenFileName(self, "Načíst mračno bodů", "",
+                                                   "Mračna bodů (*.las *.xyz *.txt *.csv *.pts *.ply);;Všechny (*)")
+            if not cesta:
+                return None
+        from ..geodezie import mracno as M
+        try:
+            m = M.nacti(cesta)
+        except (OSError, ValueError) as e:
+            self.vypis(f"⚠ {e}")
+            return None
+        self.vypis(f"Mračno {Path(cesta).name}: {M.souhrn(m)}.")
+        self._spust(self._n_mracno(m))
+        return m
+
+    def _n_mracno(self, m):
+        from ..cad import teren_cad as TC
+        from ..geodezie import mracno as M
+        from ..geodezie import teren as T
+        bunka = yield Pozadavek("cislo", "Prořídnutí – velikost buňky [1 m]:", vychozi=1.0)
+        r = yield Pozadavek("text", "Body: t = terén (bez vegetace a staveb), p = povrch (nejvyšší), s = střed "
+                            "buňky [t]:", vychozi="t")
+        r = (r or "t").strip().lower()[:1]
+        vyber = M.teren(m, float(bunka or 1)) if r == "t" else M.prorid(m, float(bunka or 1),
+                                                                         "povrch" if r == "p" else "stred")
+        body = vyber.do_vykresu()
+        self.vypis(f"Po prořídnutí: {M.souhrn(vyber)}.")
+        a = yield Pozadavek("text", "Výstup: v = vrstevnice, b = body do výkresu, s = do seznamu souřadnic "
+                            "(pro profil, kubaturu…), lze kombinovat [v]:", vychozi="v")
+        a = (a or "v").strip().lower()
+        if "b" in a:
+            if "MRACNO" not in self.dok.doc.layers:
+                self.dok.doc.layers.add("MRACNO", color=8)
+            nove = [self.prostor.add_point((float(x), float(y), float(z)), dxfattribs={"layer": "MRACNO"})
+                    for x, y, z in body[:100_000]]
+            self.historie_zmen.proved("Mračno bodů", nove)
+            self.vypis(f"Vloženo {len(nove)} bodů do hladiny MRACNO.")
+        if "s" in a:
+            from ..geodezie.body import Bod
+            v = getattr(self.win, "vypocty", None)
+            if v is not None:
+                nove = [Bod(f"M{i + 1}", -float(x), -float(y), float(z), poznamka="mračno")
+                        for i, (x, y, z) in enumerate(body[:200_000])]
+                n, _k = v.seznam.pridej(nove, "Mračno bodů")
+                v._after_change()
+                self.vypis(f"Do seznamu souřadnic přidáno {n} bodů (M1…).")
+        if "v" in a:
+            interval = yield Pozadavek("cislo", "Interval vrstevnic [1 m]:", vychozi=1.0)
+            pts = [tuple(map(float, b)) for b in body]
+            mod = T.model(pts, float(interval or 1), max_strana=TC.automaticka_max_strana(pts), vyhladit=2)
+            nove = TC.kresli(self.dok.doc, self.prostor, self.historie_zmen, mod, popis=True, vyska_textu=0.75)
+            self.vypis(TC.souhrn(mod) + f" Nakresleno {len(nove)} prvků.")
 
     def pripoj_rastr(self, cesta: str | None = None):
         """Rastr s world filem se umístí sám; bez něj se zeptá na levý dolní roh a šířku."""
@@ -1911,6 +1969,8 @@ class CadPage(QWidget):
             self.knihovna_bunek()
         elif cmd == "rastr":
             self.pripoj_rastr()
+        elif cmd == "mračno":
+            self.nacti_mracno()
         elif cmd == "vlastnosti":
             if len(self.vyber) != 1:
                 self.vypis("Vyberte jeden prvek (nebo na něj dvakrát klikněte).")
