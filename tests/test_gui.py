@@ -1229,6 +1229,9 @@ def test_vypocty_seznam_souradnic(window, tmp_path):
     idx = p.proxy.mapFromSource(p.model.index(0, 3))
     assert p.proxy.setData(idx, "260,5")
     assert p.seznam.najdi("1").z == 260.5
+    # index po změně znovu: starý QModelIndex filtrovacího modelu je po přefiltrování neplatný
+    # (na Windows jeho použití tiše shodí proces)
+    idx = p.proxy.mapFromSource(p.model.index(0, 3))
     assert not p.proxy.setData(idx, "abc") and "není číslo" in p.msg.text()
     # filtr podle kódu
     p.kody.setCurrentIndex(p.kody.findData("plot"))

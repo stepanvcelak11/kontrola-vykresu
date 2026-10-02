@@ -488,8 +488,11 @@ class VypoctyPage(QWidget):
         n = len(self.seznam.body)
         if not keep or n != getattr(self, "_pocet_radku", n):
             self.model.refresh()
-        else:
-            self.model.layoutChanged.emit()
+        elif n:
+            # jen nové hodnoty ve stejných řádcích: dataChanged (samotné layoutChanged bez
+            # layoutAboutToBeChanged nechá filtrovací model s neplatným mapováním řádků)
+            self.model.dataChanged.emit(self.model.index(0, 0),
+                                        self.model.index(n - 1, self.model.columnCount() - 1))
         self._pocet_radku = n
         cur = self.kody.currentData()
         self.kody.blockSignals(True)
