@@ -1300,6 +1300,45 @@ def body_po_prvku(msp, h: Historie, e, pocet: int | None = None, vzdalenost: flo
     return nove
 
 
+def souradnicova_sit(msp, h: Historie, rozsah, interval: float = 100.0, rameno: float = 2.0,
+                     popisy: bool = False, vyska_textu: float = 1.0, attrs: dict | None = None,
+                     sjtsk: bool = True) -> list:
+    """Křížky souřadnicové sítě po ``interval`` metrech v rozsahu kresby (x0, y0, x1, y1).
+
+    U S-JTSK (záporné souřadnice výkresu) jsou křížky na celých násobcích Y a X; popisy kladně
+    („Y 600 100“, „X 1 160 200“) jako na mapách. Jedna operace pro Zpět."""
+    x0, y0, x1, y1 = rozsah
+    if interval <= EPS or rameno <= EPS:
+        raise ValueError("Interval i délka ramene musí být kladné.")
+    nx = int(math.floor(x1 / interval)) - int(math.ceil(x0 / interval)) + 1
+    ny = int(math.floor(y1 / interval)) - int(math.ceil(y0 / interval)) + 1
+    if nx * ny > 20000:
+        raise ValueError("Příliš mnoho křížků – zvětšete interval.")
+    a = attrs or {"layer": "0"}
+    ta = {k: v for k, v in a.items() if k in ("layer", "color")}
+    nove = []
+
+    def cislo(v: float) -> str:
+        t = f"{abs(v):,.0f}".replace(",", " ")
+        return t
+    for i in range(int(math.ceil(x0 / interval)), int(math.floor(x1 / interval)) + 1):
+        for j in range(int(math.ceil(y0 / interval)), int(math.floor(y1 / interval)) + 1):
+            x, y = i * interval, j * interval
+            nove.append(msp.add_line((x - rameno, y), (x + rameno, y), dxfattribs=a))
+            nove.append(msp.add_line((x, y - rameno), (x, y + rameno), dxfattribs=a))
+            if popisy:
+                ty = ("Y " if sjtsk else "x ") + cislo(x)
+                tx = ("X " if sjtsk else "y ") + cislo(y)
+                t1 = msp.add_text(ty, height=vyska_textu, dxfattribs=ta)
+                t1.set_placement((x + vyska_textu * 0.3, y + vyska_textu * 0.3))
+                t2 = msp.add_text(tx, height=vyska_textu, dxfattribs=ta)
+                t2.set_placement((x + vyska_textu * 0.3, y - vyska_textu * 1.3))
+                nove += [t1, t2]
+    if nove:
+        h.proved(f"Souřadnicová síť ({len(nove) // (4 if popisy else 2)} křížků)", nove)
+    return nove
+
+
 def vyber_podle(msp, text: str) -> tuple[list, str]:
     """Výběr podle atributů (Select By Attributes) z textu: „58“ nebo „hladina 58“, „barva 3“,
     „styl DGN Style 2“, „typ text“, i kombinace oddělené středníkem („hladina 58; typ text“).

@@ -2343,3 +2343,15 @@ def test_porovnani_seznamu_v_aplikaci(window, tmp_path):
     finally:
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_souradnicova_sit(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=-600250 y=-1160150", "x=-600050 y=-1159950", ""):
+        c.zadej(t)
+    c.proved("síť")
+    for t in ("100", "2", "n"):
+        c.zadej(t)
+    assert len(c.prostor.query("LINE")) == 1 + 8

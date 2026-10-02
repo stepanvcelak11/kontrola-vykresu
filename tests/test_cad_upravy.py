@@ -395,3 +395,17 @@ def test_body_po_prvku():
     assert len(U.body_po_prvku(msp, h, c, pocet=8)) == 7
     with pytest.raises(ValueError):
         U.body_po_prvku(msp, h, l)
+
+
+def test_souradnicova_sit():
+    doc, msp, h, k = _novy()
+    nove = U.souradnicova_sit(msp, h, (-600250, -1160150, -600050, -1159950), 100, 2, popisy=True)
+    krize = {(round(l.dxf.start.x + 2), round(l.dxf.start.y)) for l in nove if l.dxftype() == "LINE"
+             and l.dxf.start.y == l.dxf.end.y}
+    assert krize == {(-600200, -1160100), (-600100, -1160100), (-600200, -1160000), (-600100, -1160000)}
+    texty = sorted(t.dxf.text for t in nove if t.dxftype() == "TEXT")
+    assert "Y 600 100" in texty and "X 1 160 000" in texty
+    h.krok_zpet()
+    assert len(msp) == 0
+    with pytest.raises(ValueError):
+        U.souradnicova_sit(msp, h, (0, 0, 1e6, 1e6), 1, 1)

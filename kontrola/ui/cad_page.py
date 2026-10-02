@@ -248,6 +248,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
         "uprav text": "upravit text kliknutím (Edit Text)",
+        "síť": "křížky souřadnicové sítě po intervalu (např. 100 m) s popisy",
         "mnohoúhelník": "pravidelný mnohoúhelník (střed, vrchol, počet stran)",
         "zhasni": "vypnout hladinu („zhasni 58“, „zhasni vše kromě 58“)", "rozsviť": "zapnout hladinu („rozsviť 58“, „rozsviť vše“)",
         "body po prvku": "body po prvku – na N dílů nebo po vzdálenosti (staničení)",
@@ -288,6 +289,7 @@ class CadPage(QWidget):
         "polygon": "mnohoúhelník", "mnohouhelnik": "mnohoúhelník", "pol": "mnohoúhelník",
         "zhasni hladinu": "zhasni", "lv off": "zhasni", "lvoff": "zhasni", "rozsvit": "rozsviť", "lv on": "rozsviť",
         "lvon": "rozsviť",
+        "sit": "síť", "grid": "síť", "krizky": "síť", "křížky": "síť",
         "et": "uprav text", "edit text": "uprav text", "edittext": "uprav text", "upravit text": "uprav text",
         "sel": "vyber", "select": "vyber", "výběr": "vyber", "vyber podle": "vyber", "sba": "vyber",
         "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
@@ -1958,6 +1960,20 @@ class CadPage(QWidget):
         self.vrstvy_zmeneny()
         self.vypis(f"{'Zapnuto' if zapnout else 'Vypnuto'} {n} hladin.")
         return n
+
+    def n_sit(self):
+        ext = self.dok.rozsah() if self.dok is not None else None
+        if ext is None:
+            raise ValueError("Výkres je prázdný – síť se kreslí v rozsahu kresby.")
+        rs = self._pravidla()
+        m = float(rs.meritko) if rs is not None and getattr(rs, "meritko", None) else 1000.0
+        i = yield Pozadavek("cislo", f"Interval sítě v metrech [{m / 10:g}]:", vychozi=m / 10)
+        r = yield Pozadavek("cislo", f"Délka ramene křížku v metrech [{m / 500:g}] (≈ 2 mm v mapě):", vychozi=m / 500)
+        p = yield Pozadavek("text", "Popisy souřadnic? a / n [n]:", vychozi="n")
+        nove = U.souradnicova_sit(self.prostor, self.historie_zmen, ext, i, r,
+                                  (p or "n").strip().lower().startswith("a"), self.vyska_textu,
+                                  self.kresleni._attr(), self.sjtsk)
+        self.vypis(f"Vloženo {len(nove)} prvků souřadnicové sítě.")
 
     def n_uprav_text(self):
         while True:
