@@ -1675,6 +1675,109 @@ def rozdel(msp, h: Historie, e, bod) -> list:
     return [a, b]
 
 
+def _segmenty(pts, zavrena):
+    q = list(pts) + ([pts[0]] if zavrena else [])
+    return [(q[i], q[i + 1]) for i in range(len(q) - 1)]
+
+
+def _staniceni_na(pts, zavrena, bod) -> float:
+    """Staničení nejbližšího bodu na lomené čáře."""
+    px, py = _xy(bod)
+    best, s0 = None, 0.0
+    for (x1, y1), (x2, y2) in _segmenty(pts, zavrena):
+        dx, dy = x2 - x1, y2 - y1
+        ll = math.hypot(dx, dy)
+        if ll > 0:
+            tt = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / (ll * ll)))
+            d = math.hypot(x1 + tt * dx - px, y1 + tt * dy - py)
+            if best is None or d < best[0]:
+                best = (d, s0 + tt * ll)
+        s0 += ll
+    return best[1] if best else 0.0
+
+
+def _cast_lomene(pts, zavrena, sa: float, sb: float) -> list:
+    """Body lomené čáry od staničení sa do sb (sa < sb; u uzavřené může sb přesahovat obvod)."""
+    seg = _segmenty(pts, zavrena)
+    delky = [math.dist(a, b) for a, b in seg]
+    obvod = sum(delky)
+    out = []
+
+    def bod_na(st):
+        st = st % obvod if zavrena and obvod > 0 else min(max(st, 0.0), obvod)
+        s0 = 0.0
+        for (a, b), ll in zip(seg, delky):
+            if st <= s0 + ll + 1e-12 and ll > 0:
+                tt = (st - s0) / ll
+                return (a[0] + tt * (b[0] - a[0]), a[1] + tt * (b[1] - a[1]))
+            s0 += ll
+        return seg[-1][1]
+
+    out.append(bod_na(sa))
+    s0 = 0.0
+    kola = [0.0, obvod] if zavrena else [0.0]
+    for k in kola:
+        s0 = k
+        for (_a, b), ll in zip(seg, delky):
+            s0 += ll
+            if sa + 1e-9 < s0 < sb - 1e-9:
+                out.append(tuple(b[:2]))
+    out.append(bod_na(sb))
+    return out
+
+
+def smaz_cast(msp, h: Historie, e, b1, b2) -> list:
+    """Smaže část prvku mezi dvěma body (Delete Part of Element). Úsečka a otevřená polylinie se rozpadnou
+    na dvě části, uzavřená polylinie a kružnice se otevřou (maže se od prvního bodu ke druhému proti směru
+    hodin u kružnice, ve směru vrcholů u polylinie), oblouk se zkrátí nebo rozdělí."""
+    t = e.dxftype()
+    attrs = {k: e.dxf.get(k) for k in ("layer", "color", "linetype", "lineweight", "ltscale") if e.dxf.hasattr(k)}
+    nove = []
+    if t in ("LINE", "LWPOLYLINE"):
+        if t == "LWPOLYLINE" and any(abs(p[4]) > 1e-12 for p in e.get_points("xyseb")):
+            raise ValueError("Polylinii s oblouky nejdřív rozpojte (příkaz rozpoj).")
+        pts = ([_xy(e.dxf.start), _xy(e.dxf.end)] if t == "LINE"
+               else [tuple(p[:2]) for p in e.get_points("xy")])
+        zavrena = t == "LWPOLYLINE" and bool(e.closed)
+        s1, s2 = _staniceni_na(pts, zavrena, b1), _staniceni_na(pts, zavrena, b2)
+        celk = sum(math.dist(a, b) for a, b in _segmenty(pts, zavrena))
+        if abs(s1 - s2) < EPS:
+            raise ValueError("Zadejte dva různé body na prvku.")
+        if zavrena:
+            if s2 < s1:
+                s2 += celk
+            casti = [_cast_lomene(pts, True, s2, s1 + celk)]
+        else:
+            sa, sb = min(s1, s2), max(s1, s2)
+            casti = [c for c in (_cast_lomene(pts, False, 0.0, sa), _cast_lomene(pts, False, sb, celk))
+                     if sum(math.dist(a, b) for a, b in zip(c, c[1:])) > EPS]
+        for c in casti:
+            if len(c) == 2:
+                nove.append(msp.add_line(c[0], c[1], dxfattribs=attrs))
+            else:
+                nove.append(msp.add_lwpolyline(c, format="xy", dxfattribs=attrs))
+    elif t in ("ARC", "CIRCLE"):
+        c = e.dxf.center
+        r = e.dxf.radius
+        u1, u2 = (math.degrees(math.atan2(_xy(b)[1] - c.y, _xy(b)[0] - c.x)) % 360 for b in (b1, b2))
+        if t == "CIRCLE":
+            nove.append(msp.add_arc((c.x, c.y), r, u2, u1, dxfattribs=attrs))
+        else:
+            a0, a1 = e.dxf.start_angle % 360, e.dxf.end_angle % 360
+            rozsah = (a1 - a0) % 360 or 360.0
+            p1, p2 = sorted(((u1 - a0) % 360, (u2 - a0) % 360))
+            if p1 > rozsah:
+                p1 = rozsah
+            p2 = min(p2, rozsah)
+            for z, k in ((0.0, p1), (p2, rozsah)):
+                if k - z > 1e-6:
+                    nove.append(msp.add_arc((c.x, c.y), r, a0 + z, a0 + k, dxfattribs=attrs))
+    else:
+        raise ValueError("Část jde smazat u úsečky, polylinie, kružnice nebo oblouku.")
+    h.proved("Smazání části", nove, [e])
+    return nove
+
+
 def popis_delek(msp, h: Historie, ents, vyska: float, des: int = 2, vrstva: str | None = None,
                 odsazeni: float = 0.4, attrs: dict | None = None) -> list:
     """Oměrné míry: délka každé strany úsečky / polylinie jako text rovnoběžně se stranou nad jejím středem."""

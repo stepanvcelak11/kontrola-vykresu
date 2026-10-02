@@ -2093,6 +2093,7 @@ def test_cad_transformace_vykresu(window):
     kr = c.prostor.query("CIRCLE")[0]
     assert kr.dxf.radius == pytest.approx(2) and (kr.dxf.center.x, kr.dxf.center.y) == pytest.approx((90, 210))
     assert "m0 = 0.0 mm" in c.historie.toPlainText()
+    assert len(c.index.polozky) == len(c.prostor) == 2 and all(len(v) == 1 for v in c._polozky.values())
     c.undo()
     assert c.prostor.query("LINE")[0].dxf.end.x == pytest.approx(10)
 
@@ -2135,6 +2136,8 @@ def test_cad_skupiny(window, tmp_path):
     c.vyber = []
     c.vyber_v_bode(5, 105, pridat=False)
     assert len(c.vyber) == 2  # skupina zůstane i po posunu (prvky se kopírují)
+    assert len(c.index.polozky) == len(c.prostor) == 3  # nic se nezdvojilo
+    assert all(len(v) == 1 for v in c._polozky.values())
     p = c.uloz(path=str(tmp_path / "skupiny.dxf"))
     c.otevri(str(p))
     c.vyber_v_bode(5, 100, pridat=False)

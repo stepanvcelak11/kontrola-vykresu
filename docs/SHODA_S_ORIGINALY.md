@@ -53,7 +53,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Propojení s Kontrolou výkresu | ✅ |
 | Kreslení: bod, úsečka, polylinie, obdélník, mnohoúhelník, oblouk (3 body, středem), kružnice (střed, 3 body, průměr), elipsa, křivka, text, popisek s odkazovou čárou, šrafa, kóta (i řetězová), kóta úhlu a poloměru, oměrné míry | ✅ |
 | Zadávání bodů: Y X, @dx,dy, @délka<směrník, key-iny xy= / dl= / di=, číslo bodu ze seznamu (#4001), délka číslem ve směru kurzoru (jako AccuDraw) | ✅ |
-| Úpravy: výběr (klik, okno, protínající okno, ohrada, podle atributů), posun, natažení oknem (Fence Stretch), kopie (i v řadě), pole obdélníkové a kruhové, otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, zkosení, rozdělení, body po prvku, vložení / smazání / posun vrcholu, spojení, rozpojení, mazání, úprava textu, převzetí a změna atributů | ✅ |
+| Úpravy: výběr (klik, okno, protínající okno, ohrada, podle atributů), posun, natažení oknem (Fence Stretch), smazání části prvku (Delete Part of Element), kopie (i v řadě), pole obdélníkové a kruhové, otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, zkosení, rozdělení, body po prvku, vložení / smazání / posun vrcholu, spojení, rozpojení, mazání, úprava textu, převzetí a změna atributů | ✅ |
 | Schránka Ctrl+C / Ctrl+V mezi výkresy (i s hladinami, styly a buňkami, na stejné souřadnice) | ✅ |
 | Pohledy: celý výkres, přiblížit oknem, předchozí pohled, kolečko | ✅ |
 | Hladiny příkazem (zhasni / rozsviť, i „vše kromě“) | ✅ |

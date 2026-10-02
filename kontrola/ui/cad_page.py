@@ -280,6 +280,7 @@ class CadPage(QWidget):
         "kóta poloměru": "kóta poloměru kružnice / oblouku",
         "skupina": "vytvořit skupinu prvků z výběru (Graphic Group) – klik na prvek pak vybere celou skupinu",
         "zruš skupinu": "vyjmout vybrané prvky ze skupiny", "zámek skupin": "zapnout / vypnout výběr celých skupin",
+        "smaž část": "smazat část prvku mezi dvěma body (Delete Part of Element)",
         "natáhni": "natažení: vrcholy v okně se posunou, zbytek prvků zůstane (Fence Stretch)",
         "transformace": "transformace výkresu (výběru) podle identických bodů – shodnostní, podobnostní, afinní",
         "převod atributů": "převod výkresu na pravidla ze zadání podle značek (buňky, styly čar) a vrstev",
@@ -1984,7 +1985,6 @@ class CadPage(QWidget):
             self.vypis("Transformace zrušena.")
             return
         nove, _tr, podob = U.transformace_vykresu(self.prostor, self.historie_zmen, ents, zdroj, cil, druh)
-        self._po_zmene(nove, ents)
         self.vyber = []
         self._zvyrazni()
         self.view.zoom_all()
@@ -2044,7 +2044,6 @@ class CadPage(QWidget):
         navrh = PV.navrhni(ents, self._predvolby, mapa)
         priprav_dokument(self.dok.doc, rs)  # vrstvy, styly čar a písma cílových pravidel
         nove, stare = PV.proved(self.dok.doc, self.prostor, self.historie_zmen, navrh, k)
-        self._po_zmene(nove, stare)
         self._napln_vrstvy()
         self.vyber = []
         self._zvyrazni()
@@ -2170,7 +2169,6 @@ class CadPage(QWidget):
             raise ValueError("Skupina potřebuje aspoň dva prvky.")
         g = U.nova_skupina(self.prostor)
         nove = U.nastav_skupinu(self.prostor, self.historie_zmen, ents, g)
-        self._po_zmene(nove, ents)
         self._hotovo_vyber(nove)
         self.vypis(f"Skupina {g}: {len(nove)} prvků. Klik na kterýkoli z nich vybere celou skupinu"
                    + ("" if getattr(self, "zamek_skupin", True) else " (po zapnutí „zámek skupin“)") + ".")
@@ -2181,7 +2179,6 @@ class CadPage(QWidget):
         if not ents:
             raise ValueError("Vybrané prvky nejsou ve skupině.")
         nove = U.nastav_skupinu(self.prostor, self.historie_zmen, ents, None)
-        self._po_zmene(nove, ents)
         self._hotovo_vyber(nove)
         self.vypis(f"{len(nove)} prvků vyjmuto ze skupiny.")
 
@@ -2191,6 +2188,15 @@ class CadPage(QWidget):
                                       else "vypnut – klik vybere jen jeden prvek."))
         return
         yield  # generátor
+
+    def n_smaz_cast(self):
+        while True:
+            e, k = yield Pozadavek("prvek", "Smazat část – klikněte na prvek v prvním bodě (Esc = konec):")
+            b = yield self._bod_req("Druhý bod (konec mazané části):", k)
+            try:
+                U.smaz_cast(self.prostor, self.historie_zmen, e, k, b)
+            except ValueError as ex:
+                self.vypis(f"⚠ {ex}")
 
     def n_natahni(self):
         a = yield self._bod_req("Natažení – první roh okna (vrcholy uvnitř se posunou):")

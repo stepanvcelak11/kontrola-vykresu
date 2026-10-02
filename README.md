@@ -357,6 +357,7 @@ obě zdarma pro vlastní použití.
   GEO-V8.CEL od učitele) nebo bloky a styly z jiného DXF. Buňka má barvu a tloušťku podle vložení (jako
   bodová buňka). Knihovnu .CEL přetaženou do *Zadání* CAD převezme sám při *Nový podle zadání*.
   Vložená buňka dostane aktivní barvu a tloušťku a měřítko buňky z pravidla (např. 0,5 pro 1:500).
+* **Smazat část** (`smaž část`, `delete part`): část úsečky, polylinie, kružnice nebo oblouku mezi dvěma body.
 * **Natažení** (`natáhni`, `stretch`): vrcholy v okně se posunou, zbytek prvku zůstane (Fence Stretch).
 * **Skupiny prvků** (`skupina`, `zruš skupinu`, `zámek skupin`): jako Graphic Group – klik na prvek vybere
   celou skupinu; skupina vydrží posun, kopie i uložení do DXF.
