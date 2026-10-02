@@ -42,6 +42,14 @@ spustit. Windows může upozornit na neznámého vydavatele: *Další informace 
 Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnete přes
 *Code → Download ZIP*). Program si můžete sestavit i sami, viz [Sestavení .exe](#sestavení-exe).
 
+### Bez .exe – když Windows program zablokuje (Inteligentní řízení aplikací)
+
+1. Nainstalujte **Python 3.12** z **Microsoft Store** (vyhledejte „Python 3.12“, Získat).
+2. Stáhněte aplikaci jako ZIP: [kontrola-vykresu-main.zip](https://github.com/stepanvcelak11/kontrola-vykresu/archive/refs/heads/main.zip)
+   a rozbalte ho (pravé tlačítko → Extrahovat vše).
+3. Ve složce dvakrát klikněte na **`spustit_python.bat`**. Poprvé se několik minut připravují knihovny,
+   další spuštění je rychlé. Novou verzi získáte stažením ZIPu znovu (složku `.venv` můžete přenést).
+
 ### Z Pythonu (Windows, Python 3.11 nebo novější)
 
 ```bat
