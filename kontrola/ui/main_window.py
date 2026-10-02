@@ -757,7 +757,9 @@ class MainWindow(QMainWindow):
         if qtrig:
             self.show_page("vypocty")
             dlg = self.vypocty.qtrig_dialog()
-            dlg.zakazka.setEditText(nazev)
+            if dlg.klient.token:
+                dlg.obnov_zakazky()
+            dlg.vyber_zakazku(nazev)
             return dlg
         return None
 

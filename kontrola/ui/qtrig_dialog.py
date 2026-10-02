@@ -34,20 +34,26 @@ class QTrigDialog(QDialog):
         g = QGroupBox("Firemní cloud QTrig")
         f = QFormLayout(g)
         self.kod = QLineEdit(s.value("qtrig/kod", ""))
-        self.kod.setPlaceholderText("kód účtu (8 znaků) nebo kód firmy")
+        self.kod.setPlaceholderText("kód účtu – stejný jako při přihlášení v QTrig")
         self.jmeno = QLineEdit(s.value("qtrig/jmeno", ""))
-        self.jmeno.setPlaceholderText("jen u starších firemních účtů (kód firmy + jméno)")
+        self.jmeno.setPlaceholderText("jméno uživatele ve firmě")
+        self.stary_ucet = QCheckBox("Starší firemní účet (kód firmy + jméno)")
+        self.stary_ucet.setChecked(bool(s.value("qtrig/jmeno", "")))
         self.heslo = QLineEdit()
         self.heslo.setEchoMode(QLineEdit.Password)
         self.b_login = QPushButton("Přihlásit")
         r = QHBoxLayout()
         r.addWidget(self.heslo, 1)
         r.addWidget(self.b_login)
-        f.addRow("Kód", self.kod)
-        f.addRow("Jméno", self.jmeno)
+        f.addRow("Kód účtu", self.kod)
         f.addRow("Heslo", r)
+        f.addRow(self.stary_ucet)
+        f.addRow("Jméno", self.jmeno)
+        self._jmeno_popisek = f.labelForField(self.jmeno)
+        self.stary_ucet.toggled.connect(self._ukaz_jmeno)
+        self._ukaz_jmeno(self.stary_ucet.isChecked())
         self.zakazka = QComboBox()
-        self.zakazka.setEditable(True)
+        self.zakazka.setEditable(False)  # po přihlášení se nabídnou všechny zakázky účtu
         self.zakazka.setToolTip("Zakázka se páruje podle názvu – jako mezi mobily v QTrig")
         self.b_obnov = QPushButton("↻")
         self.b_obnov.setToolTip("Načíst seznam zakázek ze serveru")
@@ -99,6 +105,20 @@ class QTrigDialog(QDialog):
             self.zakazka.addItem(posledni, Q.klic_zakazky(posledni))
         self._obnov_stav()
 
+    def vyber_zakazku(self, nazev: str) -> None:
+        """Zvolí zakázku podle názvu (nový projekt se jmenuje jako zakázka); neznámou přidá."""
+        from PySide6.QtCore import Qt as _Qt
+        i = self.zakazka.findText(nazev, _Qt.MatchFixedString)
+        if i < 0:
+            self.zakazka.addItem(nazev, Q.klic_zakazky(nazev))
+            i = self.zakazka.count() - 1
+        self.zakazka.setCurrentIndex(i)
+
+    def _ukaz_jmeno(self, on: bool):
+        self.jmeno.setVisible(on)
+        if self._jmeno_popisek is not None:
+            self._jmeno_popisek.setVisible(on)
+
     # ------------------------------------------------------------ stav
     def _obnov_stav(self, text: str | None = None, warn: bool = False):
         prihlasen = bool(self.klient.token)
@@ -125,14 +145,15 @@ class QTrigDialog(QDialog):
             self._obnov_stav("Zadejte kód a heslo.", True)
             return False
         try:
-            self._cekej(lambda: self.klient.prihlas(kod, heslo, self.jmeno.text()))
+            jmeno = self.jmeno.text() if self.stary_ucet.isChecked() else ""
+            self._cekej(lambda: self.klient.prihlas(kod, heslo, jmeno))
         except Q.ChybaQTrig as e:
             self._obnov_stav(str(e), True)
             return False
         self.heslo.clear()
         s = _nastaveni()
         s.setValue("qtrig/kod", kod)
-        s.setValue("qtrig/jmeno", self.jmeno.text().strip())
+        s.setValue("qtrig/jmeno", self.jmeno.text().strip() if self.stary_ucet.isChecked() else "")
         s.setValue("qtrig/token", self.klient.token)
         self._obnov_stav()
         self.obnov_zakazky()
@@ -152,16 +173,20 @@ class QTrigDialog(QDialog):
             return []
         akt = self.zakazka.currentText()
         self.zakazka.clear()
-        for j in jobs:
+        self.zakazka.setEditable(not jobs)
+        for j in sorted(jobs, key=lambda j: (j.get("name") or j.get("key") or "").lower()):
             self.zakazka.addItem(j.get("name") or j.get("key"), j.get("key"))
         if akt:
             i = self.zakazka.findText(akt)
             if i >= 0:
                 self.zakazka.setCurrentIndex(i)
-            else:
+            elif self.zakazka.isEditable():
                 self.zakazka.setEditText(akt)
-        if not jobs:
-            self._obnov_stav("Server zatím nezná žádnou zakázku firmy – napište název zakázky přesně jako v QTrig.")
+        if jobs:
+            self._obnov_stav(f"Přihlášeno – {len(jobs)} zakázek, vyberte jednu a stáhněte body.")
+        else:
+            self._obnov_stav("Server zatím nezná žádnou zakázku – v QTrig u zakázky zapněte sdílení do cloudu "
+                             "(níže), nebo napište název zakázky přesně jako v QTrig.")
         return jobs
 
     def _chyba(self, e):

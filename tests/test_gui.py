@@ -2294,7 +2294,9 @@ def test_qtrig_z_cloudu_a_ze_souboru(window, tmp_path, monkeypatch):
     try:
         d.kod.setText("ABCD1234")
         assert not d.prihlas("spatne") and "heslo" in d.stav.text()
+        assert not d.jmeno.isVisibleTo(d)  # u účtu stačí kód a heslo, jméno jen u starých firemních účtů
         assert d.prihlas("heslo") and d.zakazka.count() == 1
+        assert not d.zakazka.isEditable() and "zakázek" in d.stav.text()  # výběr ze zakázek účtu
         assert d.stahni() == (2, 0, 0)
         assert p.seznam.najdi("QT1") is not None and abs(p.seznam.najdi("QT1").y - 743011.7706) < 0.001
         srv.radky.append(_radek(3, "a", deleted=1))
