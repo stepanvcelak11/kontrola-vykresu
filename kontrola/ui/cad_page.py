@@ -939,7 +939,9 @@ class CadPage(QWidget):
             if e is not None:
                 self._polozky.setdefault(id(e), []).append(it)
 
-    def _obnov_indexy(self):
+    def _obnov_indexy(self, pridano=None, odebrano=()):
+        """Úchyty a index výběru. Po běžné úpravě (``pridano``/``odebrano``) se index výběru jen doplní –
+        u výkresu s desítkami tisíc prvků by přepočet celého výkresu trval sekundy."""
         msp = self.prostor
         skryte, zamcene = set(), set()
         for ly in self.dok.doc.layers:
@@ -947,14 +949,20 @@ class CadPage(QWidget):
                 skryte.add(ly.dxf.name)
             if ly.is_locked():
                 zamcene.add(ly.dxf.name)
+        nevybiratelne = skryte | zamcene
         viditelne = [e for e in msp if e.dxf.get("layer", "0") not in skryte]
+        if pridano is not None and self.index is not None and getattr(self.index, "msp", None) is msp:
+            self.view.uchyty = Uchyty(viditelne + [e for r in getattr(self, "reference", []) if self._je_model()
+                                                   and r.viditelna and r.uchyty and r.pripojena
+                                                   for e in r.prvky_pro_uchyty()])
+            self.index.zmen(pridano, odebrano, lambda e: e.dxf.get("layer", "0") in nevybiratelne)
+            return
         if self._je_model():
             for r in getattr(self, "reference", []):
                 if r.viditelna and r.uchyty and r.pripojena:
                     viditelne += r.prvky_pro_uchyty()
         self.view.uchyty = Uchyty(viditelne)
         self.index = U.IndexVyberu(msp)
-        nevybiratelne = skryte | zamcene
         if nevybiratelne:
             self.index.polozky = [p for p in self.index.polozky if p[0].dxf.get("layer", "0") not in nevybiratelne]
 
@@ -994,7 +1002,7 @@ class CadPage(QWidget):
                     sc.removeItem(it)
         if pridano:
             self._kresli_entity(list(pridano))
-        self._obnov_indexy()
+        self._obnov_indexy(pridano, odebrano)
         self.vyber = [e for e in self.vyber if e.dxf.owner is not None]
         self._zvyrazni()
         self._titulek()

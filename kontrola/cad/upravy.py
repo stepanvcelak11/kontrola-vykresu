@@ -39,8 +39,7 @@ class Historie:
     def proved(self, nazev: str, pridano=(), odebrano=()) -> Operace:
         """Zaznamená operaci: ``pridano`` už jsou v modelu, ``odebrano`` se teď z modelu odpojí."""
         op = Operace(nazev, list(pridano), list(odebrano))
-        for e in op.odebrano:
-            self._odpoj(e)
+        self._odpoj_vse(op.odebrano)
         self.zpet.append(op)
         self.vpred.clear()
         self.zmena += 1
@@ -50,6 +49,23 @@ class Historie:
         if e.dxf.owner is not None:
             self.msp.unlink_entity(e)
 
+    def _odpoj_vse(self, ents):
+        """Odpojí prvky z modelu. Hodně prvků najednou jedním průchodem (po jednom je to O(n²) –
+        u výkresu s desítkami tisíc prvků by posun nebo Zpět trvaly minuty)."""
+        ents = [e for e in ents if e.dxf.owner is not None]
+        if len(ents) < 64:
+            for e in ents:
+                self.msp.unlink_entity(e)
+            return
+        space = self.msp.entity_space
+        pryc = {id(e) for e in ents}
+        space.entities = [e for e in space.entities if id(e) not in pryc]
+        for e in ents:
+            try:
+                e.set_owner(None)
+            except AttributeError:
+                pass
+
     def _pripoj(self, e):
         if e.dxf.owner is None:
             self.msp.add_entity(e)
@@ -58,8 +74,7 @@ class Historie:
         if not self.zpet:
             return None
         op = self.zpet.pop()
-        for e in reversed(op.pridano):
-            self._odpoj(e)
+        self._odpoj_vse(list(reversed(op.pridano)))
         for e in op.odebrano:
             self._pripoj(e)
         self.vpred.append(op)
@@ -70,8 +85,7 @@ class Historie:
         if not self.vpred:
             return None
         op = self.vpred.pop()
-        for e in op.odebrano:
-            self._odpoj(e)
+        self._odpoj_vse(op.odebrano)
         for e in op.pridano:
             self._pripoj(e)
         self.zpet.append(op)
@@ -928,26 +942,62 @@ def spoj(msp, h, ents, tol: float = 1e-6):
 
 # ------------------------------------------------------------------ výběr (hledání prvků pod kurzorem)
 class IndexVyberu:
-    """Geometrie prvků pro výběr kliknutím a oknem (Shapely, plná přesnost)."""
+    """Geometrie prvků pro výběr kliknutím, oknem a ohradou (Shapely, plná přesnost).
+
+    Prostorový index (STRtree) a slovník prvek → geometrie se staví líně, takže i výkres
+    s desítkami tisíc prvků se vybírá okamžitě."""
 
     def __init__(self, msp):
         self.msp = msp
         self.obnov()
 
+    @property
+    def polozky(self):
+        return self._polozky
+
+    @polozky.setter
+    def polozky(self, hodnota):
+        self._polozky = list(hodnota)
+        self._podle_id = None
+        self._strom = None
+
     def obnov(self):
-        self.polozky = []
+        polozky = []
         for e in self.msp:
             g = geometrie(e)
             if g is not None and not g.is_empty:
-                self.polozky.append((e, g, g.bounds))
+                polozky.append((e, g, g.bounds))
+        self.polozky = polozky
+
+    def zmen(self, pridano=(), odebrano=(), vynechat=lambda e: False) -> None:
+        """Přírůstková změna po úpravě (místo přepočtu celého výkresu)."""
+        pryc = {id(e) for e in odebrano} | {id(e) for e in pridano}
+        polozky = [p for p in self._polozky if id(p[0]) not in pryc] if pryc else list(self._polozky)
+        for e in pridano:
+            if e.dxf.owner is None or vynechat(e):
+                continue
+            g = geometrie(e)
+            if g is not None and not g.is_empty:
+                polozky.append((e, g, g.bounds))
+        self.polozky = polozky
+
+    def _index(self):
+        if self._strom is None:
+            from shapely.strtree import STRtree
+            self._strom = STRtree([g for _e, g, _bb in self._polozky])
+        return self._strom
+
+    def _kandidati(self, geom, predikat=None) -> list:
+        if not self._polozky:
+            return []
+        idx = self._index().query(geom, predicate=predikat)
+        return [self._polozky[i] for i in sorted(int(i) for i in idx)]
 
     def najdi(self, x, y, tol) -> object | None:
-        from shapely.geometry import Point
+        from shapely.geometry import Point, box
         p = Point(x, y)
         best, bd = None, tol
-        for e, g, (x0, y0, x1, y1) in self.polozky:
-            if x < x0 - tol or x > x1 + tol or y < y0 - tol or y > y1 + tol:
-                continue
+        for e, g, _bb in self._kandidati(box(x - tol, y - tol, x + tol, y + tol)):
             d = g.distance(p)
             if d <= bd:
                 best, bd = e, d
@@ -959,22 +1009,17 @@ class IndexVyberu:
         poly = Polygon([_xy(p) for p in body])
         if not poly.is_valid or poly.area <= 0:
             raise ValueError("Ohrada musí být mnohoúhelník aspoň ze tří bodů.")
-        return [e for e, g, _bb in self.polozky if (poly.intersects(g) if protinajici else poly.contains(g))]
+        return [e for e, _g, _bb in self._kandidati(poly, "intersects" if protinajici else "contains")]
 
     def okno(self, x0, y0, x1, y1, protinajici: bool = False) -> list:
         from shapely.geometry import box
         b = box(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
-        out = []
-        for e, g, _bb in self.polozky:
-            if (b.intersects(g) if protinajici else b.contains(g)):
-                out.append(e)
-        return out
+        return [e for e, _g, _bb in self._kandidati(b, "intersects" if protinajici else "contains")]
 
     def geometrie(self, e):
-        for f, g, _bb in self.polozky:
-            if f is e:
-                return g
-        return None
+        if self._podle_id is None:
+            self._podle_id = {id(f): g for f, g, _bb in self._polozky}
+        return self._podle_id.get(id(e))
 
 
 def _cesta(e):
