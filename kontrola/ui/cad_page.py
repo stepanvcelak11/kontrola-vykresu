@@ -1749,15 +1749,11 @@ class CadPage(QWidget):
             self.vypis("Prvek není uzavřený obrazec.")
             return
         e = self.vyber[0]
-        if e.dxftype() == "LWPOLYLINE" and not any(abs(b) > 1e-12 for *_x, b in e.get_points("xyb")):
-            body = [(x, y) for x, y in e.get_points("xy")]
-            from ..geodezie.vypocty import vymera
-            p = vymera(body)
-        elif e.dxftype() == "CIRCLE":
-            p = math.pi * e.dxf.radius ** 2
-        else:
+        p = U.vymera_prvku(e)
+        if p is None:
             p = Polygon(g.coords).area
-        self.vypis(f"Výměra {p:.2f} m², obvod {g.length + (0 if g.is_closed else math.dist(g.coords[0], g.coords[-1])):.3f} m")
+        obvod = U._delka_jednoho(e) or (g.length + (0 if g.is_closed else math.dist(g.coords[0], g.coords[-1])))
+        self.vypis(f"Výměra {p:.2f} m², obvod {obvod:.3f} m")
 
     # ------------------------------------------------------------ nástroje kreslení
     def _bod_seznamu(self, cislo: str):

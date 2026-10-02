@@ -1223,7 +1223,8 @@ def vlastnosti(e) -> list[tuple[str, str, object]]:
                 ("_delka", "Délka", _delka_jednoho(e) or 0.0)]
         if e.closed:
             from shapely.geometry import Polygon
-            out.append(("_vymera", "Výměra [m²]", Polygon(g.coords).area if g is not None else 0.0))
+            v = vymera_prvku(e)
+            out.append(("_vymera", "Výměra [m²]", v if v is not None else (Polygon(g.coords).area if g else 0.0)))
     return out
 
 
@@ -1367,6 +1368,36 @@ def _delka_jednoho(e) -> float | None:
         return float(sum(a.distance(b) for a, b in zip(pts, pts[1:])))
     except Exception:  # noqa: BLE001
         return None
+
+
+def vymera_prvku(e) -> float | None:
+    """Přesná výměra uzavřeného prvku: polylinie i s oblouky (mnohoúhelník + kruhové úseče),
+    kružnice, elipsa; jinak None. Obvod viz ``_delka_jednoho``."""
+    t = e.dxftype()
+    if t == "CIRCLE":
+        return math.pi * e.dxf.radius ** 2
+    if t == "ELLIPSE":
+        a = e.dxf.major_axis.magnitude
+        return math.pi * a * a * e.dxf.ratio if abs((e.dxf.end_param - e.dxf.start_param) - math.tau) < 1e-9 else None
+    if t != "LWPOLYLINE":
+        return None
+    pts = list(e.get_points("xyb"))
+    uzavrena = e.closed or (len(pts) > 2 and math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) < 1e-9)
+    if not uzavrena or len(pts) < 2:
+        return None
+    if not e.closed:
+        pts = pts[:-1] + [(pts[-1][0], pts[-1][1], pts[-1][2])]
+    n = len(pts)
+    s2, useky = 0.0, 0.0
+    for i in range(n if e.closed else n - 1):
+        (x1, y1, b), (x2, y2, _b) = pts[i], pts[(i + 1) % n]
+        s2 += x1 * y2 - x2 * y1
+        if abs(b) > 1e-12:
+            c = math.hypot(x2 - x1, y2 - y1)
+            u = 4 * math.atan(abs(b))
+            r = c / (2 * math.sin(u / 2))
+            useky += math.copysign(r * r / 2 * (u - math.sin(u)), b)
+    return abs(s2 / 2 + useky)
 
 
 def delka_prvku(ents) -> tuple[float, int]:

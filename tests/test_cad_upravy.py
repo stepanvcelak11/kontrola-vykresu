@@ -427,3 +427,15 @@ def test_delka_oblouku_a_polylinie_s_obloukem():
     p = msp.add_lwpolyline([(0, 0, 0, 0, 1.0), (2, 0, 0, 0, 0)], format="xyseb")  # půlkružnice r = 1
     d, n = U.delka_prvku([a, p])
     assert n == 2 and d == pytest.approx(math.pi + math.pi, abs=1e-9)
+
+
+def test_vymera_s_oblouky():
+    doc, msp, h, k = _novy()
+    # čtverec 2×2 s jednou stranou nahrazenou půlkruhem ven (r = 1)
+    p = msp.add_lwpolyline([(0, 0, 0, 0, 0), (2, 0, 0, 0, 0), (2, 2, 0, 0, 1.0), (0, 2, 0, 0, 0)],
+                           format="xyseb", close=True)
+    assert U.vymera_prvku(p) == pytest.approx(4 + math.pi / 2, abs=1e-12)
+    p2 = msp.add_lwpolyline([(0, 0, 0, 0, 0), (2, 0, 0, 0, 0), (2, 2, 0, 0, -1.0), (0, 2, 0, 0, 0)],
+                            format="xyseb", close=True)
+    assert U.vymera_prvku(p2) == pytest.approx(4 - math.pi / 2, abs=1e-12)  # půlkruh dovnitř
+    assert U.vymera_prvku(k.kruznice((0, 0), 2)) == pytest.approx(4 * math.pi)
