@@ -59,7 +59,9 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Zpět/Vpřed bez omezení | ✅ |
 | Vrstvy: správce (zapnutí, zmrazení, zámek, barva, typ čáry, tloušťka, nová, přejmenovat, smazat, aktuální, výběr prvků vrstvy) | ✅ |
 | Bloky (buňky): tvorba z výběru, vložení s měřítkem a natočením, rozpojení | ✅ |
-| Knihovna buněk: buňky, typy čar a styly textu z jiného DXF nebo .lin (příkaz „knihovna“) | ✅ |
+| Knihovna buněk: buňky z knihovny MicroStationu .CEL (V8), buňky, typy čar a styly textu z jiného DXF nebo .lin (příkaz „knihovna“, „rc“) | ✅ | NORMA.CEL 170 buněk, GEO-V8.CEL 256 buněk |
+| Vložení buňky s aktivní barvou, tloušťkou a měřítkem buňky ze zadání | ✅ |
+| Převod atributů na jiná pravidla podle značek (buňky, styly čar) a vrstev, s poměrem měřítek (příkaz „převod“) | ✅ | úloha Zadání-převod |
 | Vlastnosti prvku (dvojklik: vrstva, barva, styl, tloušťka, souřadnice, poloměr, text…), výběr podobných, výběr prvků vrstvy, najít a nahradit text | ✅ |
 | Výkres podle zadání: vrstvy, typy čar, písma a buňky ze Směrnice / zadání / vzorového výkresu; druh prvku → atributy se nastaví samy (ověřeno kontrolou symbologie na obou zadáních); tahák s key-in pro MicroStation | ✅ |
 | Geodetické funkce (kódovník bodů, mřížka, transformace výkresu) | ❌ |
@@ -88,8 +90,9 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 3. **Úkoly z nových zadání učitele** (materiály v `podklady/ucitel-dalsi`, uživatel k nim zatím nic dalšího nemá):
    - *Zadání-převod*: mapa plynovodu → mapa spojového vedení (zakládací UGEO.DGN, NORMA.cel, UGEO_VP.rsc),
      Směrnice pro 1:1000 → výkres 1:500. Hotovo: pravidla po objektech ze Směrnice ve Wordu + přepočet měřítka.
-     Zbývá: automatický převod atributů podle značky (buňka / liniová značka ČSN 01 3411), čtení knihoven
-     buněk .CEL (V8) do CAD, případně styly čar z .RSC.
+     Hotovo i čtení knihoven buněk .CEL (V8) do CAD (příkaz „knihovna“, .CEL v Podkladech se převezme
+     při „Nový podle zadání“) a převod atributů podle značky (příkaz „převod“: buňka / styl čáry
+     automaticky, zbytek po skupinách vrstev). Zbývá: styly čar z .RSC (zatím přes DXF / .lin).
    - *Zadání-Kokeš*: vlastní tabulky Kokeše (barvy = paleta MicroStationu, barva 0 → 100, kreslicí klíče KK ze
      Směrnice, styl 4 → −13, klíče 1xx pro barvy textů, font 1 → 2). Potřeba: původní obecné tabulky Kokeše
      (složka wkokes) – uživatel zatím nemá.

@@ -278,8 +278,9 @@ class CadPage(QWidget):
         "rozděl": "rozdělit prvek v bodě", "ohrada": "výběr ohradou (mnohoúhelník)",
         "oměrné míry": "popis délek stran vybraných čar (oměrné míry)", "kóta úhlu": "úhlová kóta",
         "kóta poloměru": "kóta poloměru kružnice / oblouku",
+        "převod atributů": "převod výkresu na pravidla ze zadání podle značek (buňky, styly čar) a vrstev",
         "převezmi atributy": "aktivní atributy podle prvku (Match)", "změň atributy": "aktivní atributy na prvky",
-        "knihovna buněk": "načíst buňky (bloky) a styly z jiného DXF (knihovna od učitele)",
+        "knihovna buněk": "načíst buňky z knihovny MicroStationu (.CEL) nebo bloky a styly z jiného DXF",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -320,7 +321,8 @@ class CadPage(QWidget):
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
         "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "knihovna": "knihovna buněk", "rc": "knihovna buněk",
         "knihovna bunek": "knihovna buněk", "cells": "knihovna buněk", "ma": "převezmi atributy", "match": "převezmi atributy",
-        "prevezmi atributy": "převezmi atributy", "ca": "změň atributy", "change": "změň atributy",
+        "prevezmi atributy": "převezmi atributy",
+        "převod": "převod atributů", "prevod": "převod atributů", "prevod atributu": "převod atributů", "ca": "změň atributy", "change": "změň atributy",
         "zmen atributy": "změň atributy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
@@ -712,16 +714,18 @@ class CadPage(QWidget):
         self.vypis(f"Rastr připojen, šířka {sirka:.2f} m.")
 
     def knihovna_bunek(self, cesta: str | None = None) -> list[str]:
-        """Buňky (bloky), typy čar a textové styly z jiného DXF – jako připojení knihovny buněk v MicroStationu."""
+        """Buňky (bloky), typy čar a textové styly z jiného DXF nebo knihovny buněk MicroStationu (.CEL) – jako
+        připojení knihovny buněk v MicroStationu."""
         from ..cad.zadani import prevezmi_bloky, prevezmi_styly
         if self.dok is None:
             return []
         if cesta is None:
-            cesta, _ = QFileDialog.getOpenFileName(self, "Knihovna buněk (DXF)", "", "DXF (*.dxf);;Typy čar (*.lin)")
+            cesta, _ = QFileDialog.getOpenFileName(self, "Knihovna buněk", "",
+                                                   "Knihovna buněk (*.cel *.dxf);;Typy čar (*.lin)")
             if not cesta:
                 return []
-        styly = prevezmi_styly(self.dok.doc, [cesta])
-        bloky = prevezmi_bloky(self.dok.doc, [cesta]) if cesta.lower().endswith(".dxf") else []
+        styly = prevezmi_styly(self.dok.doc, [cesta]) if not cesta.lower().endswith(".cel") else []
+        bloky = prevezmi_bloky(self.dok.doc, [cesta]) if cesta.lower().endswith((".dxf", ".cel")) else []
         if self.historie_zmen is not None:
             self.historie_zmen.zmena += 1
         self._titulek()
@@ -777,6 +781,8 @@ class CadPage(QWidget):
         if vzory is None:
             pr = self.win.project
             vzory = [a.path for a in pr.attachments("vzor")]
+            vzory += [a.path for a in pr.attachments() if a.path.suffix.lower() in (".cel", ".lin")
+                      and a.kind != "vzor"]  # knihovna buněk a styly čar od učitele
         dok, zprava = novy_dokument(rs, vzory)
         self.nastav_dokument(dok)
         self.sjtsk = rs.rozsah == "sjtsk" or rs.rozsah is None
@@ -1927,6 +1933,67 @@ class CadPage(QWidget):
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
 
+    def _najdi_predvolbu(self, text: str):
+        t = (text or "").strip().lower()
+        if not t:
+            return None
+        for p in self._predvolby:
+            if t == p.kod.lower() or t == p.nazev.lower():
+                return p
+        for test in (lambda p: p.nazev.lower().split(" – ")[-1].startswith(t) or p.kod.lower().startswith(t),
+                     lambda p: t in p.nazev.lower()):
+            kand = [p for p in self._predvolby if test(p)]
+            if kand:
+                return kand[0] if len(kand) == 1 else None
+        return None
+
+    def n_prevod_atributu(self):
+        """Převod na pravidla ze zadání: podle značky (buňka, styl čáry), zbytek po skupinách podle vrstvy."""
+        from ..cad import prevod as PV
+        from ..cad.zadani import priprav_dokument
+        rs = self._pravidla()
+        if rs is None or not self._predvolby:
+            raise ValueError("Nejsou cílová pravidla – nahrajte Směrnici (pravidla) v Zadání.")
+        ents = list(self.vyber) or [e for e in self.prostor]
+        t = yield Pozadavek("text", "Poměr měřítek pro velikosti, které pravidla neurčují (např. 1000:500 "
+                            "nebo 0.5) [1]:", vychozi="1")
+        try:
+            if ":" in t:
+                a, b = (float(x.replace(",", ".")) for x in t.split(":", 1))
+                k = b / a
+            else:
+                k = float(t.replace(",", "."))
+            if not math.isfinite(k) or k <= 0:
+                raise ValueError
+        except (ValueError, ZeroDivisionError):
+            raise ValueError("Poměr měřítek zadejte jako 1000:500 nebo číslo (0.5).") from None
+        navrh = PV.navrhni(ents, self._predvolby)
+        self.vypis(f"Podle značky (buňka, styl čáry) přiřazeno {len(navrh.prirazeni)} prvků, "
+                   f"zbývá {len(navrh.skupiny)} skupin podle vrstvy.")
+        mapa = {}
+        for sk in navrh.skupiny:
+            while True:
+                odp = yield Pozadavek("text", f"{sk.popis()} → druh prvku (kód nebo část názvu; Enter = ponechat):",
+                                      vychozi="")
+                if not odp:
+                    break
+                p = self._najdi_predvolbu(odp)
+                if p is not None:
+                    mapa[(sk.vrstva, sk.druh, sk.styl)] = p
+                    self.vypis(f"  → {p.nazev}")
+                    break
+                self.vypis(f"⚠ „{odp}“ neodpovídá právě jednomu druhu prvku – zadejte přesnější kód nebo název.")
+        navrh = PV.navrhni(ents, self._predvolby, mapa)
+        priprav_dokument(self.dok.doc, rs)  # vrstvy, styly čar a písma cílových pravidel
+        nove, stare = PV.proved(self.dok.doc, self.prostor, self.historie_zmen, navrh, k)
+        self._po_zmene(nove, stare)
+        self._napln_vrstvy()
+        self.vyber = []
+        self._zvyrazni()
+        zb = sum(len(s.prvky) for s in navrh.skupiny)
+        self.vypis(f"Převedeno {len(nove)} prvků" + (f", beze změny {zb}" if zb else "") + ":\n  "
+                   + "\n  ".join(f"{n}: {c}×" for n, c in list(PV.souhrn(navrh).items())[:25]))
+
     def n_mnohouhelnik(self):
         st = yield self._bod_req("Mnohoúhelník – střed:")
         v = yield self._bod_req("První vrchol:", st)
@@ -2191,13 +2258,18 @@ class CadPage(QWidget):
         nazev = yield Pozadavek("text", f"Název bloku [{jmena[0]}]:", vychozi=jmena[0])
         if nazev not in jmena:
             raise ValueError(f"Blok {nazev} ve výkresu není.")
-        m = yield Pozadavek("cislo", "Měřítko [1]:", vychozi=1.0)
+        mv = (p.meritko_bunky if p is not None and p.meritko_bunky else None) or 1.0  # měřítko buňky ze zadání
+        m = yield Pozadavek("cislo", f"Měřítko [{mv:g}]:", vychozi=mv)
         u = yield Pozadavek("cislo", "Natočení ve stupních [0]:", vychozi=0.0)
+        attrs = self.kresleni._attr()
         while True:
-            p = yield self._bod_req("Vkládací bod (Enter = konec):", volitelne=True)
-            if p is None:
+            b = yield self._bod_req("Vkládací bod (Enter = konec):", volitelne=True)
+            if b is None:
                 return
-            U.vloz_blok(self.dok.doc, self.prostor, self.historie_zmen, nazev, p, m, u, self.kresleni.vrstva)
+            ins = U.vloz_blok(self.dok.doc, self.prostor, self.historie_zmen, nazev, b, m, u, self.kresleni.vrstva,
+                              attrs=attrs)
+            if self.kresleni.ms_barva is not None and attrs.get("color", 256) != 256:
+                self.kresleni.ms_barvy_prvku[ins.dxf.handle] = self.kresleni.ms_barva
 
     # ------------------------------------------------------------ výřez na listu
     def n_vyrez(self):

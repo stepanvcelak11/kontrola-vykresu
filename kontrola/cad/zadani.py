@@ -55,6 +55,7 @@ class Predvolba:
     zarovnani: str | None = None  # TextEntityAlignment
     blok: str | None = None  # povolené buňky (vzor), např. „4.01–4.20“
     meritko_stylu: float | None = None
+    meritko_bunky: float | None = None
     poznamky: list[str] = field(default_factory=list)
     kod: str = ""
     font: str | None = None  # font z pravidla i se souborem, např. „Arial Narrow IF (ARIALNI.TTF)“
@@ -149,7 +150,8 @@ def predvolby(rs: RuleSet) -> list[Predvolba]:
         if r.blok:
             nastroj = "vlož"
         p = Predvolba(nazev=r.nazev or r.kod or (r.hladina or "?"), kod=r.kod or "", geometrie=geo,
-                      nastroj=nastroj, vrstva=_vrstva(r.hladina), blok=r.blok, meritko_stylu=r.meritko_stylu)
+                      nastroj=nastroj, vrstva=_vrstva(r.hladina), blok=r.blok, meritko_stylu=r.meritko_stylu,
+                      meritko_bunky=r.meritko_bunky if isinstance(r.meritko_bunky, (int, float)) else None)
         p.ms = {"vrstva": p.vrstva, "barva": _prvni(r.barva) if r.barva not in (None, "") else None,
                 "styl": _prvni(r.styl_cary), "tloustka": _prvni(r.tloustka) if r.tloustka is not None else None,
                 "font": r.font, "vyska": p.vyska if geo == "text" else None,
@@ -339,11 +341,18 @@ def prevezmi_styly(doc, vzory) -> list[str]:
 
 
 def prevezmi_bloky(doc, vzory) -> list[str]:
-    """Definice bloků (buněk) ze vzorových DXF – kreslí se pak stejné značky jako ve vzoru."""
+    """Definice bloků (buněk) ze vzorových DXF nebo knihovny buněk .CEL – kreslí se pak stejné značky jako ve vzoru."""
     import ezdxf
     from ezdxf.addons import importer
     out = []
     for f in vzory:
+        if Path(f).suffix.lower() == ".cel":  # knihovna buněk MicroStationu V8
+            from ..io.cel import do_dokumentu, nacti_cel
+            try:
+                out += do_dokumentu(doc, nacti_cel(f))
+            except Exception:  # noqa: BLE001
+                pass
+            continue
         if Path(f).suffix.lower() != ".dxf":
             continue
         try:

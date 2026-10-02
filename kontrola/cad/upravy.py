@@ -1164,12 +1164,14 @@ def vytvor_blok(doc, msp, h: Historie, ents, nazev: str, zakladni_bod, nahradit:
 
 
 def vloz_blok(doc, msp, h: Historie, nazev: str, bod, meritko: float = 1.0, natoceni_deg: float = 0.0,
-              vrstva: str = "0"):
+              vrstva: str = "0", attrs: dict | None = None):
+    """Vložení buňky (bloku); ``attrs`` = aktivní barva, tloušťka… (jako aktivní atributy v MicroStationu)."""
     if nazev not in doc.blocks or nazev.startswith("*"):
         raise ValueError(f"Blok {nazev} ve výkresu není.")
     if abs(meritko) < EPS:
         raise ValueError("Měřítko nesmí být nulové.")
-    ins = msp.add_blockref(nazev, _xy(bod), dxfattribs={"layer": vrstva, "xscale": meritko, "yscale": meritko,
+    a = {k: v for k, v in (attrs or {}).items() if k in ("color", "lineweight", "true_color")}
+    ins = msp.add_blockref(nazev, _xy(bod), dxfattribs={**a, "layer": vrstva, "xscale": meritko, "yscale": meritko,
                                                          "zscale": meritko, "rotation": natoceni_deg})
     blk = doc.blocks.get(nazev)
     if any(e.dxftype() == "ATTDEF" for e in blk):

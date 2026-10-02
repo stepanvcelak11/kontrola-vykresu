@@ -353,6 +353,15 @@ obě zdarma pro vlastní použití.
 * **Uložit / Uložit jako** – ASCII DXF, nový výkres R2000; neznámé entity a data zůstanou beze změny
   (ověřeno testem: opakované otevření a uložení nic nemění ani neztrácí). Do starší verze se neukládá
   (ztráta dat se odmítne).
+* **Knihovna buněk** (`knihovna`, `rc`): buňky přímo z knihovny MicroStationu **.CEL** (V8 – např. NORMA.CEL,
+  GEO-V8.CEL od učitele) nebo bloky a styly z jiného DXF. Buňka má barvu a tloušťku podle vložení (jako
+  bodová buňka). Knihovnu .CEL přetaženou do *Zadání* CAD převezme sám při *Nový podle zadání*.
+  Vložená buňka dostane aktivní barvu a tloušťku a měřítko buňky z pravidla (např. 0,5 pro 1:500).
+* **Převod atributů** (`převod`) – úloha „převod“ (mapa plynovodu → spojové vedení, 1:1000 → 1:500):
+  buňky a čáry s vlastním stylem se přiřadí k druhu prvku cílových pravidel podle značky (4.110, 2.093),
+  ostatní prvky se přiřadí po skupinách (stejná vrstva, druh a styl) – stačí napsat kód nebo začátek názvu.
+  Nastaví se vrstva, barva, tloušťka, styl, měřítko stylu a buňky, výška textu; co pravidla neurčují, se
+  přepočte poměrem měřítek. Celé jde vrátit jedním *Zpět*.
 * **Propojení:** *Zkontrolovat* (CAD → Kontrola) uloží výkres a hned ho zkontroluje; *Otevřít výkres v CAD*
   (nabídka Kontrola) otevře kontrolovaný DXF v CAD.
 

@@ -1001,6 +1001,14 @@ class ZadaniTab(QWidget):
             elif suf in (".doc", ".docx", ".odt", ".rtf"):
                 self.tabs.setCurrentWidget(self.documents_page)
                 self.documents_page.add_file(f)
+            elif suf in (".cel", ".lin", ".rsc"):
+                self.project.add_attachment("dokumenty", f)
+                self.project_changed()
+                self.tabs.setCurrentWidget(self.attachments_page)
+                if suf != ".rsc":
+                    QMessageBox.information(self, "Knihovna", f"{Path(f).name} uložena do Podkladů. CAD z ní při "
+                                            "„Nový podle zadání“ převezme " + ("buňky (značky)." if suf == ".cel"
+                                                                               else "styly čar."))
             elif suf in (".txt", ".zip", ".zap"):
                 self.project.add_attachment("dokumenty", f)
                 self.project_changed()

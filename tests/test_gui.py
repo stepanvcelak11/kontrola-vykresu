@@ -2016,6 +2016,68 @@ def test_cad_knihovna_bunek(window, tmp_path):
     assert [e.dxf.name for e in c.prostor.query("INSERT")] == ["4.05"]
 
 
+def test_cad_knihovna_bunek_cel(window):
+    from pathlib import Path
+    cel = Path(__file__).resolve().parents[1] / "podklady" / "ucitel-dalsi" / "NORMA.CEL"
+    if not cel.is_file():
+        return
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    assert len(c.knihovna_bunek(str(cel))) == 170
+    for t in ("vlož", "1.030", "1", "0", "x=5 y=5", ""):
+        c.zadej(t)
+    assert [e.dxf.name for e in c.prostor.query("INSERT")] == ["1.030"]
+
+
+def test_cad_prevod_atributu(window, tmp_path):
+    from tests.test_cad_prevod import _doc, _rs
+    f = tmp_path / "plyn.dxf"
+    _doc().saveas(f)
+    w = window
+    puvodni = w.project.rules
+    w.project.rules = _rs()
+    try:
+        c = w.cad
+        w.show_page("cad")
+        c.obnov_predvolby()
+        assert c.otevri(str(f))
+        for t in ("převod", "1000:500", "kabel", "popis kab", ""):
+            c.zadej(t)
+        vrstvy = sorted(e.dxf.layer for e in c.prostor)
+        assert vrstvy == ["2", "2", "3", "5", "8"], c.historie.toPlainText()[-1500:]
+        assert c.prostor.query("INSERT")[0].dxf.xscale == pytest.approx(0.5)
+        c.undo()
+        assert "PLYN_POTRUBI" in {e.dxf.layer for e in c.prostor}
+    finally:
+        w.project.rules = puvodni
+        window.cad.obnov_predvolby()
+
+
+def test_cad_vloz_bunku_s_aktivnimi_atributy(window, tmp_path):
+    from tests.test_cad_prevod import _doc, _rs
+    f = tmp_path / "plyn.dxf"
+    _doc().saveas(f)
+    w = window
+    puvodni = w.project.rules
+    w.project.rules = _rs()
+    try:
+        c = w.cad
+        w.show_page("cad")
+        c.obnov_predvolby()
+        assert c.otevri(str(f))
+        assert c.vyber_predvolbu("8.1")
+        for t in ("4.110", "", "0", "x=50 y=50", ""):  # druh prvku s buňkou spustí „vlož“ sám
+            c.zadej(t)
+        ins = [e for e in c.prostor.query("INSERT") if e.dxf.insert.x == pytest.approx(50)]
+        assert ins, c.historie.toPlainText()[-1500:]
+        ins = ins[0]
+        assert ins.dxf.layer == "8" and ins.dxf.xscale == pytest.approx(0.5) and ins.dxf.color != 256
+    finally:
+        w.project.rules = puvodni
+        window.cad.obnov_predvolby()
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")
