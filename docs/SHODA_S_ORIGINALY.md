@@ -18,6 +18,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Protínání vpřed z úhlů / směrníků, z délek, zpět | ✅ | Shapely, Gauss–Newton |
 | Volné stanovisko (MNČ) | ✅ | nezávislá MNČ (Gauss–Newton) |
 | Transformace shodnostní, podobnostní, afinní (opravy, m0) | ✅ | přesný výpočet zlomky (1e-11 m) |
+| Jungova dotransformace (opravy z identických bodů, váhy 1/d²) | ✅ | identické body přesně na cíl |
 | Výměra a obvod | ✅ | přesný výpočet zlomky |
 | Grafika seznamu souřadnic (čísla, výšky, kódy, výběr myší propojený s tabulkou, měření délky/směrníku/převýšení) | ✅ | test |
 | Staničení a kolmice, bod ze staničení a kolmice | ✅ | zpětný výpočet |
@@ -28,10 +29,15 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Vytyčovací prvky (směr a délka ze stanoviska) | ✅ | zpětný rajón |
 | Trigonometrické výšky, nivelační pořad | ✅ | ruční příklady, uzávěr na mm |
 | Oddělování parcel rovnoběžně s hranicí | ✅ | výměra na 0,0001 m² (Shapely) |
-| Oddělování bodem, úprava hranic | ❌ | |
+| Oddělování dělicí čarou z bodu na hranici | ✅ | přesná výměra (lineární na straně) |
+| Úprava hranic (směna pozemků) | ❌ | |
 | Převod S-JTSK ↔ WGS84 (EPSG:5239, ≈ 1 m) s odkazem na mapy.cz | ✅ | shoda s PROJ na 2·10⁻⁸ ° |
 | Import zápisníku Leica GSI-8 / GSI-16 (gon, stupně, mil; mm–0,01 mm) | ✅ | Husovice přes GSI = stejné souřadnice jako ze .zap |
-| Další formáty totálních stanic (Trimble, Topcon, Sokkia) | ❌ | |
+| Další formáty totálních stanic (Trimble, Topcon, Sokkia, Nikon) | ❌ | |
+| QTrig (vlastní terénní aplikace): body zakázky z firemního cloudu (přírůstkově, hlídání), export bodů, nivelace, zápisník směrů | ✅ | převod WGS84 → S-JTSK shodný s QTrig pod 0,001 mm |
+| Spojnice bodů v grafice (ručně, podle kódu), přenos do CAD | ✅ | test |
+| Export seznamu do DXF (body, čísla, výšky, kódy, spojnice), KML, GeoJSON, PDF k odevzdání | ✅ | DXF i WGS84 zpět na mm |
+| Porovnání dvou seznamů (kontrolní měření): ΔY, ΔX, Δp, ΔZ, mezní odchylky | 🟡 | mezní odchylky k ověření ve vyhlášce |
 | Body ze seznamu do výkresu (shodně se světem, hladiny a atributy podle zadání, kódy buněk) | ✅ | kontrola symbologie bez chyb |
 | Vyrovnání sítě MNČ (směry + délky, apriorní přesnosti, σ0, střední chyby, elipsy chyb, opravy) | ✅ | přesná síť vyjde přesně, se šumem shoda s nezávislou MNČ na 0,01 mm |
 
@@ -44,8 +50,12 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Souřadnice kurzoru S-JTSK, úchyty (konec, střed, průsečík, kolmice, tečna), ortho, polární | ✅ |
 | Příkazový řádek (key-in), zadání souřadnic, měření vzdálenosti | ✅ |
 | Propojení s Kontrolou výkresu | ✅ |
-| Kreslení: bod, úsečka, polylinie, obdélník, oblouk (3 body), kružnice, elipsa, křivka, text, šrafa, kóta | ✅ |
-| Úpravy: výběr (klik, okno, protínající okno), posun, kopie (i v řadě), otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, spojení, rozpojení, mazání, vlastnosti (vrstva, barva) | ✅ |
+| Kreslení: bod, úsečka, polylinie, obdélník, mnohoúhelník, oblouk (3 body, středem), kružnice (střed, 3 body, průměr), elipsa, křivka, text, popisek s odkazovou čárou, šrafa, kóta (i řetězová), kóta úhlu a poloměru, oměrné míry | ✅ |
+| Zadávání bodů: Y X, @dx,dy, @délka<směrník, key-iny xy= / dl= / di=, číslo bodu ze seznamu (#4001), délka číslem ve směru kurzoru (jako AccuDraw) | ✅ |
+| Úpravy: výběr (klik, okno, protínající okno, ohrada, podle atributů), posun, kopie (i v řadě), pole obdélníkové a kruhové, otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, zkosení, rozdělení, body po prvku, vložení / smazání / posun vrcholu, spojení, rozpojení, mazání, úprava textu, převzetí a změna atributů | ✅ |
+| Schránka Ctrl+C / Ctrl+V mezi výkresy (i s hladinami, styly a buňkami, na stejné souřadnice) | ✅ |
+| Pohledy: celý výkres, přiblížit oknem, předchozí pohled, kolečko | ✅ |
+| Hladiny příkazem (zhasni / rozsviť, i „vše kromě“) | ✅ |
 | Zpět/Vpřed bez omezení | ✅ |
 | Vrstvy: správce (zapnutí, zmrazení, zámek, barva, typ čáry, tloušťka, nová, přejmenovat, smazat, aktuální, výběr prvků vrstvy) | ✅ |
 | Bloky (buňky): tvorba z výběru, vložení s měřítkem a natočením, rozpojení | ✅ |
@@ -58,7 +68,9 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Rastrové podklady (ortofoto, sken) s georeferencí z world filu (.jgw/.pgw/.tfw), nebo umístění dvěma body; uložení jako DXF IMAGE | ✅ |
 | Tisk do PDF: model v měřítku 1:N (A4–A0, ověřeno: 100 m v 1:1000 = 100 mm), list 1:1, bílá → černá; rámeček a razítko na list | ✅ |
 | Makra, dávky, pluginy | ❌ |
-| Výkon na statisících prvků | ❌ |
+| Výkon na velkých výkresech | 🟡 | 
+|  – 50 000 prvků: otevření ≈ 10 s, výběr všeho 0,1 s, posun všeho ≈ 11 s, Zpět ≈ 9 s (překreslení knihovnou ezdxf) | |
+| Skupiny prvků (Graphic Group) | ❌ |
 
 ## Jednotné pojmenování (Kontrola, CAD, tahák, atributy)
 
