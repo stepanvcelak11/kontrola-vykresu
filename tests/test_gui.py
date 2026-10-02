@@ -2326,3 +2326,20 @@ def test_cad_mnohouhelnik_a_hladiny(window):
     assert c.hladiny_zobrazeni("vše kromě 58", False) >= 0
     assert c.dok.doc.layers.get("0").is_on()  # aktivní hladina zůstane
     c.proved("rozsviť vše")
+
+
+def test_porovnani_seznamu_v_aplikaci(window, tmp_path):
+    from kontrola.geodezie.body import Bod
+    p = window.vypocty
+    puvodni = list(p.seznam.body)
+    try:
+        p.seznam.body[:] = [Bod("1", 600000, 1160000), Bod("2", 600010, 1160000)]
+        p._after_change()
+        f = tmp_path / "kontrola.txt"
+        f.write_text("1 600000.02 1160000.01\n2 600010.80 1160000.00\n", encoding="utf-8")
+        r = p.porovnat_seznam(str(f))
+        assert len(r) == 2 and r[0].vyhovuje and not r[1].vyhovuje
+        assert "NEVYHOVUJE" in p.ulohy.vystup.toPlainText()
+    finally:
+        p.seznam.body[:] = puvodni
+        p._after_change()

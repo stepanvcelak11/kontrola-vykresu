@@ -601,3 +601,38 @@ def oddeleni_bodem(parcela: list, bod, vymera_cil: float, tol: float = 0.001) ->
             return [P(y, x) for y, x in cast], P(*q)
         akum += tri
     raise ValueError("Oddělení se nepodařilo (zkontrolujte pořadí lomových bodů parcely).")
+
+
+@dataclass
+class RozdilBodu:
+    cislo: str
+    dy: float
+    dx: float
+    dp: float
+    dz: float | None
+    mezni: float | None
+    vyhovuje: bool | None
+
+
+def porovnani_seznamu(puvodni: list, nove: list, kod_kvality: int = 3) -> tuple[list[RozdilBodu], list[str], list[str]]:
+    """Porovná dva seznamy souřadnic (body se stejným číslem): ΔY, ΔX, polohová odchylka Δp, ΔZ
+    a mezní polohová odchylka podle kódu kvality bodu (z původního seznamu, jinak ``kod_kvality``).
+    Vrací (rozdíly, čísla jen v původním, čísla jen v novém)."""
+    from .body import klic_cisla
+    a = {b.cislo: b for b in puvodni}
+    b_ = {b.cislo: b for b in nove}
+    out = []
+    for c in sorted(set(a) & set(b_), key=klic_cisla):
+        p, q = a[c], b_[c]
+        dy, dx = q.y - p.y, q.x - p.x
+        dp = math.hypot(dy, dx)
+        dz = (q.z - p.z) if (p.z is not None and q.z is not None) else None
+        kk = p.kvalita or q.kvalita or kod_kvality
+        try:
+            mez = mezni_polohova_odchylka(int(kk))
+        except ValueError:
+            mez = None
+        out.append(RozdilBodu(c, dy, dx, dp, dz, mez, None if mez is None else dp <= mez))
+    jen_a = sorted(set(a) - set(b_), key=klic_cisla)
+    jen_b = sorted(set(b_) - set(a), key=klic_cisla)
+    return out, jen_a, jen_b

@@ -229,3 +229,14 @@ def test_jungova_dotransformace():
     # blízko identického bodu převažuje jeho oprava
     y, x = t.preved_jung((1, 0), zdroj)
     assert abs((y - t.preved((1, 0))[0]) - t.opravy[0][0]) < 0.001
+
+
+def test_porovnani_seznamu():
+    from kontrola.geodezie.body import Bod
+    a = [Bod("1", 100, 200, 10.0, kvalita=3), Bod("2", 0, 0), Bod("5", 1, 1)]
+    b = [Bod("1", 100.03, 200.04, 10.02), Bod("2", 0.5, 0), Bod("7", 2, 2)]
+    r, jen_a, jen_b = V.porovnani_seznamu(a, b)
+    assert [x.cislo for x in r] == ["1", "2"]
+    assert r[0].dp == pytest.approx(0.05) and r[0].dz == pytest.approx(0.02) and r[0].vyhovuje
+    assert not r[1].vyhovuje  # 0,5 m > 2·√2·0,14
+    assert jen_a == ["5"] and jen_b == ["7"]

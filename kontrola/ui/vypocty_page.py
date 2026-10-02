@@ -348,9 +348,11 @@ class VypoctyPage(QWidget):
         self.b_redo = QPushButton("↷ Znovu")
         self.b_polar = QPushButton("Polární metoda…")
         self.b_polar.setToolTip("Výpočet ze zápisníku (polární metoda, orientace, kontroly)")
+        self.b_porovnat = QPushButton("Porovnat…")
+        self.b_porovnat.setToolTip("Porovnat seznam se souborem (kontrolní měření): ΔY, ΔX, Δp a mezní odchylky")
         self.b_qtrig = QPushButton("QTrig…")
         self.b_qtrig.setToolTip("Body a zápisníky z terénní aplikace QTrig (firemní cloud nebo export)")
-        for b in (self.b_import, self.b_export, self.b_qtrig, self.b_add, self.b_del, self.b_bulk, self.b_dup, self.b_undo,
+        for b in (self.b_import, self.b_export, self.b_porovnat, self.b_qtrig, self.b_add, self.b_del, self.b_bulk, self.b_dup, self.b_undo,
                   self.b_redo, self.b_polar):
             bar.addWidget(b)
         bar.addStretch(1)
@@ -410,6 +412,7 @@ class VypoctyPage(QWidget):
         self.b_import.clicked.connect(lambda: self.import_dialog())
         self.b_export.clicked.connect(lambda: self.export_dialog())
         self.b_qtrig.clicked.connect(lambda: self.qtrig_dialog())
+        self.b_porovnat.clicked.connect(lambda: self.porovnat_seznam())
         self.b_add.clicked.connect(self.add_point)
         self.b_del.clicked.connect(self.delete_selected)
         self.b_bulk.clicked.connect(self.bulk_dialog)
@@ -605,6 +608,43 @@ class VypoctyPage(QWidget):
             msg += f" Přeskočeno {len(dlg.varovani)} nečitelných řádků."
         self.message(msg, bool(konf or dlg.varovani))
         return n
+
+    def porovnat_seznam(self, path: str | None = None, kod_kvality: int = 3):
+        """Porovnání seznamu projektu (původní) se seznamem ze souboru (nové / kontrolní měření)."""
+        from ..geodezie import vypocty as V
+        from ..geodezie.formaty import nacti_soubor
+        if path is None:
+            path, _ = QFileDialog.getOpenFileName(self, "Porovnat se seznamem", "",
+                                                  "Seznam souřadnic (*.txt *.csv *.xyz *.dat *.crd *.ss);;Vše (*)")
+        if not path:
+            return None
+        try:
+            nove, _var, _f = nacti_soubor(path)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "Porovnání", str(e))
+            return None
+        rozdily, jen_a, jen_b = V.porovnani_seznamu(self.seznam.body, nove, kod_kvality)
+        prot = ["POROVNÁNÍ SEZNAMŮ SOUŘADNIC", f"původní: seznam projektu ({len(self.seznam)} bodů), nový: "
+                f"{Path(path).name} ({len(nove)} bodů), společných {len(rozdily)}",
+                "mezní polohová odchylka 2·√2·m_xy podle kódu kvality bodu (ověřte v platném znění vyhlášky)", "",
+                "  bod               ΔY [m]    ΔX [m]    Δp [m]    ΔZ [m]   mezní   výsledek"]
+        spatne = 0
+        for r in rozdily:
+            vys = "" if r.vyhovuje is None else ("ok" if r.vyhovuje else "NEVYHOVUJE")
+            spatne += r.vyhovuje is False
+            prot.append(f"  {r.cislo:<14}{r.dy:>10.3f}{r.dx:>10.3f}{r.dp:>10.3f}"
+                        f"{'' if r.dz is None else f'{r.dz:.3f}':>10}{'' if r.mezni is None else f'{r.mezni:.2f}':>8}"
+                        f"   {vys}")
+        if jen_a:
+            prot.append(f"jen v původním: {', '.join(jen_a[:50])}" + ("…" if len(jen_a) > 50 else ""))
+        if jen_b:
+            prot.append(f"jen v novém: {', '.join(jen_b[:50])}" + ("…" if len(jen_b) > 50 else ""))
+        prot.append(f"překročena mezní odchylka: {spatne} bodů" if spatne else "všechny společné body vyhovují")
+        self.protokol_append(prot)
+        self.ulohy.vystup.setPlainText("\n".join(prot))
+        self.tabs.setCurrentWidget(self.ulohy)
+        self.message(f"Porovnáno {len(rozdily)} společných bodů, nevyhovuje {spatne}.", bool(spatne))
+        return rozdily
 
     def qtrig_dialog(self, klient=None):
         """Okno QTrig (nemodální – může hlídat zakázku, zatímco se pracuje dál)."""
