@@ -381,3 +381,17 @@ def test_vyber_podle_atributu():
         U.vyber_podle(msp, "typ nesmysl")
     with pytest.raises(ValueError):
         U.vyber_podle(msp, "")
+
+
+def test_body_po_prvku():
+    doc, msp, h, k = _novy()
+    l = k.usecka((0, 0), (100, 0))
+    b = U.body_po_prvku(msp, h, l, pocet=4)
+    assert [p.dxf.location.x for p in b] == pytest.approx([25, 50, 75])
+    h.krok_zpet()
+    b = U.body_po_prvku(msp, h, l, vzdalenost=30)
+    assert [p.dxf.location.x for p in b] == pytest.approx([30, 60, 90])
+    c = k.kruznice((0, 0), 10)
+    assert len(U.body_po_prvku(msp, h, c, pocet=8)) == 7
+    with pytest.raises(ValueError):
+        U.body_po_prvku(msp, h, l)

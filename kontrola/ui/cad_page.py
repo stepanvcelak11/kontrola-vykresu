@@ -248,6 +248,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
         "uprav text": "upravit text kliknutím (Edit Text)",
+        "body po prvku": "body po prvku – na N dílů nebo po vzdálenosti (staničení)",
         "vyber": "výběr podle atributů („vyber 58“, „vyber barva 3“, „vyber typ text; hladina 59“)",
         "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
         "předchozí pohled": "vrátit předchozí pohled (View Previous)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
@@ -281,6 +282,7 @@ class CadPage(QWidget):
     ALIASY = {
         "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
         "pasteclip": "vlož ze schránky", "vloz ze schranky": "vlož ze schránky", "paste": "vlož ze schránky",
+        "divide": "body po prvku", "measure": "body po prvku", "bpp": "body po prvku",
         "et": "uprav text", "edit text": "uprav text", "edittext": "uprav text", "upravit text": "uprav text",
         "sel": "vyber", "select": "vyber", "výběr": "vyber", "vyber podle": "vyber", "sba": "vyber",
         "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
@@ -1897,6 +1899,16 @@ class CadPage(QWidget):
         self.vypis(f"Vloženo {len(nove)} prvků ze schránky (vybrané – jde je hned posunout).")
         return
         yield  # generátor
+
+    def n_body_po_prvku(self):
+        e, _k = yield Pozadavek("prvek", "Body po prvku – klikněte na čáru:")
+        t = yield Pozadavek("text", "Počet dílů (např. 5) nebo vzdálenost s „d“ (např. d20):", vychozi="d10")
+        t = (t or "").strip().lower().replace(",", ".")
+        if t.startswith("d"):
+            nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, vzdalenost=float(t[1:]), attrs=self.kresleni._attr())
+        else:
+            nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
+        self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
 
     def n_uprav_text(self):
         while True:

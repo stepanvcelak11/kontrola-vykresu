@@ -2292,3 +2292,16 @@ def test_cad_uprav_text(window):
     assert [t.dxf.text for t in c.prostor.query("TEXT")] == ["4002"]
     c.undo()
     assert [t.dxf.text for t in c.prostor.query("TEXT")] == ["4001"]
+
+
+def test_cad_body_po_prvku(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=100 y=0", ""):
+        c.zadej(t)
+    l = c.prostor.query("LINE").first
+    c.proved("divide")
+    c._posli((l, (50, 0)))
+    c.zadej("d25")
+    assert len(c.prostor.query("POINT")) == 3

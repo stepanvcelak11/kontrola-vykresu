@@ -1259,6 +1259,34 @@ def vyber_podobne(msp, vzory, podle: tuple[str, ...] = ("typ", "vrstva")) -> lis
                                     for p in podle) in klice]
 
 
+def body_po_prvku(msp, h: Historie, e, pocet: int | None = None, vzdalenost: float | None = None,
+                  attrs: dict | None = None) -> list:
+    """Body po prvku (Construct Points Along / Between): rozdělí čáru na ``pocet`` stejných dílů,
+    nebo klade body po ``vzdalenost`` od začátku (staničení). Vrací nové body (jedna operace)."""
+    g = geometrie(e)
+    if g is None or g.geom_type not in ("LineString", "LinearRing"):
+        raise ValueError("Body jde rozmístit po úsečce, polylinii, oblouku, kružnici nebo křivce.")
+    delka = g.length
+    if delka <= EPS:
+        raise ValueError("Prvek má nulovou délku.")
+    if pocet is not None:
+        if pocet < 2:
+            raise ValueError("Počet dílů musí být aspoň 2.")
+        stanice = [delka * i / pocet for i in range(1, pocet)]
+    elif vzdalenost is not None and vzdalenost > EPS:
+        n = int(delka / vzdalenost + 1e-9)
+        if n > 100000:
+            raise ValueError("Příliš mnoho bodů – zvětšete vzdálenost.")
+        stanice = [vzdalenost * i for i in range(1, n + 1) if vzdalenost * i < delka - 1e-9]
+    else:
+        raise ValueError("Zadejte počet dílů nebo vzdálenost.")
+    a = attrs or {"layer": e.dxf.get("layer", "0")}
+    nove = [msp.add_point((p.x, p.y), dxfattribs=a) for p in (g.interpolate(st) for st in stanice)]
+    if nove:
+        h.proved(f"Body po prvku ({len(nove)})", nove)
+    return nove
+
+
 def vyber_podle(msp, text: str) -> tuple[list, str]:
     """Výběr podle atributů (Select By Attributes) z textu: „58“ nebo „hladina 58“, „barva 3“,
     „styl DGN Style 2“, „typ text“, i kombinace oddělené středníkem („hladina 58; typ text“).
