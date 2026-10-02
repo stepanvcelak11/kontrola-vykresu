@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kontrola výkresu – web</title>
+<meta name="description" content="Kontrola geodetického výkresu (DXF, DGN) podle zadání a Směrnice – přímo v prohlížeči, nic se neodesílá.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styl.css">
+</head>
+<body>
+<div class="app">
+  <nav class="lista" aria-label="Hlavní navigace">
+    <div class="logo">K</div>
+    <button class="stranka aktivni" data-stranka="vykres"><svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/></svg>Výkres</button>
+    <button class="stranka" data-stranka="podklady"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Zadání</button>
+    <button class="stranka" data-stranka="o"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>O aplikaci</button>
+  </nav>
+
+  <div class="obsah">
+    <header class="hlavicka">
+      <div class="nazev">
+        <div id="soubor">Kontrola výkresu</div>
+        <div id="podtitul" class="tlumene">Kontrola v prohlížeči · výkres se nikam neodesílá</div>
+      </div>
+      <div class="mezera"></div>
+      <label class="tlacitko">Otevřít výkres…<input type="file" id="f_vykres" accept=".dxf,.dgn" hidden></label>
+      <button id="b_kontrola" class="tlacitko primarni" disabled>Zkontrolovat</button>
+    </header>
+
+    <section id="s_vykres" class="stranka-obsah">
+      <main class="platno-obal">
+        <canvas id="platno" aria-label="Výkres"></canvas>
+        <div id="pretazeni" class="pretazeni">
+          <div class="pretazeni-box">
+            <div class="ikona-velka"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></svg></div>
+            <div class="pretazeni-text">
+              <div class="velky">Přetáhněte sem výkres</div>
+              <div class="tlumene">DXF nebo DGN (MicroStation V8). Pravidla a seznam souřadnic na stránce Zadání.</div>
+            </div>
+            <label class="tlacitko primarni">Vybrat soubor<input type="file" id="f_vykres2" accept=".dxf,.dgn" hidden></label>
+          </div>
+        </div>
+        <div class="souradnice" id="souradnice">Y –   X –</div>
+        <div class="zoom">
+          <button id="z_vse" class="tlacitko maly" aria-label="Celý výkres">Celý výkres</button>
+        </div>
+      </main>
+      <aside class="panel" aria-label="Chyby">
+        <div class="skore-radek">
+          <div class="prstenec" id="prstenec"><div class="prstenec-vnitrek"><div id="skore">–</div><div class="mini">ze 100</div></div></div>
+          <div class="skore-text">
+            <div id="skore_popis" class="stredni">Zatím nic nezkontrolováno</div>
+            <div id="skore_souhrn" class="tlumene">Otevřete výkres a stiskněte Zkontrolovat.</div>
+            <div class="stitky" id="stitky"></div>
+          </div>
+        </div>
+        <div class="filtry" id="filtry">
+          <button class="filtr aktivni" data-f="vse">Vše</button>
+          <button class="filtr" data-f="chyba">Chyby</button>
+          <button class="filtr" data-f="varování">Varování</button>
+          <button class="filtr" data-f="info">Info</button>
+        </div>
+        <div class="seznam" id="seznam"></div>
+      </aside>
+    </section>
+
+    <section id="s_podklady" class="stranka-obsah skryte">
+      <div class="podklady">
+        <h1>Zadání a podklady</h1>
+        <p class="tlumene">Pravidla určují, co se kontroluje (hladiny, barvy, styly, buňky, písmo). Bez pravidel se kontroluje jen topologie.</p>
+        <div class="karty">
+          <div class="karta">
+            <div class="karta-nadpis">Pravidla</div>
+            <label class="volba"><input type="radio" name="pravidla" value="zadani1" checked> Zadání 1 – MicroStation (Směrnice-výběr, 1 : 500)</label>
+            <label class="volba"><input type="radio" name="pravidla" value="soubor"> Vlastní soubor: Směrnice (xls, xlsx, csv, ods, doc, docx) nebo YAML</label>
+            <label class="volba"><input type="radio" name="pravidla" value="zadna"> Bez pravidel (jen topologie)</label>
+            <label class="tlacitko">Vybrat pravidla…<input type="file" id="f_pravidla" accept=".yaml,.yml,.xls,.xlsx,.xlsm,.csv,.ods,.doc,.docx" hidden></label>
+            <div id="i_pravidla" class="tlumene"></div>
+          </div>
+          <div class="karta">
+            <div class="karta-nadpis">Seznam souřadnic (nepovinné)</div>
+            <p class="tlumene">Ověří body, čísla a výšky bodů ve výkresu (textový seznam „číslo Y X Z“).</p>
+            <label class="tlacitko">Vybrat seznam…<input type="file" id="f_seznam" accept=".txt,.csv,.xyz,.sez,.pts" hidden></label>
+            <div id="i_seznam" class="tlumene"></div>
+          </div>
+          <div class="karta">
+            <div class="karta-nadpis">Měřítko výkresu</div>
+            <p class="tlumene">Pro Směrnici ve Wordu (psanou pro 1 : 1000) a velikosti textů.</p>
+            <select id="meritko"><option value="">podle pravidel</option><option value="500">1 : 500</option><option value="1000">1 : 1000</option><option value="2000">1 : 2000</option></select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="s_o" class="stranka-obsah skryte">
+      <div class="podklady">
+        <h1>O webové verzi</h1>
+        <p>Stejná kontrola jako v desktopové aplikaci Kontrola výkresu – běží přímo ve vašem prohlížeči (Python přes Pyodide). Výkres, pravidla ani seznam souřadnic se nikam neodesílají.</p>
+        <p class="tlumene">První spuštění stáhne asi 25 MB (Python a knihovny), prohlížeč si je pak pamatuje. Kreslení (CAD) a výpočty (Groma) jsou zatím jen v desktopové verzi.</p>
+        <p><a href="https://github.com/stepanvcelak11/kontrola-vykresu">Zdrojové kódy a desktopová verze</a></p>
+      </div>
+    </section>
+  </div>
+</div>
+<div class="stav" id="stav" role="status"><span class="tocitko"></span><span id="stav_text">Spouštím…</span></div>
+<script src="app.js"></script>
+</body>
+</html>

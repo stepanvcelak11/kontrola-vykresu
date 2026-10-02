@@ -1,0 +1,921 @@
+# Pravidla pro zadání 1 (MicroStation, účelová mapa 1:500)
+# Vytvořeno ze Směrnice-výběr.xls + vrstvy 58–60 ze Zadání-Microstation.doc.
+# Čísla barev a stylů jsou čísla MicroStationu (tabulka barev color.tbl).
+# Načtení v aplikaci: Zadání → Pravidla → Načíst YAML…
+paleta: microstation
+mapa_tloustek:
+  0: 0.0
+  2: 0.3
+barevna_tabulka:
+  0: '#FFFFFF'
+  1: '#0000FF'
+  2: '#00FF00'
+  3: '#FF0000'
+  4: '#FFFF00'
+  5: '#FF00FF'
+  6: '#FF7F00'
+  7: '#00FFFF'
+  8: '#404040'
+  9: '#C0C0C0'
+  10: '#FE0060'
+  11: '#A0E000'
+  12: '#00FEA0'
+  13: '#8000A0'
+  14: '#B0B0B0'
+  15: '#00F0F0'
+  16: '#F0F0F0'
+  17: '#0000F0'
+  18: '#00F000'
+  19: '#F00000'
+  20: '#F0F000'
+  21: '#F000F0'
+  22: '#F07A00'
+  23: '#00F0F0'
+  24: '#F0F0F0'
+  25: '#0000F0'
+  26: '#00F000'
+  27: '#F00000'
+  28: '#F0F000'
+  29: '#F000F0'
+  30: '#F07A00'
+  31: '#00E1E1'
+  32: '#E1E1E1'
+  33: '#0000E1'
+  34: '#00E100'
+  35: '#E10000'
+  36: '#E1E100'
+  37: '#E100E1'
+  38: '#E17500'
+  39: '#00E1E1'
+  40: '#E1E1E1'
+  41: '#0000E1'
+  42: '#00E100'
+  43: '#E10000'
+  44: '#E1E100'
+  45: '#E100E1'
+  46: '#E17500'
+  47: '#00D2D2'
+  48: '#D2D2D2'
+  49: '#0000D2'
+  50: '#00D200'
+  51: '#D20000'
+  52: '#D2D200'
+  53: '#D200D2'
+  54: '#D27000'
+  55: '#00D2D2'
+  56: '#D2D2D2'
+  57: '#0000D2'
+  58: '#00D200'
+  59: '#D20000'
+  60: '#D2D200'
+  61: '#D200D2'
+  62: '#D27000'
+  63: '#00C3C3'
+  64: '#C3C3C3'
+  65: '#0000C3'
+  66: '#00C300'
+  67: '#C30000'
+  68: '#C3C300'
+  69: '#C300C3'
+  70: '#C36B00'
+  71: '#00C3C3'
+  72: '#C3C3C3'
+  73: '#0000C3'
+  74: '#00C300'
+  75: '#C30000'
+  76: '#C3C300'
+  77: '#C300C3'
+  78: '#C36B00'
+  79: '#00B4B4'
+  80: '#B4B4B4'
+  81: '#0000B4'
+  82: '#00B400'
+  83: '#B40000'
+  84: '#B4B400'
+  85: '#B400B4'
+  86: '#B46600'
+  87: '#00B4B4'
+  88: '#B4B4B4'
+  89: '#0000B4'
+  90: '#00B400'
+  91: '#B40000'
+  92: '#B4B400'
+  93: '#B400B4'
+  94: '#B46600'
+  95: '#00A5A5'
+  96: '#A5A5A5'
+  97: '#0000A5'
+  98: '#00A500'
+  99: '#A50000'
+  100: '#A5A500'
+  101: '#A500A5'
+  102: '#A56100'
+  103: '#00A5A5'
+  104: '#A5A5A5'
+  105: '#0000A5'
+  106: '#00A500'
+  107: '#A50000'
+  108: '#A5A500'
+  109: '#A500A5'
+  110: '#A56100'
+  111: '#009696'
+  112: '#969696'
+  113: '#000096'
+  114: '#009600'
+  115: '#960000'
+  116: '#969600'
+  117: '#960096'
+  118: '#965C00'
+  119: '#009696'
+  120: '#969696'
+  121: '#000096'
+  122: '#009600'
+  123: '#960000'
+  124: '#969600'
+  125: '#960096'
+  126: '#965C00'
+  127: '#008787'
+  128: '#878787'
+  129: '#000087'
+  130: '#008700'
+  131: '#870000'
+  132: '#878700'
+  133: '#870087'
+  134: '#875700'
+  135: '#008787'
+  136: '#878787'
+  137: '#000087'
+  138: '#008700'
+  139: '#870000'
+  140: '#878700'
+  141: '#870087'
+  142: '#875700'
+  143: '#007878'
+  144: '#787878'
+  145: '#000078'
+  146: '#007800'
+  147: '#780000'
+  148: '#787800'
+  149: '#780078'
+  150: '#785200'
+  151: '#007878'
+  152: '#787878'
+  153: '#000078'
+  154: '#007800'
+  155: '#780000'
+  156: '#787800'
+  157: '#780078'
+  158: '#785200'
+  159: '#006969'
+  160: '#696969'
+  161: '#000069'
+  162: '#006900'
+  163: '#690000'
+  164: '#696900'
+  165: '#690069'
+  166: '#694D00'
+  167: '#006969'
+  168: '#696969'
+  169: '#000069'
+  170: '#006900'
+  171: '#690000'
+  172: '#696900'
+  173: '#690069'
+  174: '#694D00'
+  175: '#005A5A'
+  176: '#5A5A5A'
+  177: '#00005A'
+  178: '#005A00'
+  179: '#5A0000'
+  180: '#5A5A00'
+  181: '#5A005A'
+  182: '#5A4800'
+  183: '#005A5A'
+  184: '#5A5A5A'
+  185: '#00005A'
+  186: '#005A00'
+  187: '#5A0000'
+  188: '#5A5A00'
+  189: '#5A005A'
+  190: '#5A4800'
+  191: '#004B4B'
+  192: '#4B4B4B'
+  193: '#00004B'
+  194: '#004B00'
+  195: '#4B0000'
+  196: '#4B4B00'
+  197: '#4B004B'
+  198: '#4B4300'
+  199: '#004B4B'
+  200: '#4B4B4B'
+  201: '#00004B'
+  202: '#004B00'
+  203: '#4B0000'
+  204: '#4B4B00'
+  205: '#4B004B'
+  206: '#4B4300'
+  207: '#003C3C'
+  208: '#3C3C3C'
+  209: '#00003C'
+  210: '#003C00'
+  211: '#3C0000'
+  212: '#3C3C00'
+  213: '#3C003C'
+  214: '#3C3E00'
+  215: '#003C3C'
+  216: '#3C3C3C'
+  217: '#00003C'
+  218: '#003C00'
+  219: '#3C0000'
+  220: '#3C3C00'
+  221: '#3C003C'
+  222: '#3C3E00'
+  223: '#002D2D'
+  224: '#2D2D2D'
+  225: '#00002D'
+  226: '#002D00'
+  227: '#2D0000'
+  228: '#2D2D00'
+  229: '#2D002D'
+  230: '#2D3900'
+  231: '#002D2D'
+  232: '#2D2D2D'
+  233: '#00002D'
+  234: '#002D00'
+  235: '#2D0000'
+  236: '#2D2D00'
+  237: '#2D002D'
+  238: '#2D3900'
+  239: '#001E1E'
+  240: '#1E1E1E'
+  241: '#00001E'
+  242: '#001E00'
+  243: '#1E0000'
+  244: '#1E1E00'
+  245: '#1E001E'
+  246: '#1E3400'
+  247: '#001E1E'
+  248: '#1E1E1E'
+  249: '#00001E'
+  250: '#001E00'
+  251: '#1E0000'
+  252: '#1E1E00'
+  253: '#1E001E'
+  254: '#C0C0C0'
+  255: '#000000'
+rozsah: sjtsk
+pravidla:
+- kod: Budovy zděné, betonové
+  nazev: Budovy zděné, betonové
+  geometrie: linie
+  hladina: '5'
+  barva: 94
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  zdroj: Směrnice-výběr.xls, řádek 3
+- kod: Budovy kovové
+  nazev: Budovy kovové
+  geometrie: linie
+  hladina: '5'
+  barva: 95
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  zdroj: Směrnice-výběr.xls, řádek 4
+- kod: Budovy dřevěné
+  nazev: Budovy dřevěné
+  geometrie: linie
+  hladina: '5'
+  barva: 96
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  zdroj: Směrnice-výběr.xls, řádek 5
+- kod: Budovy nerozlišené
+  nazev: Budovy nerozlišené
+  geometrie: linie
+  hladina: '5'
+  barva: 97
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  zdroj: Směrnice-výběr.xls, řádek 6
+- kod: Vstup do objektu
+  nazev: Vstup do objektu
+  geometrie: linie
+  hladina: '6'
+  barva: 99
+  styl_cary: CONTINUOUS
+  tloustka: 2.0
+  typy_prvku:
+  - 3
+  topologie: false
+  poznamka: průmět dveří nebo vrat na stěnu budovy
+  zdroj: Směrnice-výběr.xls, řádek 7
+- kod: Podezdívka plotu
+  nazev: Podezdívka plotu
+  geometrie: linie
+  hladina: '7'
+  barva: 25
+  styl_cary: 0,4
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  zdroj: Směrnice-výběr.xls, řádek 10
+- kod: Plot drátěný
+  nazev: Plot drátěný
+  geometrie: linie
+  hladina: '7'
+  barva: 5
+  styl_cary: '2.123'
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  meritko_stylu: 0.5
+  zdroj: Směrnice-výběr.xls, řádek 11
+- kod: Plot dřevěný
+  nazev: Plot dřevěný
+  geometrie: linie
+  hladina: '7'
+  barva: 93
+  styl_cary: '2.103'
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  meritko_stylu: 0.5
+  zdroj: Směrnice-výběr.xls, řádek 12
+- kod: Plot kovový
+  nazev: Plot kovový
+  geometrie: linie
+  hladina: '7'
+  barva: 9
+  styl_cary: '2.123'
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  meritko_stylu: 0.5
+  zdroj: Směrnice-výběr.xls, řádek 13
+- kod: Plot zděný, azbestový
+  nazev: Plot zděný, azbestový
+  geometrie: linie
+  hladina: '7'
+  barva: 11
+  styl_cary: '2.163'
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  meritko_stylu: 0.5
+  zdroj: Směrnice-výběr.xls, řádek 14
+- kod: Plot živý
+  nazev: Plot živý
+  geometrie: linie
+  hladina: '7'
+  barva: 13
+  styl_cary: '2.143'
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  meritko_stylu: 0.5
+  zdroj: Směrnice-výběr.xls, řádek 15
+- kod: Zábradlí
+  nazev: Zábradlí
+  geometrie: linie
+  hladina: '9'
+  barva: 14
+  styl_cary: '5.303'
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  meritko_stylu: 0.5
+  zdroj: Směrnice-výběr.xls, řádek 16
+- kod: Vstup na pozemek
+  nazev: Vstup na pozemek
+  geometrie: linie
+  hladina: '8'
+  barva: 99
+  styl_cary: CONTINUOUS
+  tloustka: 2.0
+  typy_prvku:
+  - 3
+  topologie: false
+  poznamka: průmět vstupu na ohraniční pozemku
+  zdroj: Směrnice-výběr.xls, řádek 17
+- kod: Rozhraní vozovky
+  nazev: Rozhraní vozovky
+  geometrie: linie
+  hladina: '10'
+  barva: 15
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  poznamka: mezi vozovkou a zpev., nezpev. plochou
+  zdroj: Směrnice-výběr.xls, řádek 20
+- kod: Rozhraní chodníku, cesty
+  nazev: Rozhraní chodníku, cesty
+  geometrie: linie
+  hladina: '11'
+  barva: 16
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  poznamka: mezi chodníkem a zpev., nezpev. plochou mimo voz.
+  zdroj: Směrnice-výběr.xls, řádek 21
+- kod: Ostatní rozhraní
+  nazev: Ostatní rozhraní
+  geometrie: linie
+  hladina: '11'
+  barva: 17
+  styl_cary: 0,2,4,7
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  poznamka: mezi zpev. a nezpev. plochami, mimo voz. a chod.
+  zdroj: Směrnice-výběr.xls, řádek 22
+- kod: Schody
+  nazev: Schody
+  geometrie: linie
+  hladina: '11'
+  barva: 0
+  styl_cary: 0,4
+  tloustka: 0.0
+  typy_prvku:
+  - 3
+  - 4
+  - 15
+  - 16
+  poznamka: v Kokeši platí barva 1
+  zdroj: Směrnice-výběr.xls, řádek 23
+- kod: Strom nerozlišený
+  nazev: Strom nerozlišený
+  geometrie: bod
+  hladina: '22'
+  barva: 18
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.13'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 27
+- kod: Strom listnatý
+  nazev: Strom listnatý
+  geometrie: bod
+  hladina: '22'
+  barva: 28
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 3.13A
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 28
+- kod: Strom jehličnatý
+  nazev: Strom jehličnatý
+  geometrie: bod
+  hladina: '22'
+  barva: 29
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 3.13B
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 29
+- kod: Strom ovocný
+  nazev: Strom ovocný
+  geometrie: bod
+  hladina: '22'
+  barva: 30
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 3.13C
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 30
+- kod: Studna
+  nazev: Studna
+  geometrie: bod
+  hladina: '35'
+  barva: 54
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '8.11'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 33
+- kod: Sloup betonový
+  nazev: Sloup betonový
+  geometrie: bod
+  hladina: '25'
+  barva: 35
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 6.01A
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 34
+- kod: Sloup dřevěný
+  nazev: Sloup dřevěný
+  geometrie: bod
+  hladina: '25'
+  barva: 36
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 6.01B
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 35
+- kod: Sloup kovový
+  nazev: Sloup kovový
+  geometrie: bod
+  hladina: '25'
+  barva: 37
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 6.01C
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 36
+- kod: Šachta kanalizační
+  nazev: Šachta kanalizační
+  geometrie: bod
+  hladina: '27'
+  barva: 41
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '6.20'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 37
+- kod: Vpusť
+  nazev: Vpusť
+  geometrie: bod
+  hladina: '27'
+  barva: 45
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '6.30'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 38
+- kod: Šoupě vodovodní
+  nazev: Šoupě vodovodní
+  geometrie: bod
+  hladina: '28'
+  barva: 46
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 6.14A
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 39
+- kod: Hydrant podzemní
+  nazev: Hydrant podzemní
+  geometrie: bod
+  hladina: '28'
+  barva: 47
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '6.13'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 40
+- kod: Hydrant nadzemní
+  nazev: Hydrant nadzemní
+  geometrie: bod
+  hladina: '28'
+  barva: 48
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '6.12'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 41
+- kod: Šoupě plynové
+  nazev: Šoupě plynové
+  geometrie: bod
+  hladina: '31'
+  barva: 49
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: 6.14B
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  poznamka: neplatí pro skutečné provedení a převod stáv. dok.
+  zdroj: Směrnice-výběr.xls, řádek 42
+- kod: Orná půda
+  nazev: Orná půda
+  geometrie: bod
+  hladina: '36'
+  barva: 59
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.01'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 45
+- kod: Chmelnice
+  nazev: Chmelnice
+  geometrie: bod
+  hladina: '36'
+  barva: 60
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.02'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 46
+- kod: Vinice
+  nazev: Vinice
+  geometrie: bod
+  hladina: '36'
+  barva: 61
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.03'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 47
+- kod: Zahrada
+  nazev: Zahrada
+  geometrie: bod
+  hladina: '36'
+  barva: 62
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.04'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 48
+- kod: Sad ovocný
+  nazev: Sad ovocný
+  geometrie: bod
+  hladina: '36'
+  barva: 63
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.05'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 49
+- kod: Louka
+  nazev: Louka
+  geometrie: bod
+  hladina: '36'
+  barva: 64
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.06'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 50
+- kod: Pastvina
+  nazev: Pastvina
+  geometrie: bod
+  hladina: '36'
+  barva: 65
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.07'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 51
+- kod: Les nerozlišený
+  nazev: Les nerozlišený
+  geometrie: bod
+  hladina: '36'
+  barva: 66
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.08'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 52
+- kod: Les jehličnatý
+  nazev: Les jehličnatý
+  geometrie: bod
+  hladina: '36'
+  barva: 67
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.09'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 53
+- kod: Les listnatý
+  nazev: Les listnatý
+  geometrie: bod
+  hladina: '36'
+  barva: 68
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.10'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 54
+- kod: Křoviny
+  nazev: Křoviny
+  geometrie: bod
+  hladina: '36'
+  barva: 69
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.11'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 55
+- kod: Kosodřevina
+  nazev: Kosodřevina
+  geometrie: bod
+  hladina: '36'
+  barva: 69
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.12'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 56
+- kod: Park
+  nazev: Park
+  geometrie: bod
+  hladina: '36'
+  barva: 70
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.14'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 57
+- kod: Neplodná půda
+  nazev: Neplodná půda
+  geometrie: bod
+  hladina: '36'
+  barva: 71
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  blok: '3.16'
+  typy_prvku:
+  - 2
+  meritko_bunky: 1.0
+  zdroj: Směrnice-výběr.xls, řádek 58
+- kod: Popis povrchů
+  nazev: Popis povrchů
+  geometrie: text
+  hladina: '40'
+  barva: 75
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  typy_prvku:
+  - 17
+  vyska_textu: 0.65
+  sirka_textu: 0.65
+  font: CS_WORKING
+  zdroj: Směrnice-výběr.xls, řádek 61
+- kod: Popis objektů
+  nazev: Popis objektů
+  geometrie: text
+  hladina: '41'
+  barva: 76
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  typy_prvku:
+  - 17
+  vyska_textu: 0.75
+  sirka_textu: 0.75
+  font: CS_WORKING
+  zdroj: Směrnice-výběr.xls, řádek 62
+- kod: Čísla popisná
+  nazev: Čísla popisná
+  geometrie: text
+  hladina: '47'
+  barva: 97
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  typy_prvku:
+  - 17
+  vyska_textu: 1.0
+  sirka_textu: 1.0
+  font: CS_WORKING
+  zdroj: Směrnice-výběr.xls, řádek 65
+- kod: Název ulice
+  nazev: Název ulice
+  geometrie: text
+  hladina: '49'
+  barva: 78
+  styl_cary: CONTINUOUS
+  tloustka: 0.0
+  typy_prvku:
+  - 17
+  vyska_textu: 1.5
+  sirka_textu: 1.5
+  font: CS_WORKING
+  zdroj: Směrnice-výběr.xls, řádek 66
+- kod: Podrobné body polohopisu
+  nazev: Podrobné body polohopisu
+  geometrie: bod
+  hladina: '58'
+  barva: 0
+  styl_cary: CONTINUOUS
+  tloustka: 2.0
+  typy_prvku:
+  - 3
+  poznamka: bod = úsečka nulové délky („umístit aktivní bod“)
+  zdroj: Zadání-Microstation.doc (hodnoty pro 1:1000 přepočteny na 1:500)
+- kod: Čísla podrobných bodů
+  nazev: Čísla podrobných bodů
+  geometrie: text
+  hladina: '59'
+  barva: 86
+  tloustka: 0.0
+  typy_prvku:
+  - 17
+  vyska_textu: 0.75
+  sirka_textu: 0.75
+  font: CS WORKING
+  zarovnani: vlevo nahoře
+  zdroj: Zadání-Microstation.doc (hodnoty pro 1:1000 přepočteny na 1:500)
+- kod: Výšky podrobných bodů
+  nazev: Výšky podrobných bodů
+  geometrie: text
+  hladina: '60'
+  barva: 0
+  tloustka: 0.0
+  typy_prvku:
+  - 17
+  vyska_textu: 0.75
+  sirka_textu: 0.75
+  font: CS WORKING
+  zdroj: Zadání-Microstation.doc (hodnoty pro 1:1000 přepočteny na 1:500)

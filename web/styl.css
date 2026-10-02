@@ -1,0 +1,96 @@
+:root {
+  --pozadi: #0B1016; --panel: #0F151C; --karta: #121A23; --linka: #1E2833; --linka2: #2A3644;
+  --text: #E6EDF3; --tlumene: #8B98A5; --akcent: #2DD4BF; --akcent-text: #04201C; --akcent-tmavy: #102A28;
+  --chyba: #F87171; --varovani: #F59E0B; --info: #60A5FA;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--pozadi); color: var(--text); font: 14px/1.45 'IBM Plex Sans', sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+a { color: #5EEAD4; } a:hover { color: #99F6E4; }
+.skryte { display: none !important; }
+.tlumene { color: var(--tlumene); font-size: 13px; }
+.app { display: flex; height: 100vh; }
+
+.lista { width: 76px; background: var(--panel); border-right: 1px solid var(--linka); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 6px; flex-shrink: 0; }
+.logo { width: 40px; height: 40px; border-radius: 12px; background: var(--akcent); color: var(--akcent-text); display: flex; align-items: center; justify-content: center; font: 700 18px 'Space Grotesk', sans-serif; margin-bottom: 14px; }
+.stranka { width: 62px; padding: 8px 0; border-radius: 10px; border: none; background: transparent; color: var(--tlumene); display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
+.stranka svg, .ikona-velka svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.stranka:hover { color: var(--text); background: var(--karta); }
+.stranka.aktivni { background: var(--akcent); color: var(--akcent-text); font-weight: 600; }
+
+.obsah { flex-grow: 1; display: flex; flex-direction: column; min-width: 0; }
+.hlavicka { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--linka); flex-shrink: 0; }
+.nazev #soubor { font: 600 17px 'Space Grotesk', sans-serif; }
+.mezera { flex-grow: 1; }
+.tlacitko { height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--linka2); background: var(--karta); color: var(--text); font-weight: 500; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; white-space: nowrap; }
+.tlacitko:hover { border-color: var(--akcent); }
+.tlacitko.primarni { background: var(--akcent); border-color: var(--akcent); color: var(--akcent-text); font-weight: 600; }
+.tlacitko:disabled { opacity: .45; cursor: default; }
+.tlacitko.maly { height: 32px; padding: 0 12px; font-size: 13px; }
+
+.stranka-obsah { flex-grow: 1; display: flex; min-height: 0; }
+.platno-obal { flex-grow: 1; position: relative; background: #05080C; overflow: hidden; touch-action: none; }
+#platno { width: 100%; height: 100%; display: block; cursor: crosshair; }
+.pretazeni { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.pretazeni.nad .pretazeni-box { border-color: var(--akcent); background: var(--akcent-tmavy); }
+.pretazeni-box { border: 2px dashed var(--linka2); border-radius: 20px; background: var(--panel); padding: 32px; display: flex; align-items: center; gap: 22px; max-width: 760px; flex-wrap: wrap; justify-content: center; }
+.ikona-velka { width: 64px; height: 64px; border-radius: 18px; background: var(--akcent-tmavy); color: var(--akcent); display: flex; align-items: center; justify-content: center; }
+.ikona-velka svg { width: 30px; height: 30px; }
+.velky { font: 600 22px 'Space Grotesk', sans-serif; }
+.souradnice { position: absolute; left: 14px; bottom: 14px; background: rgba(15,21,28,.92); border: 1px solid var(--linka); border-radius: 8px; padding: 6px 10px; font: 12px 'JetBrains Mono', monospace; color: var(--tlumene); }
+.zoom { position: absolute; right: 14px; bottom: 14px; }
+
+.panel { width: 400px; background: var(--panel); border-left: 1px solid var(--linka); display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; }
+.skore-radek { padding: 18px; display: flex; gap: 16px; align-items: center; }
+.prstenec { width: 78px; height: 78px; border-radius: 50%; background: conic-gradient(var(--akcent) 0 0%, var(--linka) 0 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.prstenec-vnitrek { width: 62px; height: 62px; border-radius: 50%; background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#skore { font: 700 22px 'Space Grotesk', sans-serif; }
+.mini { font-size: 10px; color: var(--tlumene); }
+.stredni { font: 600 16px 'Space Grotesk', sans-serif; }
+.stitky { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.stitek { font-size: 12px; padding: 3px 9px; border-radius: 999px; }
+.stitek.chyba { background: #3B1518; color: #FCA5A5; } .stitek.varování { background: #3A2A0C; color: #FCD34D; } .stitek.info { background: #10233A; color: #93C5FD; }
+.filtry { padding: 0 18px 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.filtr { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--linka2); background: transparent; color: #C9D1D9; cursor: pointer; }
+.filtr.aktivni { border-color: var(--akcent); color: var(--akcent); }
+.seznam { flex-grow: 1; overflow-y: auto; padding: 4px 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.chyba-karta { background: var(--karta); border: 1px solid var(--linka); border-radius: 12px; padding: 12px 14px; cursor: pointer; text-align: left; width: 100%; }
+.chyba-karta:hover { border-color: var(--linka2); }
+.chyba-karta.vybrana { border-color: var(--akcent); background: #151D27; }
+.chyba-hlava { display: flex; align-items: center; gap: 8px; }
+.tecka { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tecka.chyba { background: var(--chyba); } .tecka.varování { background: var(--varovani); } .tecka.info { background: var(--info); }
+.chyba-nazev { font-weight: 600; font-size: 14px; }
+.chyba-vrstva { margin-left: auto; font: 11px 'JetBrains Mono', monospace; color: var(--tlumene); }
+.chyba-zprava { font-size: 13px; color: #A9B4BF; margin-top: 4px; }
+.navod { font-size: 13px; color: #C9D1D9; background: #0B1016; border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+.prazdne { color: var(--tlumene); padding: 20px 8px; text-align: center; }
+
+.podklady { padding: 32px 40px; max-width: 1100px; overflow-y: auto; }
+.podklady h1 { font: 700 32px 'Space Grotesk', sans-serif; margin: 0 0 8px; }
+.karty { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
+.karta { background: var(--karta); border: 1px solid var(--linka); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.karta-nadpis { font: 600 16px 'Space Grotesk', sans-serif; }
+.volba { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.volba input { accent-color: var(--akcent); margin-top: 3px; }
+select { height: 40px; border-radius: 10px; border: 1px solid var(--linka2); background: var(--pozadi); padding: 0 10px; }
+.karta p { margin: 0; }
+
+.stav { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--karta); border: 1px solid var(--linka2); border-radius: 999px; padding: 10px 18px; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.stav.chyba-stav { border-color: var(--chyba); }
+.tocitko { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--linka2); border-top-color: var(--akcent); animation: toc 0.8s linear infinite; }
+@keyframes toc { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tocitko { animation: none; } }
+
+@media (max-width: 900px) {
+  .app { flex-direction: column-reverse; height: auto; min-height: 100vh; }
+  .lista { width: 100%; height: 64px; flex-direction: row; justify-content: space-around; padding: 0; position: sticky; bottom: 0; border-right: none; border-top: 1px solid var(--linka); z-index: 5; }
+  .logo { display: none; }
+  .hlavicka { padding: 0 14px; height: auto; min-height: 60px; flex-wrap: wrap; gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+  .stranka-obsah { flex-direction: column; }
+  .platno-obal { height: 55vh; flex-grow: 0; }
+  .panel { width: 100%; border-left: none; border-top: 1px solid var(--linka); }
+  .seznam { overflow: visible; }
+  .podklady { padding: 20px 16px; }
+  .pretazeni-box { padding: 20px; }
+}

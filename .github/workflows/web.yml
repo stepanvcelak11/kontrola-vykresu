@@ -1,0 +1,56 @@
+name: Webová verze
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  sestaveni:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sestavení webu (stránky + jádro aplikace)
+        run: python nastroje/web_sestav.py _site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test v prohlížeči (nahrání výkresu a kontrola)
+        run: |
+          npm i --no-save playwright@1.56
+          npx playwright install --with-deps chromium
+          (cd _site && python -m http.server 8765 &) ; sleep 2
+          node web/test/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snimky-webu
+          path: web-snimek*.png
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  zverejneni:
+    needs: sestaveni
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - id: deploy
+        uses: actions/deploy-pages@v4
