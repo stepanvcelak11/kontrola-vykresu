@@ -2183,3 +2183,14 @@ def test_cad_kruznice_tremi_body_a_oblouk_stredem(window):
     c.zrus()
     assert abs(c.prostor.query("CIRCLE").first.dxf.radius - 5) < 1e-9
     assert abs(c.prostor.query("ARC").first.dxf.end_angle - 90) < 1e-9
+
+
+def test_cad_retezova_kota(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("ko", "x=0 y=0", "x=10 y=0", "x=5 y=3", "x=25 y=0", "x=30 y=0", ""):
+        c.zadej(t)
+    dims = list(c.prostor.query("DIMENSION"))
+    assert len(dims) == 3
+    assert all(abs(d.dxf.defpoint.y - 3) < 1e-9 for d in dims)  # všechny v jedné řadě

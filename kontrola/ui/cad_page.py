@@ -1801,6 +1801,19 @@ class CadPage(QWidget):
         b = yield self._bod_req("Druhý bod:", a)
         c = yield self._bod_req("Poloha kótovací čáry:", b)
         self.kresleni.kota(a, b, c, self.vyska_textu)
+        # řetězové kótování (jako Dimension Size v MicroStationu): další kóty navazují ve stejné řadě
+        ux, uy = b[0] - a[0], b[1] - a[1]
+        delka = math.hypot(ux, uy)
+        while delka > 0:
+            d = yield self._bod_req("Další bod řetězové kóty (Enter = konec):", b, True)
+            if d is None:
+                return
+            # kótovací čára rovnoběžně s první, ve stejné vzdálenosti od kótovaných bodů
+            nx, ny = -uy / delka, ux / delka
+            odsaz = (c[0] - a[0]) * nx + (c[1] - a[1]) * ny
+            poloha = (d[0] + nx * odsaz, d[1] + ny * odsaz)
+            self.kresleni.kota(b, d, poloha, self.vyska_textu)
+            b = d
 
     # ------------------------------------------------------------ nástroje úprav
     def _vyber_req(self, nazev):
