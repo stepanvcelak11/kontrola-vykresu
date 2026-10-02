@@ -300,6 +300,33 @@ def u_vymery_davkou(s, h):
     return Vysledek(prot)
 
 
+def u_oblouk(s, h):
+    v, a, b = _bod(s, h, "v", "vrchol tečen V"), _bod(s, h, "a", "bod na první tečně A"), _bod(s, h, "b", "bod na druhé tečně B")
+    r = _cislo(h, "r", "poloměr")
+    krok = _cislo(h, "krok", "krok podrobných bodů") if (h.get("krok") or "").strip() else None
+    if krok is not None and (krok <= 0 or krok < r * 1e-6):
+        raise ChybaVstupu("Krok podrobných bodů musí být kladný a rozumně velký.")
+    try:
+        o = V.kruzny_oblouk(v, a, b, r, krok)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    pre = (h.get("predpona") or "").strip() or "O"
+    prot = _hlavicka("Kružnicový oblouk")
+    prot += [f"tečny {a.cislo} – {v.cislo} – {b.cislo}, poloměr R = {_f(r)} m",
+             f"středový úhel α = {_f(o.alfa, 4)} gon, tečna T = {_f(o.tecna)} m, délka oblouku o = {_f(o.delka)} m,"
+             f" vzepětí (V–VO) = {_f(o.vzepeti)} m", "  bod                 staničení            Y            X"]
+    nove = []
+    for nazev, st, p in (("ZO", 0.0, o.zo), *((f"{i}", st, p) for i, (st, p) in enumerate(o.podrobne, 1)),
+                         ("KO", o.delka, o.ko)):
+        c = pre + nazev
+        prot.append(f"  {c:<14}{st:>14.3f}{p.y:>13.3f}{p.x:>13.3f}")
+        nove.append(Bod(c, p.y, p.x, poznamka="kružnicový oblouk"))
+    for nazev, p in (("VO", o.vo), ("S", o.stred)):
+        prot.append(f"  {pre + nazev:<14}{'':>14}{p.y:>13.3f}{p.x:>13.3f}")
+        nove.append(Bod(pre + nazev, p.y, p.x, poznamka="kružnicový oblouk"))
+    return Vysledek(prot, nove)
+
+
 def u_staniceni(s, h):
     a, b = _bod(s, h, "a", "bod A (začátek přímky)"), _bod(s, h, "b", "bod B (směr přímky)")
     _ruzne(a, b)
@@ -629,6 +656,10 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("predpona", "Předpona nových čísel", "text", "T")], u_transformace),
     ("Výměra a obvod", "Výměra a obvod plochy z bodů zadaných po obvodu.",
      [Pole("body", "Body po obvodu (čísla)", "radky")], u_vymera),
+    ("Kružnicový oblouk", "Hlavní body oblouku (ZO, KO, VO, střed) a podrobné body po délce – vytyčení oblouku.",
+     [Pole("v", "Vrchol tečen V"), Pole("a", "Bod na první tečně A (směr k ZO)"), Pole("b", "Bod na druhé tečně B"),
+      Pole("r", "Poloměr R [m]", "m"), Pole("krok", "Podrobné body po [m] (nepovinné)", "m"),
+      Pole("predpona", "Předpona čísel", "text", "O")], u_oblouk),
     ("Výměry parcel dávkou", "Výměry a obvody více parcel najednou (řádek: parcela: čísla bodů po obvodu).",
      [Pole("parcely", "Parcely (řádek: 125/3: 1 2 3 4)", "radky")], u_vymery_davkou),
     ("Staničení a kolmice", "Staničení a kolmice bodů k měřické přímce (oměrné, kontrola).",

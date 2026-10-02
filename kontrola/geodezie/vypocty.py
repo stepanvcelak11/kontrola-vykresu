@@ -636,3 +636,60 @@ def porovnani_seznamu(puvodni: list, nove: list, kod_kvality: int = 3) -> tuple[
     jen_a = sorted(set(a) - set(b_), key=klic_cisla)
     jen_b = sorted(set(b_) - set(a), key=klic_cisla)
     return out, jen_a, jen_b
+
+
+@dataclass
+class Oblouk:
+    zo: P  # začátek oblouku (na tečně V–A)
+    ko: P  # konec oblouku (na tečně V–B)
+    stred: P
+    vo: P  # vrchol oblouku (střed délky)
+    tecna: float  # délka tečny T = R·tg(α/2)
+    alfa: float  # středový úhel [gon]
+    delka: float  # délka oblouku
+    vzepeti: float  # vzdálenost V–VO
+    podrobne: list[tuple[float, P]] = field(default_factory=list)  # (staničení od ZO, bod)
+
+
+def kruzny_oblouk(v, a, b, r: float, krok: float | None = None) -> Oblouk:
+    """Kružnicový oblouk vepsaný do tečen V–A a V–B o poloměru r (vytyčení silničního oblouku).
+
+    Hlavní body ZO, KO, VO a střed S; při zadaném ``krok`` podrobné body po délce oblouku od ZO."""
+    if not math.isfinite(r) or r <= 0:
+        raise ValueError("Poloměr musí být kladné číslo.")
+    if krok is not None and (not math.isfinite(krok) or krok <= 0):
+        raise ValueError("Krok podrobných bodů musí být kladné číslo.")
+    (yv, xv), (ya, xa), (yb, xb) = _yx(v), _yx(a), _yx(b)
+    da, db = math.hypot(ya - yv, xa - xv), math.hypot(yb - yv, xb - xv)
+    if da == 0 or db == 0:
+        raise ValueError("Body A a B musí ležet na tečnách mimo vrchol V.")
+    ua = ((ya - yv) / da, (xa - xv) / da)
+    ub = ((yb - yv) / db, (xb - xv) / db)
+    cos_b = max(-1.0, min(1.0, ua[0] * ub[0] + ua[1] * ub[1]))
+    beta = math.acos(cos_b)  # vrcholový úhel tečen
+    if beta < 1e-9 or abs(beta - math.pi) < 1e-9:
+        raise ValueError("Tečny jsou rovnoběžné – oblouk nejde vepsat.")
+    alfa = math.pi - beta  # středový úhel = úhel změny směru
+    t = r * math.tan(alfa / 2)
+    zo = (yv + ua[0] * t, xv + ua[1] * t)
+    ko = (yv + ub[0] * t, xv + ub[1] * t)
+    osa = (ua[0] + ub[0], ua[1] + ub[1])
+    lo = math.hypot(*osa)
+    vs = r / math.cos(alfa / 2)  # vzdálenost V–S
+    s = (yv + osa[0] / lo * vs, xv + osa[1] / lo * vs)
+    vo = (yv + osa[0] / lo * (vs - r), xv + osa[1] / lo * (vs - r))
+    o = Oblouk(P(*zo), P(*ko), P(*s), P(*vo), t, alfa / GON, r * alfa, vs - r)
+    if krok:
+        if krok <= 0:
+            raise ValueError("Krok podrobných bodů musí být kladný.")
+        u0 = math.atan2(zo[0] - s[0], zo[1] - s[1])
+        u1 = math.atan2(ko[0] - s[0], ko[1] - s[1])
+        smer = 1.0 if ((u1 - u0) % (2 * math.pi)) < math.pi else -1.0
+        n = int(o.delka / krok + 1e-9)
+        for i in range(1, n + 1):
+            st = i * krok
+            if st >= o.delka - 1e-9:
+                break
+            u = u0 + smer * st / r
+            o.podrobne.append((st, P(s[0] + r * math.sin(u), s[1] + r * math.cos(u))))
+    return o

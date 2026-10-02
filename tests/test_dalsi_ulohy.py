@@ -250,3 +250,27 @@ def test_vymery_davkou():
     r = u_vymery_davkou(s, {"parcely": "125/3: 1 2 3 4\n125/4: 2 5 6 3\n"})
     t = "\n".join(r.protokol)
     assert "125/3" in t and "100.00" in t and "200.00" in t  # celkem
+
+
+def test_kruzny_oblouk():
+    # pravý úhel tečen ve V = (0, 0): tečna k A po +Y, k B po +X, R = 10 → T = 10, α = 100 g
+    o = V.kruzny_oblouk((0, 0), (100, 0), (0, 100), 10, krok=5)
+    assert (o.zo.y, o.zo.x) == pytest.approx((10, 0)) and (o.ko.y, o.ko.x) == pytest.approx((0, 10))
+    assert (o.stred.y, o.stred.x) == pytest.approx((10, 10))
+    assert o.alfa == pytest.approx(100) and o.tecna == pytest.approx(10)
+    assert o.delka == pytest.approx(10 * math.pi / 2)
+    assert o.vzepeti == pytest.approx(10 * math.sqrt(2) - 10)
+    for st, p in o.podrobne:  # podrobné body leží na kružnici
+        assert math.hypot(p.y - 10, p.x - 10) == pytest.approx(10)
+    assert [round(st) for st, _p in o.podrobne] == [5, 10, 15]
+    with pytest.raises(ValueError):
+        V.kruzny_oblouk((0, 0), (1, 0), (2, 0), 5)
+
+
+def test_oblouk_formular():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.ui.ulohy import u_oblouk
+    s = SeznamBodu()
+    s.pridej([Bod("V", 0, 0), Bod("A", 100, 0), Bod("B", 0, 100)])
+    r = u_oblouk(s, {"v": "V", "a": "A", "b": "B", "r": "10", "krok": "5", "predpona": "O"})
+    assert [b.cislo for b in r.nove] == ["OZO", "O1", "O2", "O3", "OKO", "OVO", "OS"]
