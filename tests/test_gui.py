@@ -2358,3 +2358,21 @@ def test_cad_souradnicova_sit(window):
     for t in ("100", "2", "n"):
         c.zadej(t)
     assert len(c.prostor.query("LINE")) == 1 + 8
+
+
+def test_pravidla_ze_vzoru_a_smernice(window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    u = Path(__file__).resolve().parents[1] / "podklady"
+    if not (u / "ucitel-geo" / "GEO.dgn").exists() or not (u / "ucitel-dalsi" / "Směrnice-výběr.doc").exists():
+        pytest.skip("chybí materiály učitele")
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes))
+    w = window
+    puvodni = w.project.rules
+    try:
+        rs = w.pravidla_ze_vzoru(str(u / "ucitel-geo" / "GEO.dgn"), str(u / "ucitel-geo" / "GEO.log"))
+        assert rs is not None and w.project.rules is rs and len(rs.pravidla) > 20
+        rs = w.pravidla_ze_smernice(str(u / "ucitel-dalsi" / "Směrnice-výběr.doc"), 1000, 500)
+        assert rs is not None and next(r for r in rs.pravidla if r.hladina == "59").vyska_textu == 0.75
+    finally:
+        w.project.rules = puvodni
+        w.zadani.rules_changed()

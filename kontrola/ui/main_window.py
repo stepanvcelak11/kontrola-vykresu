@@ -277,6 +277,13 @@ class MainWindow(QMainWindow):
         self.a_mgeo_cfg = self._act("Nastavení topologie od učitele (MGEO .clean.xml)…", self.nacti_mgeo_cleaner, None,
                                     "Převzít tolerance, min. délku čáry, volné konce a vrstvy z konfigurace "
                                     "MGEO Cleaner, kterou učitel kontroluje topologii")
+        self.a_pravidla_vzor = self._act("Pravidla ze vzorového výkresu…", self.pravidla_ze_vzoru, None,
+                                         "Odvodit pravidla symbologie z hotového výkresu od učitele (DGN/DXF), "
+                                         "přesněji s jeho protokolem kontroly (.log)")
+        self.a_pravidla_smernice = self._act("Pravidla ze Směrnice ve Wordu (po objektech)…",
+                                             self.pravidla_ze_smernice, None,
+                                             "Podrobná pravidla po objektech (buňky, liniové značky, texty) ze "
+                                             "Směrnice ve Wordu, s přepočtem měřítka (např. 1:1000 → 1:500)")
         self.a_vypocet = self._act("Kontrola výpočtu souřadnic (zápisník)…", self.show_vypocet, None,
                                    "Spočítat body ze zápisníku totální stanice a porovnat s vaším seznamem z Gromy")
         self.a_sketch = self._act("Náčrt vedle výkresu", self.show_sketch_beside, "Ctrl+B",
@@ -376,6 +383,8 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_vypocet)
         m_check.addAction(self.a_teacher)
         m_check.addAction(self.a_mgeo_cfg)
+        m_check.addAction(self.a_pravidla_vzor)
+        m_check.addAction(self.a_pravidla_smernice)
         m_check.addSeparator()
         m_check.addAction(self.a_watch)
         m_check.addAction(self.a_wip)
@@ -917,6 +926,84 @@ class MainWindow(QMainWindow):
         if self.drawing is not None:
             self.run_checks()
         return zmeny
+
+    def _nahrad_pravidla(self, rs, popis: str) -> bool:
+        n = len(self.project.rules.pravidla)
+        if n:
+            r = QMessageBox.question(self, APP_NAME, f"Projekt už má {n} pravidel. Nahradit je pravidly {popis}?",
+                                     QMessageBox.Yes | QMessageBox.No)
+            if r != QMessageBox.Yes:
+                return False
+        stare = self.project.rules
+        rs.barevna_tabulka = rs.barevna_tabulka or stare.barevna_tabulka
+        rs.mapa_tloustek = rs.mapa_tloustek or stare.mapa_tloustek
+        self.project.rules = rs
+        self.zadani.rules_changed()
+        if self.drawing is not None:
+            self.run_checks()
+        return True
+
+    def pravidla_ze_vzoru(self, vykres: str | None = None, protokol: str | None = None):
+        """Pravidla symbologie odvozená z hotového výkresu učitele (a jeho protokolu)."""
+        from ..pravidla_ze_vzoru import odvod_pravidla
+        from ..protokol_ucitele import read_teacher_log
+        if vykres is None:
+            vykres, _ = QFileDialog.getOpenFileName(self, "Vzorový výkres od učitele", "", "Výkres (*.dgn *.dxf)")
+            if not vykres:
+                return None
+            if QMessageBox.question(self, APP_NAME, "Máte k výkresu i protokol kontroly od učitele (.log)? "
+                                    "S ním budou pravidla přesnější.") == QMessageBox.Yes:
+                protokol, _ = QFileDialog.getOpenFileName(self, "Protokol učitele", "", "Protokol (*.log *.txt)")
+        try:
+            if str(vykres).lower().endswith(".dgn"):
+                from ..io.dgn_v8 import read_dgn
+                d = read_dgn(vykres)
+            else:
+                from ..io.dxf_loader import read_dxf
+                d = read_dxf(vykres)
+            prot = read_teacher_log(protokol) if protokol else None
+            rs = odvod_pravidla(d, prot)
+        except Exception as exc:  # noqa: BLE001 – soubor od učitele může být cokoli
+            QMessageBox.warning(self, APP_NAME, f"Pravidla nejde odvodit: {exc}")
+            return None
+        if not self._nahrad_pravidla(rs, f"ze vzorového výkresu ({len(rs.pravidla)})"):
+            return None
+        self.statusBar().showMessage(f"Pravidla ze vzorového výkresu: {len(rs.pravidla)}"
+                                     + (" (s protokolem učitele)" if protokol else ""), 10000)
+        return rs
+
+    def pravidla_ze_smernice(self, cesta: str | None = None, z: int | None = None, na: int | None = None):
+        """Podrobná pravidla po objektech ze Směrnice ve Wordu, s přepočtem měřítka."""
+        from ..importer.dokument import _doc_text, read_document
+        from ..importer.smernice_objekty import nacti_pravidla, prevod_meritka
+        if cesta is None:
+            cesta, _ = QFileDialog.getOpenFileName(self, "Směrnice ve Wordu", "", "Word (*.doc *.docx)")
+            if not cesta:
+                return None
+        if z is None or na is None:
+            from PySide6.QtWidgets import QInputDialog
+            z, ok = QInputDialog.getInt(self, "Měřítko Směrnice", "Směrnice platí pro měřítko 1 :", 1000, 100, 100000)
+            if not ok:
+                return None
+            na, ok = QInputDialog.getInt(self, "Měřítko výkresu", "Výkres se kreslí v měřítku 1 :", z, 100, 100000)
+            if not ok:
+                return None
+        try:
+            text = _doc_text(Path(cesta)) if str(cesta).lower().endswith(".doc") else read_document(cesta).text
+            rs = nacti_pravidla(text, z, Path(cesta).name)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, APP_NAME, f"Směrnici nejde přečíst: {exc}")
+            return None
+        if not rs.pravidla:
+            QMessageBox.information(self, APP_NAME, "Ve Směrnici nejsou popisy objektů („VRSTVA … Objekt …“).")
+            return None
+        if na != z:
+            rs = prevod_meritka(rs, z, na)
+        if not self._nahrad_pravidla(rs, f"ze Směrnice ({len(rs.pravidla)})"):
+            return None
+        self.statusBar().showMessage(f"Pravidla ze Směrnice: {len(rs.pravidla)}"
+                                     + (f", přepočteno z 1:{z} na 1:{na}" if na != z else ""), 10000)
+        return rs
 
     def show_vypocet(self):
         from .vypocet_dialog import VypocetDialog

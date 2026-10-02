@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QComboBox, QCompleter, QFormLayout, QGroupBox, QH
                                QWidget)
 
 from ..geodezie import vypocty as V
-from ..geodezie.body import Bod, SeznamBodu
+from ..geodezie.body import Bod, SeznamBodu, klic_cisla
 
 
 class ChybaVstupu(ValueError):
@@ -509,6 +509,47 @@ def u_nivelace(s, h):
     return Vysledek(prot, nove)
 
 
+def u_nivelacni_sit(s, h):
+    from ..geodezie.vyrovnani import Oddil, vyrovnej_nivelaci
+    oddily = []
+    for i, line in enumerate((h.get("oddily") or "").splitlines(), 1):
+        p = line.replace(";", " ").replace(",", ".").split()
+        if not p:
+            continue
+        if len(p) < 4:
+            raise ChybaVstupu(f"Řádek {i}: zadejte „od do převýšení[m] délka[m]“.")
+        try:
+            dh, d = float(p[2]), float(p[3])
+        except ValueError:
+            raise ChybaVstupu(f"Řádek {i}: převýšení a délka musí být čísla.") from None
+        if not (math.isfinite(dh) and math.isfinite(d)) or d <= 0:
+            raise ChybaVstupu(f"Řádek {i}: délka musí být kladné číslo.")
+        oddily.append(Oddil(p[0], p[1], dh, d))
+    dane = _radky_bodu(s, h.get("dane") or "")
+    if not dane:
+        raise ChybaVstupu("Zadejte výškově dané body (čísla bodů se známou výškou v seznamu).")
+    if any(b.z is None for b in dane):
+        raise ChybaVstupu("Dané body musí mít v seznamu výšku: " + ", ".join(b.cislo for b in dane if b.z is None))
+    try:
+        r = vyrovnej_nivelaci(oddily, {b.cislo: b.z for b in dane})
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    prot = _hlavicka("Vyrovnání nivelační sítě")
+    prot += [f"oddílů {len(oddily)}, daných bodů {len(dane)}, nadbytečných měření {r.redundance}"
+             + (f", jednotková střední chyba na 1 km m0 = {r.m0_km * 1000:.2f} mm" if r.redundance else ""),
+             "", "  bod                výška [m]    m_H [mm]"]
+    nove = []
+    for c in sorted(r.vysky, key=lambda x: klic_cisla(x)):
+        prot.append(f"  {c:<16}{r.vysky[c]:>13.4f}{r.stredni_chyby[c] * 1000:>11.2f}")
+        bod = s.najdi(c)
+        if bod is not None:
+            nove.append(Bod(c + "_niv", bod.y, bod.x, round(r.vysky[c], 4), bod.kod, bod.kvalita, "nivelační síť"))
+    prot += ["", "  oddíl                    převýšení   oprava [mm]"]
+    for o, v in r.opravy:
+        prot.append(f"  {o.od:>8} → {o.do:<10}{o.dh:>12.4f}{v * 1000:>12.2f}")
+    return Vysledek(prot, nove)
+
+
 def u_ortogonalni(s, h):
     a, b = _bod(s, h, "a", "bod A (začátek přímky)"), _bod(s, h, "b", "bod B (konec přímky)")
     _ruzne(a, b)
@@ -698,6 +739,9 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
       Pole("oddily", "Oddíly (řádek: cílový bod převýšení délka)", "radky"),
       Pole("mez", "Mezní odchylka [mm/√km]", "m", "40")], u_nivelace),
+    ("Vyrovnání nivelační sítě", "Výšky bodů sítě z převýšení metodou nejmenších čtverců (váhy 1/L), opravy a m0.",
+     [Pole("dane", "Výškově dané body (čísla)", "radky"),
+      Pole("oddily", "Oddíly (řádek: od do převýšení[m] délka[m])", "radky")], u_nivelacni_sit),
     ("Oddělení parcely", "Oddělí část zadané výměry dělicí čarou rovnoběžnou s hranicí A–B, nebo dělicí čarou "
      "vedenou bodem A na hranici.",
      [Pole("zpusob", "Způsob", "volba", "rovnoběžně s hranicí A–B",

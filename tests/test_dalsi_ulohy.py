@@ -274,3 +274,15 @@ def test_oblouk_formular():
     s.pridej([Bod("V", 0, 0), Bod("A", 100, 0), Bod("B", 0, 100)])
     r = u_oblouk(s, {"v": "V", "a": "A", "b": "B", "r": "10", "krok": "5", "predpona": "O"})
     assert [b.cislo for b in r.nove] == ["OZO", "O1", "O2", "O3", "OKO", "OVO", "OS"]
+
+
+def test_nivelacni_sit_formular():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.ui.ulohy import ChybaVstupu, u_nivelacni_sit
+    s = SeznamBodu()
+    s.pridej([Bod("A", 0, 0, 250.0), Bod("B", 100, 0, 252.1), Bod("1", 50, 0), Bod("2", 70, 0)])
+    r = u_nivelacni_sit(s, {"dane": "A B", "oddily": "A 1 1.234 500\n1 2 -1.358 400\n2 B 2.224 600\n1 B 0.866 700"})
+    vysky = {b.cislo: b.z for b in r.nove}
+    assert vysky["1_niv"] == pytest.approx(251.234, abs=1e-4) and vysky["2_niv"] == pytest.approx(249.876, abs=1e-4)
+    with pytest.raises(ChybaVstupu):
+        u_nivelacni_sit(s, {"dane": "1", "oddily": "A 1 1 100"})  # daný bod bez výšky
