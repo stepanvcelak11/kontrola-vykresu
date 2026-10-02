@@ -2305,3 +2305,24 @@ def test_cad_body_po_prvku(window):
     c._posli((l, (50, 0)))
     c.zadej("d25")
     assert len(c.prostor.query("POINT")) == 3
+
+
+def test_cad_mnohouhelnik_a_hladiny(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("pol", "x=0 y=0", "x=10 y=0", "6"):
+        c.zadej(t)
+    p = c.prostor.query("LWPOLYLINE").first
+    assert len(p) == 6 and p.closed
+    for t in ("lv=58", "u", "x=0 y=0", "x=1 y=0", "", "lv=0"):
+        c.zadej(t)
+    assert c.hladiny_zobrazeni("58", False) == 1
+    assert not c.dok.doc.layers.get("58").is_on()
+    c.proved("vše")
+    assert all(e.dxf.layer != "58" for e in c.vyber)  # vypnutá hladina se nevybírá
+    c.proved("rozsviť vše")
+    assert c.dok.doc.layers.get("58").is_on()
+    assert c.hladiny_zobrazeni("vše kromě 58", False) >= 0
+    assert c.dok.doc.layers.get("0").is_on()  # aktivní hladina zůstane
+    c.proved("rozsviť vše")

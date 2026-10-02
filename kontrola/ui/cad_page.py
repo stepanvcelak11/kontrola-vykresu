@@ -248,6 +248,8 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
         "uprav text": "upravit text kliknutím (Edit Text)",
+        "mnohoúhelník": "pravidelný mnohoúhelník (střed, vrchol, počet stran)",
+        "zhasni": "vypnout hladinu („zhasni 58“, „zhasni vše kromě 58“)", "rozsviť": "zapnout hladinu („rozsviť 58“, „rozsviť vše“)",
         "body po prvku": "body po prvku – na N dílů nebo po vzdálenosti (staničení)",
         "vyber": "výběr podle atributů („vyber 58“, „vyber barva 3“, „vyber typ text; hladina 59“)",
         "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
@@ -283,6 +285,9 @@ class CadPage(QWidget):
         "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
         "pasteclip": "vlož ze schránky", "vloz ze schranky": "vlož ze schránky", "paste": "vlož ze schránky",
         "divide": "body po prvku", "measure": "body po prvku", "bpp": "body po prvku",
+        "polygon": "mnohoúhelník", "mnohouhelnik": "mnohoúhelník", "pol": "mnohoúhelník",
+        "zhasni hladinu": "zhasni", "lv off": "zhasni", "lvoff": "zhasni", "rozsvit": "rozsviť", "lv on": "rozsviť",
+        "lvon": "rozsviť",
         "et": "uprav text", "edit text": "uprav text", "edittext": "uprav text", "upravit text": "uprav text",
         "sel": "vyber", "select": "vyber", "výběr": "vyber", "vyber podle": "vyber", "sba": "vyber",
         "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
@@ -1509,7 +1514,11 @@ class CadPage(QWidget):
         elif self.dok is None:
             self.vypis("Nejdřív otevřete výkres nebo začněte nový (tlačítko Nový).")
         elif cmd == "vše":
-            self.vyber = list(self.prostor)
+            # jako MicroStation: prvky ve vypnutých, zmrazených a zamčených hladinách se nevybírají
+            ly = self.dok.doc.layers
+            nelze = {x.dxf.name for x in ly if not x.is_on() or x.is_frozen() or x.is_locked()}
+            self.vyber = [e for e in self.prostor if e.dxf.get("layer", "0") not in nelze
+                          and e.dxftype() != "VIEWPORT"]
             self._zvyrazni()
             self.vypis(f"Vybráno {len(self.vyber)} prvků.")
         elif cmd == "vrstvy":
@@ -1527,6 +1536,8 @@ class CadPage(QWidget):
                 self.vypis("Vyberte jeden prvek (nebo na něj dvakrát klikněte).")
             else:
                 self.vlastnosti_prvku(self.vyber[0])
+        elif cmd in ("zhasni", "rozsviť"):
+            self.hladiny_zobrazeni(arg, cmd == "rozsviť")
         elif cmd == "vyber":
             try:
                 self.vyber, popis = U.vyber_podle(self.prostor, arg)
@@ -1909,6 +1920,44 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_mnohouhelnik(self):
+        st = yield self._bod_req("Mnohoúhelník – střed:")
+        v = yield self._bod_req("První vrchol:", st)
+        n = yield Pozadavek("cislo", "Počet stran [4]:", vychozi=4)
+        self.kresleni.mnohouhelnik(st, v, int(n))
+
+    def hladiny_zobrazeni(self, arg: str, zapnout: bool) -> int:
+        """Zapnutí / vypnutí hladin příkazem (jako Level Display): jméno, „vše“ nebo „vše kromě X“."""
+        if self.dok is None:
+            return 0
+        arg = (arg or "").strip()
+        if not arg:
+            self.vypis("Zadejte hladinu, např. „zhasni 58“ nebo „rozsviť vše“.")
+            return 0
+        vrstvy = list(self.dok.doc.layers)
+        if arg.lower() in ("vše", "vse", "all", "*"):
+            cil, krome = vrstvy, set()
+        elif arg.lower().startswith(("vše kromě", "vse krome")):
+            krome = {x.strip().lower() for x in arg.split(maxsplit=2)[2].replace(",", " ").split()}
+            cil = [ly for ly in vrstvy if ly.dxf.name.lower() not in krome]
+        else:
+            jmena = {x.strip().lower() for x in arg.replace(",", " ").split()}
+            cil = [ly for ly in vrstvy if ly.dxf.name.lower() in jmena]
+            if not cil:
+                self.vypis(f"⚠ Hladina „{arg}“ ve výkresu není.")
+                return 0
+        aktivni = (self.kresleni.vrstva or "0").lower()
+        n = 0
+        for ly in cil:
+            if not zapnout and ly.dxf.name.lower() == aktivni:
+                continue  # aktivní hladinu nejde vypnout (jako v MicroStationu)
+            if ly.is_on() != zapnout:
+                ly.on() if zapnout else ly.off()
+                n += 1
+        self.vrstvy_zmeneny()
+        self.vypis(f"{'Zapnuto' if zapnout else 'Vypnuto'} {n} hladin.")
+        return n
 
     def n_uprav_text(self):
         while True:

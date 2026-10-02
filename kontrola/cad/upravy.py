@@ -184,6 +184,19 @@ class Kresleni:
             raise ValueError("Poloměr musí být kladný.")
         return self._hotovo("Kružnice", self.msp.add_circle(_xy(stred), r, dxfattribs=self._attr()))
 
+    def mnohouhelnik(self, stred, vrchol, pocet: int):
+        """Pravidelný mnohoúhelník (Place Polygon) vepsaný do kružnice: střed a první vrchol."""
+        if not 3 <= pocet <= 1000:
+            raise ValueError("Počet stran musí být 3 až 1000.")
+        cx, cy = _xy(stred)
+        r = _dist(stred, vrchol)
+        if r <= EPS:
+            raise ValueError("Vrchol splývá se středem.")
+        u0 = _uhel(stred, vrchol)
+        body = [(cx + r * math.cos(u0 + 2 * math.pi * i / pocet), cy + r * math.sin(u0 + 2 * math.pi * i / pocet))
+                for i in range(pocet)]
+        return self.polylinie(body, uzavrena=True)
+
     def kruznice_3body(self, a, b, c):
         s = stred_kruznice_3b(a, b, c)
         if s is None:
