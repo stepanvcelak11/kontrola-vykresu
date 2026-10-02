@@ -36,6 +36,7 @@ class Pozadavek:
     slova: tuple = ()
     ref: tuple | None = None  # bod, od kterého vede gumička (a od kterého se měří délka kliknutím)
     vychozi: object = None
+    nahled: object = None  # funkce (x, y) → seznam geometrií Shapely: dynamický náhled za kurzorem
 
 
 def _citelne_pero(it) -> None:
@@ -62,6 +63,7 @@ class CadView(QGraphicsView):
     clicked = Signal(float, float)
     doubleClicked = Signal(float, float)
     windowSelected = Signal(float, float, float, float)  # x0, y0, x1, y1 (zprava doleva = protínající)
+    reset = Signal()  # pravé tlačítko bez tažení = Reset (jako v MicroStationu)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -86,8 +88,10 @@ class CadView(QGraphicsView):
         self.mys: tuple[float, float] | None = None  # skutečná poloha myši (bez úchytu) – pro výběr
         self.uchyt = None
         self.gumicka = False  # čára od posledního bodu ke kurzoru (při zadávání)
+        self.nahled = None  # funkce (x, y) → geometrie dynamického náhledu (kružnice, obdélník, posun…)
         self.vyber_oknem = True  # tažení levým tlačítkem = výběr oknem
         self.zvyraznene: list = []  # Shapely geometrie vybraných prvků
+        self.pod_kurzorem = None  # geometrie prvku pod kurzorem (zvýraznění před klikem)
         self._pan = None
         self._okno_start: tuple[float, float] | None = None
         self._okno_px = None
@@ -129,6 +133,7 @@ class CadView(QGraphicsView):
     def mousePressEvent(self, e):  # noqa: N802
         if e.button() in (Qt.MiddleButton, Qt.RightButton):
             self._pan = e.position()
+            self._pan_start = (e.position(), e.button())
             self.setCursor(Qt.ClosedHandCursor)
             return
         if e.button() == Qt.LeftButton and self.kurzor is not None:
@@ -150,6 +155,12 @@ class CadView(QGraphicsView):
         if self._pan is not None:
             self._pan = None
             self.setCursor(Qt.CrossCursor)
+            start = getattr(self, "_pan_start", None)
+            self._pan_start = None
+            if start is not None and start[1] == Qt.RightButton:
+                d = e.position() - start[0]
+                if abs(d.x()) + abs(d.y()) < 5:  # klik pravým bez posunu pohledu
+                    self.reset.emit()
             return
         if self._okno_start is not None and e.button() == Qt.LeftButton:
             start, px = self._okno_start, self._okno_px
@@ -207,6 +218,13 @@ class CadView(QGraphicsView):
             p.setPen(pen)
             for g in self.zvyraznene:
                 _kresli_geometrii(p, g, s)
+        if self.pod_kurzorem is not None:
+            p.setRenderHint(QPainter.Antialiasing, True)
+            pen = QPen(QColor(96, 165, 250, 200), 0)
+            pen.setCosmetic(True)
+            pen.setWidthF(3.0)
+            p.setPen(pen)
+            _kresli_geometrii(p, self.pod_kurzorem, s)
         if self.kurzor is None:
             return
         x, y = self.kurzor
@@ -223,6 +241,20 @@ class CadView(QGraphicsView):
             p.setBrush(QColor(34, 197, 94, 30) if protinajici else QColor(59, 130, 246, 30))
             p.drawRect(QRectF(QPointF(min(x0, x1), min(y0, y1)), QPointF(max(x0, x1), max(y0, y1))))
             p.setBrush(Qt.NoBrush)
+        if self.nahled is not None:
+            try:
+                geoms = self.nahled(x, y) or []
+            except Exception:  # noqa: BLE001 – náhled nesmí shodit kreslení (např. nulový poloměr)
+                geoms = []
+            if geoms:
+                p.setRenderHint(QPainter.Antialiasing, True)
+                pen = QPen(QColor("#FBBF24"), 0)
+                pen.setCosmetic(True)
+                pen.setWidthF(1.5)
+                p.setPen(pen)
+                for g in geoms:
+                    _kresli_geometrii(p, g, s)
+                p.setRenderHint(QPainter.Antialiasing, False)
         if self.gumicka and self.posledni is not None:
             p.setPen(QPen(QColor("#FBBF24"), 0, Qt.DashLine))
             p.drawLine(QPointF(*self.posledni), QPointF(x, y))
@@ -590,6 +622,7 @@ class CadPage(QWidget):
         self.view.clicked.connect(self._klik)
         self.view.windowSelected.connect(self._okno)
         self.view.doubleClicked.connect(self._dvojklik)
+        self.view.reset.connect(self._reset)
         self.b_uchyty.toggled.connect(lambda on: setattr(self.view, "uchyty_on", on))
         self.b_ortho.toggled.connect(self._ortho)
         self.b_polar.toggled.connect(self._polar)
@@ -1426,7 +1459,35 @@ class CadPage(QWidget):
         self.vypis(f"Vybráno {len(self.vyber)} prvků.")
 
     # ------------------------------------------------------------ kurzor a vstupy
+    def _reset(self):
+        """Pravé tlačítko (Reset): ukončí řetězec bodů (jako Enter), jinde zruší nástroj; bez nástroje zruší výběr."""
+        r = self._req
+        if self._gen is not None and r is not None:
+            if r.typ == "vyber" and self.vyber:
+                self._posli(list(self.vyber))
+            elif r.volitelne or r.vychozi is not None:
+                self._odpoved("")
+            else:
+                self.zrus()
+        elif self.vyber:
+            self.vyber = []
+            self._zvyrazni()
+        self.view.viewport().update()
+
+    def _pod_kurzorem(self, x, y):
+        """Zvýrazní prvek pod kurzorem, když se vybírá (bez nástroje nebo při výběru prvku)."""
+        r = self._req
+        g = None
+        if self.index is not None and self.view.mys is not None and (
+                self._gen is None or (r is not None and r.typ in ("vyber", "prvek"))):
+            mx, my = self.view.mys
+            e = self.index.najdi(mx, my, self._tol())
+            if e is not None and e not in self.vyber:
+                g = self.index.geometrie(e)
+        self.view.pod_kurzorem = g
+
     def _pohyb(self, x, y):
+        self._pod_kurzorem(x, y)
         u = self.view.uchyt
         su = f"   [{u.popis}]" if u is not None else ""
         if self.sjtsk:
@@ -1504,8 +1565,11 @@ class CadPage(QWidget):
         self._prikaz = None
         self._body = []
         self.view.gumicka = False
+        self.view.nahled = None
         self.view.vyber_oknem = True
         self.vyzva.setText("Příkaz:")
+        if getattr(self, "paleta", None) is not None:
+            self.paleta.oznac(None)
         self.view.viewport().update()
 
     def _enter(self):
@@ -1635,6 +1699,7 @@ class CadPage(QWidget):
                 self._po_zmene(op.pridano, op.odebrano)
         if r is not None:
             self._req = r
+            self.view.nahled = r.nahled
             self.vyzva.setText(r.vyzva)
             self.vypis(r.vyzva)
             self.view.vyber_oknem = r.typ == "vyber"
@@ -1648,6 +1713,7 @@ class CadPage(QWidget):
     def _konec_nastroje(self):
         self._gen = None
         self._req = None
+        self.view.nahled = None
         if getattr(self, "paleta", None) is not None:
             self.paleta.oznac(None)
         self.view.gumicka = False
@@ -2013,8 +2079,19 @@ class CadPage(QWidget):
         v = getattr(self.win, "vypocty", None)
         return v.seznam.najdi(cislo) if v is not None else None
 
-    def _bod_req(self, vyzva, ref=None, volitelne=False, slova=()):
-        return Pozadavek("bod", vyzva, volitelne, slova, ref)
+    def _bod_req(self, vyzva, ref=None, volitelne=False, slova=(), nahled=None):
+        return Pozadavek("bod", vyzva, volitelne, slova, ref, nahled=nahled)
+
+    def _geometrie_vyberu(self, ents) -> list:
+        """Geometrie prvků pro dynamický náhled úprav (nejvýš 3000 prvků – jinak by náhled zdržoval)."""
+        if self.index is None:
+            return []
+        out = []
+        for e in ents[:3000]:
+            g = self.index.geometrie(e)
+            if g is not None and not g.is_empty:
+                out.append(g)
+        return out
 
     def n_bod(self):
         while True:
@@ -2055,7 +2132,7 @@ class CadPage(QWidget):
         body = [(yield self._bod_req("Polylinie – první bod:"))]
         while True:
             q = yield self._bod_req("Další bod (Enter = konec, k = uzavřít, z = zpět o bod):", body[-1], True,
-                                    ("k", "z"))
+                                    ("k", "z"), nahled=lambda x, y, b=list(body): [_linie(b + [(x, y)])])
             if q == "z":
                 if len(body) > 1:
                     body.pop()
@@ -2069,7 +2146,7 @@ class CadPage(QWidget):
 
     def n_obdelnik(self):
         a = yield self._bod_req("Obdélník – první roh:")
-        b = yield self._bod_req("Protější roh:", a)
+        b = yield self._bod_req("Protější roh:", a, nahled=lambda x, y: [_obdelnik(a, (x, y))])
         self.kresleni.obdelnik(a, b)
 
     def n_kruznice(self):
@@ -2077,15 +2154,17 @@ class CadPage(QWidget):
         if s == "3":
             a = yield self._bod_req("Kružnice třemi body – první bod:")
             b = yield self._bod_req("Druhý bod:", a)
-            c = yield self._bod_req("Třetí bod:", b)
+            c = yield self._bod_req("Třetí bod:", b, nahled=lambda x, y: [_kruh3(a, b, (x, y))])
             self.kresleni.kruznice_3body(a, b, c)
             return
         if s == "p":
             a = yield self._bod_req("Kružnice průměrem – první bod:")
-            b = yield self._bod_req("Druhý konec průměru:", a)
+            b = yield self._bod_req("Druhý konec průměru:", a, nahled=lambda x, y: [_kruh(
+                ((a[0] + x) / 2, (a[1] + y) / 2), math.hypot(x - a[0], y - a[1]) / 2)])
             self.kresleni.kruznice_prumer(a, b)
             return
-        r = yield Pozadavek("cislo", "Poloměr (číslo nebo klikněte bod na kružnici):", ref=s)
+        r = yield Pozadavek("cislo", "Poloměr (číslo nebo klikněte bod na kružnici):", ref=s,
+                            nahled=lambda x, y: [_kruh(s, math.hypot(x - s[0], y - s[1]))])
         self.kresleni.kruznice(s, r)
 
     def n_oblouk(self):
@@ -2101,13 +2180,14 @@ class CadPage(QWidget):
                 self.kresleni.oblouk_stred(st, z, k)
             return
         b = yield self._bod_req("Bod na oblouku:", a)
-        c = yield self._bod_req("Koncový bod:", b)
+        c = yield self._bod_req("Koncový bod:", b, nahled=lambda x, y: [_oblouk3(a, b, (x, y))])
         self.kresleni.oblouk_3body(a, b, c)
 
     def n_elipsa(self):
         s = yield self._bod_req("Elipsa – střed:")
         a = yield self._bod_req("Konec první poloosy:", s)
-        b = yield Pozadavek("cislo", "Délka druhé poloosy (číslo nebo bod):", ref=s)
+        b = yield Pozadavek("cislo", "Délka druhé poloosy (číslo nebo bod):", ref=s,
+                            nahled=lambda x, y: [_elipsa(s, a, math.hypot(x - s[0], y - s[1]))])
         self.kresleni.elipsa(s, a, b)
 
     def n_krivka(self):
@@ -2392,7 +2472,8 @@ class CadPage(QWidget):
     def n_posun(self):
         ents = yield from self._vyber_req("Posun")
         a = yield self._bod_req("Bod odkud:")
-        b = yield self._bod_req("Bod kam:", a)
+        geo = self._geometrie_vyberu(ents)
+        b = yield self._bod_req("Bod kam:", a, nahled=lambda x, y: _posunute(geo, x - a[0], y - a[1]))
         self._hotovo_vyber(U.posun(self.prostor, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1]))
 
     def n_skupina(self):
@@ -2445,8 +2526,10 @@ class CadPage(QWidget):
     def n_kopie(self):
         ents = yield from self._vyber_req("Kopie")
         a = yield self._bod_req("Bod odkud:")
+        geo = self._geometrie_vyberu(ents)
         while True:
-            b = yield self._bod_req("Bod kam (Enter = konec, p = počet kopií v řadě):", a, True, ("p",))
+            b = yield self._bod_req("Bod kam (Enter = konec, p = počet kopií v řadě):", a, True, ("p",),
+                                    nahled=lambda x, y: _posunute(geo, x - a[0], y - a[1]))
             if b is None:
                 return
             if b == "p":
@@ -2480,7 +2563,9 @@ class CadPage(QWidget):
     def n_otoc(self):
         ents = yield from self._vyber_req("Otočení")
         s = yield self._bod_req("Střed otočení:")
-        u = yield Pozadavek("uhel", "Úhel otočení v gonech (+ proti směru hodin) nebo klikněte směr:", ref=s)
+        geo = self._geometrie_vyberu(ents)
+        u = yield Pozadavek("uhel", "Úhel otočení v gonech (+ proti směru hodin) nebo klikněte směr:", ref=s,
+                            nahled=lambda x, y: _otocene(geo, s, math.atan2(y - s[1], x - s[0])))
         self._hotovo_vyber(U.otoc(self.prostor, self.historie_zmen, ents, s, u * GON))
 
     def n_meritko(self):
@@ -2492,7 +2577,8 @@ class CadPage(QWidget):
     def n_zrcadli(self):
         ents = yield from self._vyber_req("Zrcadlení")
         a = yield self._bod_req("První bod osy:")
-        b = yield self._bod_req("Druhý bod osy:", a)
+        geo = self._geometrie_vyberu(ents)
+        b = yield self._bod_req("Druhý bod osy:", a, nahled=lambda x, y: _zrcadlene(geo, a, (x, y)))
         z = yield Pozadavek("text", "Ponechat původní prvky? [n] (a/n):", vychozi="n")
         self._hotovo_vyber(U.zrcadli(self.prostor, self.historie_zmen, ents, a, b,
                                      kopie=z.strip().lower() in ("a", "ano", "y")))
@@ -2850,3 +2936,86 @@ def _ascii(s: str) -> str:
 
 
 __all__ = ["CadPage", "CadView", "TYPY"]
+
+
+# ------------------------------------------------------------------ dynamické náhledy (geometrie Shapely)
+def _kruh(s, r: float):
+    from shapely.geometry import LineString
+    if r <= 0:
+        return LineString()
+    n = 72
+    return LineString([(s[0] + r * math.cos(2 * math.pi * i / n), s[1] + r * math.sin(2 * math.pi * i / n))
+                       for i in range(n + 1)])
+
+
+def _obdelnik(a, b):
+    from shapely.geometry import LineString
+    return LineString([a, (b[0], a[1]), b, (a[0], b[1]), a])
+
+
+def _stred_3body(a, b, c):
+    ax, ay = a
+    bx, by = b
+    cx, cy = c
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-12:
+        return None
+    ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+    uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+    return ux, uy
+
+
+def _kruh3(a, b, c):
+    from shapely.geometry import LineString
+    st = _stred_3body(a, b, c)
+    return _kruh(st, math.dist(st, a)) if st else LineString([a, b, c])
+
+
+def _oblouk3(a, b, c):
+    from shapely.geometry import LineString
+    st = _stred_3body(a, b, c)
+    if st is None:
+        return LineString([a, b, c])
+    r = math.dist(st, a)
+    u = [math.atan2(p[1] - st[1], p[0] - st[0]) for p in (a, b, c)]
+    proti = (u[1] - u[0]) % (2 * math.pi) < (u[2] - u[0]) % (2 * math.pi)  # b leží mezi a a c proti směru
+    rozsah = (u[2] - u[0]) % (2 * math.pi) if proti else -((u[0] - u[2]) % (2 * math.pi))
+    n = max(8, int(abs(rozsah) / (2 * math.pi) * 72))
+    return LineString([(st[0] + r * math.cos(u[0] + rozsah * i / n), st[1] + r * math.sin(u[0] + rozsah * i / n))
+                       for i in range(n + 1)])
+
+
+def _elipsa(s, a, b: float):
+    from shapely.geometry import LineString
+    ra = math.dist(s, a)
+    if ra <= 0 or b <= 0:
+        return LineString()
+    u0 = math.atan2(a[1] - s[1], a[0] - s[0])
+    pts = []
+    for i in range(73):
+        t = 2 * math.pi * i / 72
+        x, y = ra * math.cos(t), b * math.sin(t)
+        pts.append((s[0] + x * math.cos(u0) - y * math.sin(u0), s[1] + x * math.sin(u0) + y * math.cos(u0)))
+    return LineString(pts)
+
+
+def _posunute(geo, dx: float, dy: float) -> list:
+    from shapely.affinity import translate
+    return [translate(g, dx, dy) for g in geo]
+
+
+def _otocene(geo, s, uhel_rad: float) -> list:
+    from shapely.affinity import rotate
+    return [rotate(g, uhel_rad, origin=s, use_radians=True) for g in geo]
+
+
+def _zrcadlene(geo, a, b) -> list:
+    from shapely.affinity import affine_transform
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    ll = dx * dx + dy * dy
+    if ll < 1e-18:
+        return []
+    c, s_ = (dx * dx - dy * dy) / ll, 2 * dx * dy / ll  # zrcadlení přes přímku a–b
+    m = [c, s_, s_, -c, a[0] - c * a[0] - s_ * a[1], a[1] - s_ * a[0] + c * a[1]]
+    return [affine_transform(g, m) for g in geo]
+

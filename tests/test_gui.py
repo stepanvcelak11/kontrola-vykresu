@@ -2153,6 +2153,41 @@ def test_cad_skupiny(window, tmp_path):
     assert len(c.vyber) == 1
 
 
+def test_cad_lista_atributu_nahled_a_reset(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    # lišta atributů: barva 3, styl 2, tloušťka 2 → nové prvky
+    c._barva("3")
+    assert c.b_barva.text() == "3"
+    c._styl_z_listy(c.styl_cb.findData("2"))
+    c._tloustka_z_listy(c.tl_cb.findData("2"))
+    for t in ("úsečka", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    ln = c.prostor.query("LINE")[0]
+    assert ln.dxf.linetype == "DGN Style 2" and ln.dxf.color != 256 and ln.dxf.lineweight > 0
+    assert c.styl_cb.currentData() == "2" and c.tl_cb.currentData() == "2"
+    # dynamický náhled kružnice
+    for t in ("kružnice", "x=50 y=50"):
+        c.zadej(t)
+    g = c.view.nahled(55, 50)
+    assert g and abs(g[0].length - 2 * 3.14159 * 5) < 0.1
+    c.view.reset.emit()  # pravé tlačítko = Reset → nástroj zrušen
+    assert c._gen is None and c.view.nahled is None
+    # Reset ukončí polylinii (jako Enter)
+    for t in ("polylinie", "x=0 y=10", "x=10 y=10", "x=10 y=20"):
+        c.zadej(t)
+    c.view.reset.emit()
+    assert len(c.prostor.query("LWPOLYLINE")) == 1
+    # panel hladin: vypnutí hladiny
+    c.zadej("vrstva B")
+    c.zadej("vrstva 0")
+    c._hladina_zobrazeni_panel("B", False)
+    assert c.dok.doc.layers.get("B").is_off()
+    c._hladina_aktivni_panel("B")
+    assert c.kresleni.vrstva == "B" and c.dok.doc.layers.get("B").is_on()
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")
