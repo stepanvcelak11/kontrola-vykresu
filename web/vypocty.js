@@ -4,18 +4,32 @@
 const vyp = { body: [], ulohy: null, aktivni: null, hodnoty: {}, vysledek: null, zapisnik: null, cekajici: new Map(), dalsiId: 1, nove: new Set() };
 
 // ---------------------------------------------------------------- volání Pythonu ve workeru
-function volej(volani, args = [], soubor = null) {
+function volej(volani, args = [], soubor = null, soubory = null, sDaty = false) {
   return new Promise((ok, chyba) => {
     const id = vyp.dalsiId++;
-    vyp.cekajici.set(id, { ok, chyba });
-    worker.postMessage({ volani, args, soubor, id });
+    vyp.cekajici.set(id, { ok, chyba, sDaty });
+    worker.postMessage({ volani, args, soubor, soubory, id });
   });
 }
+// volání, které vrací soubor ke stažení: {json, data}
+function volejSoubor(volani, args = [], soubor = null, soubory = null) { return volej(volani, args, soubor, soubory, true); }
 function vypOdpoved(m) {
   const c = vyp.cekajici.get(m.id);
   if (!c) return;
   vyp.cekajici.delete(m.id);
-  if (m.chybaVolani) c.chyba(new Error(m.chybaVolani)); else c.ok(m.odpoved);
+  skryjStavPrace();
+  if (m.chybaVolani) c.chyba(new Error(m.chybaVolani));
+  else c.ok(c.sDaty ? { json: JSON.parse(m.odpoved), data: m.data } : m.odpoved);
+}
+function skryjStavPrace() { if (vyp.praceStav) { vyp.praceStav = false; skryjStav(); } }
+function stahniData(data, nazev) {
+  nazev = nazev.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const typy = { pdf: "application/pdf", html: "text/html", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", csv: "text/csv", dxf: "application/dxf" };
+  const blob = new Blob([data], { type: typy[nazev.split(".").pop().toLowerCase()] || "application/octet-stream" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = nazev;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 async function vypPripraveno() {
   try {
@@ -23,6 +37,7 @@ async function vypPripraveno() {
   } catch (e) { vyp.ulohy = []; }
   vykresliUlohy();
   $("u_spocti").disabled = !vyp.aktivni;
+  if (typeof nactiKontroly === "function") nactiKontroly();
 }
 
 // ---------------------------------------------------------------- seznam souřadnic (pamatuje si ho jen tento prohlížeč)
@@ -52,7 +67,11 @@ function vykresliBody() {
   for (const b of vyber.slice(0, 3000)) {
     const tr = document.createElement("tr");
     if (vyp.nove.has(b.c)) tr.className = "novy";
-    for (const v of [b.c, f2(b.y), f2(b.x), f2(b.z), b.kod || ""]) { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); }
+    [["c", b.c], ["y", f2(b.y)], ["x", f2(b.x)], ["z", f2(b.z)], ["kod", b.kod || ""]].forEach(([k, v]) => {
+      const td = document.createElement("td"); td.textContent = v; td.title = "Dvojklik = upravit";
+      td.addEventListener("dblclick", () => upravBunku(td, b, k));
+      tr.appendChild(td);
+    });
     const td = document.createElement("td");
     const x = document.createElement("button"); x.textContent = "✕"; x.title = "Smazat bod " + b.c; x.setAttribute("aria-label", "Smazat bod " + b.c);
     x.addEventListener("click", () => { vyp.body = vyp.body.filter((q) => q !== b); ulozMistne(); vykresliBody(); });
@@ -65,6 +84,27 @@ function vykresliBody() {
   kresliMapu();
 }
 $("v_hledat").addEventListener("input", vykresliBody);
+
+function upravBunku(td, b, k) {
+  const inp = document.createElement("input");
+  inp.className = "bunka";
+  inp.value = k === "c" || k === "kod" ? (b[k] || "") : (b[k] == null ? "" : b[k]);
+  td.textContent = "";
+  td.appendChild(inp);
+  inp.focus(); inp.select();
+  const hotovo = (ulozit) => {
+    if (ulozit) {
+      const t = inp.value.trim();
+      if (k === "c" || k === "kod") { if (k === "kod" || t) b[k] = t; }
+      else if (k === "z" && !t) b.z = null;
+      else { const v = parseFloat(t.replace(",", ".")); if (isFinite(v)) b[k] = v; }
+      serad(); ulozMistne();
+    }
+    vykresliBody();
+  };
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") hotovo(true); if (e.key === "Escape") hotovo(false); });
+  inp.addEventListener("blur", () => hotovo(true), { once: true });
+}
 
 function kresliMapu() {
   const c = $("v_mapa"), r = window.devicePixelRatio || 1;
@@ -117,6 +157,26 @@ document.addEventListener("click", () => $("m_ulozit").classList.add("skryte"));
 $("m_ulozit").addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.dataset.akce === "duplicity") {
+    try {
+      const r = JSON.parse(await volej("duplicity", [JSON.stringify(vyp.body)]));
+      vyp.nove = new Set(r.cisla); vykresliBody();
+      dialog("Duplicity v seznamu souřadnic", `<pre>${esc(r.text)}</pre>` + (r.pocet ? '<p class="tlumene">Dotčené body jsou v tabulce zvýrazněné.</p>' : ""));
+    } catch (e) { chybaDialog(e); }
+    return;
+  }
+  if (b.dataset.akce === "porovnat") {
+    const f = await vyberSoubor(".txt,.csv,.xyz,.sez,.pts,.ss");
+    if (!f) return;
+    try {
+      const r = JSON.parse(await volej("porovnej_seznamy", [JSON.stringify(vyp.body), 3], f));
+      vyp.vysledek = { protokol: r.protokol, nove: [] };
+      $("u_protokol").textContent = r.protokol;
+      $("u_stahnout").disabled = $("u_pdf").disabled = false;
+      ukazStav(r.souhrn, false); setTimeout(skryjStav, 7000);
+    } catch (e) { chybaDialog(e); }
+    return;
+  }
   if (b.dataset.smazat) {
     if (vyp.body.length && confirm(`Smazat všech ${vyp.body.length} bodů ze seznamu?`)) { vyp.body = []; vyp.nove.clear(); ulozMistne(); vykresliBody(); }
     return;
@@ -127,6 +187,20 @@ $("m_ulozit").addEventListener("click", async (e) => {
   stahni(text, odd === ";" ? "seznam_souradnic.csv" : "seznam_souradnic.txt", odd === ";");
 });
 
+function ukazVysledek(r) {
+  const ch = $("u_chyba");
+  ch.classList.add("skryte");
+  if (r.chyba) { ch.textContent = "⚠ " + r.chyba; ch.classList.remove("skryte"); $("u_pridat").disabled = true; return false; }
+  vyp.vysledek = r;
+  $("u_protokol").textContent = r.protokol;
+  $("u_stahnout").disabled = $("u_pdf").disabled = false;
+  const n = (r.nove || []).length;
+  $("u_pridat").disabled = !n;
+  $("u_pridat").textContent = n ? `Přidat ${n} ${n === 1 ? "bod" : n < 5 ? "body" : "bodů"} do seznamu` : "Přidat do seznamu";
+  if (r.upozorneni && r.upozorneni.length) { ch.textContent = "Upozornění: " + r.upozorneni.slice(0, 3).join("; "); ch.classList.remove("skryte"); }
+  return true;
+}
+
 function stahni(text, nazev, bom = false) {
   const blob = new Blob([(bom ? "﻿" : "") + text], { type: "text/plain;charset=utf-8" });
   const a = document.createElement("a");
@@ -136,9 +210,9 @@ function stahni(text, nazev, bom = false) {
 }
 
 // ---------------------------------------------------------------- úlohy
-const POLARNI = { nazev: "Polární metoda dávkou", popis: "Souřadnice a výšky podrobných bodů ze zápisníku (.zap z Gromy nebo GSI z Leica) a daných bodů ze seznamu – protokol ve stejném členění jako Groma.", pole: [], polarni: true };
+const POLARNI = { nazev: "Zápisník a polární metoda", popis: "Zápisník měření (.zap z Gromy nebo GSI z Leica): úpravy stanovisek a záměr, polární metoda dávkou s protokolem jako v Gromě, vyrovnání sítě MNČ a kontrola výpočtu proti seznamu souřadnic.", pole: [], polarni: true };
 const SKUPINY = [
-  ["Ze zápisníku", ["Polární metoda dávkou"]],
+  ["Ze zápisníku", ["Zápisník a polární metoda"]],
   ["Body", ["Směrník a délka", "Rajón (polární bod)", "Protínání vpřed z úhlů", "Protínání z délek", "Protínání zpět", "Volné stanovisko",
     "Průsečíky", "Staničení a kolmice", "Bod ze staničení a kolmice", "Ortogonální metoda", "Polygonový pořad", "Vytyčovací prvky", "Kružnicový oblouk"]],
   ["Plochy", ["Výměra a obvod", "Výměry parcel dávkou", "Oddělení parcely"]],
@@ -182,16 +256,7 @@ function vyberUlohu(u) {
   const f = $("u_form");
   f.innerHTML = "";
   const ulozene = vyp.hodnoty[u.nazev] || {};
-  if (u.polarni) {
-    const l = document.createElement("label"); l.className = "siroke";
-    l.innerHTML = '<span>Zápisník měření (.zap, .gsi)</span>';
-    const t = document.createElement("label"); t.className = "tlacitko"; t.textContent = vyp.zapisnik ? "Zápisník: " + vyp.zapisnik.nazev : "Vybrat zápisník…";
-    const inp = document.createElement("input"); inp.type = "file"; inp.hidden = true; inp.accept = ".zap,.gsi,.gs1,.txt";
-    inp.addEventListener("change", async () => { if (inp.files[0]) { vyp.zapisnik = await nacti(inp.files[0]); t.firstChild.textContent = "Zápisník: " + vyp.zapisnik.nazev; } });
-    t.appendChild(inp); l.appendChild(t);
-    const n = document.createElement("span"); n.className = "napoveda"; n.textContent = "Dané body (stanoviska a orientace) musí být v seznamu souřadnic.";
-    l.appendChild(n); f.appendChild(l);
-  }
+  if (u.polarni) vykresliZapisnik(f);
   for (const p of u.pole) {
     const l = document.createElement("label");
     if (p.typ === "radky") l.className = "siroke";
@@ -215,6 +280,7 @@ function vyberUlohu(u) {
   }
   $("u_spocti").disabled = !stav.pripraveno;
   $("u_dxf").classList.toggle("skryte", u.nazev !== "Model terénu a kubatura");
+  for (const id of ["u_vyrovnat", "u_kontrola", "u_zap"]) $(id).classList.toggle("skryte", !u.polarni);
 }
 
 $("u_dxf").addEventListener("click", async () => {
@@ -246,24 +312,13 @@ async function spocti() {
   let r;
   try {
     if (u.polarni) {
-      if (!vyp.zapisnik) throw new Error("Vyberte zápisník měření.");
-      r = JSON.parse(await volej("polarni", [JSON.stringify(vyp.body)], vyp.zapisnik));
+      if (!zap.stanoviska.length) throw new Error("Načtěte zápisník měření (nebo přidejte stanovisko).");
+      r = JSON.parse(await volej("polarni_zapisnik", [JSON.stringify(zap.stanoviska), JSON.stringify(vyp.body), zap.nazev]));
     } else {
       r = JSON.parse(await volej("spocti", [u.index, JSON.stringify(vyp.body), JSON.stringify(vyp.hodnoty[u.nazev])]));
     }
   } catch (e) { r = { chyba: e.message }; }
-  if (r.chyba) {
-    ch.textContent = "⚠ " + r.chyba; ch.classList.remove("skryte");
-    $("u_pridat").disabled = true;
-    return;
-  }
-  vyp.vysledek = r;
-  $("u_protokol").textContent = r.protokol;
-  $("u_stahnout").disabled = false;
-  const n = (r.nove || []).length;
-  $("u_pridat").disabled = !n;
-  $("u_pridat").textContent = n ? `Přidat ${n} ${n === 1 ? "bod" : n < 5 ? "body" : "bodů"} do seznamu` : "Přidat do seznamu";
-  if (r.upozorneni && r.upozorneni.length) { ch.textContent = "Upozornění: " + r.upozorneni.slice(0, 3).join("; "); ch.classList.remove("skryte"); }
+  ukazVysledek(r);
 }
 
 $("u_pridat").addEventListener("click", () => {
@@ -274,6 +329,15 @@ $("u_pridat").addEventListener("click", () => {
   $("u_pridat").disabled = true;
   ukazStav(`Do seznamu přidáno ${p} bodů` + (n ? `, ${n} přepsáno (stejné číslo)` : "") + ".", false);
   setTimeout(skryjStav, 5000);
+});
+$("u_pdf").addEventListener("click", async () => {
+  if (!vyp.vysledek) return;
+  ukazStav("Připravuji PDF…");
+  try {
+    const { json, data } = await volejSoubor("protokol_pdf", [vyp.vysledek.protokol, "protokol_" + (vyp.aktivni.nazev || "vypocet").replace(/[^\p{L}\p{N}]+/gu, "_")]);
+    skryjStav();
+    stahniData(data, json.nazev);
+  } catch (e) { skryjStav(); chybaDialog(e); }
 });
 $("u_stahnout").addEventListener("click", () => {
   if (vyp.vysledek) stahni(vyp.vysledek.protokol, "protokol_" + (vyp.aktivni.nazev || "vypocet").replace(/[^\p{L}\p{N}]+/gu, "_") + ".txt");

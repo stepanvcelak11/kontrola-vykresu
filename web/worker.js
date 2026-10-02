@@ -30,13 +30,42 @@ function zapis(soubor) {
   return cesta;
 }
 
-// Volání výpočtů (Výpočty): {id, volani, args, soubor} → {id, odpoved} nebo {id, chybaVolani}
+// PDF (reportlab) a písma s diakritikou se načtou až při prvním exportu do PDF
+const PDF_VOLANI = new Set(["export", "protokol_pdf"]);
+let pdfPripraveno = null;
+function pripravPdf() {
+  if (!pdfPripraveno) pdfPripraveno = (async () => {
+    postMessage({ stav: "Načítám knihovnu pro PDF (jen poprvé)…", prace: true });
+    await py.pyimport("micropip").install(["reportlab"]);
+    const cil = "/usr/share/fonts/truetype/dejavu/";
+    py.FS.mkdirTree(cil);
+    for (const f of ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"]) {
+      try {
+        const r = await fetch("fonty/" + f);
+        if (r.ok) py.FS.writeFile(cil + f, new Uint8Array(await r.arrayBuffer()));
+      } catch (e) { /* bez písma: PDF bez diakritiky */ }
+    }
+  })();
+  return pdfPripraveno;
+}
+
+// Volání funkcí aplikace: {id, volani, args, soubor, soubory} → {id, odpoved[, data]} nebo {id, chybaVolani}
 async function volej(m) {
   try {
+    if (PDF_VOLANI.has(m.volani) && !(m.volani === "export" && !["pdf", "oprava"].includes((m.args || [])[0]))) await pripravPdf();
     const api = py.pyimport("kontrola.web_api");
     const args = [...(m.args || [])];
+    if (m.soubory) for (const f of [...m.soubory].reverse()) args.unshift(zapis(f));
     if (m.soubor) args.unshift(zapis(m.soubor));
-    postMessage({ id: m.id, odpoved: api[m.volani](...args) });
+    const odpoved = api[m.volani](...args);
+    let data = null;
+    if (typeof odpoved === "string" && odpoved.startsWith("{") && odpoved.includes('"soubor"')) {
+      try {
+        const o = JSON.parse(odpoved);
+        if (o.soubor && o.soubor.startsWith("/")) data = py.FS.readFile(o.soubor).buffer;
+      } catch (e) { /* není soubor */ }
+    }
+    if (data) postMessage({ id: m.id, odpoved, data }, [data]); else postMessage({ id: m.id, odpoved });
   } catch (e) {
     postMessage({ id: m.id, chybaVolani: String(e).split("\n").slice(-3).join("\n") });
   }
@@ -46,7 +75,7 @@ onmessage = async (ev) => {
   await hotovo;
   if (!py) return;
   if (ev.data.volani) return volej(ev.data);
-  const { vykres, pravidla, seznam, meritko, vestavena } = ev.data;
+  const { vykres, pravidla, seznam, meritko, vestavena, nastaveni } = ev.data;
   try {
     postMessage({ stav: "Kontroluji výkres…", prace: true });
     const pv = zapis(vykres);
@@ -57,7 +86,7 @@ onmessage = async (ev) => {
     }
     const ps = zapis(seznam);
     const api = py.pyimport("kontrola.web_api");
-    const json = api.zkontroluj(pv, pp, ps, meritko || null);
+    const json = api.zkontroluj(pv, pp, ps, meritko || null, nastaveni || null);
     postMessage({ vysledek: json });
   } catch (e) {
     postMessage({ chyba: String(e).split("\n").slice(-3).join("\n") });

@@ -27,6 +27,24 @@
       </div>
       <div class="mezera"></div>
       <label class="tlacitko">Otevřít výkres…<input type="file" id="f_vykres" accept=".dxf,.dgn" hidden></label>
+      <div class="nastroje-obal">
+        <button id="b_nastroje" class="tlacitko" disabled aria-haspopup="true">Nástroje ▾</button>
+        <div id="m_nastroje" class="menu menu-hlavicka skryte" role="menu">
+          <div class="menu-nadpis">Protokol a export</div>
+          <button data-export="html">Interaktivní protokol (HTML)</button>
+          <button data-export="pdf">Protokol kontroly (PDF)</button>
+          <button data-export="oprava">Seznam k opravě na tisk (PDF)</button>
+          <button data-export="xlsx">Tabulka chyb (Excel)</button>
+          <button data-export="csv">Tabulka chyb (CSV)</button>
+          <button data-export="dxf">Výkres s vyznačenými chybami (DXF)</button>
+          <button data-export="log">Seznam chyb jako MGEO (.log)</button>
+          <div class="menu-nadpis">Nástroje</div>
+          <button data-nastroj="oprava">Automatická oprava…</button>
+          <button data-nastroj="porovnani">Porovnat se starší verzí výkresu…</button>
+          <button data-nastroj="ucitel">Porovnat s protokolem od učitele (.log)…</button>
+          <button data-nastroj="predikce">Co nejspíš najde učitel</button>
+        </div>
+      </div>
       <button id="b_kontrola" class="tlacitko primarni" disabled>Zkontrolovat</button>
     </header>
 
@@ -49,6 +67,20 @@
         </div>
       </main>
       <aside class="panel" aria-label="Chyby">
+        <div class="zalozky" role="tablist">
+          <button class="zalozka aktivni" data-z="chyby" role="tab">Chyby</button>
+          <button class="zalozka" data-z="hladiny" role="tab">Hladiny</button>
+          <button class="zalozka" data-z="prvek" role="tab">Prvek</button>
+          <button class="zalozka skryte" data-z="zmeny" role="tab">Změny</button>
+        </div>
+        <div id="z_hladiny" class="zalozka-obsah skryte">
+          <div class="hladiny-hlava"><input id="h_hledat" class="pole" placeholder="Hledat hladinu…" aria-label="Hledat hladinu">
+            <button id="h_vse" class="tlacitko maly">Vše</button><button id="h_nic" class="tlacitko maly">Nic</button></div>
+          <div id="h_seznam" class="hladiny-seznam"></div>
+        </div>
+        <div id="z_prvek" class="zalozka-obsah skryte"><div id="p_obsah" class="prazdne">Klikněte do výkresu na prvek – ukážou se jeho vlastnosti (hladina, barva, styl, tloušťka, text, délka…).</div></div>
+        <div id="z_zmeny" class="zalozka-obsah skryte"><div id="zm_souhrn" class="tlumene zm-souhrn"></div><div id="zm_seznam" class="seznam"></div></div>
+        <div id="z_chyby" class="zalozka-obsah">
         <div class="skore-radek">
           <div class="prstenec" id="prstenec"><div class="prstenec-vnitrek"><div id="skore">–</div><div class="mini">ze 100</div></div></div>
           <div class="skore-text">
@@ -64,6 +96,7 @@
           <button class="filtr" data-f="info">Info</button>
         </div>
         <div class="seznam" id="seznam"></div>
+        </div>
       </aside>
     </section>
 
@@ -74,11 +107,13 @@
             <div class="karta-nadpis">Seznam souřadnic <span id="v_pocet" class="tlumene"></span></div>
             <div class="mezera"></div>
             <label class="tlacitko maly">Načíst…<input type="file" id="f_body" accept=".txt,.csv,.xyz,.sez,.pts,.ss,.tsv" hidden></label>
-            <button id="b_ulozit_body" class="tlacitko maly">Uložit ▾</button>
+            <button id="b_ulozit_body" class="tlacitko maly">Seznam ▾</button>
           </div>
           <div id="m_ulozit" class="menu skryte">
             <button data-odd=" ">Textový seznam (jako Groma, .txt)</button>
             <button data-odd=";">CSV se středníkem (Excel, .csv)</button>
+            <button data-akce="duplicity">Najít duplicity (číslo, poloha)</button>
+            <button data-akce="porovnat">Porovnat s jiným seznamem…</button>
             <button data-smazat="1">Vymazat celý seznam</button>
           </div>
           <input id="v_hledat" class="pole" placeholder="Hledat bod, kód…" aria-label="Hledat bod">
@@ -103,7 +138,11 @@
             <div class="u-tlacitka">
               <button id="u_spocti" class="tlacitko primarni" disabled>Vypočítat</button>
               <button id="u_pridat" class="tlacitko" disabled>Přidat do seznamu</button>
-              <button id="u_stahnout" class="tlacitko" disabled>Stáhnout protokol</button>
+              <button id="u_vyrovnat" class="tlacitko skryte">Vyrovnat síť (MNČ)…</button>
+              <button id="u_kontrola" class="tlacitko skryte">Kontrola výpočtu…</button>
+              <button id="u_zap" class="tlacitko skryte">Uložit zápisník ▾</button>
+              <button id="u_stahnout" class="tlacitko" disabled>Protokol (TXT)</button>
+              <button id="u_pdf" class="tlacitko" disabled>Protokol (PDF)</button>
               <button id="u_dxf" class="tlacitko skryte">Stáhnout vrstevnice (DXF)</button>
             </div>
             <div id="u_chyba" class="u-chyba skryte" role="alert"></div>
@@ -133,6 +172,14 @@
             <label class="tlacitko">Vybrat seznam…<input type="file" id="f_seznam" accept=".txt,.csv,.xyz,.sez,.pts" hidden></label>
             <div id="i_seznam" class="tlumene"></div>
           </div>
+          <div class="karta karta-siroka">
+            <div class="karta-nadpis">Nastavení kontroly</div>
+            <div class="nast-radek">
+              <label class="pole-popis">Tolerance začištění [m]<input id="n_tolerance" class="pole" inputmode="decimal" value="0.010"></label>
+              <label class="volba"><input type="checkbox" id="n_rozpracovany"> Rozpracovaný výkres (nehlásit, co vzniká nedokončenou kresbou)</label>
+            </div>
+            <div id="n_kontroly" class="kontroly-seznam"><span class="tlumene">Seznam kontrol se načte po spuštění Pythonu…</span></div>
+          </div>
           <div class="karta">
             <div class="karta-nadpis">Měřítko výkresu</div>
             <p class="tlumene">Pro Směrnici ve Wordu (psanou pro 1 : 1000) a velikosti textů.</p>
@@ -146,14 +193,26 @@
       <div class="podklady">
         <h1>O webové verzi</h1>
         <p>Stejná kontrola jako v desktopové aplikaci Kontrola výkresu – běží přímo ve vašem prohlížeči (Python přes Pyodide). Výkres, pravidla ani seznam souřadnic se nikam neodesílají.</p>
-        <p class="tlumene">První spuštění stáhne asi 25 MB (Python a knihovny), prohlížeč si je pak pamatuje. Výpočty (seznam souřadnic, polární metoda ze zápisníku a geodetické úlohy) fungují i tady; kreslení (CAD) je zatím jen v desktopové verzi. Seznam souřadnic si prohlížeč pamatuje jen u vás.</p>
+        <p class="tlumene">První spuštění stáhne asi 25 MB (Python a knihovny), prohlížeč si je pak pamatuje. Kreslení (CAD) je jen v desktopové verzi.</p>
+        <div class="karty">
+          <div class="karta"><div class="karta-nadpis">Kontrola výkresu</div><p class="tlumene">DXF i DGN, pravidla ze Zadání 1, vlastní Směrnice (xls, xlsx, csv, ods, doc, docx, YAML), seznam souřadnic, výběr kontrol a tolerance, návod k opravě u každé chyby, hladiny, vlastnosti prvku kliknutím.</p></div>
+          <div class="karta"><div class="karta-nadpis">Protokoly a nástroje</div><p class="tlumene">Protokol HTML a PDF, seznam k opravě na tisk, tabulka chyb (Excel, CSV), výkres s vyznačenými chybami (DXF), seznam chyb jako MGEO (.log), automatická oprava, porovnání se starší verzí, s protokolem od učitele a odhad, co učitel najde.</p></div>
+          <div class="karta"><div class="karta-nadpis">Výpočty (jako Groma)</div><p class="tlumene">Seznam souřadnic (načtení, úpravy, duplicity, porovnání, uložení), zápisník (.zap, GSI) s úpravami, polární metoda dávkou, vyrovnání sítě MNČ, kontrola výpočtu proti seznamu z Gromy, 23 geodetických úloh, model terénu, protokoly TXT a PDF.</p></div>
+        </div>
         <p><a href="https://github.com/stepanvcelak11/kontrola-vykresu">Zdrojové kódy a desktopová verze</a></p>
       </div>
     </section>
   </div>
 </div>
+<dialog id="dlg" class="dlg" aria-labelledby="dlg_nadpis">
+  <div class="dlg-hlava"><div id="dlg_nadpis" class="karta-nadpis"></div><button class="dlg-zavrit" id="dlg_zavrit" aria-label="Zavřít">✕</button></div>
+  <div id="dlg_telo" class="dlg-telo"></div>
+  <div id="dlg_tlacitka" class="dlg-tlacitka"></div>
+</dialog>
 <div class="stav" id="stav" role="status"><span class="tocitko"></span><span id="stav_text">Spouštím…</span></div>
 <script src="app.js"></script>
 <script src="vypocty.js"></script>
+<script src="zapisnik.js"></script>
+<script src="nastroje.js"></script>
 </body>
 </html>

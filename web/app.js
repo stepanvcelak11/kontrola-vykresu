@@ -2,7 +2,8 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const stav = { vykres: null, pravidla: null, seznam: null, pripraveno: false, vysledek: null, filtr: "vse", vybrana: null };
+const stav = { vykres: null, pravidla: null, seznam: null, pripraveno: false, vysledek: null, filtr: "vse", vybrana: null,
+  skryteVrstvy: new Set(), obrys: null, znacky: [], vybranaZnacka: null };
 const worker = new Worker("worker.js");
 
 // ---------------------------------------------------------------- stavový řádek
@@ -22,7 +23,7 @@ worker.onerror = (e) => {
 worker.onmessage = (ev) => {
   const m = ev.data;
   if (m.id) { vypOdpoved(m); return; }
-  if (m.stav) ukazStav(m.stav);
+  if (m.stav) { ukazStav(m.stav); if (m.prace && stav.pripraveno) vyp.praceStav = true; }
   if (m.pripraveno) {
     stav.pripraveno = true;
     skryjStav();
@@ -92,6 +93,7 @@ function zkontroluj() {
     vestavena: volba === "zadani1" ? "pravidla/zadani1.yaml" : null,
     seznam: stav.seznam,
     meritko: parseInt($("meritko").value, 10) || null,
+    nastaveni: typeof nastaveniKontroly === "function" ? JSON.stringify(nastaveniKontroly()) : null,
   });
 }
 
@@ -121,6 +123,9 @@ function zobrazVysledek(v) {
     ukazStav(v.varovani[0], false);
     setTimeout(skryjStav, 8000);
   }
+  stav.skryteVrstvy.clear(); stav.obrys = null; stav.znacky = [];
+  $("b_nastroje").disabled = false;
+  if (typeof vykresliHladiny === "function") vykresliHladiny();
   vykresliSeznam();
   pohled.vse();
 }
@@ -210,7 +215,9 @@ function kresli() {
   if (!v) return;
   const k = v.kresba;
   ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const skryte = stav.skryteVrstvy;
   for (const c of k.cary) {
+    if (skryte.size && skryte.has(c.l)) continue;
     const p = c.p;
     ctx.strokeStyle = c.c;
     ctx.lineWidth = c.w > 0.25 ? Math.min(4, 1 + c.w * 3) : 1;
@@ -220,6 +227,7 @@ function kresli() {
     ctx.stroke();
   }
   for (const b of k.body) {
+    if (skryte.size && skryte.has(b[4])) continue;
     const x = pohled.sx(b[0]), y = pohled.sy(b[1]);
     if (x < -10 || y < -10 || x > w + 10 || y > h + 10) continue;
     ctx.fillStyle = b[2];
@@ -227,6 +235,7 @@ function kresli() {
     else ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
   }
   for (const t of k.texty) {
+    if (skryte.size && skryte.has(t.l)) continue;
     const vys = t.h * pohled.k;
     if (vys < 5) continue;
     const x = pohled.sx(t.x), y = pohled.sy(t.y);
@@ -239,7 +248,24 @@ function kresli() {
     ctx.fillText(t.t, 0, 0);
     ctx.restore();
   }
+  if (stav.obrys) {  // vybraný prvek (inspektor)
+    ctx.strokeStyle = "#FDE047"; ctx.lineWidth = 3;
+    for (const p of stav.obrys) {
+      ctx.beginPath(); ctx.moveTo(pohled.sx(p[0]), pohled.sy(p[1]));
+      for (let i = 2; i < p.length; i += 2) ctx.lineTo(pohled.sx(p[i]), pohled.sy(p[i + 1]));
+      ctx.stroke();
+    }
+  }
+  for (const z of stav.znacky) {  // změny proti starší verzi
+    const x = pohled.sx(z.x), y = pohled.sy(z.y);
+    if (x < -20 || y < -20 || x > w + 20 || y > h + 20) continue;
+    ctx.strokeStyle = z.druh.startsWith("přid") ? "#34D399" : z.druh.startsWith("odeb") ? "#F87171" : "#FBBF24";
+    ctx.lineWidth = z === stav.vybranaZnacka ? 3.5 : 2;
+    const r = z === stav.vybranaZnacka ? 14 : 8;
+    ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
+  }
   for (const c of v.chyby) {
+    if (stav.panel === "zmeny") break;
     if (c.x == null || (stav.filtr !== "vse" && c.zavaznost !== stav.filtr)) continue;
     const x = pohled.sx(c.x), y = pohled.sy(c.y);
     if (x < -20 || y < -20 || x > w + 20 || y > h + 20) continue;
@@ -296,11 +322,13 @@ platno.addEventListener("wheel", (e) => {
 
 function vyberChybuNa(px, py) {
   let nej = null, d = 22;
-  for (const c of stav.vysledek.chyby) {
+  if (stav.panel === "zmeny" && typeof vyberZmenuNa === "function") { vyberZmenuNa(px, py); return; }
+  for (const c of stav.panel === "prvek" ? [] : stav.vysledek.chyby) {
     if (c.x == null) continue;
     const dd = Math.hypot(pohled.sx(c.x) - px, pohled.sy(c.y) - py);
     if (dd < d) { d = dd; nej = c; }
   }
+  if (!nej || stav.panel === "prvek") { if (typeof inspektor === "function") inspektor(px, py); return; }
   if (nej) {
     stav.vybrana = nej.id;
     stav.filtr = "vse";

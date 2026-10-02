@@ -44,12 +44,22 @@ Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnet
 
 ### Webová verze (bez instalace)
 
-**https://stepanvcelak11.github.io/kontrola-vykresu/** – kontrola výkresu DXF/DGN přímo v prohlížeči (i na mobilu),
-s pravidly ze Zadání 1, vlastní Směrnicí (xls, xlsx, csv, ods, doc, docx, YAML) a seznamem souřadnic. Výpočet běží
-v prohlížeči (Python přes Pyodide), soubory se nikam neodesílají. Stránka **Výpočty** má seznam souřadnic (načtení,
-ruční přidání, uložení do TXT/CSV, náčrt bodů), polární metodu dávkou ze zápisníku (.zap, GSI) s protokolem jako
-v Gromě a všechny geodetické úlohy z desktopu (rajón, protínání, volné stanovisko, transformace, výměry, oddělení,
-nivelace, polygonový pořad, S-JTSK ↔ WGS84, model terénu s kubaturou a stažením vrstevnic do DXF…). Kreslení (CAD) je zatím jen v desktopové verzi. Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
+**https://stepanvcelak11.github.io/kontrola-vykresu/** – kontrola a výpočty přímo v prohlížeči (i na mobilu), nic se
+neodesílá (Python přes Pyodide). Umí vše z kontroly a z Výpočtů jako desktop, jen bez CAD:
+
+* **Kontrola** výkresu DXF/DGN s pravidly ze Zadání 1, vlastní Směrnicí (xls, xlsx, csv, ods, doc, docx, YAML) a seznamem
+  souřadnic; výběr kontrol a tolerance (Zadání → Nastavení kontroly), návod u každé chyby, hladiny zapnout/vypnout,
+  vlastnosti prvku kliknutím (záložka Prvek).
+* **Nástroje ▾**: protokol HTML / PDF, seznam k opravě na tisk, tabulka chyb Excel / CSV, výkres s vyznačenými chybami
+  (DXF), seznam chyb jako MGEO (.log), automatická oprava (stáhne opravený DXF), porovnání se starší verzí výkresu
+  (záložka Změny), porovnání s protokolem od učitele a odhad, co učitel najde.
+* **Výpočty**: seznam souřadnic (načtení, úpravy dvojklikem, duplicity, porovnání s jiným seznamem, TXT/CSV, náčrt),
+  zápisník .zap / GSI s úpravami stanovisek a záměr (uložení .zap i GSI), polární metoda dávkou s protokolem jako
+  v Gromě, vyrovnání sítě MNČ, kontrola výpočtu proti seznamu z Gromy, všechny geodetické úlohy z desktopu
+  (rajón, protínání, volné stanovisko, transformace, výměry, oddělení, nivelace, polygonový pořad, S-JTSK ↔ WGS84,
+  model terénu s kubaturou a vrstevnicemi do DXF…), protokol TXT i PDF.
+
+Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
 
 ### Bez .exe – když Windows program zablokuje (Inteligentní řízení aplikací)
 

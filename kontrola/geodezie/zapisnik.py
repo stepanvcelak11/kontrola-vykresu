@@ -73,3 +73,34 @@ def zkontroluj(stations: list[Station]) -> list[str]:
 
 def kopie(stations: list[Station]) -> list[Station]:
     return copy.deepcopy(stations)
+
+
+def vyrovnani_site(stanoviska: list[Station], body, sigma_smer_cc: float = 10.0, sigma_delka_mm: float = 3.0,
+                   sigma_ppm: float = 2.0):
+    """Vyrovnání sítě MNČ ze zápisníku: směry a vodorovné délky redukované do zobrazení; pevné body = ``body``
+    (seznam souřadnic). Body určené jen jednou (rajóny) síť nezpevní, do vyrovnání nejdou.
+    Vrací (VysledekVyrovnani, text protokolu)."""
+    import math
+
+    from ..vypocet import krovak_scale
+    from . import vyrovnani as VR
+    pevne = {b.cislo: (b.y, b.x) for b in body}
+    if not pevne:
+        raise ValueError("V seznamu souřadnic nejsou pevné body.")
+    ys = [v[0] for v in pevne.values()]
+    xs = [v[1] for v in pevne.values()]
+    zs = [b.z for b in body if b.z is not None]
+    m = krovak_scale(sum(ys) / len(ys), sum(xs) / len(xs), sum(zs) / len(zs) if zs else 0.0)
+    smery, delky = [], []
+    for st in pro_vypocet(stanoviska):
+        for o in st.orient + st.detail:
+            smery.append(VR.Smer(st.bod, o.bod, o.hz))
+            delky.append(VR.Delka(st.bod, o.bod, o.sd * math.sin(o.z * VR.GON) * m))
+    pocet: dict[str, int] = {}
+    for s in smery:
+        pocet[s.cil] = pocet.get(s.cil, 0) + 1
+    sit = {b for b, n in pocet.items() if n >= 2 or b in pevne} | {s.st for s in smery}
+    smery = [s for s in smery if s.cil in sit]
+    delky = [d for d in delky if d.cil in sit]
+    v = VR.vyrovnej(smery, delky, pevne, sigma_smer_cc, sigma_delka_mm, sigma_ppm)
+    return v, "\n".join(VR.protokol(v, sigma_smer_cc, sigma_delka_mm, sigma_ppm))

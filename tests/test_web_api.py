@@ -56,3 +56,49 @@ def test_vrstevnice_dxf(tmp_path):
     d = ezdxf.readfile(f)
     assert len(d.modelspace().query('LWPOLYLINE[layer=="VRSTEVNICE_ZAKLADNI"]')) >= 6 and "TIN" in r["souhrn"]
     assert "chyba" in json.loads(W.vrstevnice_dxf("[]", "{}"))
+
+
+def test_kontrola_exporty_a_nastroje():
+    if not (P / "zap_husovice.zap").exists():
+        pytest.skip("chybí podklady")
+    vykres = next(P.glob("Husovice_*_mapa.dxf"))
+    seznam = next(P.glob("Husovice_*_seznam.txt"))
+    k = json.loads(W.kontroly())
+    assert len(k) > 20 and all("nazev" in x for x in k)
+    vyp = [x["id"] for x in k if x["zapnuto"]][:1]
+    j = json.loads(W.zkontroluj(str(vykres), None, str(seznam), None, json.dumps({"vypnute": vyp, "tolerance": 0.02})))
+    assert j["chyby"] and j["vrstvy"] and all(c["kid"] != vyp[0] for c in j["chyby"])
+    for druh in ("html", "pdf", "oprava", "xlsx", "csv", "dxf", "log"):
+        r = json.loads(W.export(druh))
+        assert Path(r["soubor"]).stat().st_size > 100, druh
+    o = json.loads(W.oprava(json.dumps({"symbologie": False})))
+    assert Path(o["soubor"]).exists() and "oprav" in o["text"].lower()
+    assert "verdikt" in json.loads(W.predikce())
+    assert json.loads(W.porovnej(str(vykres)))["zmeny"] == []
+    c = next(c for c in j["chyby"] if c["x"] is not None)
+    assert json.loads(W.prvek_na(c["x"], c["y"], 0.5)).get("vlastnosti")
+
+
+def test_zapisnik_vyrovnani_kontrola_vypoctu():
+    if not (P / "zap_husovice.zap").exists():
+        pytest.skip("chybí podklady")
+    from kontrola.geodezie.formaty import nacti_soubor
+    body, _v, _f = nacti_soubor(P / "dane_body.txt")
+    bj = json.dumps(W._body_json(body))
+    z = json.loads(W.nacti_zapisnik(str(P / "zap_husovice.zap"), bj))
+    zj = json.dumps(z["stanoviska"])
+    assert len(z["stanoviska"]) == 2
+    assert len(json.loads(W.polarni_zapisnik(zj, bj))["nove"]) > 100
+    assert "σ0" in json.loads(W.vyrovnani(zj, bj))["souhrn"]
+    k = json.loads(W.kontrola_vypoctu(str(next(P.glob("Husovice_*_seznam.txt"))), zj, bj))
+    assert k["rozdilu"] == 0 and k["bodu"] > 100
+    for druh in ("zap", "gsi"):
+        assert Path(json.loads(W.zapisnik_soubor(zj, druh))["soubor"]).stat().st_size > 1000
+    # .zap tam a zpět dá stejná stanoviska
+    z2 = json.loads(W.nacti_zapisnik(json.loads(W.zapisnik_soubor(zj, "zap"))["soubor"], bj))
+    assert sum(len(s["orient"]) + len(s["detail"]) for s in z2["stanoviska"]) == \
+        sum(len(s["orient"]) + len(s["detail"]) for s in z["stanoviska"])
+    r = json.loads(W.porovnej_seznamy(str(P / "dane_body.txt"), bj))
+    assert "nevyhovuje 0" in r["souhrn"]
+    assert json.loads(W.duplicity(bj))["pocet"] == 0
+    assert Path(json.loads(W.protokol_pdf("PROTOKOL\nřádek", "p"))["soubor"]).stat().st_size > 500

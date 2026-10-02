@@ -3,7 +3,6 @@ výpočet polární metody dávkou proti seznamu souřadnic projektu a vypočten
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -261,8 +260,6 @@ class ZapisnikPanel(QWidget):
                  sigma_ppm: float | None = None):
         """Vyrovnání sítě MNČ ze zápisníku: směry a vodorovné délky (redukované do zobrazení)."""
         from PySide6.QtWidgets import QInputDialog
-        from ..geodezie import vyrovnani as VR
-        from ..vypocet import krovak_scale
         if not self.stanoviska:
             self.info.setText("Zápisník je prázdný.")
             return None
@@ -276,33 +273,12 @@ class ZapisnikPanel(QWidget):
             except ValueError:
                 self.info.setText("⚠ Zadejte tři čísla, např. 10 3 2.")
                 return None
-        pevne = {b.cislo: (b.y, b.x) for b in self.page.seznam.body}
-        if not pevne:
-            self.info.setText("⚠ V seznamu souřadnic nejsou pevné body.")
-            return None
-        # měřítko zobrazení + nadmořská výška z pevných bodů (stejně jako polární metoda)
-        ys = [v[0] for v in pevne.values()]
-        xs = [v[1] for v in pevne.values()]
-        zs = [b.z for b in self.page.seznam.body if b.z is not None]
-        m = krovak_scale(sum(ys) / len(ys), sum(xs) / len(xs), sum(zs) / len(zs) if zs else 0.0)
-        smery, delky = [], []
-        for st in Z.pro_vypocet(self.stanoviska):
-            for o in st.orient + st.detail:
-                smery.append(VR.Smer(st.bod, o.bod, o.hz))
-                delky.append(VR.Delka(st.bod, o.bod, o.sd * math.sin(o.z * VR.GON) * m))
-        # body, které jsou jen rajóny bez kontroly, síť nezpevní – do vyrovnání jdou jen body určené víckrát
-        pocet: dict[str, int] = {}
-        for s in smery:
-            pocet[s.cil] = pocet.get(s.cil, 0) + 1
-        sit = {b for b, n in pocet.items() if n >= 2 or b in pevne} | {s.st for s in smery}
-        smery = [s for s in smery if s.cil in sit]
-        delky = [d for d in delky if d.cil in sit]
         try:
-            v = VR.vyrovnej(smery, delky, pevne, sigma_smer_cc, sigma_delka_mm, sigma_ppm)
+            v, text = Z.vyrovnani_site(self.stanoviska, self.page.seznam.body, sigma_smer_cc, sigma_delka_mm,
+                                       sigma_ppm)
         except ValueError as e:
             self.info.setText(f"⚠ {e}")
             return None
-        text = "\n".join(VR.protokol(v, sigma_smer_cc, sigma_delka_mm, sigma_ppm))
         self.vystup.setPlainText(text)
         self.page.protokol_append(text.splitlines())
         self.vyrovnani = v

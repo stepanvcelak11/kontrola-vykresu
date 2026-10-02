@@ -19,6 +19,14 @@ def sestav(cil: Path) -> Path:
                 continue
             if f.suffix in (".py", ".json", ".yaml", ".txt", ".tbl") or "resources" in rel.parts:
                 z.write(f, rel.as_posix())
+    # písma s českou diakritikou do PDF (protokoly) – ze systému, kde se web sestavuje
+    fonty = cil / "fonty"
+    fonty.mkdir(exist_ok=True)
+    for f in ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf"):
+        for d in (Path("/usr/share/fonts/truetype/dejavu"), Path("/usr/share/fonts/dejavu")):
+            if (d / f).is_file():
+                shutil.copy(d / f, fonty / f)
+                break
     return cil
 
 
