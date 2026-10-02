@@ -23,6 +23,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Grafika seznamu souřadnic (čísla, výšky, kódy, výběr myší propojený s tabulkou, měření délky/směrníku/převýšení) | ✅ | test |
 | Staničení a kolmice, bod ze staničení a kolmice | ✅ | zpětný výpočet |
 | Kontrola dvou určení, mezní odchylky podle kódu kvality | 🟡 | hodnoty z vyhlášky k ověření |
+| Kontrolní oměrné míry (měřená délka proti délce ze souřadnic, u_d = 2·m_xy·√((d+12)/(d+20))) | 🟡 | vzorec a m_xy z vyhlášky k ověření |
 | Ortogonální metoda (dávka, vyrovnání na měřenou délku) | ✅ | zpětný výpočet staničení a kolmic |
 | Průsečík přímek, přímky a kružnice, dvou kružnic | ✅ | náhodné příklady, body leží na obou útvarech |
 | Polygonový pořad (oboustranně připojený a orientovaný, vyrovnání) | ✅ | 50 syntetických pořadů bez chyb (přesně), rozdělení zavedených chyb |

@@ -326,6 +326,16 @@ def mezni_polohova_odchylka(kod_kvality: int, nasobek: float = 2.0 * math.sqrt(2
     return nasobek * MXY_KOD_KVALITY[kod_kvality]
 
 
+def mezni_odchylka_delky(d: float, kod_kvality: int) -> float:
+    """Mezní odchylka mezi měřenou délkou a délkou ze souřadnic (kontrolní oměrné míry):
+    u_d = 2 · m_xy · √((d + 12) / (d + 20)), d v metrech."""
+    if kod_kvality not in MXY_KOD_KVALITY:
+        raise ValueError(f"Pro kód kvality {kod_kvality} není střední chyba stanovena.")
+    if d < 0 or not math.isfinite(d):
+        raise ValueError("Délka musí být kladné číslo.")
+    return 2.0 * MXY_KOD_KVALITY[kod_kvality] * math.sqrt((d + 12.0) / (d + 20.0))
+
+
 # ------------------------------------------------------------------ průsečíky
 def prusecik_primek(a1, a2, b1, b2) -> P:
     """Průsečík přímek A1A2 a B1B2 (i mimo úsečky)."""

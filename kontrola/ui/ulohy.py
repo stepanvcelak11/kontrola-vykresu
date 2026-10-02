@@ -372,6 +372,52 @@ def u_odchylka(s, h):
     return Vysledek(prot)
 
 
+def u_omerne(s, h):
+    """Kontrolní oměrné míry: měřená délka mezi body proti délce ze souřadnic."""
+    try:
+        kk = int(h.get("kk") or 3)
+    except ValueError:
+        raise ChybaVstupu("Kód kvality je číslo 3–7.") from None
+    if kk not in V.MXY_KOD_KVALITY:
+        raise ChybaVstupu("Kód kvality je číslo 3–7.")
+    radky = []
+    for i, line in enumerate((h.get("miry") or "").splitlines(), 1):
+        parts = line.replace(";", " ").split()
+        if not parts:
+            continue
+        if len(parts) < 3:
+            raise ChybaVstupu(f"Řádek {i}: zadejte „bod bod měřená_délka“.")
+        a, b = s.najdi(parts[0]), s.najdi(parts[1])
+        for c, x in ((parts[0], a), (parts[1], b)):
+            if x is None:
+                raise ChybaVstupu(f"Řádek {i}: bod {c} v seznamu souřadnic není.")
+        try:
+            dm = float(parts[2].replace(",", "."))
+        except ValueError:
+            raise ChybaVstupu(f"Řádek {i}: „{parts[2]}“ není číslo.") from None
+        if not math.isfinite(dm) or dm <= 0:
+            raise ChybaVstupu(f"Řádek {i}: měřená délka musí být kladná.")
+        radky.append((a, b, dm))
+    if not radky:
+        raise ChybaVstupu("Zadejte oměrné míry – řádky „bod bod měřená_délka“.")
+    prot = _hlavicka("Kontrolní oměrné míry")
+    prot += [f"kód kvality {kk}, m_xy = {_f(V.MXY_KOD_KVALITY[kk], 2)} m, mezní odchylka "
+             "u_d = 2·m_xy·√((d+12)/(d+20)) – ověřte v platném znění vyhlášky",
+             "  od          do            měřená   ze souř.    rozdíl    mezní",
+             "  " + "-" * 66]
+    spatne = 0
+    for a, b, dm in radky:
+        ds = V.delka(a, b)
+        rozdil = dm - ds
+        lim = V.mezni_odchylka_delky(ds, kk)
+        ok = abs(rozdil) <= lim
+        spatne += not ok
+        prot.append(f"  {a.cislo:<11} {b.cislo:<11} {dm:>9.2f} {ds:>9.2f} {rozdil:>+9.2f} {lim:>8.2f}"
+                    + ("" if ok else "  NEVYHOVUJE"))
+    prot += ["", f"{len(radky)} měr, " + ("všechny vyhovují." if not spatne else f"{spatne} překračuje mezní odchylku.")]
+    return Vysledek(prot)
+
+
 def _radky_cisel(text: str, n_min: int, popis: str) -> list[list[str]]:
     """Řádky „text číslo číslo…“; vrací rozdělené řádky (první položka text, ostatní ověřená čísla)."""
     out = []
@@ -711,6 +757,10 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Kontrola dvou určení", "Polohová odchylka dvou určení bodu a mezní odchylka podle kódu kvality.",
      [Pole("a", "První určení (bod)"), Pole("b", "Druhé určení (bod)"),
       Pole("kk", "Kód kvality", "volba", "3", ("3", "4", "5", "6", "7"))], u_odchylka),
+    ("Kontrolní oměrné míry", "Měřené délky (oměrné míry) proti délkám ze souřadnic, mezní odchylka podle kódu "
+     "kvality.",
+     [Pole("miry", "Míry (řádek: bod bod měřená_délka)", "radky"),
+      Pole("kk", "Kód kvality", "volba", "3", ("3", "4", "5", "6", "7"))], u_omerne),
     ("Průsečíky", "Průsečík dvou přímek, přímky a kružnice nebo dvou kružnic.",
      [Pole("druh", "Druh", "volba", "dvou přímek", ("dvou přímek", "přímky a kružnice", "dvou kružnic")),
       Pole("a", "Bod A"), Pole("b", "Bod B"),

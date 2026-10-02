@@ -286,3 +286,22 @@ def test_nivelacni_sit_formular():
     assert vysky["1_niv"] == pytest.approx(251.234, abs=1e-4) and vysky["2_niv"] == pytest.approx(249.876, abs=1e-4)
     with pytest.raises(ChybaVstupu):
         u_nivelacni_sit(s, {"dane": "1", "oddily": "A 1 1 100"})  # daný bod bez výšky
+
+
+def test_kontrolni_omerne_miry():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.ui.ulohy import ChybaVstupu, u_omerne
+    s = SeznamBodu()
+    s.pridej([Bod("1", 0, 0), Bod("2", 30, 40), Bod("3", 0, 10)])
+    # d = 50 m, KK 3: u_d = 2·0,14·√(62/70) = 0,2635 m
+    assert V.mezni_odchylka_delky(50, 3) == pytest.approx(2 * 0.14 * math.sqrt(62 / 70))
+    r = u_omerne(s, {"miry": "1 2 50.10\n1 3 10.40\n", "kk": "3"})
+    t = "\n".join(r.protokol)
+    radky = [x for x in r.protokol if x.strip().startswith("1 ")]
+    assert "NEVYHOVUJE" not in radky[0] and "+0.10" in radky[0]
+    assert "NEVYHOVUJE" in radky[1]  # 0,40 m > u_d(10 m) = 0,23 m
+    assert "1 překračuje" in t
+    with pytest.raises(ChybaVstupu):
+        u_omerne(s, {"miry": "1 9 10", "kk": "3"})
+    with pytest.raises(ChybaVstupu):
+        u_omerne(s, {"miry": "", "kk": "3"})
