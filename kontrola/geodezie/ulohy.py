@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import re
 from dataclasses import dataclass, field
 
 from . import vypocty as V
@@ -331,6 +332,75 @@ def u_vymery_davkou(s, h):
         celkem += p
         prot.append(f"  {nazev.strip():<18}{p:>14.2f}{round(p):>9d}{V.obvod(body):>14.3f}{len(body):>7d}")
     prot.append(f"  {'celkem':<18}{celkem:>14.2f}{round(celkem):>9d}")
+    return Vysledek(prot)
+
+
+def _parcely_gp(s, text: str, nazev: str) -> list[tuple[str, float | None, str, object]]:
+    """Řádky „parcela [výměra] [druh]: čísla bodů po obvodu“ → [(parcela, evidovaná výměra, druh, Polygon)]."""
+    from shapely.geometry import Polygon
+    out = []
+    for i, r in enumerate([r for r in (text or "").splitlines() if r.strip()], 1):
+        if ":" not in r:
+            raise ChybaVstupu(f"{nazev}, řádek {i}: chybí dvojtečka – „parcela [výměra] [druh]: čísla bodů“.")
+        hlava, cisla = r.split(":", 1)
+        casti = hlava.split()
+        if not casti:
+            raise ChybaVstupu(f"{nazev}, řádek {i}: chybí číslo parcely.")
+        parc, vym, druh = casti[0], None, ""
+        zbytek = casti[1:]
+        if zbytek and re.match(r"^\d+(?:[.,]\d+)?$", zbytek[0]):
+            vym = float(zbytek[0].replace(",", "."))
+            zbytek = zbytek[1:]
+        druh = " ".join(zbytek)
+        body = _radky_bodu(s, cisla)
+        if len(body) < 3:
+            raise ChybaVstupu(f"{nazev}, parcela {parc}: potřebuje aspoň tři body po obvodu.")
+        g = Polygon([(b.y, b.x) for b in body])
+        if not g.is_valid:
+            raise ChybaVstupu(f"{nazev}, parcela {parc}: obvod se kříží – zkontrolujte pořadí bodů.")
+        out.append((parc, vym, druh, g))
+    return out
+
+
+def u_vykaz_vymer(s, h):
+    """Výkaz výměr geometrického plánu: dosavadní a nový stav, díly (srovnávací sestavení) a kontrola součtů."""
+    dos = _parcely_gp(s, h.get("dosavadni") or "", "Dosavadní stav")
+    nov = _parcely_gp(s, h.get("nove") or "", "Nový stav")
+    if not dos or not nov:
+        raise ChybaVstupu("Zadejte dosavadní i nový stav (řádek: parcela [výměra] [druh]: čísla bodů po obvodu).")
+    prot = _hlavicka("Výkaz výměr geometrického plánu")
+    prot += ["", "DOSAVADNÍ STAV", f"  {'parcela':<12}{'výměra z souř. [m²]':>21}{'evidovaná [m²]':>16}{'rozdíl':>9}  druh"]
+    for parc, vym, druh, g in dos:
+        rozd = f"{round(g.area) - vym:+.0f}" if vym is not None else ""
+        prot.append(f"  {parc:<12}{g.area:>21.2f}{(f'{vym:.0f}' if vym is not None else '–'):>16}{rozd:>9}  {druh}")
+    prot += ["", "NOVÝ STAV A POROVNÁNÍ SE STAVEM EVIDENCE",
+             f"  {'parcela':<12}{'výměra [m²]':>13}  {'druh':<16}{'díl':>5}  {'z parcely':<12}{'výměra dílu [m²]':>18}"]
+    pismena = "abcdefghijklmnopqrstuvwxyz"
+    n_dil = 0
+    for parc, _vym, druh, g in nov:
+        prvni = True
+        for dparc, _v, _d, dg in dos:
+            prunik = g.intersection(dg).area
+            if prunik < 0.01:
+                continue
+            znak = pismena[n_dil % 26] + ("" if n_dil < 26 else str(n_dil // 26))
+            n_dil += 1
+            prot.append(f"  {(parc if prvni else ''):<12}{(f'{round(g.area):d}' if prvni else ''):>13}  "
+                        f"{(druh if prvni else ''):<16}{znak:>5}  {dparc:<12}{round(prunik):>18d}")
+            prvni = False
+        if prvni:
+            prot.append(f"  {parc:<12}{round(g.area):>13d}  {druh:<16}{'':>5}  (mimo dosavadní parcely)")
+    sd = sum(g.area for *_x, g in dos)
+    sn = sum(g.area for *_x, g in nov)
+    prot += ["", f"Součet dosavadního stavu: {sd:.2f} m² ({round(sd)} m²)",
+             f"Součet nového stavu:      {sn:.2f} m² ({round(sn)} m²)"]
+    if abs(sd - sn) > 0.5:
+        prot.append(f"⚠ Součty se liší o {sn - sd:+.2f} m² – nový stav nepokrývá přesně dosavadní parcely "
+                    "(chybí nebo přebývá část obvodu).")
+    else:
+        prot.append("Součty souhlasí – nový stav pokrývá dosavadní parcely.")
+    prot.append("Výměry jsou z ploch zaokrouhlené na celé m². Vyrovnání na evidovanou výměru a mezní odchylku "
+                "výměry posuďte podle katastrální vyhlášky (zde se nepočítá).")
     return Vysledek(prot)
 
 
@@ -840,6 +910,12 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("ms", "Max. délka strany trojúhelníku [m] (nepovinné)", "m",
            napoveda="odřízne dlouhé trojúhelníky na okraji a v zálivech"),
       Pole("zref", "Srovnávací výška pro kubaturu [m] (nepovinné)", "m")], u_teren),
+    ("Výkaz výměr GP", "Geometrický plán: výměry dosavadního a nového stavu ze souřadnic, díly (srovnávací "
+     "sestavení – z které parcely díl přechází) a kontrola součtů.",
+     [Pole("dosavadni", "Dosavadní stav (řádek: parcela [evidovaná výměra] [druh]: čísla bodů)", "radky",
+           napoveda="např. 125/3 450 zahrada: 1 2 3 4"),
+      Pole("nove", "Nový stav (řádek: parcela [druh]: čísla bodů)", "radky",
+           napoveda="např. 125/5 zahrada: 1 2 6 5")], u_vykaz_vymer),
     ("Převod S-JTSK ↔ WGS84", "Zeměpisné souřadnice bodů (s odkazem na mapy.cz) a opačně, přesnost ≈ 1 m.",
      [Pole("smer", "Směr", "volba", "S-JTSK → WGS84", ("S-JTSK → WGS84", "WGS84 → S-JTSK")),
       Pole("body", "Body (čísla) pro S-JTSK → WGS84", "radky"),

@@ -305,3 +305,21 @@ def test_kontrolni_omerne_miry():
         u_omerne(s, {"miry": "1 9 10", "kk": "3"})
     with pytest.raises(ChybaVstupu):
         u_omerne(s, {"miry": "", "kk": "3"})
+
+
+def test_vykaz_vymer_gp():
+    import pytest
+
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import ChybaVstupu, u_vykaz_vymer
+    s = SeznamBodu([Bod("1", 0, 0), Bod("2", 20, 0), Bod("3", 20, 30), Bod("4", 0, 30), Bod("5", 40, 0),
+                    Bod("6", 40, 30), Bod("7", 10, 0), Bod("8", 10, 30)])
+    v = u_vykaz_vymer(s, {"dosavadni": "125/3 600 zahrada: 1 2 3 4\n125/4 orná: 2 5 6 3",
+                          "nove": "125/5 zahrada: 1 7 8 4\n125/6: 7 5 6 8"})
+    t = "\n".join(v.protokol)
+    assert "125/5" in t and "Součty souhlasí" in t
+    # 125/6 vzniká ze dvou dílů: 300 m² z 125/3 a 600 m² z 125/4
+    assert any("125/3" in r and r.rstrip().endswith("300") for r in v.protokol)
+    assert any("125/4" in r and r.rstrip().endswith("600") for r in v.protokol)
+    with pytest.raises(ChybaVstupu):
+        u_vykaz_vymer(s, {"dosavadni": "125/3: 1 2", "nove": "x: 1 2 3"})

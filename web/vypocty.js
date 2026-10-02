@@ -216,7 +216,7 @@ const SKUPINY = [
   ["Ze zápisníku", ["Zápisník a polární metoda"]],
   ["Body", ["Směrník a délka", "Rajón (polární bod)", "Protínání vpřed z úhlů", "Protínání z délek", "Protínání zpět", "Volné stanovisko",
     "Průsečíky", "Staničení a kolmice", "Bod ze staničení a kolmice", "Ortogonální metoda", "Polygonový pořad", "Vytyčovací prvky", "Kružnicový oblouk"]],
-  ["Plochy", ["Výměra a obvod", "Výměry parcel dávkou", "Oddělení parcely"]],
+  ["Plochy", ["Výměra a obvod", "Výměry parcel dávkou", "Oddělení parcely", "Výkaz výměr GP"]],
   ["Výšky a terén", ["Trigonometrická výška", "Nivelační pořad", "Vyrovnání nivelační sítě", "Model terénu a kubatura"]],
   ["Kontroly", ["Kontrola dvou určení", "Kontrolní oměrné míry"]],
   ["Transformace", ["Transformace", "Převod S-JTSK ↔ WGS84"]],

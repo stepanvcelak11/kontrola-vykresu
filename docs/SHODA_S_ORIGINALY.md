@@ -103,6 +103,6 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
    - transformace rastrů: ✅ CAD `georeference` – identické body, opravy, m0, shodnostní/podobnostní/afinní, uložení world filu;
    - kódování prvků účelové mapy: ✅ kódovník (kód → linie/plocha/značka, pravidlo, hladina, buňka, styl) a kresba z kódů v CAD (`kódy`), řídicí kódy /Z /K /U a #n;
    - mračna bodů: ✅ CAD `mračno` – XYZ/LAS/PLY, prořídnutí, terén, body / vrstevnice / do seznamu (profil, kubatura); zbývá LAZ;
-   - geometrický plán: výkaz výměr (dosavadní / nový stav), srovnávací sestavení, výkres GP;
+   - geometrický plán: ✅ výkaz výměr (dosavadní / nový stav, díly – srovnávací sestavení, kontrola součtů) jako úloha ve Výpočtech; zbývá výkres GP a vyrovnání výměr podle vyhlášky;
    - tachymetrie a geodetické výpočty: další formáty totálních stanic (až budou ukázková data).
 
