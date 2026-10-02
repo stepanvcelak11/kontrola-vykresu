@@ -51,8 +51,9 @@ neodesílá (Python přes Pyodide). Umí vše z kontroly a z Výpočtů jako des
   souřadnic; výběr kontrol a tolerance (Zadání → Nastavení kontroly), návod u každé chyby, hladiny zapnout/vypnout,
   vlastnosti prvku kliknutím (záložka Prvek).
 * **Nástroje ▾**: protokol HTML / PDF, seznam k opravě na tisk, tabulka chyb Excel / CSV, výkres s vyznačenými chybami
-  (DXF), seznam chyb jako MGEO (.log), automatická oprava (stáhne opravený DXF), porovnání se starší verzí výkresu
-  (záložka Změny), porovnání s protokolem od učitele a odhad, co učitel najde.
+  (DXF), seznam chyb jako MGEO (.log), automatická oprava (stáhne opravený DXF), ověření bodů ze seznamu souřadnic,
+  spojnice podle náčrtu, porovnání se starší verzí výkresu (záložka Výsledky), porovnání s protokolem od učitele,
+  odhad, co učitel najde, a hromadná kontrola více výkresů.
 * **Výpočty**: seznam souřadnic (načtení, body z QTrig po přihlášení kódem účtu a heslem, úpravy dvojklikem,
   duplicity, porovnání s jiným seznamem, TXT/CSV, náčrt),
   zápisník .zap / GSI s úpravami stanovisek a záměr (uložení .zap i GSI), polární metoda dávkou s protokolem jako

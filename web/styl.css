@@ -209,3 +209,4 @@ select { height: 40px; border-radius: 10px; border: 1px solid var(--linka2); bac
 .u-form .zap-hlava .pole { width: 140px; }
 .zap-tab td { padding: 2px 4px; }
 .u-form .siroke { grid-column: 1 / -1; }
+.tecka.ok { background: #34D399; }

@@ -644,3 +644,69 @@ def qtrig_body(klic: str) -> str:
     if z is None:
         return json.dumps({"chyba": "Zakázka v záloze není – přihlaste se znovu."}, ensure_ascii=False)
     return json.dumps({"nazev": z["name"], "body": _body_json(z["body"])}, ensure_ascii=False)
+
+
+# ------------------------------------------------------------------ ověření bodů, spojnice podle náčrtu, hromadná kontrola
+def overeni_bodu(seznam: str, tol: float = 0.01) -> str:
+    """Body ze seznamu souřadnic proti výkresu: chybí, posunutý, špatné číslo / výška, navíc."""
+    from .checks.seznam import STAVY, read_point_list, verify_points
+    p = _potreba_kontroly()
+    vys, _tr, nalezeno = verify_points(p["d"], read_point_list(seznam), float(tol))
+    out = [{"druh": STAVY.get(r.stav, r.stav), "stav": r.stav, "vrstva": r.cislo,
+            "popis": (f"bod {r.cislo}: {STAVY.get(r.stav, r.stav)}" + (f", odchylka {r.odchylka * 1000:.0f} mm"
+                                                                      if r.odchylka else "")
+                      + (f" – {r.poznamka}" if r.poznamka else "")), "x": r.x, "y": r.y}
+           for r in vys]
+    from collections import Counter
+    c = Counter(r.stav for r in vys)
+    souhrn = f"Nalezeno {nalezeno} bodů. " + ", ".join(f"{STAVY.get(k, k)}: {n}" for k, n in c.most_common())
+    return json.dumps({"souhrn": souhrn, "polozky": [x for x in out if x["stav"] != "ok"] + [x for x in out if x["stav"] == "ok"]},
+                      ensure_ascii=False)
+
+
+def spojnice(seznam: str, text: str) -> str:
+    """Spojnice podle náčrtu („plot: 1-2-3“): co je v náčrtu spojené, musí být nakreslené."""
+    from .checks.seznam import read_point_list
+    from .checks.spojnice import STAVY_SPOJNIC, verify_lines
+    p = _potreba_kontroly()
+    vys = verify_lines(p["d"], read_point_list(seznam), text, p["rs"], p["cfg"].tolerance)
+    out = []
+    for r in vys:
+        g = r.geometry
+        x = y = None
+        if g is not None and not g.is_empty:
+            c = g.centroid
+            x, y = c.x, c.y
+        out.append({"druh": STAVY_SPOJNIC.get(r.stav, r.stav), "stav": r.stav, "vrstva": r.linie.popis,
+                    "popis": f"{r.od}–{r.do}: {STAVY_SPOJNIC.get(r.stav, r.stav)}" + (f" – {r.poznamka}" if r.poznamka else ""),
+                    "x": x, "y": y})
+    spatne = sum(1 for r in vys if r.stav != "ok")
+    souhrn = (f"Všech {len(vys)} úseků je nakresleno." if vys and not spatne
+              else f"{spatne} z {len(vys)} úseků nesedí." if vys else "Nenašel jsem žádnou spojnici – zapište např. plot: 1-2-3.")
+    return json.dumps({"souhrn": souhrn, "polozky": sorted(out, key=lambda o: o["stav"] == "ok")}, ensure_ascii=False)
+
+
+def hromadne(*args) -> str:
+    """Hromadná kontrola více výkresů se stejnými pravidly → tabulka (skóre, chyby, varování)."""
+    from collections import Counter
+
+    from .skore import compute_score
+    volby = json.loads(args[-1] or "{}")
+    soubory = list(args[:-1])
+    pravidla = soubory.pop(0) if volby.get("pravidla") else None
+    rs, _pozn = nacti_pravidla(pravidla, volby.get("meritko"))
+    cfg = _config(volby.get("nastaveni"))
+    radky = []
+    for f in soubory:
+        try:
+            d = load_drawing(f)
+            res = run_checks(d, rs, cfg)
+            sk = compute_score(res.issues, bool(rs.pravidla))
+            c = Counter(i.severity.value if isinstance(i.severity, Severity) else str(i.severity) for i in res.issues)
+            nej = Counter(i.check_name for i in res.issues).most_common(3)
+            radky.append({"soubor": Path(f).name, "skore": sk.hodnota, "popis": sk.popis, "chyb": c.get("chyba", 0),
+                          "varovani": c.get("varování", 0), "info": c.get("info", 0),
+                          "nejcastejsi": ", ".join(f"{k} ({n})" for k, n in nej)})
+        except Exception as e:  # noqa: BLE001 – jeden špatný soubor nesmí zastavit ostatní
+            radky.append({"soubor": Path(f).name, "chyba": str(e)})
+    return json.dumps(radky, ensure_ascii=False)

@@ -40,9 +40,12 @@
           <button data-export="log">Seznam chyb jako MGEO (.log)</button>
           <div class="menu-nadpis">Nástroje</div>
           <button data-nastroj="oprava">Automatická oprava…</button>
+          <button data-nastroj="overeni">Ověřit body ze seznamu souřadnic</button>
+          <button data-nastroj="spojnice">Spojnice podle náčrtu…</button>
           <button data-nastroj="porovnani">Porovnat se starší verzí výkresu…</button>
           <button data-nastroj="ucitel">Porovnat s protokolem od učitele (.log)…</button>
           <button data-nastroj="predikce">Co nejspíš najde učitel</button>
+          <button data-nastroj="hromadne">Hromadná kontrola více výkresů…</button>
         </div>
       </div>
       <button id="b_kontrola" class="tlacitko primarni" disabled>Zkontrolovat</button>
@@ -71,7 +74,7 @@
           <button class="zalozka aktivni" data-z="chyby" role="tab">Chyby</button>
           <button class="zalozka" data-z="hladiny" role="tab">Hladiny</button>
           <button class="zalozka" data-z="prvek" role="tab">Prvek</button>
-          <button class="zalozka skryte" data-z="zmeny" role="tab">Změny</button>
+          <button class="zalozka skryte" data-z="zmeny" role="tab">Výsledky</button>
         </div>
         <div id="z_hladiny" class="zalozka-obsah skryte">
           <div class="hladiny-hlava"><input id="h_hledat" class="pole" placeholder="Hledat hladinu…" aria-label="Hledat hladinu">

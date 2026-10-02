@@ -95,7 +95,8 @@ $("m_nastroje").addEventListener("click", async (e) => {
   if (!b) return;
   $("m_nastroje").classList.add("skryte");
   if (b.dataset.export) return exportuj(b.dataset.export, b.textContent);
-  ({ oprava: dlgOprava, porovnani: dlgPorovnani, ucitel: dlgUcitel, predikce: dlgPredikce })[b.dataset.nastroj]();
+  ({ oprava: dlgOprava, porovnani: dlgPorovnani, ucitel: dlgUcitel, predikce: dlgPredikce, overeni: dlgOvereni,
+    spojnice: dlgSpojnice, hromadne: dlgHromadne })[b.dataset.nastroj]();
 });
 
 async function exportuj(druh, popis) {
@@ -138,23 +139,82 @@ async function dlgPorovnani() {
   try {
     const r = JSON.parse(await volej("porovnej", [], f));
     skryjStav();
-    stav.znacky = r.zmeny;
-    $("zm_souhrn").textContent = `Proti ${f.nazev}: ${r.souhrn || "beze změn"}`;
-    const sez = $("zm_seznam");
-    sez.innerHTML = r.zmeny.length ? "" : '<div class="prazdne">Výkresy se neliší.</div>';
-    for (const z of r.zmeny.slice(0, 1500)) {
-      const b = document.createElement("button");
-      b.className = "chyba-karta";
-      const barva = z.druh.startsWith("přid") ? "info" : z.druh.startsWith("odeb") ? "chyba" : "varování";
-      b.innerHTML = `<div class="chyba-hlava"><span class="tecka ${barva}"></span><span class="chyba-nazev">${esc(z.druh)}</span><span class="chyba-vrstva">${esc(z.vrstva)}</span></div><div class="chyba-zprava">${esc(z.popis)}</div>`;
-      b.addEventListener("click", () => { stav.vybranaZnacka = z; document.querySelectorAll("#zm_seznam .chyba-karta").forEach((x) => x.classList.toggle("vybrana", x === b)); pohled.na(z.x, z.y); });
-      z.karta = b;
-      sez.appendChild(b);
-    }
-    document.querySelector(".zalozka[data-z=zmeny]").classList.remove("skryte");
-    prepniPanel("zmeny");
+    ukazVysledky(`Proti ${f.nazev}: ${r.souhrn || "beze změn"}`, r.zmeny.map((z) => ({ ...z,
+      barva: z.druh.startsWith("přid") ? "info" : z.druh.startsWith("odeb") ? "chyba" : "varování" })), "Výkresy se neliší.");
   } catch (e) { skryjStav(); chybaDialog(e); }
 }
+// Výsledky nástroje (porovnání, ověření bodů, spojnice) v záložce Výsledky a jako značky ve výkresu
+const BARVA_STAVU = { ok: "ok", chybi: "chyba", posunuty: "varování", cislo: "varování", vyska: "varování", navic: "info",
+  vrstva: "varování", jinak: "info", bod: "info" };
+function ukazVysledky(souhrn, polozky, prazdne = "Nic k zobrazení.") {
+  stav.znacky = polozky.filter((z) => z.x != null);
+  stav.vybranaZnacka = null;
+  $("zm_souhrn").textContent = souhrn;
+  const sez = $("zm_seznam");
+  sez.innerHTML = polozky.length ? "" : `<div class="prazdne">${esc(prazdne)}</div>`;
+  for (const z of polozky.slice(0, 1500)) {
+    const b = document.createElement("button");
+    b.className = "chyba-karta";
+    const barva = z.barva || BARVA_STAVU[z.stav] || "info";
+    b.innerHTML = `<div class="chyba-hlava"><span class="tecka ${barva}"></span><span class="chyba-nazev">${esc(z.druh)}</span><span class="chyba-vrstva">${esc(z.vrstva)}</span></div><div class="chyba-zprava">${esc(z.popis)}</div>`;
+    b.addEventListener("click", () => { stav.vybranaZnacka = z; document.querySelectorAll("#zm_seznam .chyba-karta").forEach((x) => x.classList.toggle("vybrana", x === b)); if (z.x != null) pohled.na(z.x, z.y); });
+    z.karta = b;
+    sez.appendChild(b);
+  }
+  document.querySelector(".zalozka[data-z=zmeny]").classList.remove("skryte");
+  prepniPanel("zmeny");
+}
+
+async function seznamProNastroj() {
+  if (stav.seznam) return stav.seznam;
+  return vyberSoubor(".txt,.csv,.xyz,.sez,.pts,.ss");
+}
+async function dlgOvereni() {
+  const f = await seznamProNastroj();
+  if (!f) return;
+  try {
+    const r = JSON.parse(await volej("overeni_bodu", [0.01], f));
+    ukazVysledky(`Body ze seznamu ${f.nazev}: ${r.souhrn}`, r.polozky);
+  } catch (e) { chybaDialog(e); }
+}
+function dlgSpojnice() {
+  let text = "";
+  try { text = localStorage.getItem("kv_spojnice") || ""; } catch (e) { /* nic */ }
+  dialog("Spojnice podle náčrtu", `<p class="tlumene">Jeden řádek = jedna čára podle měřického náčrtu (popis je nepovinný). Poloha bodů se vezme ze seznamu souřadnic${stav.seznam ? " (" + esc(stav.seznam.nazev) + ")" : " – vyberete ho po stisku Zkontrolovat"}.</p>
+    <textarea id="sp_text" class="pole" rows="10" style="height:auto;padding:10px;font-family:'JetBrains Mono',monospace" placeholder="plot: 1-2-3-4&#10;budova 10-11-12-13-10">${esc(text)}</textarea>`,
+  [["Zkontrolovat spojnice", async () => {
+    const t = $("sp_text").value;
+    try { localStorage.setItem("kv_spojnice", t); } catch (e) { /* nic */ }
+    const f = await seznamProNastroj();
+    if (!f) return;
+    $("dlg").close();
+    try {
+      const r = JSON.parse(await volej("spojnice", [t], f));
+      ukazVysledky(r.souhrn, r.polozky);
+    } catch (e) { chybaDialog(e); }
+  }, true]]);
+}
+async function dlgHromadne() {
+  const soubory = await new Promise((ok) => {
+    const i = document.createElement("input");
+    i.type = "file"; i.accept = ".dxf,.dgn"; i.multiple = true;
+    i.addEventListener("change", async () => ok(await Promise.all([...i.files].map(nacti))));
+    i.click();
+  });
+  if (!soubory || !soubory.length) return;
+  const volba = document.querySelector("input[name=pravidla]:checked").value;
+  let pr = volba === "soubor" ? stav.pravidla : null;
+  if (volba === "zadani1") pr = { nazev: "zadani1.yaml", data: await (await fetch("pravidla/zadani1.yaml")).arrayBuffer() };
+  ukazStav(`Kontroluji ${soubory.length} výkresů…`);
+  try {
+    const r = JSON.parse(await volej("hromadne", [JSON.stringify({ pravidla: !!pr, meritko: parseInt($("meritko").value, 10) || null, nastaveni: nastaveniKontroly() })], null, pr ? [pr, ...soubory] : soubory));
+    skryjStav();
+    const radky = r.map((x) => x.chyba ? `<tr><td>${esc(x.soubor)}</td><td colspan="5">⚠ ${esc(x.chyba)}</td></tr>` :
+      `<tr><td>${esc(x.soubor)}</td><td class="cislo">${x.skore}</td><td class="cislo">${x.chyb}</td><td class="cislo">${x.varovani}</td><td class="cislo">${x.info}</td><td>${esc(x.nejcastejsi)}</td></tr>`).join("");
+    dialog("Hromadná kontrola", `<table><thead><tr><th>Výkres</th><th class="cislo">Skóre</th><th class="cislo">Chyby</th><th class="cislo">Var.</th><th class="cislo">Info</th><th>Nejčastější</th></tr></thead><tbody>${radky}</tbody></table>`);
+  } catch (e) { skryjStav(); chybaDialog(e); }
+}
+
 function vyberZmenuNa(px, py) {
   let nej = null, d = 22;
   for (const z of stav.znacky) {

@@ -115,3 +115,19 @@ def test_qtrig_ze_zalohy():
     r = json.loads(W.qtrig_body("p1"))
     assert r["nazev"] == "Husovice" and abs(r["body"][0]["y"] - 743011.77) < 0.01
     assert "chyba" in json.loads(W.qtrig_zakazky("nesmysl"))
+
+
+def test_overeni_spojnice_hromadne():
+    vykres = next(P.glob("Husovice_*_mapa.dxf"), None)
+    if vykres is None:
+        pytest.skip("chybí podklady")
+    seznam = next(P.glob("Husovice_*_seznam.txt"))
+    W.zkontroluj(str(vykres))
+    r = json.loads(W.overeni_bodu(str(seznam)))
+    assert "Nalezeno" in r["souhrn"] and r["polozky"]
+    r = json.loads(W.spojnice(str(seznam), "plot: 1-2-3"))
+    assert len(r["polozky"]) == 2 and "úseků" in r["souhrn"]
+    r = json.loads(W.hromadne(str(vykres), str(vykres), json.dumps({})))
+    assert len(r) == 2 and r[0]["skore"] == r[1]["skore"]
+    r = json.loads(W.hromadne(str(P / "zap_husovice.zap"), json.dumps({})))
+    assert "chyba" in r[0]

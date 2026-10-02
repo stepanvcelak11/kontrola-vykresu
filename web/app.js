@@ -259,7 +259,8 @@ function kresli() {
   for (const z of stav.znacky) {  // změny proti starší verzi
     const x = pohled.sx(z.x), y = pohled.sy(z.y);
     if (x < -20 || y < -20 || x > w + 20 || y > h + 20) continue;
-    ctx.strokeStyle = z.druh.startsWith("přid") ? "#34D399" : z.druh.startsWith("odeb") ? "#F87171" : "#FBBF24";
+    const bz = z.barva || (typeof BARVA_STAVU !== "undefined" && BARVA_STAVU[z.stav]) || "info";
+    ctx.strokeStyle = { chyba: "#F87171", "varování": "#FBBF24", info: "#60A5FA", ok: "#34D399" }[bz] || "#60A5FA";
     ctx.lineWidth = z === stav.vybranaZnacka ? 3.5 : 2;
     const r = z === stav.vybranaZnacka ? 14 : 8;
     ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
