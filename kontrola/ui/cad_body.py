@@ -62,8 +62,10 @@ class BodyDialog(QDialog):
         self.podle_kodu.setChecked(True)
         self.preskocit = QCheckBox("Přeskočit body, jejichž číslo už ve výkresu je")
         self.preskocit.setChecked(True)
+        self.v3d = QCheckBox("Ve 3D – značky a spojnice ve výšce bodu (Z), pro 3D výkres a model terénu")
         f.addRow(self.podle_kodu)
         f.addRow(self.preskocit)
+        f.addRow(self.v3d)
         lay.addLayout(f)
         self.info = QLabel()
         lay.addWidget(self.info)
@@ -123,7 +125,8 @@ class BodyDialog(QDialog):
         self.info.setText(f"Vloží se {n} bodů." if n else "Ve zdroji nejsou žádné body.")
 
     def nastaveni(self) -> NastaveniBodu:
-        n = NastaveniBodu(podle_kodu=self.podle_kodu.isChecked(), preskocit_existujici=self.preskocit.isChecked())
+        n = NastaveniBodu(podle_kodu=self.podle_kodu.isChecked(), preskocit_existujici=self.preskocit.isChecked(),
+                          v3d=self.v3d.isChecked())
         for k, cb in self.cb.items():
             d = cb.currentData()
             setattr(n, k, None if d in (None, "aktivni") else d)

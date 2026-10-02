@@ -1229,7 +1229,7 @@ class MainWindow(QMainWindow):
         elif self.a_region.isChecked():
             self.a_region.setChecked(False)  # jiný výkres – výřez už neplatí
         self.layers.set_drawing(drawing)
-        self.set_issues([])
+        self.set_issues([], "Výkres je otevřený – stiskněte Zkontrolovat (F5).")
         self._update_watch()
         n = len(drawing.features)
         self.info_label.setText(f"Načteno {n} prvků, {sum(1 for l in drawing.layers.values() if l.count)} vrstev.")

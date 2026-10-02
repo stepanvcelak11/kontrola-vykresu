@@ -25,6 +25,7 @@ class NastaveniBodu:
     preskocit_existujici: bool = True
     spojnice: object | None = None  # Predvolba pro spojnice z grafiky (linie), None = nevkládat
     spojnice_aktivni: bool = False  # spojnice aktivními atributy (když předvolba není)
+    v3d: bool = False  # značky bodů a spojnice ve 3D (souřadnice Z = výška bodu)
 
 
 def _hleda(pv, *slova, geometrie=None):
@@ -80,10 +81,11 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                 preskoceno += 1
                 continue
             x, y = -b.y, -b.x  # shodně se světem: S-JTSK jako v MicroStationu
+            z = float(b.z) if nast.v3d and b.z is not None else 0.0
             pk, blok = _predvolba_kodu(pv, (b.kod or "").strip(), doc) if nast.podle_kodu else (None, None)
             if pk is not None:
                 k.nastav_predvolbu(pk)
-                ins = msp.add_blockref(blok, (x, y), dxfattribs=k._attr())
+                ins = msp.add_blockref(blok, (x, y, z), dxfattribs=k._attr())
                 nove.append(ins)
                 bunky += 1
             elif nast.znacka is not None:
@@ -91,12 +93,12 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                 if nast.znacka.blok:
                     _pk, jm = _predvolba_kodu([nast.znacka], split_alternatives(nast.znacka.blok)[0], doc)
                     if jm:
-                        nove.append(msp.add_blockref(jm, (x, y), dxfattribs=k._attr()))
+                        nove.append(msp.add_blockref(jm, (x, y, z), dxfattribs=k._attr()))
                         bunky += 1
                     else:
-                        nove.append(k.bod((x, y)))
+                        nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
                 else:
-                    nove.append(k.bod((x, y)))
+                    nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
             for pv_txt, text, posun in ((nast.cislo, b.cislo, (0.6, 0.3)),
                                          (nast.vyska, None if b.z is None else f"{b.z:.{nast.des_vysky}f}",
                                           (0.6, -1.4)),
@@ -114,7 +116,10 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
             vlozene = {b.cislo for b in body}
             for a, b in spojnice:  # dvojice bodů (Y, X kladné), jen mezi vkládanými body
                 if a.cislo in vlozene and b.cislo in vlozene:
-                    nove.append(k.usecka((-a.y, -a.x), (-b.y, -b.x)))
+                    if nast.v3d and a.z is not None and b.z is not None:
+                        nove.append(msp.add_line((-a.y, -a.x, a.z), (-b.y, -b.x, b.z), dxfattribs=k._attr()))
+                    else:
+                        nove.append(k.usecka((-a.y, -a.x), (-b.y, -b.x)))
     finally:
         k.h = h
         k.nastav_predvolbu(puvodni[0])

@@ -49,3 +49,18 @@ def test_kodovnik_csv_a_ze_zadani(tmp_path):
     # kód mimo kódovník se najde v zadání (číslo stylu / buňky)
     kr = sestav([_b(1, 0, 0, "2.13"), _b(2, 5, 0, "2.13"), _b(3, 1, 1, "3.13")], Kodovnik(), pv)
     assert len(kr.linie) == 1 and kr.linie[0].kod.styl == "2.13" and kr.bodove[0][0].bunka == "3.13"
+
+
+def test_kresba_z_kodu_3d():
+    import ezdxf
+
+    from kontrola.cad import kresba_z_kodu as KZ
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    kr = sestav([_b(1, 0, 0, "PL"), Bod("2", 10, 0, 251.5, "PL"), _b(3, 5, 5, "STR")],
+                Kodovnik([Kod("PL"), Kod("STR", druh="bod")]))
+    r = KZ.kresli(doc, msp, U.Historie(msp), kr, v3d=True)
+    pl = msp.query("POLYLINE").first
+    assert [round(v.dxf.location.z, 2) for v in pl.vertices] == [250.0, 251.5] and r["linie"] == 1
+    assert msp.query("POINT").first.dxf.location.z == 250.0

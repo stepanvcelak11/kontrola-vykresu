@@ -3127,10 +3127,13 @@ class CadPage(QWidget):
         if not kr.linie and not kr.bodove:
             raise ValueError("Žádný kód bodu není v kódovníku ani v zadání. " + kr.souhrn()
                              + " Upravte kódovník (příkaz „kódovník“).")
-        t = yield Pozadavek("text", kr.souhrn() + " Nakreslit? [a]/n:", vychozi="a")
-        if (t or "a").strip().lower().startswith("n"):
+        t = yield Pozadavek("text", kr.souhrn() + " Nakreslit? [a] (a = ano 2D, 3 = ve 3D s výškami, n = ne):",
+                            vychozi="a")
+        t = (t or "a").strip().lower()
+        if t.startswith("n"):
             return
-        r = KZ.kresli(self.dok.doc, self.prostor, self.historie_zmen, kr, self._predvolby, self.kresleni)
+        r = KZ.kresli(self.dok.doc, self.prostor, self.historie_zmen, kr, self._predvolby, self.kresleni,
+                      v3d=t.startswith("3"))
         self.vypis(f"Kresba z kódů: {r['linie']} linií, {r['plochy']} ploch, {r['bunky']} značek"
                    + (f", {r['body']} bodů bez buňky" if r["body"] else "") + ".")
         for p in r["poznamky"] + kr.varovani[:5]:

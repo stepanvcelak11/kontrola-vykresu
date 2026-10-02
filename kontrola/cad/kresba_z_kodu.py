@@ -22,8 +22,9 @@ def _blok(doc, nazev: str) -> str | None:
         next((b.name for b in doc.blocks if block_matches(nazev, b.name)), None)
 
 
-def kresli(doc, msp, h, kresba: Kresba, pv=(), kresleni=None) -> dict:
-    """Nakreslí kresbu z kódů. Vrací {prvky, linie, plochy, bunky, body, poznamky}."""
+def kresli(doc, msp, h, kresba: Kresba, pv=(), kresleni=None, v3d: bool = False) -> dict:
+    """Nakreslí kresbu z kódů (``v3d`` = 3D lomené čáry a značky ve výšce bodů).
+    Vrací {prvky, linie, plochy, bunky, body, poznamky}."""
     from . import upravy as U
     k = kresleni or U.Kresleni(msp, h)
     puvodni = (k.predvolba, k.vrstva)
@@ -53,7 +54,11 @@ def kresli(doc, msp, h, kresba: Kresba, pv=(), kresleni=None) -> dict:
             priprav(lin.kod)
             body = [(-b.y, -b.x) for b in lin.body]
             try:
-                e = k.polylinie(body, uzavrena=lin.uzavrena)
+                if v3d and all(b.z is not None for b in lin.body):
+                    e = msp.add_polyline3d([(-b.y, -b.x, float(b.z)) for b in lin.body], close=lin.uzavrena,
+                                           dxfattribs=k._attr())
+                else:
+                    e = k.polylinie(body, uzavrena=lin.uzavrena)
             except ValueError as ex:
                 poznamky.append(f"{lin.kod.kod}: {ex}")
                 continue
@@ -62,12 +67,13 @@ def kresli(doc, msp, h, kresba: Kresba, pv=(), kresleni=None) -> dict:
         for kod, b in kresba.bodove:
             priprav(kod)
             jm = _blok(doc, kod.bunka or kod.kod)
+            z = float(b.z) if v3d and b.z is not None else 0.0
             if jm:
-                nove.append(msp.add_blockref(jm, (-b.y, -b.x), dxfattribs=k._attr()))
+                nove.append(msp.add_blockref(jm, (-b.y, -b.x, z), dxfattribs=k._attr()))
                 n["bunky"] += 1
             else:
                 chybi_bunka.add(kod.bunka or kod.kod)
-                nove.append(k.bod((-b.y, -b.x)))
+                nove.append(k.bod((-b.y, -b.x)) if not z else msp.add_point((-b.y, -b.x, z), dxfattribs=k._attr()))
                 n["body"] += 1
     finally:
         k.h = h
