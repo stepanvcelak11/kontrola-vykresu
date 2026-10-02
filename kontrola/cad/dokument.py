@@ -119,15 +119,49 @@ class CadDokument:
         return p
 
     def rozsah(self) -> tuple[float, float, float, float] | None:
-        """Rozsah kresby (x0, y0, x1, y1) v souřadnicích DXF."""
+        """Rozsah kresby (x0, y0, x1, y1) v souřadnicích DXF.
+
+        Běžné prvky se počítají přímo z jejich bodů (rychle i pro desítky tisíc prvků), jen složité
+        (bloky, kóty, šrafy…) přes obálku ezdxf. Pro texty stačí bod vložení – jde o rozsah pro zoom."""
         from ezdxf import bbox
-        try:
-            ext = bbox.extents(self.msp, fast=True)
-        except Exception:  # noqa: BLE001
+        xs, ys, slozite = [], [], []
+        for e in self.msp:
+            t = e.dxftype()
+            try:
+                if t == "LINE":
+                    xs += (e.dxf.start.x, e.dxf.end.x)
+                    ys += (e.dxf.start.y, e.dxf.end.y)
+                elif t == "POINT":
+                    xs.append(e.dxf.location.x)
+                    ys.append(e.dxf.location.y)
+                elif t in ("CIRCLE", "ARC"):
+                    c, r = e.dxf.center, e.dxf.radius
+                    xs += (c.x - r, c.x + r)
+                    ys += (c.y - r, c.y + r)
+                elif t == "LWPOLYLINE":
+                    for x, y in e.get_points("xy"):
+                        xs.append(x)
+                        ys.append(y)
+                elif t in ("TEXT", "MTEXT"):
+                    xs.append(e.dxf.insert.x)
+                    ys.append(e.dxf.insert.y)
+                elif t == "VIEWPORT":
+                    continue
+                else:
+                    slozite.append(e)
+            except Exception:  # noqa: BLE001
+                slozite.append(e)
+        if slozite:
+            try:
+                ext = bbox.extents(slozite, fast=True)
+                if ext.has_data:
+                    xs += (ext.extmin.x, ext.extmax.x)
+                    ys += (ext.extmin.y, ext.extmax.y)
+            except Exception:  # noqa: BLE001
+                pass
+        if not xs:
             return None
-        if not ext.has_data:
-            return None
-        return ext.extmin.x, ext.extmin.y, ext.extmax.x, ext.extmax.y
+        return min(xs), min(ys), max(xs), max(ys)
 
 
 def _cesky(doc: Drawing) -> None:

@@ -962,9 +962,8 @@ class CadPage(QWidget):
                 if r.viditelna and r.uchyty and r.pripojena:
                     viditelne += r.prvky_pro_uchyty()
         self.view.uchyty = Uchyty(viditelne)
-        self.index = U.IndexVyberu(msp)
-        if nevybiratelne:
-            self.index.polozky = [p for p in self.index.polozky if p[0].dxf.get("layer", "0") not in nevybiratelne]
+        self.index = U.IndexVyberu(msp, (lambda e: e.dxf.get("layer", "0") in nevybiratelne) if nevybiratelne
+                                   else None)
 
     def spravce_vrstev(self, modal: bool = True):
         if self.dok is None:

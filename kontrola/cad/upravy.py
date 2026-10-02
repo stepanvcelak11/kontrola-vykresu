@@ -947,32 +947,39 @@ class IndexVyberu:
     Prostorový index (STRtree) a slovník prvek → geometrie se staví líně, takže i výkres
     s desítkami tisíc prvků se vybírá okamžitě."""
 
-    def __init__(self, msp):
+    def __init__(self, msp, vynechat=None):
         self.msp = msp
+        self.vynechat = vynechat or (lambda e: False)
         self.obnov()
 
     @property
     def polozky(self):
+        if self._polozky is None:  # líně – geometrie se počítá až při prvním výběru
+            polozky = []
+            for e in self.msp:
+                if self.vynechat(e):
+                    continue
+                g = geometrie(e)
+                if g is not None and not g.is_empty:
+                    polozky.append((e, g, g.bounds))
+            self._polozky = polozky
         return self._polozky
 
     @polozky.setter
     def polozky(self, hodnota):
-        self._polozky = list(hodnota)
+        self._polozky = None if hodnota is None else list(hodnota)
         self._podle_id = None
         self._strom = None
 
     def obnov(self):
-        polozky = []
-        for e in self.msp:
-            g = geometrie(e)
-            if g is not None and not g.is_empty:
-                polozky.append((e, g, g.bounds))
-        self.polozky = polozky
+        self.polozky = None
 
     def zmen(self, pridano=(), odebrano=(), vynechat=lambda e: False) -> None:
         """Přírůstková změna po úpravě (místo přepočtu celého výkresu)."""
+        if self._polozky is None:
+            return  # index ještě nebyl potřeba – spočítá se z aktuálního modelu, až bude
         pryc = {id(e) for e in odebrano} | {id(e) for e in pridano}
-        polozky = [p for p in self._polozky if id(p[0]) not in pryc] if pryc else list(self._polozky)
+        polozky = [p for p in self.polozky if id(p[0]) not in pryc] if pryc else list(self.polozky)
         for e in pridano:
             if e.dxf.owner is None or vynechat(e):
                 continue
@@ -984,14 +991,14 @@ class IndexVyberu:
     def _index(self):
         if self._strom is None:
             from shapely.strtree import STRtree
-            self._strom = STRtree([g for _e, g, _bb in self._polozky])
+            self._strom = STRtree([g for _e, g, _bb in self.polozky])
         return self._strom
 
     def _kandidati(self, geom, predikat=None) -> list:
-        if not self._polozky:
+        if not self.polozky:
             return []
         idx = self._index().query(geom, predicate=predikat)
-        return [self._polozky[i] for i in sorted(int(i) for i in idx)]
+        return [self.polozky[i] for i in sorted(int(i) for i in idx)]
 
     def najdi(self, x, y, tol) -> object | None:
         from shapely.geometry import Point, box
@@ -1018,7 +1025,7 @@ class IndexVyberu:
 
     def geometrie(self, e):
         if self._podle_id is None:
-            self._podle_id = {id(f): g for f, g, _bb in self._polozky}
+            self._podle_id = {id(f): g for f, g, _bb in self.polozky}
         return self._podle_id.get(id(e))
 
 
