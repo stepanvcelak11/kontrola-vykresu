@@ -424,7 +424,8 @@ class VypoctyPage(QWidget):
         self.kody.currentIndexChanged.connect(self._filter)
         self.des.valueChanged.connect(self._decimals)
         self.model.changeFailed.connect(lambda m: self.message(m, True))
-        self.model.dataChanged.connect(lambda *a: self._after_change())
+        # úprava v tabulce → uložit a obnovit (ne když dataChanged hlásí sama obnova – nekonečná smyčka)
+        self.model.dataChanged.connect(lambda *a: None if getattr(self, "_obnovuji", False) else self._after_change())
         from PySide6.QtGui import QKeySequence, QShortcut
         QShortcut(QKeySequence.Delete, self.table, activated=self.delete_selected)
         self.table.selectionModel().selectionChanged.connect(
@@ -491,8 +492,12 @@ class VypoctyPage(QWidget):
         elif n:
             # jen nové hodnoty ve stejných řádcích: dataChanged (samotné layoutChanged bez
             # layoutAboutToBeChanged nechá filtrovací model s neplatným mapováním řádků)
-            self.model.dataChanged.emit(self.model.index(0, 0),
-                                        self.model.index(n - 1, self.model.columnCount() - 1))
+            self._obnovuji = True
+            try:
+                self.model.dataChanged.emit(self.model.index(0, 0),
+                                            self.model.index(n - 1, self.model.columnCount() - 1))
+            finally:
+                self._obnovuji = False
         self._pocet_radku = n
         cur = self.kody.currentData()
         self.kody.blockSignals(True)
