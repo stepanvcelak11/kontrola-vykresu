@@ -2605,3 +2605,31 @@ def test_pravidla_ze_vzoru_a_smernice(window, monkeypatch):
     finally:
         w.project.rules = puvodni
         w.zadani.rules_changed()
+
+
+def test_qtrig_zakazky_ze_zalohy_uctu(window, tmp_path, monkeypatch):
+    from kontrola import qtrig as Q
+    from tests.test_qtrig import _Server, _zaloha_telefonu
+    monkeypatch.setattr("kontrola.ui.qtrig_dialog._nastaveni", lambda: __import__(
+        "PySide6.QtCore", fromlist=["QSettings"]).QSettings(str(tmp_path / "s.ini"), __import__(
+            "PySide6.QtCore", fromlist=["QSettings"]).QSettings.IniFormat))
+    w = window
+    w.show_page("vypocty")
+    p = w.vypocty
+    puvodni = list(p.seznam.body)
+    srv = _Server()
+    srv.zaloha = _zaloha_telefonu()
+    d = p.qtrig_dialog(Q.Klient(otevri=srv))
+    try:
+        d.kod.setText("ABCD1234")
+        assert d.prihlas("heslo")
+        texty = [d.zakazka.itemText(i) for i in range(d.zakazka.count())]
+        assert len(texty) == 4 and any("Husovice" in t and "2 bodů" in t for t in texty)  # 3 ze zálohy + 1 firemní
+        assert "Záloha z telefonu" in d.stav.text()
+        d.vyber_zakazku("Husovice")
+        assert d.stahni() == (2, 0, 0) and p.seznam.najdi("Z1") is not None
+        assert d.stahni() == (0, 0, 0)
+    finally:
+        d.close()
+        p.seznam.body[:] = puvodni
+        p._after_change()

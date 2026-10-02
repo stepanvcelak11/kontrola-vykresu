@@ -1,5 +1,7 @@
 """Propojení s QTrig: převod bodů z WGS84, zápisníky z exportu a přírůstková synchronizace z cloudu."""
 
+import base64
+import gzip
 import io
 import json
 import urllib.error
@@ -76,6 +78,7 @@ class _Server:
     def __init__(self):
         self.radky = []
         self.dotazy = []
+        self.zaloha = None  # JSON zálohy účtu (jako ji posílá QTrig), None = účet zatím bez zálohy
 
     def __call__(self, req, timeout=None):
         from urllib.parse import parse_qs, urlparse
@@ -97,6 +100,15 @@ class _Server:
             since = int(q["since"][0])
             nove = [r for r in self.radky if r["srv"] > since][:2]  # stránka po dvou
             return io.BytesIO(json.dumps({"points": nove, "more": len(nove) == 2}).encode())
+        if u.path == "/account/backup":
+            q = parse_qs(u.query)
+            if self.zaloha is None:
+                return io.BytesIO(json.dumps({"zalohy": []}).encode())
+            if "slot" not in q:
+                return io.BytesIO(json.dumps({"zalohy": [{"slot": 0, "ts": 1000}, {"slot": 1, "ts": 1759400000000}]}).encode())
+            assert q["slot"] == ["1"]  # nejnovější
+            data = base64.b64encode(gzip.compress(json.dumps(self.zaloha).encode())).decode()
+            return io.BytesIO(json.dumps({"ok": True, "slot": 1, "ts": 1759400000000, "data": data}).encode())
         raise AssertionError(u.path)
 
 
@@ -142,3 +154,28 @@ def test_slouceni_do_seznamu_a_nivelace():
     vysky, prot = Q.nivelace_vypocet(n)
     assert vysky == [("A", 250.0), ("1", pytest.approx(250.247)), ("B", pytest.approx(249.847))]
     assert "NIVELACE" in prot[0]
+
+
+def _zaloha_telefonu():
+    body = [{"id": "cp_1", "name": "Z1", "lat": 50.08, "lng": 14.42, "vyska": 250.0},
+            {"id": "cp_2", "name": "Z2", "lat": 49.2, "lng": 16.6}]
+    return {"app": "QTRIG", "data": {"arProjectsList": json.dumps([{"id": "p1", "name": "Husovice"},
+                                                                    {"id": "p2", "name": "Prázdná"}])},
+            "idb": {"p1_arCustomPoints12": json.dumps(body),
+                    "default_arCustomPoints12": json.dumps(body[:1])}}
+
+
+def test_zakazky_ze_zalohy_uctu():
+    z = Q.zakazky_ze_zalohy(_zaloha_telefonu())
+    assert [(x["key"], x["name"], len(x["body"])) for x in z] == [
+        ("p1", "Husovice", 2), ("p2", "Prázdná", 0), ("default", "Výchozí zakázka", 1)]
+    with pytest.raises(Q.ChybaQTrig):
+        Q.zakazky_ze_zalohy({"neco": 1})
+    srv = _Server()
+    k = Q.Klient(otevri=srv)
+    k.prihlas("ABCD1234", "heslo")
+    with pytest.raises(Q.ChybaQTrig, match="Zálohovat"):
+        k.zaloha_uctu()
+    srv.zaloha = _zaloha_telefonu()
+    zal, ts = k.zaloha_uctu()
+    assert ts == 1759400000000 and Q.zakazky_ze_zalohy(zal)[0]["name"] == "Husovice"

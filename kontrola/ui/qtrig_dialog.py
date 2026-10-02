@@ -31,7 +31,7 @@ class QTrigDialog(QDialog):
                              "body zakázky do seznamu souřadnic (S-JTSK, stejný převod jako v QTrig – sedí na mm). "
                              "V QTrig se nic nemění."))
         # --- cloud
-        g = QGroupBox("Firemní cloud QTrig")
+        g = QGroupBox("Účet QTrig")
         f = QFormLayout(g)
         self.kod = QLineEdit(s.value("qtrig/kod", ""))
         self.kod.setPlaceholderText("kód účtu – stejný jako při přihlášení v QTrig")
@@ -73,8 +73,9 @@ class QTrigDialog(QDialog):
         r3.addWidget(self.b_sync, 1)
         r3.addWidget(self.b_odhlas)
         f.addRow(r3)
-        f.addRow(QLabel("<span style='color:gray'>V QTrig u zakázky zapněte Nastavení → Data → Firemní cloud → "
-                        "„Sdílet body této zakázky ve firmě“. Heslo se neukládá, jen přihlášení (60 dní).</span>"))
+        f.addRow(QLabel("<span style='color:gray'>Stačí kód účtu a heslo jako v QTrig – zobrazí se všechny zakázky z telefonu "
+                        "(ze zálohy účtu, kterou QTrig posílá sám denně a po každých 20 bodech). Nejnovější body: "
+                        "v QTrig Nastavení → Záloha a údržba → Zálohovat teď, pak tady ↻. Heslo se neukládá.</span>"))
         lay.addWidget(g)
         # --- soubor
         g2 = QGroupBox("Export z QTrig (soubor)")
@@ -107,12 +108,15 @@ class QTrigDialog(QDialog):
 
     def vyber_zakazku(self, nazev: str) -> None:
         """Zvolí zakázku podle názvu (nový projekt se jmenuje jako zakázka); neznámou přidá."""
-        from PySide6.QtCore import Qt as _Qt
-        i = self.zakazka.findText(nazev, _Qt.MatchFixedString)
-        if i < 0:
-            self.zakazka.addItem(nazev, Q.klic_zakazky(nazev))
-            i = self.zakazka.count() - 1
-        self.zakazka.setCurrentIndex(i)
+        cil = (nazev or "").strip().lower()
+        for i in range(self.zakazka.count()):
+            d = self.zakazka.itemData(i)
+            jm = d.get("name") if isinstance(d, dict) else self.zakazka.itemText(i)
+            if (jm or "").strip().lower() == cil:
+                self.zakazka.setCurrentIndex(i)
+                return
+        self.zakazka.addItem(nazev, {"key": Q.klic_zakazky(nazev), "name": nazev, "zdroj": "firma", "n": None})
+        self.zakazka.setCurrentIndex(self.zakazka.count() - 1)
 
     def _ukaz_jmeno(self, on: bool):
         self.jmeno.setVisible(on)
@@ -166,28 +170,54 @@ class QTrigDialog(QDialog):
         self._obnov_stav()
 
     def obnov_zakazky(self) -> list[dict]:
+        """Zakázky účtu: ze zálohy účtu (všechny zakázky a body z telefonu – QTrig ji posílá sám) a ze sdílení
+        ve firmě. Vrací seznam položek {key, name, zdroj}."""
+        polozky, chyby = [], []
+        self._zaloha = {}
         try:
-            jobs = self._cekej(self.klient.zakazky)
+            zal, ts = self._cekej(self.klient.zaloha_uctu)
+            for z in Q.zakazky_ze_zalohy(zal):
+                self._zaloha[z["key"]] = z
+                polozky.append({"key": z["key"], "name": z["name"], "zdroj": "zaloha", "n": len(z["body"])})
+            self._zaloha_cas = ts
         except Q.ChybaQTrig as e:
-            self._chyba(e)
-            return []
-        akt = self.zakazka.currentText()
+            chyby.append(str(e))
+            if not self.klient.token:
+                self._chyba(e)
+                return []
+        try:
+            jmena = {p["name"].strip().lower() for p in polozky}
+            for j in self._cekej(self.klient.zakazky):
+                nm = j.get("name") or j.get("key")
+                if nm and nm.strip().lower() not in jmena:
+                    polozky.append({"key": j.get("key"), "name": nm, "zdroj": "firma", "n": None})
+        except Q.ChybaQTrig as e:
+            if not self.klient.token:
+                self._chyba(e)
+                return []
+        akt = self._zvolena_zakazka()
         self.zakazka.clear()
-        self.zakazka.setEditable(not jobs)
-        for j in sorted(jobs, key=lambda j: (j.get("name") or j.get("key") or "").lower()):
-            self.zakazka.addItem(j.get("name") or j.get("key"), j.get("key"))
+        self.zakazka.setEditable(not polozky)
+        for p in sorted(polozky, key=lambda p: p["name"].lower()):
+            text = p["name"] + (f"   ({p['n']} bodů)" if p["n"] is not None else "   (sdílená ve firmě)")
+            self.zakazka.addItem(text, p)
         if akt:
-            i = self.zakazka.findText(akt)
-            if i >= 0:
-                self.zakazka.setCurrentIndex(i)
-            elif self.zakazka.isEditable():
-                self.zakazka.setEditText(akt)
-        if jobs:
-            self._obnov_stav(f"Přihlášeno – {len(jobs)} zakázek, vyberte jednu a stáhněte body.")
+            self.vyber_zakazku(akt)
+        if polozky:
+            kdy = ""
+            if getattr(self, "_zaloha_cas", 0):
+                import datetime as _dt
+                kdy = " Záloha z telefonu: " + _dt.datetime.fromtimestamp(self._zaloha_cas / 1000).strftime("%d. %m. %H:%M") + "."
+            self._obnov_stav(f"Přihlášeno – {len(polozky)} zakázek, vyberte jednu a stáhněte body.{kdy}")
         else:
-            self._obnov_stav("Server zatím nezná žádnou zakázku – v QTrig u zakázky zapněte sdílení do cloudu "
-                             "(níže), nebo napište název zakázky přesně jako v QTrig.")
-        return jobs
+            self._obnov_stav(((chyby[0] + " ") if chyby else "") + "Zatím tu nejsou žádné zakázky.", True)
+        return polozky
+
+    def _zvolena_zakazka(self) -> str:
+        d = self.zakazka.currentData()
+        if isinstance(d, dict):
+            return d.get("name", "")
+        return self.zakazka.currentText().strip()
 
     def _chyba(self, e):
         if not self.klient.token:
@@ -224,19 +254,37 @@ class QTrigDialog(QDialog):
             pass
 
     def stahni(self, tise: bool = False) -> tuple[int, int, int] | None:
-        nazev = self.zakazka.currentText().strip()
+        nazev = self._zvolena_zakazka()
         if not nazev:
             self._obnov_stav("Vyberte nebo napište zakázku.", True)
             return None
-        i = self.zakazka.findText(nazev)
-        klic = self.zakazka.itemData(i) if i >= 0 and self.zakazka.itemData(i) else Q.klic_zakazky(nazev)
-        stav = self._nacti_stav(klic)
-        try:
-            body, smazane, stav = (Q.sync(self.klient, stav, klic) if tise
-                                   else self._cekej(lambda: Q.sync(self.klient, stav, klic)))
-        except Q.ChybaQTrig as e:
-            self._chyba(e)
-            return None
+        d = self.zakazka.currentData()
+        if isinstance(d, dict) and d.get("zdroj") == "zaloha":
+            if tise:  # hlídání: záloha se obnoví nanejvýš jednou za pár minut
+                try:
+                    self.obnov_zakazky()
+                    self.vyber_zakazku(nazev)
+                    d = self.zakazka.currentData()
+                except Q.ChybaQTrig:
+                    return None
+            z = getattr(self, "_zaloha", {}).get(d.get("key")) if isinstance(d, dict) else None
+            if z is None:
+                self._obnov_stav("Zakázka v záloze není – obnovte seznam (↻).", True)
+                return None
+            body = list(z["body"])
+            stav = self._nacti_stav("zaloha:" + str(d["key"]))
+            predtim = set(stav.body)
+            smazane = sorted(predtim - {b.cislo for b in body})
+            stav.body = {b.cislo: {} for b in body}
+        else:
+            klic = d.get("key") if isinstance(d, dict) else Q.klic_zakazky(nazev)
+            stav = self._nacti_stav(klic)
+            try:
+                body, smazane, stav = (Q.sync(self.klient, stav, klic) if tise
+                                       else self._cekej(lambda: Q.sync(self.klient, stav, klic)))
+            except Q.ChybaQTrig as e:
+                self._chyba(e)
+                return None
         self._uloz_stav(stav)
         _nastaveni().setValue("qtrig/zakazka", nazev)
         _nastaveni().setValue("qtrig/smazat", "1" if self.smazat.isChecked() else "0")

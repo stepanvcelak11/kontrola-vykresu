@@ -2,11 +2,10 @@
 
 Dvě cesty, obě jen ČTOU – v QTrig se nic nemění:
 
-1) Firemní cloud QTrig (stejný server, přes který si body sdílejí mobily ve firmě):
-   přihlášení kódem účtu a heslem (nebo kódem firmy + jménem + heslem), výběr zakázky
-   a stažení jejích bodů (``GET /sync/points``). Synchronizace je přírůstková – drží se
-   kurzor serveru, takže další stažení přinese jen nové a změněné body. V QTrig je potřeba
-   u zakázky zapnout Nastavení → Data → Firemní cloud → „Sdílet body této zakázky ve firmě“.
+1) Cloud QTrig: přihlášení kódem účtu a heslem (u starých firemních účtů i jménem). Zakázky a body
+   se čtou ze zálohy účtu (``GET /account/backup``), kterou QTrig posílá sám (denně a po každých
+   20 bodech) – nic se v QTrig nastavovat nemusí. Zakázky sdílené ve firmě (``/jobs``,
+   ``/sync/points``) se stahují přírůstkově podle kurzoru serveru.
 2) Soubory exportované z QTrig: body (JSON „moje_body_*.json“ i CSV/TXT „název;Y;X;Z;kód“),
    nivelační zápisník a zápisník vodorovných směrů (CSV).
 
@@ -76,6 +75,50 @@ def body_z_json(data) -> list[Bod]:
         raise ChybaQTrig("Soubor neobsahuje body QTrig.")
     out = [b for b in (bod_z_qtrig(p) for p in data if isinstance(p, dict)) if b is not None]
     return out
+
+
+def zakazky_ze_zalohy(zaloha) -> list[dict]:
+    """Zakázky a body ze zálohy QTrig (soubor „Zálohovat“ nebo záloha účtu v cloudu):
+    [{"key": id zakázky, "name": název, "body": [Bod, …]}] – i zakázky bez bodů."""
+    if isinstance(zaloha, (str, bytes)):
+        zaloha = json.loads(zaloha)
+    if not isinstance(zaloha, dict) or not isinstance(zaloha.get("data"), dict):
+        raise ChybaQTrig("Tohle není záloha QTrig.")
+    data, idb = zaloha.get("data") or {}, zaloha.get("idb") or {}
+    try:
+        seznam = json.loads(data.get("arProjectsList") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        seznam = []
+    zak = [(str(z.get("id")), str(z.get("name") or z.get("id"))) for z in seznam
+           if isinstance(z, dict) and z.get("id") is not None]
+    zname = {k for k, _ in zak}
+    for klic in list(idb) + list(data):  # zakázky, které v seznamu nejsou (výchozí „default“)
+        if isinstance(klic, str) and klic.endswith("_arCustomPoints12"):
+            pid = klic[: -len("_arCustomPoints12")]
+            if pid not in zname:
+                zak.append((pid, "Výchozí zakázka" if pid == "default" else pid))
+                zname.add(pid)
+    out = []
+    for pid, nazev in zak:
+        raw = idb.get(f"{pid}_arCustomPoints12", data.get(f"{pid}_arCustomPoints12"))
+        body = []
+        if raw:
+            try:
+                body = body_z_json(raw if isinstance(raw, (list, dict)) else json.loads(raw))
+            except (ChybaQTrig, TypeError, ValueError):
+                body = []
+        out.append({"key": pid, "name": nazev, "body": body})
+    return out
+
+
+def rozbal_zalohu_uctu(data_b64: str) -> dict:
+    """Záloha účtu ze serveru: gzip + base64 → JSON zálohy."""
+    import base64
+    import gzip
+    try:
+        return json.loads(gzip.decompress(base64.b64decode(data_b64)).decode("utf-8"))
+    except (OSError, ValueError) as e:
+        raise ChybaQTrig(f"Zálohu účtu se nepodařilo rozbalit ({e}).") from None
 
 
 def je_qtrig_json(text: str) -> bool:
@@ -225,6 +268,24 @@ class Klient:
         self.firma = ((r.get("config") or {}).get("firm") or {}).get("name", "") if isinstance(
             (r.get("config") or {}).get("firm"), dict) else ""
         return r
+
+    def zalohy_uctu(self) -> list[dict]:
+        """Zálohy účtu na serveru (QTrig je posílá sám: denně a po každých 20 bodech) – nejnovější první."""
+        r = self._pozadavek("GET", "/account/backup")
+        return sorted(r.get("zalohy") or [], key=lambda z: -(z.get("ts") or 0))
+
+    def zaloha_uctu(self, slot: int | None = None) -> tuple[dict, int]:
+        """Nejnovější (nebo zvolená) záloha účtu → (JSON zálohy, čas zálohy v ms)."""
+        if slot is None:
+            zal = self.zalohy_uctu()
+            if not zal:
+                raise ChybaQTrig("V účtu zatím není žádná záloha. V QTrig: Nastavení → Záloha a údržba → "
+                                 "Zálohovat teď (jinak se záloha pošle sama jednou denně).")
+            slot = zal[0].get("slot", 0)
+        r = self._pozadavek("GET", "/account/backup", query={"slot": slot})
+        if not r.get("data"):
+            raise ChybaQTrig(r.get("error") or "Zálohu účtu se nepodařilo stáhnout.")
+        return rozbal_zalohu_uctu(r["data"]), int(r.get("ts") or 0)
 
     def zakazky(self) -> list[dict]:
         """[{key, name, …}] – zakázky firmy, které server zná (živé, ne smazané)."""
