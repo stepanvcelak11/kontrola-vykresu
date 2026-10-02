@@ -278,6 +278,28 @@ def u_vymera(s, h):
     return Vysledek(prot)
 
 
+def u_vymery_davkou(s, h):
+    radky = [r for r in (h.get("parcely") or "").splitlines() if r.strip()]
+    if not radky:
+        raise ChybaVstupu("Zadejte řádky „parcela: čísla bodů po obvodu“, např. „125/3: 1 2 3 4“.")
+    prot = _hlavicka("Výměry parcel")
+    prot += ["  parcela              výměra [m²]   zaokr.     obvod [m]   bodů"]
+    celkem = 0.0
+    for i, r in enumerate(radky, 1):
+        if ":" in r:
+            nazev, cisla = r.split(":", 1)
+        else:
+            nazev, cisla = f"plocha {i}", r
+        body = _radky_bodu(s, cisla)
+        if len(body) < 3:
+            raise ChybaVstupu(f"Řádek {i} ({nazev.strip()}): výměra potřebuje aspoň tři body.")
+        p = V.vymera(body)
+        celkem += p
+        prot.append(f"  {nazev.strip():<18}{p:>14.2f}{round(p):>9d}{V.obvod(body):>14.3f}{len(body):>7d}")
+    prot.append(f"  {'celkem':<18}{celkem:>14.2f}{round(celkem):>9d}")
+    return Vysledek(prot)
+
+
 def u_staniceni(s, h):
     a, b = _bod(s, h, "a", "bod A (začátek přímky)"), _bod(s, h, "b", "bod B (směr přímky)")
     _ruzne(a, b)
@@ -607,6 +629,8 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("predpona", "Předpona nových čísel", "text", "T")], u_transformace),
     ("Výměra a obvod", "Výměra a obvod plochy z bodů zadaných po obvodu.",
      [Pole("body", "Body po obvodu (čísla)", "radky")], u_vymera),
+    ("Výměry parcel dávkou", "Výměry a obvody více parcel najednou (řádek: parcela: čísla bodů po obvodu).",
+     [Pole("parcely", "Parcely (řádek: 125/3: 1 2 3 4)", "radky")], u_vymery_davkou),
     ("Staničení a kolmice", "Staničení a kolmice bodů k měřické přímce (oměrné, kontrola).",
      [Pole("a", "Bod A"), Pole("b", "Bod B"), Pole("body", "Body (čísla)", "radky")], u_staniceni),
     ("Bod ze staničení a kolmice", "Nový bod ze staničení a kolmice k přímce A–B (vytyčení).",

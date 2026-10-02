@@ -240,3 +240,13 @@ def test_porovnani_seznamu():
     assert r[0].dp == pytest.approx(0.05) and r[0].dz == pytest.approx(0.02) and r[0].vyhovuje
     assert not r[1].vyhovuje  # 0,5 m > 2·√2·0,14
     assert jen_a == ["5"] and jen_b == ["7"]
+
+
+def test_vymery_davkou():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.ui.ulohy import u_vymery_davkou
+    s = SeznamBodu()
+    s.pridej([Bod("1", 0, 0), Bod("2", 10, 0), Bod("3", 10, 10), Bod("4", 0, 10), Bod("5", 20, 0), Bod("6", 20, 10)])
+    r = u_vymery_davkou(s, {"parcely": "125/3: 1 2 3 4\n125/4: 2 5 6 3\n"})
+    t = "\n".join(r.protokol)
+    assert "125/3" in t and "100.00" in t and "200.00" in t  # celkem
