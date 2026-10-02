@@ -626,10 +626,27 @@ class VypoctyPage(QWidget):
             path, _ = QFileDialog.getSaveFileName(self, "Export seznamu souřadnic", "seznam.txt",
                                                   "Text – sloupce (*.txt);;CSV pro Excel (*.csv);;"
                                                   "DXF – body, čísla, výšky a spojnice (*.dxf);;"
-                                                  "KML – mapy, Google Earth (*.kml);;GeoJSON – QGIS (*.geojson)")
+                                                  "KML – mapy, Google Earth (*.kml);;GeoJSON – QGIS (*.geojson);;"
+                                                  "PDF – seznam k tisku a odevzdání (*.pdf)")
         if not path:
             return None
         pripona = Path(path).suffix.lower()
+        if pripona == ".pdf":
+            from ..geodezie.formaty import zapis_text
+            from ..geodezie.protokol import protokol_pdf
+            sl = ["cislo", "y", "x", "z"] + (["kod"] if any(b.kod for b in body) else [])
+            d = self.des.value()
+            pr = getattr(self.win, "project", None)
+            nazev = f"Seznam souřadnic {getattr(pr, 'name', '') if pr is not None else ''}".strip()
+            text = (f"SEZNAM SOUŘADNIC – S-JTSK, Bpv\npočet bodů: {len(body)}\n\n"
+                    + zapis_text(body, sloupce=sl, des_xy=d, des_z=d, hlavicka=True))
+            try:
+                protokol_pdf(text, path, nazev=nazev)
+            except OSError as e:
+                QMessageBox.warning(self, "Export", str(e))
+                return None
+            self.message(f"Seznam {len(body)} bodů uložen do PDF {path}.")
+            return path
         if pripona in (".dxf", ".kml", ".geojson", ".json"):
             from ..geodezie import export_mapy as E
             cisla = {b.cislo for b in body}

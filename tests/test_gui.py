@@ -2214,3 +2214,17 @@ def test_cad_prime_zadani_delky(window):
     c.zadej("5")  # u prvního bodu nástroje délka nedává smysl – nic se nestane
     c.zrus()
     assert not list(c.prostor.query("CIRCLE"))
+
+
+def test_export_seznamu_pdf(window, tmp_path):
+    from kontrola.geodezie.body import Bod
+    p = window.vypocty
+    puvodni = list(p.seznam.body)
+    try:
+        p.seznam.body[:] = [Bod("4001", 600000.123, 1160000.456, 250.0, kod="plot")]
+        p._after_change()
+        assert p.export_dialog(str(tmp_path / "s.pdf"))
+        assert (tmp_path / "s.pdf").read_bytes()[:4] == b"%PDF"
+    finally:
+        p.seznam.body[:] = puvodni
+        p._after_change()
