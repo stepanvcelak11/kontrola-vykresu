@@ -409,3 +409,21 @@ def test_souradnicova_sit():
     assert len(msp) == 0
     with pytest.raises(ValueError):
         U.souradnicova_sit(msp, h, (0, 0, 1e6, 1e6), 1, 1)
+
+
+def test_delka_prvku():
+    doc, msp, h, k = _novy()
+    a = k.usecka((0, 0), (3, 4))
+    b = k.polylinie([(0, 0), (10, 0), (10, 10)])
+    c = k.kruznice((0, 0), 1)
+    t = k.text((0, 0), "x", 1)
+    d, n = U.delka_prvku([a, b, c, t])
+    assert n == 3 and d == pytest.approx(5 + 20 + 2 * math.pi, abs=1e-3)
+
+
+def test_delka_oblouku_a_polylinie_s_obloukem():
+    doc, msp, h, k = _novy()
+    a = msp.add_arc((0, 0), 2, 0, 90)
+    p = msp.add_lwpolyline([(0, 0, 0, 0, 1.0), (2, 0, 0, 0, 0)], format="xyseb")  # půlkružnice r = 1
+    d, n = U.delka_prvku([a, p])
+    assert n == 2 and d == pytest.approx(math.pi + math.pi, abs=1e-9)

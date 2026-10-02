@@ -1220,7 +1220,7 @@ def vlastnosti(e) -> list[tuple[str, str, object]]:
     elif t == "LWPOLYLINE":
         g = geometrie(e)
         out += [("_vrcholy", "Vrcholů", len(e)), ("closed", "Uzavřená", bool(e.closed)),
-                ("_delka", "Délka", g.length if g is not None else 0.0)]
+                ("_delka", "Délka", _delka_jednoho(e) or 0.0)]
         if e.closed:
             from shapely.geometry import Polygon
             out.append(("_vymera", "Výměra [m²]", Polygon(g.coords).area if g is not None else 0.0))
@@ -1337,6 +1337,47 @@ def souradnicova_sit(msp, h: Historie, rozsah, interval: float = 100.0, rameno: 
     if nove:
         h.proved(f"Souřadnicová síť ({len(nove) // (4 if popisy else 2)} křížků)", nove)
     return nove
+
+
+def _delka_jednoho(e) -> float | None:
+    t = e.dxftype()
+    if t == "LINE":
+        return _dist(_xy(e.dxf.start), _xy(e.dxf.end))
+    if t == "CIRCLE":
+        return 2 * math.pi * e.dxf.radius
+    if t == "ARC":
+        return e.dxf.radius * math.radians((e.dxf.end_angle - e.dxf.start_angle) % 360 or 360)
+    if t == "LWPOLYLINE":
+        pts = list(e.get_points("xyb"))
+        if e.closed and pts:
+            pts.append(pts[0])
+        d = 0.0
+        for (x1, y1, b), (x2, y2, _b2) in zip(pts, pts[1:]):
+            c = math.hypot(x2 - x1, y2 - y1)
+            if abs(b) < 1e-12:
+                d += c
+            else:  # oblouk: středový úhel 4·atan(bulge), délka = r·úhel
+                u = 4 * math.atan(abs(b))
+                d += c / (2 * math.sin(u / 2)) * u if c > 0 else 0.0
+        return d
+    if t in ("POINT", "TEXT", "MTEXT", "INSERT", "HATCH", "DIMENSION", "SOLID", "VIEWPORT"):
+        return None
+    try:  # křivky, elipsy, 3D polylinie – jemné rozložení
+        pts = list(_cesta(e).flattening(0.0005, segments=64))
+        return float(sum(a.distance(b) for a, b in zip(pts, pts[1:])))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def delka_prvku(ents) -> tuple[float, int]:
+    """Celková délka čar výběru (úsečky, polylinie i s oblouky, oblouky, kružnice, křivky) a počet prvků."""
+    celkem, n = 0.0, 0
+    for e in ents:
+        d = _delka_jednoho(e)
+        if d is not None:
+            celkem += d
+            n += 1
+    return celkem, n
 
 
 def vyber_podle(msp, text: str) -> tuple[list, str]:

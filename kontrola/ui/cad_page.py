@@ -248,7 +248,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
         "uprav text": "upravit text kliknutím (Edit Text)",
-        "síť": "křížky souřadnicové sítě po intervalu (např. 100 m) s popisy",
+        "délka": "celková délka vybraných čar (Measure Length)", "síť": "křížky souřadnicové sítě po intervalu (např. 100 m) s popisy",
         "mnohoúhelník": "pravidelný mnohoúhelník (střed, vrchol, počet stran)",
         "zhasni": "vypnout hladinu („zhasni 58“, „zhasni vše kromě 58“)", "rozsviť": "zapnout hladinu („rozsviť 58“, „rozsviť vše“)",
         "body po prvku": "body po prvku – na N dílů nebo po vzdálenosti (staničení)",
@@ -289,6 +289,7 @@ class CadPage(QWidget):
         "polygon": "mnohoúhelník", "mnohouhelnik": "mnohoúhelník", "pol": "mnohoúhelník",
         "zhasni hladinu": "zhasni", "lv off": "zhasni", "lvoff": "zhasni", "rozsvit": "rozsviť", "lv on": "rozsviť",
         "lvon": "rozsviť",
+        "delka": "délka", "len": "délka", "measure length": "délka", "mer delku": "délka",
         "sit": "síť", "grid": "síť", "krizky": "síť", "křížky": "síť",
         "et": "uprav text", "edit text": "uprav text", "edittext": "uprav text", "upravit text": "uprav text",
         "sel": "vyber", "select": "vyber", "výběr": "vyber", "vyber podle": "vyber", "sba": "vyber",
@@ -1540,6 +1541,13 @@ class CadPage(QWidget):
                 self.vlastnosti_prvku(self.vyber[0])
         elif cmd in ("zhasni", "rozsviť"):
             self.hladiny_zobrazeni(arg, cmd == "rozsviť")
+        elif cmd == "délka":
+            if not self.vyber:
+                self.vypis("Vyberte čáry (klik, okno, „vyber …“), pak „délka“.")
+            else:
+                d, n = U.delka_prvku(self.vyber)
+                self.vypis(f"Celková délka {n} čar: {d:.3f} m" + (" (body, texty a buňky se nepočítají)"
+                                                                   if n < len(self.vyber) else ""))
         elif cmd == "vyber":
             try:
                 self.vyber, popis = U.vyber_podle(self.prostor, arg)
