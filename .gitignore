@@ -8,3 +8,5 @@ dist/
 *.egg-info/
 /vystupy/
 /kontrola/_build.py
+pip_log.txt
+chyba_spusteni.txt
