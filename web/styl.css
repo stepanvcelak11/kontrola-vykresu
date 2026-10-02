@@ -93,4 +93,59 @@ select { height: 40px; border-radius: 10px; border: 1px solid var(--linka2); bac
   .seznam { overflow: visible; }
   .podklady { padding: 20px 16px; }
   .pretazeni-box { padding: 20px; }
+  .stav { bottom: 80px; max-width: calc(100vw - 32px); }
+}
+
+/* Výpočty */
+.vyp { display: grid; grid-template-columns: minmax(340px, 420px) 230px minmax(0, 1fr); gap: 14px; padding: 14px; width: 100%; min-height: 0; overflow: hidden; }
+.vyp > * { min-height: 0; }
+.vyp-seznam { padding: 14px; gap: 8px; align-items: stretch; overflow: hidden; position: relative; }
+.vyp-hlava, .vyp-seznam > .pole, .novy-bod { flex-shrink: 0; }
+.vyp-hlava { display: flex; align-items: center; gap: 6px; }
+.pole, .novy-bod input, .u-form input, .u-form textarea, .u-form select { height: 36px; border-radius: 8px; border: 1px solid var(--linka2); background: var(--pozadi); padding: 0 10px; color: var(--text); width: 100%; min-width: 0; }
+.u-form textarea { height: auto; min-height: 96px; padding: 8px 10px; font: 13px/1.5 'JetBrains Mono', monospace; resize: vertical; }
+.pole:focus, .novy-bod input:focus, .u-form :focus { outline: none; border-color: var(--akcent); }
+.tabulka-obal { flex: 1 1 auto; overflow: auto; border: 1px solid var(--linka); border-radius: 10px; min-height: 120px; }
+.tabulka { width: 100%; border-collapse: collapse; font: 12.5px 'JetBrains Mono', monospace; }
+.tabulka th { position: sticky; top: 0; background: var(--panel); color: var(--tlumene); font: 600 11px 'IBM Plex Sans', sans-serif; text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--linka); }
+.tabulka td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--linka); white-space: nowrap; }
+.tabulka th:first-child, .tabulka td:first-child, .tabulka td:nth-child(5), .tabulka th:nth-child(5) { text-align: left; }
+.tabulka tr.novy td { color: var(--akcent); }
+.tabulka button { border: none; background: none; color: var(--tlumene); cursor: pointer; padding: 0 4px; }
+.tabulka button:hover { color: var(--chyba); }
+.novy-bod { display: grid; grid-template-columns: 1.1fr 1.3fr 1.3fr 0.9fr auto; gap: 6px; }
+.v-mapa { width: 100%; height: 150px; background: #05080C; border-radius: 10px; border: 1px solid var(--linka); flex-shrink: 0; }
+.menu { position: absolute; right: 14px; top: 54px; z-index: 4; background: var(--karta); border: 1px solid var(--linka2); border-radius: 10px; padding: 6px; display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.menu button { text-align: left; border: none; background: none; color: var(--text); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.menu button:hover { background: var(--akcent-tmavy); }
+.menu button[data-smazat] { color: #FCA5A5; }
+.vyp-ulohy { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.vyp-ulohy .skupina { font: 600 11px 'IBM Plex Sans', sans-serif; color: var(--tlumene); text-transform: uppercase; letter-spacing: .06em; padding: 10px 10px 4px; }
+.vyp-ulohy button { text-align: left; border: none; background: transparent; color: #C9D1D9; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+.vyp-ulohy button:hover { background: var(--karta); color: var(--text); }
+.vyp-ulohy button.aktivni { background: var(--akcent-tmavy); color: var(--akcent); font-weight: 600; }
+.vyp-uloha { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.u-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 12px; width: 100%; }
+.u-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--tlumene); }
+.u-form label.siroke { grid-column: 1 / -1; }
+.u-form .napoveda { font-size: 11.5px; color: var(--tlumene); opacity: .8; }
+.u-tlacitka { display: flex; gap: 8px; flex-wrap: wrap; }
+.u-chyba { background: #3B1518; color: #FCA5A5; border-radius: 8px; padding: 8px 12px; width: 100%; }
+.protokol { margin: 0; background: var(--panel); border: 1px solid var(--linka); border-radius: 14px; padding: 16px; font: 12.5px/1.5 'JetBrains Mono', monospace; color: #D7DEE5; white-space: pre; overflow: auto; min-height: 120px; flex: 1 0 auto; }
+.protokol:empty::before { content: "Tady se objeví výpočetní protokol."; color: var(--tlumene); font-family: 'IBM Plex Sans', sans-serif; }
+
+@media (max-width: 1200px) {
+  .vyp { grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); overflow-y: auto; }
+  .vyp-ulohy { grid-column: 2; grid-row: 1; flex-direction: row; flex-wrap: wrap; overflow: visible; }
+  .vyp-ulohy .skupina { width: 100%; }
+  .vyp-uloha { grid-column: 2; }
+  .vyp-seznam { grid-row: 1 / span 2; }
+}
+@media (max-width: 900px) {
+  .vyp { grid-template-columns: 1fr; padding: 12px; overflow: visible; }
+  .vyp-seznam, .vyp-ulohy, .vyp-uloha { grid-column: 1; grid-row: auto; }
+  .tabulka-obal { max-height: 50vh; }
+  .novy-bod { grid-template-columns: 1fr 1fr; }
+  .novy-bod button { grid-column: 1 / -1; }
+  .protokol { max-height: 70vh; flex: 0 0 auto; }
 }

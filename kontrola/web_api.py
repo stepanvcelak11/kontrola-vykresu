@@ -173,3 +173,86 @@ def zkontroluj(vykres: str, pravidla: str | None = None, seznam: str | None = No
         "pravidel": len(rs.pravidla), "skore": {"hodnota": sk.hodnota, "popis": sk.popis, "barva": sk.barva},
         "varovani": list(d.warnings) + pozn, "chyby": chyby, "kresba": kresba(d),
     }, ensure_ascii=False)
+
+
+# ------------------------------------------------------------------ Výpočty (Groma) ve webové verzi
+def _body_json(body) -> list[dict]:
+    return [{"c": b.cislo, "y": b.y, "x": b.x, "z": b.z, "kod": b.kod or "", "kk": b.kvalita,
+             "pozn": b.poznamka or ""} for b in body]
+
+
+def _seznam(body_json: str):
+    from .geodezie.body import Bod, SeznamBodu
+    s = SeznamBodu()
+    for d in json.loads(body_json or "[]"):
+        try:
+            s.body.append(Bod(str(d["c"]), float(d["y"]), float(d["x"]),
+                              None if d.get("z") in (None, "") else float(d["z"]),
+                              d.get("kod") or "", d.get("kk"), d.get("pozn") or ""))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return s
+
+
+def nacti_seznam(cesta: str) -> str:
+    """Seznam souřadnic ze souboru (txt, csv, Groma, Kokeš…) → JSON {body, varovani, format}."""
+    from .geodezie.formaty import nacti_soubor
+    body, var, fmt = nacti_soubor(cesta)
+    return json.dumps({"body": _body_json(body), "varovani": var[:50],
+                       "format": " ".join(fmt.sloupce)}, ensure_ascii=False)
+
+
+def seznam_text(body_json: str, oddelovac: str = " ") -> str:
+    """Seznam bodů do textu (zarovnané sloupce jako Groma, nebo CSV se středníkem)."""
+    from .geodezie.formaty import zapis_text
+    s = _seznam(body_json)
+    sl = ["cislo", "y", "x", "z", "kod"] if any(b.kod for b in s.body) else ["cislo", "y", "x", "z"]
+    return zapis_text(s.body, sl, oddelovac, hlavicka=oddelovac != " ")
+
+
+def ulohy() -> str:
+    """Popis všech úloh (pole formuláře) pro webový formulář."""
+    from .geodezie.ulohy import ULOHY
+    return json.dumps([{"nazev": n, "popis": p, "pole": [
+        {"key": f.key, "label": f.label, "typ": f.typ, "vychozi": f.vychozi, "volby": list(f.volby),
+         "napoveda": f.napoveda} for f in pole]} for n, p, pole, _fn in ULOHY], ensure_ascii=False)
+
+
+def spocti(index: int, body_json: str, hodnoty_json: str) -> str:
+    """Výpočet úlohy → JSON {protokol, nove} nebo {chyba} (chyba vstupu srozumitelně)."""
+    from .geodezie.ulohy import ULOHY, ChybaVstupu
+    s = _seznam(body_json)
+    _n, _p, _pole, fn = ULOHY[int(index)]
+    try:
+        v = fn(s, json.loads(hodnoty_json or "{}"))
+    except ChybaVstupu as e:
+        return json.dumps({"chyba": str(e)}, ensure_ascii=False)
+    except Exception as e:  # noqa: BLE001 – výpočet nesmí shodit stránku
+        return json.dumps({"chyba": f"Výpočet se nepovedl: {e}"}, ensure_ascii=False)
+    return json.dumps({"protokol": "\n".join(v.protokol), "nove": _body_json(v.nove)}, ensure_ascii=False)
+
+
+def polarni(zapisnik: str, body_json: str) -> str:
+    """Polární metoda dávkou ze zápisníku (.zap Gromy nebo GSI) a daných bodů → protokol jako v Gromě."""
+    from .checks.seznam import ListPoint
+    from .geodezie import zapisnik as Z
+    from .geodezie.protokol import protokol_polarni
+    from .vypocet import compute
+    s = _seznam(body_json)
+    dane = [ListPoint(b.cislo, b.y, b.x, b.z) for b in s.body]
+    if not dane:
+        return json.dumps({"chyba": "Nejdřív načtěte seznam souřadnic s danými body."}, ensure_ascii=False)
+    try:
+        stanoviska = Z.nacti(zapisnik, {b.cislo for b in s.body})
+        if not stanoviska:
+            return json.dumps({"chyba": "V zápisníku nejsou žádná stanoviska."}, ensure_ascii=False)
+        upoz = Z.zkontroluj(stanoviska)
+        st = Z.pro_vypocet(stanoviska)
+        res = compute(st, dane)
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({"chyba": f"Výpočet se nepovedl: {e}"}, ensure_ascii=False)
+    from .geodezie.body import Bod
+    nove = [Bod(p.bod, p.y, p.x, p.z, poznamka=f"polárně z {p.stanovisko}") for p in res.body if not p.kontrolni]
+    text = protokol_polarni(res, st, dane, soubor_mereni=Path(zapisnik).name)
+    return json.dumps({"protokol": text, "nove": _body_json(nove), "upozorneni": upoz[:10],
+                       "stanovisek": len(stanoviska)}, ensure_ascii=False)

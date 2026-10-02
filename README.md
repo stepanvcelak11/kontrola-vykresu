@@ -46,8 +46,10 @@ Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnet
 
 **https://stepanvcelak11.github.io/kontrola-vykresu/** – kontrola výkresu DXF/DGN přímo v prohlížeči (i na mobilu),
 s pravidly ze Zadání 1, vlastní Směrnicí (xls, xlsx, csv, ods, doc, docx, YAML) a seznamem souřadnic. Výpočet běží
-v prohlížeči (Python přes Pyodide), soubory se nikam neodesílají. Kreslení (CAD) a výpočty jsou zatím jen v desktopové
-verzi. Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
+v prohlížeči (Python přes Pyodide), soubory se nikam neodesílají. Stránka **Výpočty** má seznam souřadnic (načtení,
+ruční přidání, uložení do TXT/CSV, náčrt bodů), polární metodu dávkou ze zápisníku (.zap, GSI) s protokolem jako
+v Gromě a všechny geodetické úlohy z desktopu (rajón, protínání, volné stanovisko, transformace, výměry, oddělení,
+nivelace, polygonový pořad, S-JTSK ↔ WGS84…). Kreslení (CAD) je zatím jen v desktopové verzi. Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
 
 ### Bez .exe – když Windows program zablokuje (Inteligentní řízení aplikací)
 

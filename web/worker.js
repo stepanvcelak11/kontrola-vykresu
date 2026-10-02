@@ -30,9 +30,22 @@ function zapis(soubor) {
   return cesta;
 }
 
+// Volání výpočtů (Výpočty): {id, volani, args, soubor} → {id, odpoved} nebo {id, chybaVolani}
+async function volej(m) {
+  try {
+    const api = py.pyimport("kontrola.web_api");
+    const args = [...(m.args || [])];
+    if (m.soubor) args.unshift(zapis(m.soubor));
+    postMessage({ id: m.id, odpoved: api[m.volani](...args) });
+  } catch (e) {
+    postMessage({ id: m.id, chybaVolani: String(e).split("\n").slice(-3).join("\n") });
+  }
+}
+
 onmessage = async (ev) => {
   await hotovo;
   if (!py) return;
+  if (ev.data.volani) return volej(ev.data);
   const { vykres, pravidla, seznam, meritko, vestavena } = ev.data;
   try {
     postMessage({ stav: "Kontroluji výkres…", prace: true });

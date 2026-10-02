@@ -21,11 +21,13 @@ worker.onerror = (e) => {
 };
 worker.onmessage = (ev) => {
   const m = ev.data;
+  if (m.id) { vypOdpoved(m); return; }
   if (m.stav) ukazStav(m.stav);
   if (m.pripraveno) {
     stav.pripraveno = true;
     skryjStav();
     aktualizujTlacitko();
+    vypPripraveno();
     if (stav.vykres && stav.cekat) { stav.cekat = false; zkontroluj(); }
   }
   if (m.chyba) { ukazStav(m.chyba, false, true); setTimeout(skryjStav, 12000); }
@@ -35,8 +37,9 @@ worker.onmessage = (ev) => {
 // ---------------------------------------------------------------- stránky
 document.querySelectorAll(".stranka").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll(".stranka").forEach((x) => x.classList.toggle("aktivni", x === b));
-  for (const s of ["vykres", "podklady", "o"]) $("s_" + s).classList.toggle("skryte", s !== b.dataset.stranka);
+  for (const s of ["vykres", "vypocty", "podklady", "o"]) $("s_" + s).classList.toggle("skryte", s !== b.dataset.stranka);
   if (b.dataset.stranka === "vykres") prekresli();
+  if (b.dataset.stranka === "vypocty") kresliMapu();
 }));
 
 // ---------------------------------------------------------------- soubory
