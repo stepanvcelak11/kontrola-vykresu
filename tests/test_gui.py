@@ -2097,6 +2097,59 @@ def test_cad_transformace_vykresu(window):
     assert c.prostor.query("LINE")[0].dxf.end.x == pytest.approx(10)
 
 
+def test_cad_natazeni(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.prostor.add_lwpolyline([(0, 0), (10, 0), (10, 10), (0, 10)], close=True)
+    c.prostor.add_line((10, 5), (20, 5))
+    c.prostor.add_circle((30, 30), 1)
+    c._vykresli()
+    for t in ("natáhni", "x=8 y=-1", "x=12 y=11", "x=0 y=0", "x=5 y=0"):
+        c.zadej(t)
+    pl = c.prostor.query("LWPOLYLINE")[0]
+    assert [tuple(p[:2]) for p in pl.get_points("xy")] == [(0, 0), (15, 0), (15, 10), (0, 10)]
+    ln = c.prostor.query("LINE")[0]
+    assert (ln.dxf.start.x, ln.dxf.end.x) == (15, 20)
+    assert c.prostor.query("CIRCLE")[0].dxf.center.x == 30
+    c.undo()
+    assert c.prostor.query("LINE")[0].dxf.start.x == 10
+
+
+def test_cad_skupiny(window, tmp_path):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.prostor.add_line((0, 0), (10, 0))
+    c.prostor.add_line((0, 5), (10, 5))
+    c.prostor.add_circle((30, 30), 1)
+    c._vykresli()
+    c.vyber_v_bode(5, 0, pridat=False)
+    c.vyber_v_bode(5, 5)
+    c.zadej("skupina")
+    c.vyber = []
+    c.vyber_v_bode(5, 0, pridat=False)
+    assert len(c.vyber) == 2  # klik na jeden prvek vybere celou skupinu
+    for t in ("posun", "x=0 y=0", "x=0 y=100"):
+        c.zadej(t)
+    c.vyber = []
+    c.vyber_v_bode(5, 105, pridat=False)
+    assert len(c.vyber) == 2  # skupina zůstane i po posunu (prvky se kopírují)
+    p = c.uloz(path=str(tmp_path / "skupiny.dxf"))
+    c.otevri(str(p))
+    c.vyber_v_bode(5, 100, pridat=False)
+    assert len(c.vyber) == 2  # i po uložení a otevření
+    c.zadej("zámek skupin")
+    c.vyber = []
+    c.vyber_v_bode(5, 100, pridat=False)
+    assert len(c.vyber) == 1
+    c.zadej("zámek skupin")
+    c.zadej("zruš skupinu")
+    c.vyber = []
+    c.vyber_v_bode(5, 105, pridat=False)
+    assert len(c.vyber) == 1
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")

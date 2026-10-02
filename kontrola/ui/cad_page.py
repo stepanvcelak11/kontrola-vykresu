@@ -278,6 +278,9 @@ class CadPage(QWidget):
         "rozděl": "rozdělit prvek v bodě", "ohrada": "výběr ohradou (mnohoúhelník)",
         "oměrné míry": "popis délek stran vybraných čar (oměrné míry)", "kóta úhlu": "úhlová kóta",
         "kóta poloměru": "kóta poloměru kružnice / oblouku",
+        "skupina": "vytvořit skupinu prvků z výběru (Graphic Group) – klik na prvek pak vybere celou skupinu",
+        "zruš skupinu": "vyjmout vybrané prvky ze skupiny", "zámek skupin": "zapnout / vypnout výběr celých skupin",
+        "natáhni": "natažení: vrcholy v okně se posunou, zbytek prvků zůstane (Fence Stretch)",
         "transformace": "transformace výkresu (výběru) podle identických bodů – shodnostní, podobnostní, afinní",
         "převod atributů": "převod výkresu na pravidla ze zadání podle značek (buňky, styly čar) a vrstev",
         "převezmi atributy": "aktivní atributy podle prvku (Match)", "změň atributy": "aktivní atributy na prvky",
@@ -323,6 +326,9 @@ class CadPage(QWidget):
         "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "knihovna": "knihovna buněk", "rc": "knihovna buněk",
         "knihovna bunek": "knihovna buněk", "cells": "knihovna buněk", "ma": "převezmi atributy", "match": "převezmi atributy",
         "prevezmi atributy": "převezmi atributy",
+        "group": "skupina", "gg": "skupina", "add to graphic group": "skupina", "zrus skupinu": "zruš skupinu",
+        "ungroup": "zruš skupinu", "drop from graphic group": "zruš skupinu", "zamek skupin": "zámek skupin",
+        "graphic group lock": "zámek skupin", "natahni": "natáhni", "stretch": "natáhni", "fence stretch": "natáhni", "natažení": "natáhni",
         "převod": "převod atributů", "transformuj": "transformace",
         "transformace vykresu": "transformace", "helmert": "transformace", "prevod": "převod atributů", "prevod atributu": "převod atributů", "ca": "změň atributy", "change": "změň atributy",
         "zmen atributy": "změň atributy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
@@ -1184,12 +1190,18 @@ class CadPage(QWidget):
         e = self.index.najdi(x, y, self._tol())
         if e is None:
             return None
+        cleny = [e]
+        g = U.skupina(e) if getattr(self, "zamek_skupin", True) else None
+        if g is not None:  # zámek skupin: klik na prvek vybere celou skupinu (Graphic Group lock)
+            cleny = [x for x in U.cleny_skupiny(self.prostor, g) if self.index.geometrie(x) is not None] or [e]
         if e in self.vyber:
-            self.vyber.remove(e)
+            for x in cleny:
+                if x in self.vyber:
+                    self.vyber.remove(x)
         else:
             if not pridat:
                 self.vyber = []
-            self.vyber.append(e)
+            self.vyber += [x for x in cleny if x not in self.vyber]
         self._zvyrazni()
         return e
 
@@ -2151,6 +2163,46 @@ class CadPage(QWidget):
         a = yield self._bod_req("Bod odkud:")
         b = yield self._bod_req("Bod kam:", a)
         self._hotovo_vyber(U.posun(self.prostor, self.historie_zmen, ents, b[0] - a[0], b[1] - a[1]))
+
+    def n_skupina(self):
+        ents = yield from self._vyber_req("Skupina")
+        if len(ents) < 2:
+            raise ValueError("Skupina potřebuje aspoň dva prvky.")
+        g = U.nova_skupina(self.prostor)
+        nove = U.nastav_skupinu(self.prostor, self.historie_zmen, ents, g)
+        self._po_zmene(nove, ents)
+        self._hotovo_vyber(nove)
+        self.vypis(f"Skupina {g}: {len(nove)} prvků. Klik na kterýkoli z nich vybere celou skupinu"
+                   + ("" if getattr(self, "zamek_skupin", True) else " (po zapnutí „zámek skupin“)") + ".")
+
+    def n_zrus_skupinu(self):
+        ents = yield from self._vyber_req("Zrušit skupinu")
+        ents = [e for e in ents if U.skupina(e) is not None]
+        if not ents:
+            raise ValueError("Vybrané prvky nejsou ve skupině.")
+        nove = U.nastav_skupinu(self.prostor, self.historie_zmen, ents, None)
+        self._po_zmene(nove, ents)
+        self._hotovo_vyber(nove)
+        self.vypis(f"{len(nove)} prvků vyjmuto ze skupiny.")
+
+    def n_zamek_skupin(self):
+        self.zamek_skupin = not getattr(self, "zamek_skupin", True)
+        self.vypis("Zámek skupin " + ("zapnut – klik vybere celou skupinu." if self.zamek_skupin
+                                      else "vypnut – klik vybere jen jeden prvek."))
+        return
+        yield  # generátor
+
+    def n_natahni(self):
+        a = yield self._bod_req("Natažení – první roh okna (vrcholy uvnitř se posunou):")
+        b = yield self._bod_req("Protější roh okna:", a)
+        ents = list(self.vyber) or [e for e in self.prostor if e.dxftype() != "VIEWPORT"
+                                    and not (self.index and self.index.vynechat and self.index.vynechat(e))]
+        z = yield self._bod_req("Bod odkud:")
+        k = yield self._bod_req("Bod kam:", z)
+        nove = U.natahni(self.prostor, self.historie_zmen, ents, a, b, k[0] - z[0], k[1] - z[1])
+        if not nove:
+            self.vypis("V okně nejsou žádné vrcholy – nic se nenatáhlo.")
+        self._hotovo_vyber(nove)
 
     def n_kopie(self):
         ents = yield from self._vyber_req("Kopie")

@@ -892,6 +892,110 @@ def posun_vrchol(msp, h, e, klik, novy):
     return c
 
 
+# ------------------------------------------------------------------ skupiny prvků (Graphic Group)
+SKUPINA_APP = "KONTROLA_SKUPINA"  # číslo skupiny v XDATA – zůstane i při úpravách (prvky se kopírují)
+
+
+def skupina(e) -> int | None:
+    try:
+        if e.has_xdata(SKUPINA_APP):
+            for kod, v in e.get_xdata(SKUPINA_APP):
+                if kod == 1071:
+                    return int(v)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def nastav_skupinu(msp, h, ents, cislo: int | None) -> list:
+    """Přidá prvky do skupiny ``cislo`` (None = vyjme ze skupiny). Jedna operace Zpět."""
+    doc = msp.doc
+    if cislo is not None and SKUPINA_APP not in doc.appids:
+        doc.appids.new(SKUPINA_APP)
+    nove = []
+    for e in ents:
+        c = _kopie(e)
+        if c.has_xdata(SKUPINA_APP):
+            c.discard_xdata(SKUPINA_APP)
+        if cislo is not None:
+            c.set_xdata(SKUPINA_APP, [(1071, int(cislo))])
+        msp.add_entity(c)
+        nove.append(c)
+    h.proved("Skupina" if cislo is not None else "Zrušení skupiny", nove, list(ents))
+    return nove
+
+
+def nova_skupina(msp) -> int:
+    return max((g for g in (skupina(e) for e in msp) if g is not None), default=0) + 1
+
+
+def cleny_skupiny(msp, cislo: int) -> list:
+    return [e for e in msp if skupina(e) == cislo]
+
+
+# ------------------------------------------------------------------ natažení ohradou (Fence Stretch)
+def natahni(msp, h, ents, roh1, roh2, dx: float, dy: float) -> list:
+    """Natažení: vrcholy uvnitř okna se posunou o (dx, dy), ostatní zůstanou (Fence Stretch / Stretch).
+    Prvek celý uvnitř okna se posune celý; kružnice, texty, buňky a body podle středu / vkládacího bodu.
+    Oblouky polylinie se zachovají (bulge), samostatný oblouk se posune jen celý."""
+    (x1, y1), (x2, y2) = _xy(roh1), _xy(roh2)
+    x0, x1, y0, y1 = min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2)
+
+    def uvnitr(p) -> bool:
+        return x0 - EPS <= p[0] <= x1 + EPS and y0 - EPS <= p[1] <= y1 + EPS
+
+    m = Matrix44.translate(dx, dy, 0)
+    nove, stare = [], []
+    for e in ents:
+        t = e.dxftype()
+        c = None
+        if t == "LINE":
+            a, b = uvnitr(_xy(e.dxf.start)), uvnitr(_xy(e.dxf.end))
+            if a or b:
+                c = _kopie(e)
+                for k, ok in (("start", a), ("end", b)):
+                    if ok:
+                        v = c.dxf.get(k)
+                        c.dxf.set(k, (v.x + dx, v.y + dy, v.z))
+                msp.add_entity(c)
+        elif t == "LWPOLYLINE":
+            pts = [tuple(p) for p in e.get_points("xyseb")]
+            if any(uvnitr(p) for p in pts):
+                pts = [(p[0] + dx, p[1] + dy, *p[2:]) if uvnitr(p) else p for p in pts]
+                c = _polylinie_z(msp, e, pts)
+        else:
+            try:
+                ref = _referencni_bod(e) if t != "ARC" else None
+                if t == "ARC":
+                    s_, k_ = e.start_point, e.end_point
+                    cela = uvnitr(_xy(s_)) and uvnitr(_xy(k_))
+                elif t in ("SPLINE", "POLYLINE", "ELLIPSE", "HATCH", "DIMENSION", "MTEXT", "IMAGE"):
+                    bb = _obalka(e)
+                    cela = bb is not None and uvnitr(bb[:2]) and uvnitr(bb[2:])
+                else:
+                    cela = uvnitr(ref)
+            except Exception:  # noqa: BLE001
+                cela = False
+            if cela:
+                c = _kopie(e)
+                c.transform(m)
+                msp.add_entity(c)
+        if c is not None:
+            nove.append(c)
+            stare.append(e)
+    if nove:
+        h.proved("Natažení", nove, stare)
+    return nove
+
+
+def _obalka(e):
+    from ezdxf import bbox
+    b = bbox.extents([e], fast=True)
+    if not b.has_data:
+        return None
+    return (b.extmin.x, b.extmin.y, b.extmax.x, b.extmax.y)
+
+
 # ------------------------------------------------------------------ rozpojení a spojení
 def rozpoj(msp, h, ents) -> list:
     """Rozpojí polylinie, bloky, kóty, víceřádkové texty na jednoduché prvky."""

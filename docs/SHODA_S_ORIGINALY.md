@@ -52,7 +52,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Propojení s Kontrolou výkresu | ✅ |
 | Kreslení: bod, úsečka, polylinie, obdélník, mnohoúhelník, oblouk (3 body, středem), kružnice (střed, 3 body, průměr), elipsa, křivka, text, popisek s odkazovou čárou, šrafa, kóta (i řetězová), kóta úhlu a poloměru, oměrné míry | ✅ |
 | Zadávání bodů: Y X, @dx,dy, @délka<směrník, key-iny xy= / dl= / di=, číslo bodu ze seznamu (#4001), délka číslem ve směru kurzoru (jako AccuDraw) | ✅ |
-| Úpravy: výběr (klik, okno, protínající okno, ohrada, podle atributů), posun, kopie (i v řadě), pole obdélníkové a kruhové, otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, zkosení, rozdělení, body po prvku, vložení / smazání / posun vrcholu, spojení, rozpojení, mazání, úprava textu, převzetí a změna atributů | ✅ |
+| Úpravy: výběr (klik, okno, protínající okno, ohrada, podle atributů), posun, natažení oknem (Fence Stretch), kopie (i v řadě), pole obdélníkové a kruhové, otočení, měřítko, zrcadlení, ořez, prodloužení, rovnoběžka, zaoblení / roh, zkosení, rozdělení, body po prvku, vložení / smazání / posun vrcholu, spojení, rozpojení, mazání, úprava textu, převzetí a změna atributů | ✅ |
 | Schránka Ctrl+C / Ctrl+V mezi výkresy (i s hladinami, styly a buňkami, na stejné souřadnice) | ✅ |
 | Pohledy: celý výkres, přiblížit oknem, předchozí pohled, kolečko | ✅ |
 | Hladiny příkazem (zhasni / rozsviť, i „vše kromě“) | ✅ |
@@ -72,7 +72,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Makra, dávky, pluginy | ❌ |
 | Výkon na velkých výkresech | 🟡 | 
 |  – 50 000 prvků: otevření ≈ 10 s, výběr všeho 0,1 s, posun všeho ≈ 11 s, Zpět ≈ 9 s (překreslení knihovnou ezdxf) | |
-| Skupiny prvků (Graphic Group) | ❌ |
+| Skupiny prvků (Graphic Group): skupina z výběru, klik vybere celou skupinu, zámek skupin, vyjmutí; skupina vydrží úpravy i uložení | ✅ |
 
 ## Jednotné pojmenování (Kontrola, CAD, tahák, atributy)
 
