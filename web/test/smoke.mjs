@@ -56,9 +56,9 @@ await p.click("#u_spocti");
 await p.waitForFunction(() => document.getElementById("u_protokol").textContent.includes("trojúhelníků TIN"), null, { timeout: 60000 });
 const [dl] = await Promise.all([p.waitForEvent("download"), p.click("#u_dxf")]);
 console.log("DXF:", dl.suggestedFilename());
+console.log("Protokol PDF", await stahni(() => p.click("#u_pdf")));
 await p.screenshot({ path: "web-snimek-vypocty.png" });
 await b.close();
-console.log("Protokol PDF", await stahni(() => p.click("#u_pdf")));
 if (bodu < 50 || hladin < 1) { console.error("Výpočty ve webové verzi nefungují."); process.exit(1); }
 if (skore === "–" || karet < 1 || chyby.length) {
   console.error("Webová verze nefunguje:", stavText, chyby);

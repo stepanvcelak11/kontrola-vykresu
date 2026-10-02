@@ -142,3 +142,75 @@ async function ulozZapSoubor(druh) {
     stahniData(data, json.nazev);
   } catch (e) { chybaDialog(e); }
 }
+
+// ---------------------------------------------------------------- QTrig: přihlášení kódem účtu a heslem, zakázky ze zálohy účtu
+const QTRIG_API = "https://ar-geodet-api.ar-geodet.workers.dev";
+async function qtrigDotaz(cesta, { metoda = "GET", telo = null, token = null } = {}) {
+  const h = { "Content-Type": "application/json", "X-AG-Ver": "kontrola-vykresu-web" };
+  if (token) h.Authorization = "Bearer " + token;
+  let r;
+  try { r = await fetch(QTRIG_API + cesta, { method: metoda, headers: h, body: telo ? JSON.stringify(telo) : null }); }
+  catch (e) { throw new Error("Server QTrig není dostupný – zkontrolujte připojení k internetu."); }
+  let j = {};
+  try { j = await r.json(); } catch (e) { /* prázdná odpověď */ }
+  if (r.status === 401 && cesta !== "/login") { try { localStorage.removeItem("kv_qtrig_token"); } catch (e) { /* nic */ } throw new Error("Přihlášení vypršelo – přihlaste se znovu."); }
+  if (!r.ok) throw new Error(j.error || `Server QTrig odpověděl chybou ${r.status}.`);
+  return j;
+}
+function qtrigToken() { try { return localStorage.getItem("kv_qtrig_token"); } catch (e) { return null; } }
+
+function dlgQtrig() {
+  const kod = (() => { try { return localStorage.getItem("kv_qtrig_kod") || ""; } catch (e) { return ""; } })();
+  const prihlasen = !!qtrigToken();
+  dialog("Body z QTrig", `<p class="tlumene">Přihlaste se stejně jako v QTrig (kód účtu a heslo). Zobrazí se všechny zakázky z telefonu – ze zálohy účtu, kterou QTrig posílá sám (denně a po každých 20 bodech). Nejnovější body: v QTrig Nastavení → Záloha a údržba → Zálohovat teď. Heslo se neukládá.</p>
+    <div class="u-form" id="q_prihl" ${prihlasen ? 'style="display:none"' : ""}>
+      <label>Kód účtu<input class="pole" id="q_kod" value="${esc(kod)}" autocomplete="username"></label>
+      <label>Heslo<input class="pole" id="q_heslo" type="password" autocomplete="current-password"></label>
+    </div>
+    <div id="q_stav" class="tlumene">${prihlasen ? "Přihlášeno." : ""}</div>
+    <div id="q_zakazky" class="karty" style="margin-top:0"></div>`,
+  [[prihlasen ? "Načíst zakázky" : "Přihlásit a načíst zakázky", qtrigNacti, true], ["Odhlásit", () => { try { localStorage.removeItem("kv_qtrig_token"); } catch (e) { /* nic */ } $("dlg").close(); }]]);
+}
+
+async function qtrigNacti() {
+  const st = $("q_stav");
+  try {
+    let token = qtrigToken();
+    if (!token) {
+      const kod = $("q_kod").value.trim(), heslo = $("q_heslo").value;
+      if (!kod || !heslo) throw new Error("Vyplňte kód účtu a heslo.");
+      st.textContent = "Přihlašuji…";
+      const r = await qtrigDotaz("/login", { metoda: "POST", telo: { code: kod, password: heslo } });
+      if (!r.token) throw new Error(r.error || "Přihlášení se nepovedlo.");
+      token = r.token;
+      try { localStorage.setItem("kv_qtrig_token", token); localStorage.setItem("kv_qtrig_kod", kod); } catch (e) { /* nic */ }
+      $("q_prihl").style.display = "none";
+    }
+    st.textContent = "Stahuji zálohu účtu…";
+    const sez = await qtrigDotaz("/account/backup", { token });
+    const zal = (sez.zalohy || []).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    if (!zal.length) throw new Error("V účtu zatím není žádná záloha. V QTrig: Nastavení → Záloha a údržba → Zálohovat teď.");
+    const d = await qtrigDotaz("/account/backup?slot=" + encodeURIComponent(zal[0].slot ?? 0), { token });
+    if (!d.data) throw new Error(d.error || "Zálohu účtu se nepodařilo stáhnout.");
+    const zak = JSON.parse(await volej("qtrig_zakazky", [d.data]));
+    if (zak.chyba) throw new Error(zak.chyba);
+    st.textContent = `Záloha z telefonu: ${new Date(d.ts || zal[0].ts).toLocaleString("cs-CZ")} · ${zak.length} zakázek. Vyberte zakázku:`;
+    const el = $("q_zakazky");
+    el.innerHTML = "";
+    for (const z of zak.sort((a, b) => a.name.localeCompare(b.name, "cs"))) {
+      const b = document.createElement("button");
+      b.className = "chyba-karta";
+      b.innerHTML = `<div class="chyba-nazev">${esc(z.name)}</div><div class="chyba-zprava">${z.n} bodů</div>`;
+      b.addEventListener("click", async () => {
+        const r = JSON.parse(await volej("qtrig_body", [z.key]));
+        if (r.chyba) { st.textContent = r.chyba; return; }
+        vyp.nove.clear();
+        const [p, n] = pridejBody(r.body);
+        $("dlg").close();
+        ukazStav(`QTrig – ${r.nazev}: ${p} nových bodů` + (n ? `, ${n} přepsáno` : "") + " (S-JTSK, stejný převod jako v QTrig).", false);
+        setTimeout(skryjStav, 8000);
+      });
+      el.appendChild(b);
+    }
+  } catch (e) { st.textContent = "⚠ " + e.message; if (!qtrigToken()) $("q_prihl").style.display = ""; }
+}

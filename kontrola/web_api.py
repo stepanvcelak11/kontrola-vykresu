@@ -620,3 +620,27 @@ def protokol_pdf(text: str, nazev: str = "protokol") -> str:
     out = _vystup(f"{nazev}.pdf")
     pdf(text, out, nazev=nazev)
     return _soubor(out)
+
+
+# ------------------------------------------------------------------ QTrig (zakázky ze zálohy účtu)
+_QTRIG: dict = {}
+
+
+def qtrig_zakazky(zaloha_b64: str) -> str:
+    """Záloha účtu QTrig (gzip + base64, jak ji vrací server) → zakázky s počtem bodů."""
+    from . import qtrig as Q
+    try:
+        zak = Q.zakazky_ze_zalohy(Q.rozbal_zalohu_uctu(zaloha_b64))
+    except Q.ChybaQTrig as e:
+        return json.dumps({"chyba": str(e)}, ensure_ascii=False)
+    _QTRIG.clear()
+    _QTRIG.update({z["key"]: z for z in zak})
+    return json.dumps([{"key": z["key"], "name": z["name"], "n": len(z["body"])} for z in zak], ensure_ascii=False)
+
+
+def qtrig_body(klic: str) -> str:
+    """Body zvolené zakázky v S-JTSK (stejný převod jako v QTrig)."""
+    z = _QTRIG.get(klic)
+    if z is None:
+        return json.dumps({"chyba": "Zakázka v záloze není – přihlaste se znovu."}, ensure_ascii=False)
+    return json.dumps({"nazev": z["name"], "body": _body_json(z["body"])}, ensure_ascii=False)

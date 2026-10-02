@@ -157,6 +157,7 @@ document.addEventListener("click", () => $("m_ulozit").classList.add("skryte"));
 $("m_ulozit").addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.dataset.akce === "qtrig") return dlgQtrig();
   if (b.dataset.akce === "duplicity") {
     try {
       const r = JSON.parse(await volej("duplicity", [JSON.stringify(vyp.body)]));

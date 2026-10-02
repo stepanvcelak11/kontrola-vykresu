@@ -53,7 +53,8 @@ neodesílá (Python přes Pyodide). Umí vše z kontroly a z Výpočtů jako des
 * **Nástroje ▾**: protokol HTML / PDF, seznam k opravě na tisk, tabulka chyb Excel / CSV, výkres s vyznačenými chybami
   (DXF), seznam chyb jako MGEO (.log), automatická oprava (stáhne opravený DXF), porovnání se starší verzí výkresu
   (záložka Změny), porovnání s protokolem od učitele a odhad, co učitel najde.
-* **Výpočty**: seznam souřadnic (načtení, úpravy dvojklikem, duplicity, porovnání s jiným seznamem, TXT/CSV, náčrt),
+* **Výpočty**: seznam souřadnic (načtení, body z QTrig po přihlášení kódem účtu a heslem, úpravy dvojklikem,
+  duplicity, porovnání s jiným seznamem, TXT/CSV, náčrt),
   zápisník .zap / GSI s úpravami stanovisek a záměr (uložení .zap i GSI), polární metoda dávkou s protokolem jako
   v Gromě, vyrovnání sítě MNČ, kontrola výpočtu proti seznamu z Gromy, všechny geodetické úlohy z desktopu
   (rajón, protínání, volné stanovisko, transformace, výměry, oddělení, nivelace, polygonový pořad, S-JTSK ↔ WGS84,

@@ -102,3 +102,16 @@ def test_zapisnik_vyrovnani_kontrola_vypoctu():
     assert "nevyhovuje 0" in r["souhrn"]
     assert json.loads(W.duplicity(bj))["pocet"] == 0
     assert Path(json.loads(W.protokol_pdf("PROTOKOL\nřádek", "p"))["soubor"]).stat().st_size > 500
+
+
+def test_qtrig_ze_zalohy():
+    import base64
+    import gzip
+
+    from tests.test_qtrig import _zaloha_telefonu
+    b64 = base64.b64encode(gzip.compress(json.dumps(_zaloha_telefonu()).encode())).decode()
+    z = json.loads(W.qtrig_zakazky(b64))
+    assert {x["name"]: x["n"] for x in z} == {"Husovice": 2, "Prázdná": 0, "Výchozí zakázka": 1}
+    r = json.loads(W.qtrig_body("p1"))
+    assert r["nazev"] == "Husovice" and abs(r["body"][0]["y"] - 743011.77) < 0.01
+    assert "chyba" in json.loads(W.qtrig_zakazky("nesmysl"))
