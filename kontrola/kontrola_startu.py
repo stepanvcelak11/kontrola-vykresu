@@ -41,7 +41,17 @@ def zkontroluj() -> list[str]:
     return chyby
 
 
+def _bezpecny_vystup() -> None:
+    """Konzole Windows může mít kódování bez češtiny (cp1252) – znaky, které nejdou zapsat, se nahradí."""
+    for proud in (sys.stdout, sys.stderr):
+        try:
+            proud.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main() -> int:
+    _bezpecny_vystup()
     print(f"Python {sys.version.split()[0]} ({sys.executable})")
     try:
         chyby = zkontroluj()

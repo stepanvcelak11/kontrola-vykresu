@@ -14,3 +14,14 @@ def test_pozna_blokaci_windows(monkeypatch):
     chyby = K.zkontroluj()
     assert chyby and all(c.startswith("BLOKACE:") for c in chyby)
     assert K.main() == 1
+
+
+def test_konzole_bez_cestiny(monkeypatch):
+    import io
+    import sys
+    out = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(K, "zkontroluj", lambda: ["Knihovna numpy nejde načíst: chybí"])
+    assert K.main() == 1
+    out.flush()
+    assert b"SPU" in out.buffer.getvalue()

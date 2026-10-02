@@ -18,7 +18,7 @@ def test_rozbaleni_prepise_aplikaci_a_necha_venv(tmp_path):
     (root / ".venv").mkdir()
     (root / ".venv" / "x.txt").write_text("venv")
     (root / "spustit.py").write_text("stary")
-    (root / "kontrola" / "stary_modul.py").write_text("pryč")
+    (root / "kontrola" / "stary_modul.py").write_text("pryč", encoding="utf-8")
     (root / "kontrola" / "app.py").write_text("stary")
     z = _zip(tmp_path / "main.zip", {"spustit.py": "novy", "kontrola/app.py": "novy", "kontrola/novy.py": "x",
                                      ".venv/zlo.txt": "nesmí", "requirements.txt": "ezdxf"})
