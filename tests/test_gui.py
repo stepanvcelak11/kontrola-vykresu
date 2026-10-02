@@ -2203,6 +2203,32 @@ def test_cad_text_z_okna(window):
     assert all(e.dxf.height == 1.5 for e in c.prostor.query("TEXT"))
 
 
+def test_cad_uchopy(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.prostor.add_lwpolyline([(0, 0), (10, 0), (10, 10)])
+    c.prostor.add_circle((50, 50), 2)
+    c._vykresli()
+    c.view.zoom_all()
+    c.vyber = list(c.prostor.query("LWPOLYLINE"))
+    c._zvyrazni()
+    assert len(c.view.uchopy) == 3
+    c.view.najed(10, 0)
+    c._klik(10, 0)  # klik na úchop vrcholu
+    assert c._gen is not None and c.view.nahled(12, 3)
+    c.zadej("x=12 y=3")
+    pl = c.prostor.query("LWPOLYLINE")[0]
+    assert [tuple(p[:2]) for p in pl.get_points("xy")] == [(0, 0), (12, 3), (10, 10)]
+    assert c.vyber == [pl]
+    c.vyber = list(c.prostor.query("CIRCLE"))
+    c._zvyrazni()
+    c.view.najed(50, 50)
+    c._klik(50, 50)  # úchop středu kružnice = posun celé
+    c.zadej("x=60 y=50")
+    assert c.prostor.query("CIRCLE")[0].dxf.center.x == 60
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")

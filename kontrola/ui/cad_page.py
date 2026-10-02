@@ -92,6 +92,7 @@ class CadView(QGraphicsView):
         self.vyber_oknem = True  # tažení levým tlačítkem = výběr oknem
         self.zvyraznene: list = []  # Shapely geometrie vybraných prvků
         self.pod_kurzorem = None  # geometrie prvku pod kurzorem (zvýraznění před klikem)
+        self.uchopy: list = []  # body úchopů vybraných prvků (vrcholy) – čtverečky
         self._pan = None
         self._okno_start: tuple[float, float] | None = None
         self._okno_px = None
@@ -225,6 +226,14 @@ class CadView(QGraphicsView):
             pen.setWidthF(3.0)
             p.setPen(pen)
             _kresli_geometrii(p, self.pod_kurzorem, s)
+        if self.uchopy:
+            p.setRenderHint(QPainter.Antialiasing, False)
+            p.setPen(QPen(QColor("#F59E0B"), 0))
+            p.setBrush(QColor("#1F2937"))
+            r = 3.5 * s
+            for ux, uy in self.uchopy[:4000]:
+                p.drawRect(QRectF(ux - r, uy - r, 2 * r, 2 * r))
+            p.setBrush(Qt.NoBrush)
         if self.kurzor is None:
             return
         x, y = self.kurzor
@@ -1363,7 +1372,29 @@ class CadPage(QWidget):
         self.vypis(f"Vpřed: {op.nazev}")
 
     # ------------------------------------------------------------ výběr
+    def _uchopy(self) -> list:
+        """Úchopy vybraných prvků: (prvek, bod, je_vrchol) – vrcholy úseček a polylinií, jinak vkládací bod / střed."""
+        out = []
+        for e in self.vyber[:30]:
+            t = e.dxftype()
+            try:
+                if t == "LINE":
+                    out += [(e, (e.dxf.start.x, e.dxf.start.y), True), (e, (e.dxf.end.x, e.dxf.end.y), True)]
+                elif t == "LWPOLYLINE":
+                    out += [(e, (p[0], p[1]), True) for p in e.get_points("xy")]
+                else:
+                    for k in ("center", "insert", "location"):
+                        if e.dxf.hasattr(k):
+                            v = e.dxf.get(k)
+                            out.append((e, (v[0], v[1]), False))
+                            break
+            except Exception:  # noqa: BLE001
+                continue
+        return out
+
     def _zvyrazni(self):
+        if getattr(self, "view", None) is not None:
+            self.view.uchopy = [b for _e, b, _v in self._uchopy()]
         if getattr(self, "panel_vlastnosti", None) is not None:
             self.panel_vlastnosti.ukaz(self.vyber, self._popis_vlastnosti)
         if self.index is None:
@@ -1522,6 +1553,13 @@ class CadPage(QWidget):
             self._bod_mereni(x, y)
             return
         mx, my = self.view.mys or (x, y)
+        if self.vyber and self._gen is None:  # klik na úchop vybraného prvku → úprava vrcholu / posun prvku
+            tol = 7.0 / max(1e-12, abs(self.view.transform().m11()))
+            for e, b, vrchol in self._uchopy():
+                if math.hypot(mx - b[0], my - b[1]) <= tol:
+                    self._posledni_prikaz = None
+                    self._spust(self._n_uchop(e, b, vrchol))
+                    return
         # jako v MicroStationu: klik vybere prvek (nahradí výběr), Ctrl+klik přidá / ubere, klik do prázdna zruší
         pridat = bool(QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
         if self.vyber_v_bode(mx, my, pridat=pridat) is None and not pridat and self.vyber:
@@ -2218,6 +2256,30 @@ class CadPage(QWidget):
             self.kresleni.text(p, t, v, a)
             r = math.radians(a)
             p = (p[0] + math.sin(r) * v * 1.6, p[1] - math.cos(r) * v * 1.6)  # další řádek pod
+
+    def _n_uchop(self, e, b, vrchol: bool):
+        """Tah za úchop: vrchol úsečky / polylinie na nové místo, jiný prvek posunout celý (s náhledem)."""
+        g = self.index.geometrie(e) if self.index else None
+        if vrchol:
+            if e.dxftype() == "LINE":
+                pts = [(e.dxf.start.x, e.dxf.start.y), (e.dxf.end.x, e.dxf.end.y)]
+                zavr = False
+            else:
+                pts = [tuple(p[:2]) for p in e.get_points("xy")]
+                zavr = bool(e.closed)
+            i = min(range(len(pts)), key=lambda k: math.hypot(pts[k][0] - b[0], pts[k][1] - b[1]))
+
+            def nahled(x, y):
+                q = list(pts)
+                q[i] = (x, y)
+                return [_linie(q + ([q[0]] if zavr else []))]
+            n = yield self._bod_req("Nová poloha vrcholu (pravé tlačítko = zrušit):", b, nahled=nahled)
+            nove = U.posun_vrchol(self.prostor, self.historie_zmen, e, b, n)
+            self._hotovo_vyber([nove])
+        else:
+            n = yield self._bod_req("Nová poloha prvku (pravé tlačítko = zrušit):", b,
+                                    nahled=lambda x, y: _posunute([g] if g is not None else [], x - b[0], y - b[1]))
+            self._hotovo_vyber(U.posun(self.prostor, self.historie_zmen, [e], n[0] - b[0], n[1] - b[1]))
 
     def _z_palety(self, cmd: str):
         if cmd == "text" and self.dok is not None:
