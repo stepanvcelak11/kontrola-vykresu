@@ -27,3 +27,20 @@ def test_protokol_ucitele_novy_format():
     assert {(g.vrstva, g.spatne) for g in p.skupiny} >= {("Vrstva 50", frozenset({"vrstva"})),
                                                         ("Vrstva 27", frozenset({"buňka"})),
                                                         ("Vrstva 40", frozenset({"výška", "šířka"}))}
+
+
+@pytest.mark.skipif(not (UCITEL / "GEO.dgn").exists(), reason="chybí výkres učitele")
+def test_pravidla_ze_vzoru_ucitele():
+    """Pravidla odvozená z učitelova výkresu a protokolu: kontrola najde jeho chyby, skoro nic navíc."""
+    from kontrola.config import Config
+    from kontrola.pravidla_ze_vzoru import odvod_pravidla
+    from kontrola.protokol_ucitele import compare_with_teacher, read_teacher_log
+    from kontrola.runner import run_checks
+    d = read_dgn(UCITEL / "GEO.dgn")
+    p = read_teacher_log(UCITEL / "GEO.log")
+    rs = odvod_pravidla(d, p)
+    res = run_checks(d, rs, Config())
+    rows, _txt = compare_with_teacher(p, d, rs, res.issues)
+    shoda = sum(min(r.ucitel, r.program) for r in rows)
+    navic = sum(max(0, r.program - r.ucitel) for r in rows)
+    assert shoda >= 15 and navic <= 6  # bez pravidel učitele: shoda 14, navíc přes 1000
