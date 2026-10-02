@@ -132,11 +132,18 @@ class CadView(QGraphicsView):
                        Qt.KeepAspectRatio)
 
     def mousePressEvent(self, e):  # noqa: N802
+        self.modifikatory = e.modifiers()
         if e.button() in (Qt.MiddleButton, Qt.RightButton):
             self._pan = e.position()
             self._pan_start = (e.position(), e.button())
             self.setCursor(Qt.ClosedHandCursor)
             return
+        if e.button() == Qt.LeftButton:
+            # klik bez předchozího pohybu myši (po přepnutí okna, z dotykové obrazovky): poloha z události
+            mys = self.mapToScene(e.position().toPoint())
+            if self.mys is None or self.kurzor is None or math.hypot(mys.x() - self.mys[0], mys.y() - self.mys[1]) \
+                    > 3.0 / max(1e-12, abs(self.transform().m11())):
+                self.najed(mys.x(), mys.y())
         if e.button() == Qt.LeftButton and self.kurzor is not None:
             if self.vyber_oknem and self.mys is not None:
                 self._okno_start = self.mys
@@ -153,6 +160,7 @@ class CadView(QGraphicsView):
         super().mouseDoubleClickEvent(e)
 
     def mouseReleaseEvent(self, e):  # noqa: N802
+        self.modifikatory = e.modifiers() | getattr(self, "modifikatory", Qt.NoModifier)
         if self._pan is not None:
             self._pan = None
             self.setCursor(Qt.CrossCursor)
@@ -1654,7 +1662,8 @@ class CadPage(QWidget):
                     self._spust(self._n_uchop(e, b, vrchol))
                     return
         # jako v MicroStationu: klik vybere prvek (nahradí výběr), Ctrl+klik přidá / ubere, klik do prázdna zruší
-        pridat = bool(QApplication.keyboardModifiers() & (Qt.ControlModifier | Qt.ShiftModifier))
+        mod = QApplication.keyboardModifiers() | getattr(self.view, "modifikatory", Qt.NoModifier)
+        pridat = bool(mod & (Qt.ControlModifier | Qt.ShiftModifier))
         if self.vyber_v_bode(mx, my, pridat=pridat) is None and not pridat and self.vyber:
             self.vyber = []
             self._zvyrazni()

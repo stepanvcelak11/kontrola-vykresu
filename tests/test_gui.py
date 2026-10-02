@@ -2802,3 +2802,38 @@ def test_vypocty_kresba_z_kodu_tlacitko(window):
         w.cad.zrus()
     finally:
         v.seznam.body[:] = puvodni
+
+
+def test_cad_ovladani_mysi(window):
+    """Skutečné kliky myší: kreslení s úchytem, klik bez předchozího pohybu, výběr kliknutím, zrušení, oknem."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtTest import QTest
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    v = c.view
+    for t in ("u", "x=0 y=0", "x=100 y=0", ""):
+        c.zadej(t)
+    c.proved("celý")
+
+    def bod(x, y):
+        return v.mapFromScene(QPointF(x, y))
+
+    c.proved("u")
+    v.kurzor = v.mys = None  # klik bez pohybu myši
+    QTest.mouseClick(v.viewport(), Qt.LeftButton, Qt.NoModifier, bod(100.4, 0.3))  # úchyt na konec úsečky
+    v.kurzor = None
+    QTest.mouseClick(v.viewport(), Qt.LeftButton, Qt.NoModifier, bod(100, 50))
+    c.zrus()
+    nova = [e for e in c.prostor.query("LINE") if abs(e.dxf.start.x - 100) < 1e-9 and abs(e.dxf.start.y) < 1e-9]
+    assert len(nova) == 1 and abs(nova[0].dxf.end.y - 50) < 1.0
+    QTest.mouseClick(v.viewport(), Qt.LeftButton, Qt.NoModifier, bod(50, 0))
+    assert len(c.vyber) == 1
+    QTest.mouseClick(v.viewport(), Qt.LeftButton, Qt.NoModifier, bod(-20, 30))
+    assert not c.vyber
+    a, b = bod(-10, -10), bod(110, 60)
+    QTest.mousePress(v.viewport(), Qt.LeftButton, Qt.NoModifier, a)
+    QTest.mouseMove(v.viewport(), b)
+    v.najed(110, 60)
+    QTest.mouseRelease(v.viewport(), Qt.LeftButton, Qt.NoModifier, b)
+    assert len(c.vyber) == 2
