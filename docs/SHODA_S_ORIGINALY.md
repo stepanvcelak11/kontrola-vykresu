@@ -85,3 +85,11 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 1. Dokončit nejčastěji používané funkce Gromy a MicroStationu, pak méně používané
    (uživatel programy projde a řekne, co není potřeba).
 2. **Potom: náhrada programu Kokeš** (přání uživatele – až bude Groma a MicroStation hotové).
+3. **Úkoly z nových zadání učitele** (materiály v `podklady/ucitel-dalsi`, uživatel k nim zatím nic dalšího nemá):
+   - *Zadání-převod*: mapa plynovodu → mapa spojového vedení (zakládací UGEO.DGN, NORMA.cel, UGEO_VP.rsc),
+     Směrnice pro 1:1000 → výkres 1:500. Hotovo: pravidla po objektech ze Směrnice ve Wordu + přepočet měřítka.
+     Zbývá: automatický převod atributů podle značky (buňka / liniová značka ČSN 01 3411), čtení knihoven
+     buněk .CEL (V8) do CAD, případně styly čar z .RSC.
+   - *Zadání-Kokeš*: vlastní tabulky Kokeše (barvy = paleta MicroStationu, barva 0 → 100, kreslicí klíče KK ze
+     Směrnice, styl 4 → −13, klíče 1xx pro barvy textů, font 1 → 2). Potřeba: původní obecné tabulky Kokeše
+     (složka wkokes) – uživatel zatím nemá.
