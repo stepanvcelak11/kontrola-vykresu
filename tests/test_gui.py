@@ -2229,6 +2229,20 @@ def test_cad_uchopy(window):
     assert c.prostor.query("CIRCLE")[0].dxf.center.x == 60
 
 
+def test_novy_projekt_s_qtrig_a_podklady(window, tmp_path, monkeypatch):
+    from pathlib import Path
+    import kontrola.project as P
+    monkeypatch.setattr(P, "default_projects_dir", lambda: tmp_path)
+    seznam = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "Body13_tr.txt"
+    monkeypatch.setattr("kontrola.ui.zadani_tab.QMessageBox.information", lambda *a, **k: None)
+    d = window.new_project("Zakázka Husovice", qtrig=True, podklady=[str(seznam)] if seznam.exists() else [])
+    assert window.project.name == "Zakázka Husovice"
+    assert d is not None and d.zakazka.currentText() == "Zakázka Husovice"
+    d.close()
+    if seznam.exists():
+        assert any(a.path.name == "Body13_tr.txt" for a in window.project.attachments())
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")

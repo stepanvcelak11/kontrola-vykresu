@@ -1,5 +1,5 @@
 // Výpočetní vlákno webové verze: Python (Pyodide) s jádrem Kontroly výkresu. Soubory zůstávají v prohlížeči.
-const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.27.2/full/";
+const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.28.2/full/";
 importScripts(PYODIDE + "pyodide.js");
 
 let py = null;

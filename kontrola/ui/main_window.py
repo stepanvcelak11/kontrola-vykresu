@@ -712,17 +712,54 @@ class MainWindow(QMainWindow):
             project = Project.new_in_default_location("Můj projekt")
         self.set_project(project)
 
-    def new_project(self):
-        name, ok = QInputDialog.getText(self, "Nový projekt", "Název projektu (např. Mapování 2026 – úloha 3):")
-        if not ok or not name.strip():
+    def new_project(self, nazev: str | None = None, qtrig: bool | None = None, podklady: list[str] | None = None):
+        """Nový projekt: název, volitelně body ze zakázky QTrig a podklady (zadání, Směrnice, výkres, seznam)."""
+        if not isinstance(nazev, str):  # z nabídky přijde „checked“ (bool)
+            nazev = None
+        if nazev is None:
+            from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+            d = QDialog(self)
+            d.setWindowTitle("Nový projekt")
+            f = QFormLayout(d)
+            e = QLineEdit()
+            e.setPlaceholderText("např. Mapování 2026 – úloha 3")
+            f.addRow("Název projektu:", e)
+            c_q = QCheckBox("Stáhnout body ze zakázky QTrig (stejného názvu, jde změnit)")
+            c_q.setToolTip("Po založení se otevře okno QTrig s touto zakázkou – body přijdou do seznamu souřadnic")
+            f.addRow(c_q)
+            c_p = QCheckBox("Přidat podklady – zadání, Směrnici, výkres, seznam souřadnic…")
+            f.addRow(c_p)
+            bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+            bb.button(QDialogButtonBox.Ok).setText("Založit")
+            bb.accepted.connect(d.accept)
+            bb.rejected.connect(d.reject)
+            f.addRow(bb)
+            if not d.exec() or not e.text().strip():
+                return
+            nazev, qtrig = e.text().strip(), c_q.isChecked()
+            if c_p.isChecked():
+                podklady, _ = QFileDialog.getOpenFileNames(self, "Podklady k projektu", "",
+                                                           "Podklady (*.doc *.docx *.pdf *.xls *.xlsx *.csv *.ods *.dxf "
+                                                           "*.dgn *.txt *.zap *.gsi *.cel *.lin *.jpg *.png);;Vše (*)")
+        nazev = (nazev or "").strip()
+        if not nazev:
             return
         if self.project is not None:
             self.project.save()
         self.drawing = self.prev_drawing = None
         self.view.clear_drawing()
         self.layers.set_drawing(None)
-        self.set_project(Project.new_in_default_location(name.strip()))
+        self.set_project(Project.new_in_default_location(nazev))
         self.statusBar().showMessage(f"Projekt vytvořen ve složce {self.project.root}", 10000)
+        if podklady:
+            self.show_page("zadani")
+            self.zadani.handle_files(list(podklady))
+        if qtrig:
+            self.show_page("vypocty")
+            dlg = self.vypocty.qtrig_dialog()
+            dlg.zakazka.setEditText(nazev)
+            return dlg
+        return None
 
     def open_project_dialog(self):
         start = self.settings.value("cesty/projekt", str(default_projects_dir()))
