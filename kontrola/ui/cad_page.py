@@ -587,6 +587,25 @@ class CadPage(QWidget):
             b.setToolTip(tip)
             crow.addWidget(b)
         self.b_uchyty.setChecked(True)
+        # druhy úchytů (jako Snap Mode v MicroStationu) – zapamatují se
+        from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QMenu
+        ulozene = QSettings("KontrolaVykresu", "KontrolaVykresu").value("cad/uchyty", None)
+        self.zapnute_uchyty = set(ulozene) & set(TYPY) if isinstance(ulozene, list) and ulozene else set(TYPY)
+        self.b_druhy_uchytu = QToolButton()
+        self.b_druhy_uchytu.setText("▾")
+        self.b_druhy_uchytu.setToolTip("Které úchyty používat (koncový bod, střed, průsečík…)")
+        self.b_druhy_uchytu.setPopupMode(QToolButton.InstantPopup)
+        mu = QMenu(self.b_druhy_uchytu)
+        self._akce_uchytu = {}
+        for k, popis in TYPY.items():
+            a = mu.addAction(popis)
+            a.setCheckable(True)
+            a.setChecked(k in self.zapnute_uchyty)
+            a.toggled.connect(lambda on, k=k: self._druh_uchytu(k, on))
+            self._akce_uchytu[k] = a
+        self.b_druhy_uchytu.setMenu(mu)
+        crow.insertWidget(crow.indexOf(self.b_uchyty) + 1, self.b_druhy_uchytu)
         self.krok = QSpinBox()
         self.krok.setRange(1, 200)
         self.krok.setValue(50)
@@ -639,6 +658,7 @@ class CadPage(QWidget):
         from PySide6.QtGui import QKeySequence, QShortcut
         for key, fn in (("F3", self.b_uchyty.toggle), ("F8", self.b_ortho.toggle), ("F10", self.b_polar.toggle),
                         ("Escape", self.zrus), ("Delete", lambda: self.proved("smaž")),
+                        ("Ctrl+A", lambda: self.proved("vše") if self.dok is not None else None),
                         ("Ctrl+C", lambda: self._schranka_klavesa("kopíruj do schránky")),
                         ("Ctrl+V", lambda: self._schranka_klavesa("vlož ze schránky"))):
             sc = QShortcut(QKeySequence(key), self)
@@ -1224,14 +1244,14 @@ class CadPage(QWidget):
         if pridano is not None and self.index is not None and getattr(self.index, "msp", None) is msp:
             self.view.uchyty = Uchyty(viditelne + [e for r in getattr(self, "reference", []) if self._je_model()
                                                    and r.viditelna and r.uchyty and r.pripojena
-                                                   for e in r.prvky_pro_uchyty()])
+                                                   for e in r.prvky_pro_uchyty()], self.zapnute_uchyty)
             self.index.zmen(pridano, odebrano, lambda e: e.dxf.get("layer", "0") in nevybiratelne)
             return
         if self._je_model():
             for r in getattr(self, "reference", []):
                 if r.viditelna and r.uchyty and r.pripojena:
                     viditelne += r.prvky_pro_uchyty()
-        self.view.uchyty = Uchyty(viditelne)
+        self.view.uchyty = Uchyty(viditelne, self.zapnute_uchyty)
         self.index = U.IndexVyberu(msp, (lambda e: e.dxf.get("layer", "0") in nevybiratelne) if nevybiratelne
                                    else None)
 
@@ -1492,6 +1512,13 @@ class CadPage(QWidget):
         self.vypis(f"Vybráno {len(self.vyber)} prvků.")
 
     # ------------------------------------------------------------ kurzor a vstupy
+    def _druh_uchytu(self, k: str, on: bool):
+        from PySide6.QtCore import QSettings
+        (self.zapnute_uchyty.add if on else self.zapnute_uchyty.discard)(k)
+        QSettings("KontrolaVykresu", "KontrolaVykresu").setValue("cad/uchyty", sorted(self.zapnute_uchyty))
+        if self.view.uchyty is not None:
+            self.view.uchyty.zapnute = set(self.zapnute_uchyty)
+
     def _reset(self):
         """Pravé tlačítko (Reset): ukončí řetězec bodů (jako Enter), jinde zruší nástroj; bez nástroje zruší výběr."""
         r = self._req

@@ -751,6 +751,8 @@ class MainWindow(QMainWindow):
         self.set_project(project)
 
     def save_project(self):
+        if self.tabs.currentWidget() is getattr(self, "cad", None) and self.cad.dok is not None:
+            self.cad.uloz()  # v CADu Ctrl+S uloží výkres (jako v MicroStationu)
         if self.project is not None:
             self.project.store_issues(self.issues)
             self.project.save()
@@ -1094,6 +1096,9 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ výkres
     def open_dialog(self):
+        if self.tabs.currentWidget() is getattr(self, "cad", None):
+            self.cad.otevri()  # v CADu Ctrl+O otevře výkres do CADu
+            return
         start = self.settings.value("cesty/vykres", str(Path.home()))
         path, _ = QFileDialog.getOpenFileName(self, "Otevřít výkres", start, DRAWING_FILTER)
         if path:
