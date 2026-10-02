@@ -72,9 +72,30 @@ class CadView(QGraphicsView):
         self._pan = None
         self._okno_start: tuple[float, float] | None = None
         self._okno_px = None
+        self._pohledy: list = []  # předchozí pohledy (View Previous)
+        self._posledni_ulozeni = 0.0
 
     # ------------------------------------------------------------ zoom a posun
+    def zapamatuj_pohled(self, vynutit: bool = True):
+        """Uloží aktuální pohled pro „předchozí pohled“ (kolečko jen jednou za chvíli)."""
+        import time
+        if not vynutit and time.monotonic() - self._posledni_ulozeni < 1.5:
+            return
+        self._posledni_ulozeni = time.monotonic()
+        stav = (self.transform(), self.mapToScene(self.viewport().rect().center()))
+        self._pohledy = (self._pohledy + [stav])[-30:]
+
+    def predchozi_pohled(self) -> bool:
+        if not self._pohledy:
+            return False
+        t, stred = self._pohledy.pop()
+        self.setTransform(t)
+        self.centerOn(stred)
+        self._posledni_ulozeni = 0.0
+        return True
+
     def wheelEvent(self, e):  # noqa: N802
+        self.zapamatuj_pohled(vynutit=False)
         f = 1.0015 ** e.angleDelta().y()
         self.scale(f, f)
 
@@ -82,6 +103,7 @@ class CadView(QGraphicsView):
         r = rect or self.scene().itemsBoundingRect()
         if r.isEmpty():
             return
+        self.zapamatuj_pohled()
         self.fitInView(r.adjusted(-r.width() * 0.03, -r.height() * 0.03, r.width() * 0.03, r.height() * 0.03),
                        Qt.KeepAspectRatio)
 
@@ -223,7 +245,8 @@ class CadPage(QWidget):
     """Stránka CAD: výkres DXF, příkazový řádek, kreslení, úpravy a stav (souřadnice, úchyty, ortho…)."""
 
     PRIKAZY = {
-        "celý": "celý výkres (zoom)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
+        "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
+        "předchozí pohled": "vrátit předchozí pohled (View Previous)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
         "otevři": "otevřít DXF", "ulož": "uložit DXF", "nápověda": "seznam příkazů",
         "bod": "bod", "úsečka": "úsečky (řetězec, Enter = konec, z = zpět o bod)",
         "polylinie": "lomená čára (k = uzavřít, Enter = konec)", "obdélník": "obdélník ze dvou rohů",
@@ -252,6 +275,9 @@ class CadPage(QWidget):
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
+        "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
+        "wa": "přiblížit", "vp": "předchozí pohled", "view previous": "předchozí pohled",
+        "predchozi pohled": "předchozí pohled", "zpět pohled": "předchozí pohled",
         "c": "celý", "cel": "celý", "zoom": "celý", "za": "celý", "celý výkres": "celý", "cely": "celý",
         "vzd": "vzdálenost", "dist": "vzdálenost", "di": "vzdálenost", "vzdalenost": "vzdálenost",
         "o": "otevři", "open": "otevři", "otevri": "otevři", "s": "ulož", "save": "ulož", "uloz": "ulož",
@@ -1432,6 +1458,9 @@ class CadPage(QWidget):
         self.vypis(f"> {t}")
         if cmd == "celý":
             self.view.zoom_all()
+        elif cmd == "předchozí pohled":
+            if not self.view.predchozi_pohled():
+                self.vypis("Žádný předchozí pohled.")
         elif cmd == "nápověda":
             self.vypis("Příkazy: " + "; ".join(f"{k} – {v}" for k, v in self.PRIKAZY.items()))
             self.vypis("Zkratky: u úsečka, pl polylinie, kr kružnice, ob oblouk, t text, m posun, cp kopie, "
@@ -1822,6 +1851,13 @@ class CadPage(QWidget):
         if vz.upper() != "SOLID":
             m = yield Pozadavek("cislo", "Měřítko vzoru [1]:", vychozi=1.0)
         self.kresleni.sraf(e, vz, m)
+
+    def n_priblizit(self):
+        a = yield self._bod_req("Přiblížit oknem – první roh:")
+        b = yield self._bod_req("Protilehlý roh:", a)
+        if abs(a[0] - b[0]) < 1e-9 or abs(a[1] - b[1]) < 1e-9:
+            raise ValueError("Okno má nulovou velikost.")
+        self.view.zoom_all(QRectF(min(a[0], b[0]), min(a[1], b[1]), abs(a[0] - b[0]), abs(a[1] - b[1])))
 
     def n_kota(self):
         a = yield self._bod_req("Kóta – první bod:")

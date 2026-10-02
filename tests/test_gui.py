@@ -2228,3 +2228,21 @@ def test_export_seznamu_pdf(window, tmp_path):
     finally:
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_priblizit_oknem_a_predchozi_pohled(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=1000 y=1000", ""):
+        c.zadej(t)
+    c.proved("celý")
+    m0 = c.view.transform().m11()
+    c.proved("zw")
+    c.zadej("x=0 y=0")
+    c.zadej("x=10 y=10")
+    m1 = c.view.transform().m11()
+    assert m1 > m0 * 20  # přiblíženo
+    c.view.mapToScene(c.view.viewport().rect().center())
+    c.proved("vp")
+    assert abs(c.view.transform().m11() - m0) < 1e-9 * max(1.0, m0)
