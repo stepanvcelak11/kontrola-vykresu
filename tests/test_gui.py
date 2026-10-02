@@ -2743,3 +2743,26 @@ def test_kodovnik_dialog(window, tmp_path, monkeypatch):
         d2.close()
     finally:
         d.close()
+
+
+def test_cad_georeference_rastru(window, tmp_path):
+    from PySide6.QtGui import QColor, QImage
+
+    from kontrola.cad import rastr as RA
+    img = QImage(100, 50, QImage.Format_RGB32)
+    img.fill(QColor("blue"))
+    f = tmp_path / "nacrt.png"
+    img.save(str(f))
+    (tmp_path / "nacrt.pgw").write_text("1\n0\n0\n-1\n0.5\n49.5\n", encoding="ascii")
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.pripoj_rastr(str(f))
+    im = c.prostor.query("IMAGE").first
+    c.proved("georeference")
+    c._posli((im, (10, 10)))
+    for t in ("p", "x=0 y=0", "x=1000 y=2000", "x=100 y=0", "x=1200 y=2000", "x=0 y=50", "x=1000 y=2100", "", "a", "a"):
+        c.zadej(t)
+    a, d, b, e, cc, ff = RA.nacti_world_file(tmp_path / "nacrt.pgw")
+    assert abs(a - 2) < 1e-6 and abs(cc - 1001) < 1e-6 and abs(ff - 2099) < 1e-6
+    assert len(c.prostor.query("IMAGE")) == 1

@@ -390,6 +390,9 @@ obě zdarma pro vlastní použití.
   zesílená každá n-tá, max. délka strany trojúhelníku (automaticky navržená), vyhlazení, popis zesílených
   vrstevnic s přerušením čáry, volitelně TIN jako 3D plošky; hladiny a vzhled podle zadání (je-li v něm druh
   „vrstevnice“), jinak VRSTEVNICE_ZAKLADNI / _ZESILENE / _POPIS. Vše jedno *Zpět*.
+* **Georeference rastru** (`georeference`, `warp`): klik na rastr, identické body v rastru → cílové souřadnice
+  (Y X, `#číslo` ze seznamu, klik), shodnostní / podobnostní / afinní transformace s opravami a m0; poloha se uloží
+  do world filu vedle obrázku (.jgw, .pgw, .tfw), takže rastr sedí i v QGIS, MicroStationu a AutoCADu.
 * **Kresba z kódů** (`kódy`) a **kódovník** (`kódovník`) – kódování prvků účelové mapy: body ze seznamu souřadnic
   s kódy z terénu se spojí do linií a ploch (v pořadí čísel bodů) a bodové kódy vloží značky – vše do hladin a se
   vzhledem podle zadání. Kódy: `PL` linie, `PL/Z` začátek nové linie, `PL/K` konec, `PL/U` uzavřít, `PL#2` souběžná

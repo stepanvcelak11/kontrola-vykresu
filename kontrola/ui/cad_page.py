@@ -348,6 +348,7 @@ class CadPage(QWidget):
         "knihovna buněk": "načíst buňky z knihovny MicroStationu (.CEL) nebo bloky a styly z jiného DXF",
         "vrstevnice": "model terénu: TIN a vrstevnice z výškových bodů (výběr nebo seznam souřadnic)",
         "profil": "podélný profil terénu po trase (čára ve výkresu) z výškových bodů",
+        "georeference": "transformace rastru podle identických bodů s opravami a m0, uložení world filu",
         "kódy": "kresba z kódů bodů seznamu souřadnic – linie, plochy a značky podle kódovníku a zadání",
         "kódovník": "kódovník: kód bodu → linie / plocha / značka, hladina a vzhled podle zadání",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
@@ -400,6 +401,7 @@ class CadPage(QWidget):
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
         "kota polomeru": "kóta poloměru", "dimrad": "kóta poloměru", "kp": "kóta poloměru", "mp": "měř plochu", "plocha bodů": "měř plochu",
+        "warp": "georeference", "georef": "georeference", "transformace rastru": "georeference",
         "kody": "kódy", "kresba z kodu": "kódy", "kresba z kódů": "kódy", "kodovnik": "kódovník",
         "tin": "vrstevnice", "profile": "profil", "podélný profil": "profil", "dtm": "vrstevnice", "contour": "vrstevnice", "contours": "vrstevnice",
         "mer plochu": "měř plochu", "measure area": "měř plochu", "mu": "měř úhel", "mer uhel": "měř úhel",
@@ -2486,6 +2488,28 @@ class CadPage(QWidget):
         self.view.zoom_all()
         self.vypis(f"Transformováno {len(nove)} prvků." + (f" {podob} prvků (kružnice, texty, buňky) jen podobnostně"
                                                           " – afinní zkosení na ně nejde použít." if podob else ""))
+        rastry = [e for e in nove if e.dxftype() == "IMAGE"]
+        if rastry:
+            t = yield Pozadavek("text", f"Uložit polohu {len(rastry)} rastru do world filu (.jgw/.tfw…) vedle "
+                                "obrázku? [a] (a/n):", vychozi="a")
+            if (t or "a").strip().lower() in ("a", "ano", "y", "yes"):
+                from ..cad import rastr as RA
+                zaklad = self.dok.path.parent if self.dok.path else None
+                for im in rastry:
+                    try:
+                        self.vypis(f"World file uložen: {RA.uloz_world_file(im, zaklad).name}")
+                    except (ValueError, OSError) as ex:
+                        self.vypis(f"⚠ {ex}")
+
+    def n_georeference(self):
+        """Transformace rastru podle identických bodů (Raster Manager → Warp): klik na rastr, pak dvojice
+        bod v rastru → cílové souřadnice; opravy, m0 a uložení world filu."""
+        im, _k = yield Pozadavek("prvek", "Georeference – klikněte na rastr:")
+        if im.dxftype() != "IMAGE":
+            raise ValueError("Vyberte rastr (připojený obrázek).")
+        self.vyber = [im]
+        self._zvyrazni()
+        yield from self.n_transformace()
 
     def _najdi_predvolbu(self, text: str):
         t = (text or "").strip().lower()

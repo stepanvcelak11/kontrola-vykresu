@@ -100,7 +100,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 4. **Předmět „Zpracování tachymetrického zaměření lokality“** (uživatel další materiály nemá – pracovat na tom,
    když nezadá jinou práci; pořadí podle užitku):
    - 3D výkresy: ✅ TIN a vrstevnice z bodů (CAD příkaz „vrstevnice“, úloha „Model terénu a kubatura“, web: DXF s vrstevnicemi); ✅ podélný profil (CAD „profil“); zbývá 3D body/čáry;
-   - transformace rastrů: transformace podle více identických bodů s opravami a m0, uložení world filu;
+   - transformace rastrů: ✅ CAD `georeference` – identické body, opravy, m0, shodnostní/podobnostní/afinní, uložení world filu;
    - kódování prvků účelové mapy: ✅ kódovník (kód → linie/plocha/značka, pravidlo, hladina, buňka, styl) a kresba z kódů v CAD (`kódy`), řídicí kódy /Z /K /U a #n;
    - mračna bodů: načtení XYZ/LAS/PLY, prořídnutí, terén, vrstevnice a profil;
    - geometrický plán: výkaz výměr (dosavadní / nový stav), srovnávací sestavení, výkres GP;

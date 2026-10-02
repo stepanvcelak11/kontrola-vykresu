@@ -108,3 +108,23 @@ def qt_transform(im) -> tuple[float, float, float, float, float, float]:
     u, v, ins = im.dxf.u_pixel, im.dxf.v_pixel, im.dxf.insert
     hpx = im.dxf.image_size.y
     return u.x, u.y, -v.x, -v.y, ins.x + hpx * v.x, ins.y + hpx * v.y
+
+
+def world_file_z_obrazku(im) -> tuple[float, float, float, float, float, float]:
+    """A, D, B, E, C, F z polohy IMAGE ve výkresu (opak ``geometrie_z_world_file``)."""
+    u, v, ins = im.dxf.u_pixel, im.dxf.v_pixel, im.dxf.insert
+    hpx = im.dxf.image_size.y
+    a, d = u.x, u.y
+    b, e = -v.x, -v.y
+    lhx, lhy = ins.x - hpx * b, ins.y - hpx * e  # levý horní roh
+    return a, d, b, e, lhx + a / 2 + b / 2, lhy + d / 2 + e / 2
+
+
+def uloz_world_file(im, zaklad: Path | None = None) -> Path:
+    """Uloží world file vedle obrázku (.jgw, .pgw, .tfw…), aby rastr seděl i v QGIS, MicroStationu, AutoCADu."""
+    f = cesta_obrazku(im, zaklad)
+    if f is None:
+        raise ValueError("Soubor obrázku se nenašel – world file nejde uložit.")
+    cil = f.with_suffix(PRIPONY_WF.get(f.suffix.lower(), ".wld"))
+    cil.write_text("\n".join(f"{x:.10f}" for x in world_file_z_obrazku(im)) + "\n", encoding="ascii")
+    return cil

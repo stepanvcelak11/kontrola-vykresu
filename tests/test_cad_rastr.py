@@ -60,3 +60,27 @@ def _w(tmp_path):
     p = tmp_path / "spatny.wld"
     p.write_text("1\n2\n", encoding="ascii")
     return p
+
+
+def test_world_file_tam_a_zpet(tmp_path):
+    wf = (0.25, 0.01, 0.02, -0.25, -600000.0, -1160000.0)
+    f = _obrazek(tmp_path, "\n".join(map(str, wf)))
+    dok = CadDokument()
+    im = RA.pripoj(dok.doc, dok.msp, U.Historie(dok.msp), f, tmp_path)
+    assert all(abs(a - b) < 1e-9 for a, b in zip(RA.world_file_z_obrazku(im), wf))
+    (tmp_path / "orto.pgw").unlink()
+    out = RA.uloz_world_file(im, tmp_path)
+    assert out.name == "orto.pgw" and all(abs(a - b) < 1e-9 for a, b in zip(RA.nacti_world_file(out), wf))
+
+
+def test_georeference_rastru_afinne(tmp_path):
+    f = _obrazek(tmp_path, "1\n0\n0\n-1\n0.5\n49.5\n")  # 100×50 px, 1 m, levý dolní roh (0, 0)
+    dok = CadDokument()
+    h = U.Historie(dok.msp)
+    im = RA.pripoj(dok.doc, dok.msp, h, f, tmp_path)
+    zdroj = [(0, 0), (100, 0), (0, 50), (100, 50)]
+    cil = [(1000, 2000), (1200, 2000), (1000, 2100), (1200, 2100)]  # 2× větší a posunutý
+    nove, tr, _p = U.transformace_vykresu(dok.msp, h, [im], zdroj, cil, "afinni")
+    assert tr.m0 < 1e-9
+    a, d, b, e, c, ff = RA.world_file_z_obrazku(nove[0])
+    assert abs(a - 2) < 1e-9 and abs(e + 2) < 1e-9 and abs(c - 1001) < 1e-9 and abs(ff - 2099) < 1e-9
