@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     vzhled = QSettings("KontrolaVykresu", "KontrolaVykresu").value("zobrazeni/vzhled", "tmavy")
     from .ui.theme import set_accent, set_font_scale
     _st = QSettings("KontrolaVykresu", "KontrolaVykresu")
-    set_accent(str(_st.value("zobrazeni/barva", "modra")))
+    set_accent(str(_st.value("zobrazeni/barva", "tyrkysova")))
     set_font_scale(str(_st.value("zobrazeni/pismo", "normalni")))
     apply_theme(app, vzhled != "svetly")
     from PySide6.QtGui import QIcon

@@ -538,8 +538,8 @@ class CadPage(QWidget):
         from PySide6.QtWidgets import QSplitter, QTabWidget
 
         from .cad_panely import PaletaNastroju, PanelHladin, PanelVlastnosti
-        from .theme import ACCENT, is_dark
-        self.paleta = PaletaNastroju(self.PRIKAZY, "#D1D5DB" if is_dark() else "#374151", ACCENT)
+        from .theme import accent, is_dark
+        self.paleta = PaletaNastroju(self.PRIKAZY, "#D1D5DB" if is_dark() else "#374151", accent())
         self.paleta.nastroj.connect(self._z_palety)
         self.nastroje: dict[str, QToolButton] = dict(self.paleta.tlacitka)
         self.view = CadView()

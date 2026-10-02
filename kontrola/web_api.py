@@ -8,7 +8,46 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
+
+
+def _nahrady_shapely() -> None:
+    """V Pyodide (WebAssembly) padá vektorová funkce shapely.get_num_points / get_point („function signature
+    mismatch“) – nahradí se stejným výpočtem po prvcích. Na desktopu se nic nemění."""
+    import numpy as np
+    import shapely
+
+    def get_num_points(geometry, **_kw):
+        if isinstance(geometry, np.ndarray):
+            return np.array([len(g.coords) if g is not None and hasattr(g, "coords") else 0 for g in geometry.ravel()],
+                            dtype=int).reshape(geometry.shape)
+        return len(geometry.coords) if geometry is not None and hasattr(geometry, "coords") else 0
+
+    def get_point(geometry, index, **_kw):
+        from shapely.geometry import Point
+
+        def jeden(g):
+            if g is None or not hasattr(g, "coords"):
+                return None
+            c = list(g.coords)
+            try:
+                return Point(c[index])
+            except IndexError:
+                return None
+        if isinstance(geometry, np.ndarray):
+            out = np.empty(geometry.shape, dtype=object)
+            for i, g in np.ndenumerate(geometry):
+                out[i] = jeden(g)
+            return out
+        return jeden(geometry)
+
+    shapely.get_num_points = get_num_points
+    shapely.get_point = get_point
+
+
+if sys.platform == "emscripten":
+    _nahrady_shapely()
 
 from .checks.base import Severity
 from .config import Config

@@ -287,10 +287,10 @@ def test_tmavy_rezim_a_aktualizace(window, monkeypatch):
     from kontrola.ui import theme
     w = window
     w.a_dark.setChecked(True)
-    assert theme.is_dark() and "#1E1F22" in QApplication.instance().styleSheet()
+    assert theme.is_dark() and "#0E141B" in QApplication.instance().styleSheet()
     assert w.settings.value("zobrazeni/vzhled") == "tmavy"
     w.a_dark.setChecked(False)
-    assert not theme.is_dark() and "#1E1F22" not in QApplication.instance().styleSheet()
+    assert not theme.is_dark() and "#0E141B" not in QApplication.instance().styleSheet()
     # nová verze → okno s odkazem ke stažení (síť se v testu nepoužije)
     shown = []
     monkeypatch.setattr(aktualizace, "BUILD", 5)

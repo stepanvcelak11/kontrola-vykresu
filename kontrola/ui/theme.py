@@ -63,23 +63,25 @@ _ICONS = {
 
 
 # tmavý režim: každá barva světlého vzhledu má svůj tmavý protějšek (nahrazuje se najednou, bez řetězení)
-DARK_MAP = {
-    "#F3F4F6": "#1E1F22", "#FFFFFF": "#2B2D31", "#D1D5DB": "#43464D", "#1F2937": "#E5E7EB",
-    "#6B7280": "#9CA3AF", "#9CA3AF": "#6B7280", "#2563EB": "#3B82F6", "#1D4ED8": "#2563EB",
-    "#DBEAFE": "#1E3A5F", "#EEF2F7": "#35383F", "#93C5FD": "#3B82F6", "#F9FAFB": "#313338",
-    "#E5E7EB": "#3A3D44", "#EEF0F3": "#383A40", "#374151": "#D1D5DB", "#EFF6FF": "#1E2A3D",
-    "#BFDBFE": "#2F4A73", "#1E3A8A": "#BFDBFE", "#FEF3C7": "#3D3218", "#FCD34D": "#806521",
-    "#78350F": "#FDE68A", "#DC2626": "#F87171", "#B45309": "#FBBF24", "#4B5563": "#C0C4CC", "#C0C4CC": "#5A5E66",
-    "#F4F6FA": "#17181C", "#E3E7EE": "#34373F", "#CBD2DC": "#4A4E58", "#F1F4F9": "#2C2F36",
-    "#F8FAFC": "#26282E", "#111827": "#E8EAED", "#E8F0FE": "#1F3354", "#EEF2FF": "#232B45",
-    "#C7D2FE": "#3A4A7A", "#0F172A": "#0B0C0F", "#1E40AE": "#BFDBFE",
+DARK_MAP = {  # vzhled „Studio“: břidlicově modrá tma, panely o odstín světlejší (návrh vzhledu A)
+    "#F3F4F6": "#0E141B", "#FFFFFF": "#111821", "#D1D5DB": "#2A3644", "#1F2937": "#E6EDF3",
+    "#6B7280": "#8B98A5", "#9CA3AF": "#6B7785", "#2563EB": "#3B82F6", "#1D4ED8": "#2563EB",
+    "#DBEAFE": "#12304A", "#EEF2F7": "#1A232E", "#93C5FD": "#3B82F6", "#F9FAFB": "#0F151C",
+    "#E5E7EB": "#1E2833", "#EEF0F3": "#1A232E", "#374151": "#C9D1D9", "#EFF6FF": "#102233",
+    "#BFDBFE": "#264866", "#1E3A8A": "#BFDBFE", "#FEF3C7": "#3A2A0C", "#FCD34D": "#806521",
+    "#78350F": "#FDE68A", "#DC2626": "#F87171", "#B45309": "#FBBF24", "#4B5563": "#A9B4BF", "#C0C4CC": "#4A5664",
+    "#F4F6FA": "#0B1016", "#E3E7EE": "#1E2833", "#CBD2DC": "#2A3644", "#F1F4F9": "#16202A",
+    "#F8FAFC": "#0F151C", "#111827": "#E6EDF3", "#E8F0FE": "#123040", "#EEF2FF": "#16233A",
+    "#C7D2FE": "#2E4A6A", "#0F172A": "#05080C", "#1E40AE": "#BFDBFE",
 }
 _dark = False
 
 # barva vzhledu (zvýraznění): modrá je výchozí, ostatní vzniknou otočením odstínu modrých tónů stylu
-ACCENTS = {"modra": ("Modrá", None), "zelena": ("Zelená", 158), "fialova": ("Fialová", 262),
-           "oranzova": ("Oranžová", 24)}
-_accent = "modra"
+ACCENTS = {"tyrkysova": ("Tyrkysová (Studio)", 172), "modra": ("Modrá", None), "zelena": ("Zelená", 158),
+           "fialova": ("Fialová", 262), "oranzova": ("Oranžová", 24)}
+VYCHOZI_ACCENT = "tyrkysova"
+_ACCENT_JAS = {"tyrkysova": 0.66}  # tyrkysová je v plném jasu na bílý text moc světlá
+_accent = VYCHOZI_ACCENT
 
 
 # velikost písma celé aplikace (pro menší displeje / horší zrak)
@@ -108,7 +110,7 @@ def _scale_pt(css: str) -> str:
 
 def set_accent(name: str) -> None:
     global _accent
-    _accent = name if name in ACCENTS else "modra"
+    _accent = name if name in ACCENTS else VYCHOZI_ACCENT
 
 
 def accent_name() -> str:
@@ -122,9 +124,11 @@ def _accent_color(hexcol: str) -> str:
         return hexcol
     c = QColor(hexcol)
     h, sat, light, _a = c.getHslF()
-    if h < 0 or sat < 0.2 or not (190 / 360 <= h <= 245 / 360):
+    # jen výrazné modré tóny zvýraznění – modrošedé texty a pozadí vzhledu Studio zůstanou
+    if h < 0 or sat < 0.5 or not (190 / 360 <= h <= 245 / 360):
         return hexcol
-    out = QColor.fromHslF(hue / 360, sat, light)
+    jas = _ACCENT_JAS.get(_accent, 1.0) if 0.25 <= light <= 0.75 else 1.0
+    out = QColor.fromHslF(hue / 360, sat, min(1.0, light * jas))
     return out.name().upper()
 
 
