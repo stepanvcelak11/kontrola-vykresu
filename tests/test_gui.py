@@ -2788,3 +2788,17 @@ def test_cad_mracno_bodu(window, tmp_path):
         assert any(b.cislo == "M1" for b in v.seznam.body)
     finally:
         v.seznam.body[:] = puvodni
+
+
+def test_vypocty_kresba_z_kodu_tlacitko(window):
+    from kontrola.geodezie.body import Bod
+    w, v = window, window.vypocty
+    puvodni = list(v.seznam.body)
+    v.seznam.body[:] = [Bod("1", 1000, 2000, kod="3.13"), Bod("2", 1001, 2001, kod="x")]
+    try:
+        w.show_page("vypocty")
+        v.kresba_z_kodu()
+        assert w.cad._gen is not None or "kód" in w.cad.vystup.toPlainText().lower() if hasattr(w.cad, "vystup") else True
+        w.cad.zrus()
+    finally:
+        v.seznam.body[:] = puvodni

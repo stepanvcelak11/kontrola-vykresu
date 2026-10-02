@@ -351,9 +351,13 @@ class VypoctyPage(QWidget):
         self.b_porovnat = QPushButton("Porovnat…")
         self.b_porovnat.setToolTip("Porovnat seznam se souborem (kontrolní měření): ΔY, ΔX, Δp a mezní odchylky")
         self.b_qtrig = QPushButton("QTrig…")
-        self.b_qtrig.setToolTip("Body a zápisníky z terénní aplikace QTrig (firemní cloud nebo export)")
+        self.b_qtrig.setToolTip("Body a zápisníky z terénní aplikace QTrig (účet: kód a heslo, nebo export)")
+        self.b_kody = QPushButton("Kresba z kódů…")
+        self.b_kody.setToolTip("Body s kódy z terénu → linie, plochy a značky v CAD podle kódovníku a zadání")
+        self.b_kodovnik = QPushButton("Kódovník…")
+        self.b_kodovnik.setToolTip("Kód bodu → linie / plocha / značka, hladina a vzhled podle zadání")
         for b in (self.b_import, self.b_export, self.b_porovnat, self.b_qtrig, self.b_add, self.b_del, self.b_bulk, self.b_dup, self.b_undo,
-                  self.b_redo, self.b_polar):
+                  self.b_redo, self.b_polar, self.b_kody, self.b_kodovnik):
             bar.addWidget(b)
         bar.addStretch(1)
         lay.addLayout(bar)
@@ -420,6 +424,8 @@ class VypoctyPage(QWidget):
         self.b_undo.clicked.connect(self.undo)
         self.b_redo.clicked.connect(self.redo)
         self.b_polar.clicked.connect(lambda: getattr(self.win, "show_vypocet", lambda: None)())
+        self.b_kody.clicked.connect(self.kresba_z_kodu)
+        self.b_kodovnik.clicked.connect(self.otevri_kodovnik)
         self.search.textChanged.connect(self._filter)
         self.kody.currentIndexChanged.connect(self._filter)
         self.des.valueChanged.connect(self._decimals)
@@ -756,3 +762,18 @@ class VypoctyPage(QWidget):
         self._after_change()
         self.message(f"Sloučeno {n} skupin (vrátit: Ctrl+Z).")
         return n
+
+    # ------------------------------------------------------------ kódování prvků (kresba z kódů v CAD)
+    def kresba_z_kodu(self):
+        cad = getattr(self.win, "cad", None)
+        if cad is None:
+            return
+        self.win.show_page("cad")
+        if cad.dok is None:
+            cad.novy()
+        cad.proved("kódy")
+
+    def otevri_kodovnik(self):
+        from .kodovnik_dialog import KodovnikDialog
+        cad = getattr(self.win, "cad", None)
+        KodovnikDialog(self.win, getattr(cad, "_predvolby", []) if cad is not None else [], self).exec()
