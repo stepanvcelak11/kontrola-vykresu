@@ -2152,3 +2152,20 @@ def test_spojnice_v_grafice_a_do_cad(window):
         p.seznam.body[:] = puvodni
         p.spojnice.dvojice[:] = spoj
         p._after_change()
+
+
+def test_export_seznamu_dxf_kml(window, tmp_path):
+    from kontrola.geodezie.body import Bod
+    p = window.vypocty
+    puvodni = list(p.seznam.body)
+    try:
+        p.seznam.body[:] = [Bod("1", 600000, 1160000, 250.0), Bod("2", 600010, 1160000)]
+        p._after_change()
+        assert p.export_dialog(str(tmp_path / "s.dxf"))
+        assert p.export_dialog(str(tmp_path / "s.kml"))
+        import ezdxf
+        assert len(ezdxf.readfile(tmp_path / "s.dxf").modelspace().query("POINT")) == 2
+        assert "Placemark" in (tmp_path / "s.kml").read_text(encoding="utf-8")
+    finally:
+        p.seznam.body[:] = puvodni
+        p._after_change()

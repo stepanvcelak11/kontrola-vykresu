@@ -624,9 +624,28 @@ class VypoctyPage(QWidget):
             return None
         if path is None:
             path, _ = QFileDialog.getSaveFileName(self, "Export seznamu souřadnic", "seznam.txt",
-                                                  "Text – sloupce (*.txt);;CSV pro Excel (*.csv)")
+                                                  "Text – sloupce (*.txt);;CSV pro Excel (*.csv);;"
+                                                  "DXF – body, čísla, výšky a spojnice (*.dxf);;"
+                                                  "KML – mapy, Google Earth (*.kml);;GeoJSON – QGIS (*.geojson)")
         if not path:
             return None
+        pripona = Path(path).suffix.lower()
+        if pripona in (".dxf", ".kml", ".geojson", ".json"):
+            from ..geodezie import export_mapy as E
+            cisla = {b.cislo for b in body}
+            spoj = [(a, b) for a, b in self.spojnice.platne(self.seznam) if a.cislo in cisla and b.cislo in cisla]
+            try:
+                if pripona == ".dxf":
+                    E.do_dxf(path, body, spoj, des_z=self.des.value())
+                elif pripona == ".kml":
+                    E.do_kml(path, body, spoj, Path(path).stem)
+                else:
+                    E.do_geojson(path, body, spoj)
+            except OSError as e:
+                QMessageBox.warning(self, "Export", str(e))
+                return None
+            self.message(f"Uloženo {len(body)} bodů" + (f" a {len(spoj)} spojnic" if spoj else "") + f" do {path}.")
+            return path
         sloupce = ["cislo", "y", "x", "z"] + (["kod"] if any(b.kod for b in body) else []) + \
                   (["kvalita"] if any(b.kvalita for b in body) else [])
         d = self.des.value()
