@@ -2689,3 +2689,57 @@ def test_cad_podelny_profil(window):
         assert not len(c.prostor.query('LWPOLYLINE[layer=="PROFIL"]'))
     finally:
         p.seznam.body[:] = puvodni
+
+
+def test_cad_kresba_z_kodu(window, tmp_path, monkeypatch):
+    from kontrola.geodezie.body import Bod
+    from kontrola.geodezie.kodovnik import Kod, Kodovnik
+    from kontrola.rules import RuleSet
+    f = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation" / "pravidla_zadani1.yaml"
+    if not f.exists():
+        pytest.skip("chybí pravidla")
+    w, c, p = window, window.cad, window.vypocty
+    monkeypatch.setattr("kontrola.ui.kodovnik_dialog.soubor_kodovniku", lambda win: tmp_path / "kodovnik.csv")
+    puvodni_pr, puvodni = w.project.rules, list(p.seznam.body)
+    w.project.rules = RuleSet.load(f)
+    try:
+        w.show_page("cad")
+        c.obnov_predvolby()
+        c.novy_podle_zadani(vzory=[])
+        bud = next(q.nazev for q in c._predvolby if "Budovy zděné" in q.nazev)
+        Kodovnik([Kod("B", "budova", "plocha", bud), Kod("PL", "plot", "linie", vrstva="PLOTY")]).uloz(tmp_path / "kodovnik.csv")
+        p.seznam.body[:] = [Bod("1", 1000, 2000, kod="B"), Bod("2", 1010, 2000, kod="B"), Bod("3", 1010, 2010, kod="B"),
+                            Bod("4", 1020, 2000, kod="PL"), Bod("5", 1030, 2000, kod="PL/K"), Bod("6", 1, 1, kod="??")]
+        c.proved("kódy")
+        assert "Neznámé kódy: ??" in c.vyzva.text() if hasattr(c, "vyzva") else True
+        c.zadej("a")
+        pl = c.prostor.query("LWPOLYLINE")
+        b = next(e for e in pl if e.dxf.layer == "5")
+        assert b.closed and b.dxf.color == next(q for q in c._predvolby if q.nazev == bud).barva
+        plot = next(e for e in pl if e.dxf.layer == "PLOTY")
+        assert [tuple(round(v) for v in q) for q in plot.get_points("xy")] == [(-1020, -2000), (-1030, -2000)]
+        c.proved("zpět")
+        assert not len(c.prostor.query("LWPOLYLINE"))
+    finally:
+        w.project.rules = puvodni_pr
+        p.seznam.body[:] = puvodni
+
+
+def test_kodovnik_dialog(window, tmp_path, monkeypatch):
+    from kontrola.ui.kodovnik_dialog import KodovnikDialog
+    monkeypatch.setattr("kontrola.ui.kodovnik_dialog.soubor_kodovniku", lambda win: tmp_path / "k.csv")
+    c = window.cad
+    d = KodovnikDialog(window, c._predvolby)
+    try:
+        d.tab.setRowCount(0)
+        d.pridej()
+        d.tab.item(0, 0).setText("PL")
+        d.tab.item(0, 1).setText("plot")
+        d.uloz()
+        assert (tmp_path / "k.csv").read_text(encoding="utf-8").count("PL;plot;linie") == 1
+        d2 = KodovnikDialog(window, c._predvolby)
+        assert d2.kodovnik().najdi("pl").popis == "plot"
+        d2.ze_zadani()
+        d2.close()
+    finally:
+        d.close()

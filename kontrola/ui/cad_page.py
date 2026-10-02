@@ -348,6 +348,8 @@ class CadPage(QWidget):
         "knihovna buněk": "načíst buňky z knihovny MicroStationu (.CEL) nebo bloky a styly z jiného DXF",
         "vrstevnice": "model terénu: TIN a vrstevnice z výškových bodů (výběr nebo seznam souřadnic)",
         "profil": "podélný profil terénu po trase (čára ve výkresu) z výškových bodů",
+        "kódy": "kresba z kódů bodů seznamu souřadnic – linie, plochy a značky podle kódovníku a zadání",
+        "kódovník": "kódovník: kód bodu → linie / plocha / značka, hladina a vzhled podle zadání",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -398,6 +400,7 @@ class CadPage(QWidget):
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
         "kota polomeru": "kóta poloměru", "dimrad": "kóta poloměru", "kp": "kóta poloměru", "mp": "měř plochu", "plocha bodů": "měř plochu",
+        "kody": "kódy", "kresba z kodu": "kódy", "kresba z kódů": "kódy", "kodovnik": "kódovník",
         "tin": "vrstevnice", "profile": "profil", "podélný profil": "profil", "dtm": "vrstevnice", "contour": "vrstevnice", "contours": "vrstevnice",
         "mer plochu": "měř plochu", "measure area": "měř plochu", "mu": "měř úhel", "mer uhel": "měř úhel",
         "uhel": "měř úhel", "úhel": "měř úhel", "pr": "vlastnosti", "props": "vlastnosti",
@@ -3023,6 +3026,37 @@ class CadPage(QWidget):
             raise ValueError("Vyberte výškové body (body nebo buňky se souřadnicí Z), nebo načtěte seznam "
                              "souřadnic s výškami ve Výpočtech.")
         return [(-b.y, -b.x, b.z) for b in sez], "seznamu souřadnic"  # S-JTSK jako v MicroStationu
+
+    def n_kody(self):
+        """Kresba z kódů bodů seznamu souřadnic (jako kresba z kódů v Gromě / Atlasu): linie, plochy a značky
+        podle kódovníku a zadání."""
+        from ..cad import kresba_z_kodu as KZ
+        from ..geodezie import kodovnik as KV
+        from .kodovnik_dialog import nacti_kodovnik
+        v = getattr(self.win, "vypocty", None)
+        body = [b for b in (v.seznam.body if v is not None else []) if (b.kod or "").strip()]
+        if not body:
+            raise ValueError("V seznamu souřadnic (Výpočty) nejsou body s kódem. Kódy se zadávají v terénu "
+                             "(totální stanice, QTrig) nebo ve sloupci Kód seznamu souřadnic.")
+        kv = nacti_kodovnik(self.win, self._predvolby)
+        kr = KV.sestav(body, kv, self._predvolby)
+        if not kr.linie and not kr.bodove:
+            raise ValueError("Žádný kód bodu není v kódovníku ani v zadání. " + kr.souhrn()
+                             + " Upravte kódovník (příkaz „kódovník“).")
+        t = yield Pozadavek("text", kr.souhrn() + " Nakreslit? [a]/n:", vychozi="a")
+        if (t or "a").strip().lower().startswith("n"):
+            return
+        r = KZ.kresli(self.dok.doc, self.prostor, self.historie_zmen, kr, self._predvolby, self.kresleni)
+        self.vypis(f"Kresba z kódů: {r['linie']} linií, {r['plochy']} ploch, {r['bunky']} značek"
+                   + (f", {r['body']} bodů bez buňky" if r["body"] else "") + ".")
+        for p in r["poznamky"] + kr.varovani[:5]:
+            self.vypis("⚠ " + p)
+
+    def n_kodovnik(self):
+        from .kodovnik_dialog import KodovnikDialog
+        KodovnikDialog(self.win, self._predvolby, self).exec()
+        return
+        yield  # generátor kvůli jednotnému volání příkazů
 
     def n_profil(self):
         """Podélný profil terénu po trase (čára ve výkresu) z modelu terénu – jako profil v Atlasu / GEOPAKu."""

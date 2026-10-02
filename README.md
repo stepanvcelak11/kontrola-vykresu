@@ -390,6 +390,12 @@ obě zdarma pro vlastní použití.
   zesílená každá n-tá, max. délka strany trojúhelníku (automaticky navržená), vyhlazení, popis zesílených
   vrstevnic s přerušením čáry, volitelně TIN jako 3D plošky; hladiny a vzhled podle zadání (je-li v něm druh
   „vrstevnice“), jinak VRSTEVNICE_ZAKLADNI / _ZESILENE / _POPIS. Vše jedno *Zpět*.
+* **Kresba z kódů** (`kódy`) a **kódovník** (`kódovník`) – kódování prvků účelové mapy: body ze seznamu souřadnic
+  s kódy z terénu se spojí do linií a ploch (v pořadí čísel bodů) a bodové kódy vloží značky – vše do hladin a se
+  vzhledem podle zadání. Kódy: `PL` linie, `PL/Z` začátek nové linie, `PL/K` konec, `PL/U` uzavřít, `PL#2` souběžná
+  linie, víc kódů mezerou (`PL BUD/Z`). Kódovník (tabulka kód → druh, pravidlo ze zadání, hladina, buňka, styl) se
+  uloží do projektu (kodovnik.csv, otevře i Excel); bez něj se kódy hledají v zadání (číslo buňky 3.13 = strom,
+  číslo stylu 2.13 = plot) a „Doplnit ze zadání“ ho z nich vyplní.
 * **Podélný profil** (`profil`) po trase (úsečka / lomená čára) z modelu terénu: lomové body na všech stranách
   trojúhelníků, srovnávací rovina, staničení (km,m) a výšky po zvoleném kroku, převýšení (např. 10×).
 * **Převod atributů** (`převod`) – úloha „převod“ (mapa plynovodu → spojové vedení, 1:1000 → 1:500):

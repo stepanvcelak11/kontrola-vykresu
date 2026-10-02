@@ -156,7 +156,7 @@ def predvolby(rs: RuleSet) -> list[Predvolba]:
                 "styl": _prvni(r.styl_cary), "tloustka": _prvni(r.tloustka) if r.tloustka is not None else None,
                 "font": r.font, "vyska": p.vyska if geo == "text" else None,
                 "sirka": rs.text_size(r.sirka_textu) if (geo == "text" and r.sirka_textu) else None,
-                "blok": _prvni(r.blok)}
+                "blok": _prvni(r.blok), "styl_vse": str(r.styl_cary) if r.styl_cary not in (None, "") else ""}
         if not r.hladina:
             p.poznamky.append("pravidlo neurčuje vrstvu – kreslí se do vrstvy 0, doplňte vrstvu v Zadání → Pravidla")
         p.barva, pozn = _aci(r.barva, rs)
