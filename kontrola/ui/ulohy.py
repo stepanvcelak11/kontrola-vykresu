@@ -255,10 +255,12 @@ def u_transformace(s, h):
     nove = []
     pre = (h.get("predpona") or "").strip()
     cil = _radky_bodu(s, h.get("transformovat") or "")
+    jung = (h.get("jung") or "").startswith("ano")
     if cil:
-        prot += ["", "transformované body:"]
+        prot += ["", "transformované body" + (" (s Jungovou dotransformací, váhy 1/d²):" if jung else ":")]
+        zdroj = [b for b, _ in pary]
         for b in cil:
-            y, x = t.preved(b)
+            y, x = t.preved_jung(b, zdroj) if jung else t.preved(b)
             nove.append(Bod(pre + b.cislo, y, x, b.z, b.kod, b.kvalita, "transformace"))
             prot.append(f"  {pre + b.cislo:<14} Y = {_f(y)}   X = {_f(x)}")
     return Vysledek(prot, nove)
@@ -601,6 +603,7 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("druh", "Druh", "volba", "podobnostní", ("shodnostní", "podobnostní", "afinní")),
       Pole("identicke", "Identické body (řádek: bod Y_cíl X_cíl)", "radky"),
       Pole("transformovat", "Transformovat body (čísla)", "radky"),
+      Pole("jung", "Jungova dotransformace", "volba", "ne", ("ne", "ano – opravy z identických bodů")),
       Pole("predpona", "Předpona nových čísel", "text", "T")], u_transformace),
     ("Výměra a obvod", "Výměra a obvod plochy z bodů zadaných po obvodu.",
      [Pole("body", "Body po obvodu (čísla)", "radky")], u_vymera),

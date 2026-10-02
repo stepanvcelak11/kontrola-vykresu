@@ -204,6 +204,26 @@ class Transformace:
         v = self.a @ np.array(_yx(p)) + self.t
         return float(v[0]), float(v[1])
 
+    def preved_jung(self, p, identicke_zdroj: list) -> tuple[float, float]:
+        """Transformace s Jungovou dotransformací: opravy z identických bodů se rozloží na bod
+        s vahami 1/d² (d = vzdálenost od identického bodu ve zdrojové soustavě). Identický bod
+        tak dostane přesně cílové souřadnice a okolí se „dotáhne“ plynule."""
+        y, x = self.preved(p)
+        py, px = _yx(p)
+        sw = swy = swx = 0.0
+        for q, (vy, vx) in zip(identicke_zdroj, self.opravy):
+            qy, qx = _yx(q)
+            d2 = (py - qy) ** 2 + (px - qx) ** 2
+            if d2 < 1e-12:
+                return y + vy, x + vx
+            w = 1.0 / d2
+            sw += w
+            swy += w * vy
+            swx += w * vx
+        if sw == 0:
+            return y, x
+        return y + swy / sw, x + swx / sw
+
 
 def transformace(zdroj: list, cil: list, druh: str = "podobnostni") -> Transformace:
     """Transformační klíč z identických bodů (MNČ): ``shodnostni`` (posun + otočení), ``podobnostni``

@@ -212,3 +212,20 @@ def test_oddeleni_bodem():
             assert Polygon(parc).exterior.distance(Point(q.y, q.x)) < 1e-6
     with pytest.raises(ValueError):
         V.oddeleni_bodem(parc, (600050, 1160050), 100)  # bod uvnitř
+
+
+def test_jungova_dotransformace():
+    zdroj = [(0, 0), (100, 0), (100, 100), (0, 100)]
+    cil = [(1000.00, 2000.00), (1100.02, 2000.00), (1100.00, 2100.03), (999.98, 2100.00)]
+    t = V.transformace(zdroj, cil, "podobnostni")
+    for q, c in zip(zdroj, cil):  # identické body dostanou přesně cílové souřadnice
+        assert t.preved_jung(q, zdroj) == pytest.approx(c, abs=1e-9)
+    # bod uprostřed: oprava = průměr oprav (stejné vzdálenosti)
+    y, x = t.preved_jung((50, 50), zdroj)
+    y0, x0 = t.preved((50, 50))
+    vy = sum(v[0] for v in t.opravy) / 4
+    vx = sum(v[1] for v in t.opravy) / 4
+    assert (y - y0, x - x0) == pytest.approx((vy, vx), abs=1e-12)
+    # blízko identického bodu převažuje jeho oprava
+    y, x = t.preved_jung((1, 0), zdroj)
+    assert abs((y - t.preved((1, 0))[0]) - t.opravy[0][0]) < 0.001
