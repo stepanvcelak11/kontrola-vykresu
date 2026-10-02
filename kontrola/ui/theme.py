@@ -402,6 +402,9 @@ def fit_headers(table, extra: int = 30) -> None:
             table.setColumnWidth(c, need)
 
 
+BEZPECNE_PISMO = False  # bezpečný start: výchozí písmo systému (bez Segoe UI Variable)
+
+
 def apply_theme(app, dark: bool = False) -> None:
     """Nastaví styl Fusion se světlou (nebo tmavou) paletou a vlastním stylesheetem."""
     global _dark
@@ -427,7 +430,8 @@ def apply_theme(app, dark: bool = False) -> None:
         f = QFont(_base_font)
     else:
         f = app.font()
-    if _base_font is None and (f.family() in ("", "Sans Serif", "MS Shell Dlg 2") or f.pointSizeF() < 9.5):
+    if _base_font is None and not BEZPECNE_PISMO and (f.family() in ("", "Sans Serif", "MS Shell Dlg 2")
+                                                       or f.pointSizeF() < 9.5):
         import sys
         if sys.platform == "win32":
             from PySide6.QtGui import QFontDatabase

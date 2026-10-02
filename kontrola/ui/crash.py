@@ -93,6 +93,29 @@ def _tail(path: Path, n: int) -> str:
     return "\n".join(lines[-n:])
 
 
+def startup_flag() -> Path:
+    return log_dir() / "start.flag"
+
+
+def previous_startup_failed() -> bool:
+    """Spadlo minulé spuštění ještě před zobrazením okna (příznak startu nebyl smazán)?"""
+    return startup_flag().exists()
+
+
+def begin_startup() -> None:
+    try:
+        startup_flag().write_text(f"{os.getpid()} {dt.datetime.now().isoformat()}", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def startup_ok() -> None:
+    try:
+        startup_flag().unlink()
+    except OSError:
+        pass
+
+
 def previous_run_crashed() -> bool:
     """Skončila minulá relace bez řádného zavření (pád, zamrznutí, ukončení ve Správci úloh)?"""
     return running_flag().exists()
