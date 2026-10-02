@@ -355,6 +355,44 @@ def transformuj(msp, h: Historie, ents, m: Matrix44, nazev: str, ponechat: bool 
     return nove
 
 
+def transformace_vykresu(msp, h: Historie, ents, zdroj, cil, druh: str = "podobnostni"):
+    """Transformace prvků podle identických bodů (zdroj → cíl ve výkresových souřadnicích), MNČ.
+
+    Vrací (nové prvky, transformační klíč, počet prvků transformovaných jen podobnostně). U afinní
+    transformace se kružnice, oblouky, texty a buňky (nejdou zkosit) převedou nejbližší podobnostní
+    transformací se stejným obrazem vkládacího bodu / středu."""
+    from ..geodezie.vypocty import transformace
+    tr = transformace([_xy(p) for p in zdroj], [_xy(p) for p in cil], druh)
+    a, t = tr.a, tr.t
+    m = Matrix44([a[0, 0], a[1, 0], 0, 0, a[0, 1], a[1, 1], 0, 0, 0, 0, 1, 0, t[0], t[1], 0, 1])
+    q, w = (a[0, 0] + a[1, 1]) / 2, (a[0, 1] - a[1, 0]) / 2  # nejbližší podobnostní (měřítko · otočení)
+    nove, podobnostne = [], 0
+    for e in ents:
+        c = _kopie(e)
+        try:
+            c.transform(m)
+        except Exception:  # noqa: BLE001 – nerovnoměrné měřítko u kružnice, textu, buňky
+            c = _kopie(e)
+            v0 = _referencni_bod(e)
+            cil0 = (a[0, 0] * v0[0] + a[0, 1] * v0[1] + t[0], a[1, 0] * v0[0] + a[1, 1] * v0[1] + t[1])
+            ms = Matrix44([q, -w, 0, 0, w, q, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+            p0 = (q * v0[0] + w * v0[1], -w * v0[0] + q * v0[1])
+            c.transform(Matrix44.chain(ms, Matrix44.translate(cil0[0] - p0[0], cil0[1] - p0[1], 0)))
+            podobnostne += 1
+        msp.add_entity(c)
+        nove.append(c)
+    h.proved("Transformace", nove, list(ents))
+    return nove, tr, podobnostne
+
+
+def _referencni_bod(e) -> tuple[float, float]:
+    for k in ("center", "insert", "location", "start"):
+        if e.dxf.hasattr(k):
+            v = e.dxf.get(k)
+            return float(v[0]), float(v[1])
+    return 0.0, 0.0
+
+
 def posun(msp, h, ents, dx, dy, kopie=False):
     return transformuj(msp, h, ents, Matrix44.translate(dx, dy, 0), "Kopie" if kopie else "Posun", kopie)
 

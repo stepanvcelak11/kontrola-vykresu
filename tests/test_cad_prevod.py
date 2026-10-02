@@ -74,3 +74,20 @@ def test_meritko_kdyz_pravidlo_neurcuje():
     n = PV.navrhni(list(msp), predvolby(rs))
     PV.proved(doc, msp, U.Historie(msp), n, meritko=0.5)
     assert msp.query("INSERT")[0].dxf.xscale == pytest.approx(0.5)
+
+
+def test_transformace_vykresu_afinni():
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    h = U.Historie(msp)
+    ln = msp.add_line((0, 0), (10, 0))
+    kr = msp.add_circle((5, 5), 1)
+    f = lambda p: (p[0] * 2 + 1, p[1] + 3)  # noqa: E731 – nerovnoměrné měřítko
+    z = [(0, 0), (10, 0), (0, 10), (10, 10)]
+    nove, tr, podobnostne = U.transformace_vykresu(msp, h, [ln, kr], z, [f(p) for p in z], "afinni")
+    assert tr.m0 == pytest.approx(0, abs=1e-9) and podobnostne == 1
+    n_ln = msp.query("LINE")[0]
+    assert (n_ln.dxf.end.x, n_ln.dxf.end.y) == pytest.approx((21, 3))
+    assert (msp.query("CIRCLE")[0].dxf.center.x, msp.query("CIRCLE")[0].dxf.center.y) == pytest.approx((11, 8))
+    h.krok_zpet()
+    assert msp.query("LINE")[0].dxf.end.x == pytest.approx(10)

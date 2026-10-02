@@ -278,6 +278,7 @@ class CadPage(QWidget):
         "rozděl": "rozdělit prvek v bodě", "ohrada": "výběr ohradou (mnohoúhelník)",
         "oměrné míry": "popis délek stran vybraných čar (oměrné míry)", "kóta úhlu": "úhlová kóta",
         "kóta poloměru": "kóta poloměru kružnice / oblouku",
+        "transformace": "transformace výkresu (výběru) podle identických bodů – shodnostní, podobnostní, afinní",
         "převod atributů": "převod výkresu na pravidla ze zadání podle značek (buňky, styly čar) a vrstev",
         "převezmi atributy": "aktivní atributy podle prvku (Match)", "změň atributy": "aktivní atributy na prvky",
         "knihovna buněk": "načíst buňky z knihovny MicroStationu (.CEL) nebo bloky a styly z jiného DXF",
@@ -322,7 +323,8 @@ class CadPage(QWidget):
         "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "knihovna": "knihovna buněk", "rc": "knihovna buněk",
         "knihovna bunek": "knihovna buněk", "cells": "knihovna buněk", "ma": "převezmi atributy", "match": "převezmi atributy",
         "prevezmi atributy": "převezmi atributy",
-        "převod": "převod atributů", "prevod": "převod atributů", "prevod atributu": "převod atributů", "ca": "změň atributy", "change": "změň atributy",
+        "převod": "převod atributů", "transformuj": "transformace",
+        "transformace vykresu": "transformace", "helmert": "transformace", "prevod": "převod atributů", "prevod atributu": "převod atributů", "ca": "změň atributy", "change": "změň atributy",
         "zmen atributy": "změň atributy", "br": "rozděl", "break": "rozděl", "rozdel": "rozděl",
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
@@ -1932,6 +1934,50 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_transformace(self):
+        """Transformace výkresu podle identických bodů (jako geodetická transformace v MicroStationu / Gromě):
+        bod ve výkresu (úchyt) → cílové souřadnice (Y X, #číslo bodu ze seznamu, nebo klik)."""
+        ents = list(self.vyber) or [e for e in self.prostor if e.dxftype() != "VIEWPORT"]
+        if not ents:
+            raise ValueError("Výkres je prázdný.")
+        d = yield Pozadavek("text", "Transformace – druh [p] (s = shodnostní, p = podobnostní / Helmert, a = afinní):",
+                            vychozi="p")
+        druh = {"s": "shodnostni", "p": "podobnostni", "a": "afinni", "h": "podobnostni"}.get(
+            (d or "p").strip().lower()[:1])
+        if druh is None:
+            raise ValueError("Druh: s, p nebo a.")
+        potreba = 3 if druh == "afinni" else 2
+        zdroj, cil = [], []
+        while True:
+            n = len(zdroj) + 1
+            a = yield self._bod_req(f"Identický bod {n} ve výkresu" + (" (Enter = konec):" if n > potreba else ":"),
+                                    volitelne=n > potreba)
+            if a is None:
+                break
+            b = yield self._bod_req(f"Bod {n} – cílové souřadnice (Y X, #číslo bodu ze seznamu nebo klik):", a)
+            zdroj.append(a)
+            cil.append(b)
+        from ..geodezie.vypocty import transformace
+        tr = transformace(zdroj, cil, druh)
+        radky = []
+        for i, (vx, vy) in enumerate(tr.opravy, 1):
+            vY, vX = (-vx, -vy) if self.sjtsk else (vx, vy)
+            radky.append(f"  {i}: v{'Y' if self.sjtsk else 'x'} = {vY * 1000:+.1f} mm, v{'X' if self.sjtsk else 'y'} = "
+                         f"{vX * 1000:+.1f} mm, |v| = {math.hypot(vx, vy) * 1000:.1f} mm")
+        self.vypis(f"Transformace {druh}: {len(zdroj)} identických bodů, m0 = {tr.m0 * 1000:.1f} mm, měřítko "
+                   f"{tr.meritko:.7f}, otočení {tr.rotace / GON:.5f} g\n" + "\n".join(radky))
+        ok = yield Pozadavek("text", f"Transformovat {len(ents)} prvků? [a] (a/n):", vychozi="a")
+        if ok.strip().lower() not in ("a", "ano", "y", "yes"):
+            self.vypis("Transformace zrušena.")
+            return
+        nove, _tr, podob = U.transformace_vykresu(self.prostor, self.historie_zmen, ents, zdroj, cil, druh)
+        self._po_zmene(nove, ents)
+        self.vyber = []
+        self._zvyrazni()
+        self.view.zoom_all()
+        self.vypis(f"Transformováno {len(nove)} prvků." + (f" {podob} prvků (kružnice, texty, buňky) jen podobnostně"
+                                                          " – afinní zkosení na ně nejde použít." if podob else ""))
 
     def _najdi_predvolbu(self, text: str):
         t = (text or "").strip().lower()

@@ -357,6 +357,9 @@ obě zdarma pro vlastní použití.
   GEO-V8.CEL od učitele) nebo bloky a styly z jiného DXF. Buňka má barvu a tloušťku podle vložení (jako
   bodová buňka). Knihovnu .CEL přetaženou do *Zadání* CAD převezme sám při *Nový podle zadání*.
   Vložená buňka dostane aktivní barvu a tloušťku a měřítko buňky z pravidla (např. 0,5 pro 1:500).
+* **Transformace výkresu** (`transformace`, `transformuj`) podle identických bodů: bod ve výkresu → cílové souřadnice
+  (Y X, `#číslo` bodu ze seznamu nebo klik); shodnostní, podobnostní (Helmert) nebo afinní, výpis oprav
+  v mm, m0, měřítka a otočení, pak transformace výběru nebo celého výkresu (jedno *Zpět*).
 * **Převod atributů** (`převod`) – úloha „převod“ (mapa plynovodu → spojové vedení, 1:1000 → 1:500):
   buňky a čáry s vlastním stylem se přiřadí k druhu prvku cílových pravidel podle značky (4.110, 2.093),
   ostatní prvky se přiřadí po skupinách (stejná vrstva, druh a styl) – stačí napsat kód nebo začátek názvu.

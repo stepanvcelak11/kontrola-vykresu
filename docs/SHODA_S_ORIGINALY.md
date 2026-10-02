@@ -64,7 +64,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Převod atributů na jiná pravidla podle značek (buňky, styly čar) a vrstev, s poměrem měřítek (příkaz „převod“) | ✅ | úloha Zadání-převod |
 | Vlastnosti prvku (dvojklik: vrstva, barva, styl, tloušťka, souřadnice, poloměr, text…), výběr podobných, výběr prvků vrstvy, najít a nahradit text | ✅ |
 | Výkres podle zadání: vrstvy, typy čar, písma a buňky ze Směrnice / zadání / vzorového výkresu; druh prvku → atributy se nastaví samy (ověřeno kontrolou symbologie na obou zadáních); tahák s key-in pro MicroStation | ✅ |
-| Geodetické funkce (kódovník bodů, mřížka, transformace výkresu) | ❌ |
+| Geodetické funkce: transformace výkresu podle identických bodů (shodnostní, podobnostní, afinní, opravy a m0, jedno Zpět), souřadnicová síť s popisy, body ze seznamu podle kódů (buňky) | ✅ |
 | Reference: připojení DXF podkladu (XREF) s polohou, měřítkem, natočením; zobrazení pod výkresem, úchyty na referenci, kopie prvků z reference, odpojení se Zpět | ✅ |
 | Modely: Model a výkresové listy (A3), výřezy modelu v měřítku | ✅ |
 | Rastrové podklady (ortofoto, sken) s georeferencí z world filu (.jgw/.pgw/.tfw), nebo umístění dvěma body; uložení jako DXF IMAGE | ✅ |

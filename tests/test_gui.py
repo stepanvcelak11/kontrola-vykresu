@@ -2078,6 +2078,25 @@ def test_cad_vloz_bunku_s_aktivnimi_atributy(window, tmp_path):
         window.cad.obnov_predvolby()
 
 
+def test_cad_transformace_vykresu(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.prostor.add_line((0, 0), (10, 0))
+    c.prostor.add_circle((5, 5), 1)
+    c._vykresli()
+    for t in ("transformace", "p", "x=0 y=0", "x=100 y=200", "x=10 y=0", "x=100 y=220", "", "a"):
+        c.zadej(t)
+    ln = c.prostor.query("LINE")[0]
+    assert (ln.dxf.start.x, ln.dxf.start.y) == pytest.approx((100, 200))
+    assert (ln.dxf.end.x, ln.dxf.end.y) == pytest.approx((100, 220))
+    kr = c.prostor.query("CIRCLE")[0]
+    assert kr.dxf.radius == pytest.approx(2) and (kr.dxf.center.x, kr.dxf.center.y) == pytest.approx((90, 210))
+    assert "m0 = 0.0 mm" in c.historie.toPlainText()
+    c.undo()
+    assert c.prostor.query("LINE")[0].dxf.end.x == pytest.approx(10)
+
+
 def test_cad_zkoseni_a_vrcholy(window):
     c = window.cad
     window.show_page("cad")
