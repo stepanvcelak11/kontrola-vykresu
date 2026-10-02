@@ -256,3 +256,30 @@ def polarni(zapisnik: str, body_json: str) -> str:
     text = protokol_polarni(res, st, dane, soubor_mereni=Path(zapisnik).name)
     return json.dumps({"protokol": text, "nove": _body_json(nove), "upozorneni": upoz[:10],
                        "stanovisek": len(stanoviska)}, ensure_ascii=False)
+
+
+def vrstevnice_dxf(body_json: str, hodnoty_json: str) -> str:
+    """Vrstevnice (a popisy) ze seznamu bodů jako text DXF – souřadnice jako v MicroStationu (−Y, −X)."""
+    import io
+
+    import ezdxf
+
+    from .cad import teren_cad as TC
+    from .geodezie import teren as T
+    h = json.loads(hodnoty_json or "{}")
+    s = _seznam(body_json)
+    cisla = set((h.get("body") or "").split())
+    body = [(-b.y, -b.x, b.z) for b in s.body if b.z is not None and (not cisla or b.cislo in cisla)]
+
+    def cislo(k, vych):
+        t = str(h.get(k) or "").strip().replace(",", ".")
+        return float(t) if t else vych
+    try:
+        m = T.model(body, cislo("interval", 1.0), max_strana=cislo("ms", None) or None, vyhladit=2)
+    except ValueError as e:
+        return json.dumps({"chyba": str(e)}, ensure_ascii=False)
+    doc = ezdxf.new("R2000")
+    TC.kresli(doc, doc.modelspace(), None, m, popis=True, vyska_textu=0.75)
+    out = io.StringIO()
+    doc.write(out)
+    return json.dumps({"dxf": out.getvalue(), "souhrn": TC.souhrn(m)}, ensure_ascii=False)

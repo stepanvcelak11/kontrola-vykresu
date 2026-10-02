@@ -142,7 +142,7 @@ const SKUPINY = [
   ["Body", ["Směrník a délka", "Rajón (polární bod)", "Protínání vpřed z úhlů", "Protínání z délek", "Protínání zpět", "Volné stanovisko",
     "Průsečíky", "Staničení a kolmice", "Bod ze staničení a kolmice", "Ortogonální metoda", "Polygonový pořad", "Vytyčovací prvky", "Kružnicový oblouk"]],
   ["Plochy", ["Výměra a obvod", "Výměry parcel dávkou", "Oddělení parcely"]],
-  ["Výšky", ["Trigonometrická výška", "Nivelační pořad", "Vyrovnání nivelační sítě"]],
+  ["Výšky a terén", ["Trigonometrická výška", "Nivelační pořad", "Vyrovnání nivelační sítě", "Model terénu a kubatura"]],
   ["Kontroly", ["Kontrola dvou určení", "Kontrolní oměrné míry"]],
   ["Transformace", ["Transformace", "Převod S-JTSK ↔ WGS84"]],
 ];
@@ -214,7 +214,16 @@ function vyberUlohu(u) {
     f.appendChild(l);
   }
   $("u_spocti").disabled = !stav.pripraveno;
+  $("u_dxf").classList.toggle("skryte", u.nazev !== "Model terénu a kubatura");
 }
+
+$("u_dxf").addEventListener("click", async () => {
+  ulozHodnoty();
+  const r = JSON.parse(await volej("vrstevnice_dxf", [JSON.stringify(vyp.body), JSON.stringify(vyp.hodnoty[vyp.aktivni.nazev])]));
+  if (r.chyba) { $("u_chyba").textContent = "⚠ " + r.chyba; $("u_chyba").classList.remove("skryte"); return; }
+  stahni(r.dxf, "vrstevnice.dxf");
+  ukazStav(r.souhrn, false); setTimeout(skryjStav, 7000);
+});
 
 function ulozHodnoty() {
   const u = vyp.aktivni;

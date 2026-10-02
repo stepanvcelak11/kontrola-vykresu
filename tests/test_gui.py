@@ -2633,3 +2633,29 @@ def test_qtrig_zakazky_ze_zalohy_uctu(window, tmp_path, monkeypatch):
         d.close()
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_vrstevnice_ze_seznamu(window):
+    from kontrola.geodezie.body import Bod
+    c, p = window.cad, window.vypocty
+    puvodni = list(p.seznam.body)
+    p.seznam.body[:] = [Bod(f"{i}-{j}", 1000 + i * 10.0, 2000 + j * 10.0, 250 + 0.4 * i * 10 + 0.1 * j * 10)
+                        for i in range(8) for j in range(8)]
+    try:
+        window.show_page("cad")
+        c.novy()
+        c.proved("tin")
+        for t in ("1", "5", "0", "vt", "0.75"):
+            c.zadej(t)
+        msp = c.prostor
+        zakl = msp.query('LWPOLYLINE[layer=="VRSTEVNICE_ZAKLADNI"]')
+        zes = msp.query('LWPOLYLINE[layer=="VRSTEVNICE_ZESILENE"]')
+        assert len(zakl) > 20 and len(zes) >= 6 and len(msp.query("3DFACE")) == 98
+        assert all(abs(e.dxf.elevation - round(e.dxf.elevation)) < 1e-9 for e in zakl)
+        assert len(msp.query('TEXT[layer=="VRSTEVNICE_POPIS"]')) >= 1
+        x, y = zakl[0].get_points("xy")[0]
+        assert -1080 <= x <= -1000 and -2080 <= y <= -2000  # S-JTSK jako v MicroStationu (−Y, −X)
+        c.proved("zpět")  # vše jedna operace
+        assert not len(msp.query("LWPOLYLINE")) and not len(msp.query("3DFACE"))
+    finally:
+        p.seznam.body[:] = puvodni

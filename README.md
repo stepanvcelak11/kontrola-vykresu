@@ -49,7 +49,7 @@ s pravidly ze Zadání 1, vlastní Směrnicí (xls, xlsx, csv, ods, doc, docx, Y
 v prohlížeči (Python přes Pyodide), soubory se nikam neodesílají. Stránka **Výpočty** má seznam souřadnic (načtení,
 ruční přidání, uložení do TXT/CSV, náčrt bodů), polární metodu dávkou ze zápisníku (.zap, GSI) s protokolem jako
 v Gromě a všechny geodetické úlohy z desktopu (rajón, protínání, volné stanovisko, transformace, výměry, oddělení,
-nivelace, polygonový pořad, S-JTSK ↔ WGS84…). Kreslení (CAD) je zatím jen v desktopové verzi. Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
+nivelace, polygonový pořad, S-JTSK ↔ WGS84, model terénu s kubaturou a stažením vrstevnic do DXF…). Kreslení (CAD) je zatím jen v desktopové verzi. Web se sestaví a otestuje v prohlížeči při každé změně (GitHub Actions, workflow „Webová verze“).
 
 ### Bez .exe – když Windows program zablokuje (Inteligentní řízení aplikací)
 
@@ -374,6 +374,10 @@ obě zdarma pro vlastní použití.
 * **Transformace výkresu** (`transformace`, `transformuj`) podle identických bodů: bod ve výkresu → cílové souřadnice
   (Y X, `#číslo` bodu ze seznamu nebo klik); shodnostní, podobnostní (Helmert) nebo afinní, výpis oprav
   v mm, m0, měřítka a otočení, pak transformace výběru nebo celého výkresu (jedno *Zpět*).
+* **Vrstevnice a TIN** (`vrstevnice`, `tin`, `dtm`) z vybraných výškových bodů nebo ze seznamu souřadnic: interval,
+  zesílená každá n-tá, max. délka strany trojúhelníku (automaticky navržená), vyhlazení, popis zesílených
+  vrstevnic s přerušením čáry, volitelně TIN jako 3D plošky; hladiny a vzhled podle zadání (je-li v něm druh
+  „vrstevnice“), jinak VRSTEVNICE_ZAKLADNI / _ZESILENE / _POPIS. Vše jedno *Zpět*.
 * **Převod atributů** (`převod`) – úloha „převod“ (mapa plynovodu → spojové vedení, 1:1000 → 1:500):
   buňky a čáry s vlastním stylem se přiřadí k druhu prvku cílových pravidel podle značky (4.110, 2.093),
   ostatní prvky se přiřadí po skupinách (stejná vrstva, druh a styl) – stačí napsat kód nebo začátek názvu.

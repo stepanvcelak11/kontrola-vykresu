@@ -45,3 +45,14 @@ def test_polarni_metoda_ze_zapisniku():
     assert "chyba" not in r, r
     assert len(r["nove"]) > 5 and "POLÁRNÍ" in r["protokol"].upper()
     assert json.loads(W.polarni(str(P / "zap_husovice.zap"), "[]"))["chyba"]
+
+
+def test_vrstevnice_dxf(tmp_path):
+    import ezdxf
+    body = [{"c": f"{i}{j}", "y": 1000 + i * 10.0, "x": 2000 + j * 10.0, "z": 250 + i * 2.0} for i in range(5) for j in range(5)]
+    r = json.loads(W.vrstevnice_dxf(json.dumps(body), json.dumps({"interval": "1"})))
+    f = tmp_path / "v.dxf"
+    f.write_text(r["dxf"], encoding="utf-8")
+    d = ezdxf.readfile(f)
+    assert len(d.modelspace().query('LWPOLYLINE[layer=="VRSTEVNICE_ZAKLADNI"]')) >= 6 and "TIN" in r["souhrn"]
+    assert "chyba" in json.loads(W.vrstevnice_dxf("[]", "{}"))

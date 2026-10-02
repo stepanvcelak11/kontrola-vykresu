@@ -38,6 +38,12 @@ await p.waitForFunction(() => !document.getElementById("u_pridat").disabled, nul
 await p.click("#u_pridat");
 const bodu = await p.locator("#t_body tbody tr").count();
 console.log("Výpočty: bodů v seznamu po polární metodě", bodu);
+await p.click("#v_ulohy button:has-text('Model terénu')");
+await p.fill("#u_form [name=interval]", "0.5");
+await p.click("#u_spocti");
+await p.waitForFunction(() => document.getElementById("u_protokol").textContent.includes("trojúhelníků TIN"), null, { timeout: 60000 });
+const [dl] = await Promise.all([p.waitForEvent("download"), p.click("#u_dxf")]);
+console.log("DXF:", dl.suggestedFilename());
 await p.screenshot({ path: "web-snimek-vypocty.png" });
 await b.close();
 if (bodu < 50) { console.error("Výpočty ve webové verzi nefungují."); process.exit(1); }

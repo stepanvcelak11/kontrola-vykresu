@@ -19,13 +19,13 @@ SKUPINY = [
                 "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "uprav text", "smaž"]),
     ("Výběr", ["vše", "ohrada", "podobné", "vyber", "skupina"]),
     ("Měření", ["vzdálenost", "délka", "výměra", "info"]),
-    ("Geodézie", ["body", "síť", "transformace", "oměrné míry", "převod atributů"]),
+    ("Geodézie", ["body", "vrstevnice", "síť", "transformace", "oměrné míry", "převod atributů"]),
     ("Zobrazení", ["celý", "přiblížit", "předchozí pohled", "vrstvy"]),
 ]
 NAZVY = {"vlož": "Vložit buňku", "body": "Body ze seznamu", "vrstvy": "Správce hladin", "celý": "Celý výkres",
          "info": "Informace o prvku", "vše": "Vybrat vše", "vyber": "Výběr podle atributů",
          "podobné": "Vybrat podobné", "ohrada": "Výběr ohradou", "skupina": "Skupina prvků",
-         "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť"}
+         "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť", "vrstevnice": "Vrstevnice a TIN"}
 
 
 class PaletaNastroju(QScrollArea):

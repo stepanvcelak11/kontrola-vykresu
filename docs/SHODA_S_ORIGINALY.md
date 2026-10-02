@@ -99,7 +99,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
      (složka wkokes) – uživatel zatím nemá.
 4. **Předmět „Zpracování tachymetrického zaměření lokality“** (uživatel další materiály nemá – pracovat na tom,
    když nezadá jinou práci; pořadí podle užitku):
-   - 3D výkresy: TIN (trojúhelníková síť) a vrstevnice z bodů, 3D body/čáry do DXF, podélný profil;
+   - 3D výkresy: ✅ TIN a vrstevnice z bodů (CAD příkaz „vrstevnice“, úloha „Model terénu a kubatura“, web: DXF s vrstevnicemi); zbývá podélný profil a 3D body/čáry;
    - transformace rastrů: transformace podle více identických bodů s opravami a m0, uložení world filu;
    - kódování prvků účelové mapy: kódovník jako tabulka (kód → vrstva, buňka, barva, spojování);
    - mračna bodů: načtení XYZ/LAS/PLY, prořídnutí, terén, vrstevnice a profil;

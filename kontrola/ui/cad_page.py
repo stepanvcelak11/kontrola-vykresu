@@ -346,6 +346,7 @@ class CadPage(QWidget):
         "převod atributů": "převod výkresu na pravidla ze zadání podle značek (buňky, styly čar) a vrstev",
         "převezmi atributy": "aktivní atributy podle prvku (Match)", "změň atributy": "aktivní atributy na prvky",
         "knihovna buněk": "načíst buňky z knihovny MicroStationu (.CEL) nebo bloky a styly z jiného DXF",
+        "vrstevnice": "model terénu: TIN a vrstevnice z výškových bodů (výběr nebo seznam souřadnic)",
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
@@ -396,6 +397,7 @@ class CadPage(QWidget):
         "fence": "ohrada", "oh": "ohrada", "omerne miry": "oměrné míry", "om": "oměrné míry",
         "popis delek": "oměrné míry", "kota uhlu": "kóta úhlu", "dimang": "kóta úhlu", "ku": "kóta úhlu",
         "kota polomeru": "kóta poloměru", "dimrad": "kóta poloměru", "kp": "kóta poloměru", "mp": "měř plochu", "plocha bodů": "měř plochu",
+        "tin": "vrstevnice", "dtm": "vrstevnice", "contour": "vrstevnice", "contours": "vrstevnice",
         "mer plochu": "měř plochu", "measure area": "měř plochu", "mu": "měř úhel", "mer uhel": "měř úhel",
         "uhel": "měř úhel", "úhel": "měř úhel", "pr": "vlastnosti", "props": "vlastnosti",
         "podobne": "podobné", "similar": "podobné", "find": "najdi", "nahrad": "nahraď", "replace": "nahraď", "plot": "tisk", "print": "tisk",
@@ -3006,6 +3008,47 @@ class CadPage(QWidget):
         po_smeru = ((u1 - u2) % math.tau) / GON
         vnitrni = min(po_smeru, 400 - po_smeru)
         self.vypis(f"Úhel {po_smeru:.4f} g po směru hodin ({po_smeru * 0.9:.4f}°), vnitřní {vnitrni:.4f} g")
+
+    # ------------------------------------------------------------ model terénu
+    def n_vrstevnice(self):
+        """TIN a vrstevnice (jako „Vrstevnice“ v Atlasu / GEOPAK Site): z vybraných výškových bodů (body, buňky,
+        3D čáry) nebo ze seznamu souřadnic ve Výpočtech."""
+        from ..cad import teren_cad as TC
+        from ..geodezie import teren as T
+        body = TC.body_z_entit(self.vyber) if self.vyber else []
+        zdroj = "výběru"
+        if not body or all(abs(b[2]) < 1e-9 for b in body):
+            v = getattr(self.win, "vypocty", None)
+            sez = [b for b in (v.seznam.body if v is not None else []) if b.z is not None]
+            if not sez:
+                raise ValueError("Vyberte výškové body (body nebo buňky se souřadnicí Z), nebo načtěte seznam "
+                                 "souřadnic s výškami ve Výpočtech.")
+            body = [(-b.y, -b.x, b.z) for b in sez]  # S-JTSK jako v MicroStationu
+            zdroj = "seznamu souřadnic"
+        auto = TC.automaticka_max_strana(body)
+        interval = yield Pozadavek("cislo", "Vrstevnice – interval [1 m]:", vychozi=1.0)
+        if not interval or interval <= 0:
+            raise ValueError("Interval musí být kladný.")
+        zes = yield Pozadavek("cislo", "Zesílená každá [5.]:", vychozi=5)
+        ms = yield Pozadavek("cislo", f"Max. délka strany trojúhelníku [{auto:.0f} m, 0 = bez omezení]:"
+                             if auto else "Max. délka strany trojúhelníku [0 = bez omezení]:", vychozi=round(auto or 0))
+        t = yield Pozadavek("text", "Vyhladit vrstevnice a kreslit TIN? (v = vyhladit, t = TIN, vt = obojí) [v]:",
+                            vychozi="v")
+        t = (t or "").strip().lower()
+        vp = yield Pozadavek("cislo", "Výška popisu zesílených vrstevnic [0.75 m] (0 = bez popisu):", vychozi=0.75)
+        m = T.model(body, float(interval), max_strana=float(ms) or None, zesilena_kazda=int(zes or 0),
+                    vyhladit=2 if "v" in t else 0)
+        vrstvy, atributy = {}, {}
+        for druh, klic in (("zesilena", "zesílen"), ("zakladni", "vrstevnic")):  # podle zadání, je-li v něm
+            p = next((q for q in self._predvolby if klic in (q.nazev or "").lower()
+                      and (druh == "zesilena" or "zesílen" not in (q.nazev or "").lower())), None)
+            if p is not None:
+                vrstvy[druh] = p.vrstva
+                atributy[druh] = {k: x for k, x in (("color", p.barva), ("lineweight", p.tloustka),
+                                                     ("linetype", p.typ_cary)) if x not in (256, -1, "BYLAYER", None)}
+        nove = TC.kresli(self.dok.doc, self.prostor, self.historie_zmen, m, tin="t" in t, popis=bool(vp),
+                         vyska_textu=float(vp or 0), vrstvy=vrstvy, atributy=atributy)
+        self.vypis(f"Z {zdroj}: " + TC.souhrn(m) + f" Nakresleno {len(nove)} prvků.")
 
     # ------------------------------------------------------------ rozdělení, ohrada, oměrné míry, kóty
     def n_rozdel(self):

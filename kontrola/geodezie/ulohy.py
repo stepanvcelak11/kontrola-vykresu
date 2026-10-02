@@ -273,6 +273,45 @@ def u_vymera(s, h):
     return Vysledek(prot)
 
 
+def _cislo_nepovinne(h: dict, key: str, nazev: str, vychozi: float | None) -> float | None:
+    return _cislo(h, key, nazev) if (h.get(key) or "").strip() else vychozi
+
+
+def u_teren(s, h):
+    from . import teren as T
+    text = (h.get("body") or "").strip()
+    body = _radky_bodu(s, text) if text else [b for b in s.body if b.z is not None]
+    bez = [b.cislo for b in body if b.z is None]
+    body = [b for b in body if b.z is not None]
+    if len(body) < 3:
+        raise ChybaVstupu("Model terénu potřebuje aspoň tři body s výškou.")
+    interval = _cislo_nepovinne(h, "interval", "interval vrstevnic", 1.0)
+    if interval <= 0:
+        raise ChybaVstupu("Interval vrstevnic musí být kladný.")
+    ms = _cislo_nepovinne(h, "ms", "max. délka strany", None)
+    try:
+        m = T.model([(b.y, b.x, b.z) for b in body], interval, max_strana=ms or None)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    zmin, zmax = m.tin.rozsah_z()
+    prot = _hlavicka("Model terénu a kubatura")
+    prot += [f"bodů s výškou: {len(m.tin.body)}" + (f", bez výšky vynecháno: {', '.join(bez[:10])}" if bez else "")
+             + (f", duplicitní polohy: {m.tin.vynechane}" if m.tin.vynechane else ""),
+             f"trojúhelníků TIN: {len(m.tin.trojuhelniky)}" + (f" (max. strana {_f(ms, 1)} m)" if ms else ""),
+             f"plocha modelu (průmět): {_f(m.tin.plocha(), 2)} m²",
+             f"výšky: min {_f(zmin)}  max {_f(zmax)}  rozdíl {_f(zmax - zmin)} m",
+             f"vrstevnice po {interval:g} m: {len(m.vrstevnice)} čar ({len({v.z for v in m.vrstevnice})} výškových úrovní)"]
+    zref = _cislo_nepovinne(h, "zref", "srovnávací výška", None)
+    if zref is not None:
+        nad, pod = T.kubatura(m.tin, zref)
+        prot += ["", f"Kubatura vůči rovině H = {_f(zref)} m:",
+                 f"  nad rovinou (výkop)  V = {_f(nad, 2)} m³",
+                 f"  pod rovinou (násyp)  V = {_f(pod, 2)} m³",
+                 f"  rozdíl (výkop − násyp) = {_f(nad - pod, 2)} m³"]
+    prot.append("Vrstevnice do výkresu: v CAD příkaz „vrstevnice“.")
+    return Vysledek(prot)
+
+
 def u_vymery_davkou(s, h):
     radky = [r for r in (h.get("parcely") or "").splitlines() if r.strip()]
     if not radky:
@@ -794,6 +833,13 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("body", "Body parcely po obvodu (čísla)", "radky"), Pole("a", "Bod A (hranice / dělicí čára)"),
       Pole("b", "Hranice – bod B (jen rovnoběžně)"), Pole("vymera", "Oddělit výměru [m²]", "m"),
       Pole("predpona", "Předpona nových bodů", "text", "D")], u_oddeleni),
+    ("Model terénu a kubatura", "TIN z bodů s výškou, výškový rozsah, vrstevnice a objem nad / pod srovnávací "
+     "rovinou (výkop, násyp).",
+     [Pole("body", "Body (čísla, prázdné = všechny s výškou)", "radky"),
+      Pole("interval", "Interval vrstevnic [m]", "m", "1"),
+      Pole("ms", "Max. délka strany trojúhelníku [m] (nepovinné)", "m",
+           napoveda="odřízne dlouhé trojúhelníky na okraji a v zálivech"),
+      Pole("zref", "Srovnávací výška pro kubaturu [m] (nepovinné)", "m")], u_teren),
     ("Převod S-JTSK ↔ WGS84", "Zeměpisné souřadnice bodů (s odkazem na mapy.cz) a opačně, přesnost ≈ 1 m.",
      [Pole("smer", "Směr", "volba", "S-JTSK → WGS84", ("S-JTSK → WGS84", "WGS84 → S-JTSK")),
       Pole("body", "Body (čísla) pro S-JTSK → WGS84", "radky"),
