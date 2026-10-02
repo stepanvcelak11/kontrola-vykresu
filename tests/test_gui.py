@@ -2276,3 +2276,19 @@ def test_cad_vyber_podle_atributu(window):
         c.zadej(t)
     c.proved("vyber hladina 58; typ úsečka")
     assert len(c.vyber) == 1 and c.vyber[0].dxf.layer == "58"
+
+
+def test_cad_uprav_text(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("t", "x=0 y=0", "1", "0", "4001", ""):
+        c.zadej(t)
+    txt = c.prostor.query("TEXT").first
+    c.proved("et")
+    c._posli((txt, (0, 0)))
+    c.zadej("4002")
+    c.zrus()
+    assert [t.dxf.text for t in c.prostor.query("TEXT")] == ["4002"]
+    c.undo()
+    assert [t.dxf.text for t in c.prostor.query("TEXT")] == ["4001"]

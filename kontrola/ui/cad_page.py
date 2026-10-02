@@ -247,6 +247,7 @@ class CadPage(QWidget):
     PRIKAZY = {
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
+        "uprav text": "upravit text kliknutím (Edit Text)",
         "vyber": "výběr podle atributů („vyber 58“, „vyber barva 3“, „vyber typ text; hladina 59“)",
         "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
         "předchozí pohled": "vrátit předchozí pohled (View Previous)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
@@ -280,6 +281,7 @@ class CadPage(QWidget):
     ALIASY = {
         "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
         "pasteclip": "vlož ze schránky", "vloz ze schranky": "vlož ze schránky", "paste": "vlož ze schránky",
+        "et": "uprav text", "edit text": "uprav text", "edittext": "uprav text", "upravit text": "uprav text",
         "sel": "vyber", "select": "vyber", "výběr": "vyber", "vyber podle": "vyber", "sba": "vyber",
         "zw": "přiblížit", "okno pohledu": "přiblížit", "window area": "přiblížit", "priblizit": "přiblížit",
         "wa": "přiblížit", "vp": "předchozí pohled", "view previous": "předchozí pohled",
@@ -1895,6 +1897,17 @@ class CadPage(QWidget):
         self.vypis(f"Vloženo {len(nove)} prvků ze schránky (vybrané – jde je hned posunout).")
         return
         yield  # generátor
+
+    def n_uprav_text(self):
+        while True:
+            e, _k = yield Pozadavek("prvek", "Upravit text – klikněte na text (Esc = konec):")
+            if e.dxftype() not in ("TEXT", "MTEXT"):
+                self.vypis("⚠ To není text.")
+                continue
+            stary = e.plain_text() if e.dxftype() == "MTEXT" else e.dxf.text
+            novy = yield Pozadavek("text", f"Nový text [{stary}]:", vychozi=stary)
+            if novy and novy != stary:
+                U.nastav_vlastnosti(self.prostor, self.historie_zmen, e, {"text": novy})
 
     def n_priblizit(self):
         a = yield self._bod_req("Přiblížit oknem – první roh:")
