@@ -2659,3 +2659,33 @@ def test_cad_vrstevnice_ze_seznamu(window):
         assert not len(msp.query("LWPOLYLINE")) and not len(msp.query("3DFACE"))
     finally:
         p.seznam.body[:] = puvodni
+
+
+def test_cad_podelny_profil(window):
+    from kontrola.geodezie.body import Bod
+    c, p = window.cad, window.vypocty
+    puvodni = list(p.seznam.body)
+    # rovina z = 250 + 0.1·Y (S-JTSK); ve výkresu je x = −Y
+    p.seznam.body[:] = [Bod(f"{i}-{j}", 1000 + i * 10.0, 2000 + j * 10.0, 250 + 0.1 * (1000 + i * 10.0) - 100)
+                        for i in range(6) for j in range(6)]
+    try:
+        window.show_page("cad")
+        c.novy()
+        for t in ("u", "x=-1005 y=-2025", "x=-1045 y=-2025", ""):
+            c.zadej(t)
+        trasa = c.prostor.query("LINE").first
+        c.proved("profil")
+        c._posli((trasa, (-1020, -2025)))
+        for t in ("10", "10", "x=0 y=0"):
+            c.zadej(t)
+        prof = c.prostor.query('LWPOLYLINE[layer=="PROFIL"]')
+        assert len(prof) == 1
+        pts = prof.first.get_points("xy")
+        assert abs(pts[0][0]) < 1e-9 and abs(pts[-1][0] - 40.0) < 1e-9
+        assert abs((pts[-1][1] - pts[0][1]) - 40.0) < 1e-6  # stoupání 4 m × převýšení 10
+        texty = [t.dxf.text for t in c.prostor.query('TEXT[layer=="PROFIL"]')]
+        assert "0,040.00" in texty and any(t.startswith("S.R.") for t in texty)
+        c.proved("zpět")
+        assert not len(c.prostor.query('LWPOLYLINE[layer=="PROFIL"]'))
+    finally:
+        p.seznam.body[:] = puvodni

@@ -378,6 +378,8 @@ obě zdarma pro vlastní použití.
   zesílená každá n-tá, max. délka strany trojúhelníku (automaticky navržená), vyhlazení, popis zesílených
   vrstevnic s přerušením čáry, volitelně TIN jako 3D plošky; hladiny a vzhled podle zadání (je-li v něm druh
   „vrstevnice“), jinak VRSTEVNICE_ZAKLADNI / _ZESILENE / _POPIS. Vše jedno *Zpět*.
+* **Podélný profil** (`profil`) po trase (úsečka / lomená čára) z modelu terénu: lomové body na všech stranách
+  trojúhelníků, srovnávací rovina, staničení (km,m) a výšky po zvoleném kroku, převýšení (např. 10×).
 * **Převod atributů** (`převod`) – úloha „převod“ (mapa plynovodu → spojové vedení, 1:1000 → 1:500):
   buňky a čáry s vlastním stylem se přiřadí k druhu prvku cílových pravidel podle značky (4.110, 2.093),
   ostatní prvky se přiřadí po skupinách (stejná vrstva, druh a styl) – stačí napsat kód nebo začátek názvu.

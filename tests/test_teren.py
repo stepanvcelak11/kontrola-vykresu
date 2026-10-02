@@ -63,3 +63,13 @@ def test_uloha_model_terenu():
     assert "trojúhelníků TIN: 50" in t and "11250.00 m³" in t and "5000.00 m³" in t
     with pytest.raises(ChybaVstupu):
         fn(s, {"body": "bez 00"})
+
+
+def test_podelny_profil():
+    t = T.tin(_rovina())
+    p = T.profil(t, [(0.0, 5.0), (50.0, 5.0), (50.0, 60.0)], krok=10)
+    assert p[0] == (0.0, 100.0) and abs(p[-1][0] - 105.0) < 1e-9 and p[-1][1] is None  # konec mimo model
+    for s, z in p:
+        if s <= 50:
+            assert abs(z - (100 + 0.5 * s)) < 1e-9
+    assert any(abs(s - 5.0) < 1e-9 for s, _z in p)  # průsečík se stranou trojúhelníku (úhlopříčka)

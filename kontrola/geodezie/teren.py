@@ -251,3 +251,44 @@ def _objem_hranolu(a, b, c, z0):
     v_mala = _plocha2(p0, rezy[0], rezy[1]) * h0 / 3.0  # se znaménkem
     v_zbytek = s * sum(hs) / 3.0 - v_mala  # se znaménkem druhých dvou vrcholů
     return (v_mala, -v_zbytek) if h0 > 0 else (v_zbytek, -v_mala)
+
+
+def profil(t: Tin, trasa: list[tuple[float, float]], krok: float = 5.0) -> list[tuple[float, float | None]]:
+    """Podélný profil po trase (lomená čára): [(staničení, výška | None mimo model)] v bodech po ``krok``
+    metrech, ve vrcholech trasy a na všech průsečících se stranami trojúhelníků (přesný lom terénu)."""
+    if len(trasa) < 2:
+        raise ValueError("Trasa profilu potřebuje aspoň dva body.")
+    if krok <= 0:
+        raise ValueError("Krok profilu musí být kladný.")
+    hrany = set()
+    for a, b, c in t.trojuhelniky:
+        for i, j in ((a, b), (b, c), (c, a)):
+            hrany.add((min(i, j), max(i, j)))
+    stanice = []
+    s0 = 0.0
+    for (x0, y0), (x1, y1) in zip(trasa, trasa[1:]):
+        d = math.hypot(x1 - x0, y1 - y0)
+        if d < 1e-9:
+            continue
+        ts = {0.0, 1.0}
+        n = int(d // krok)
+        ts.update((k * krok) / d for k in range(1, n + 1) if k * krok < d)
+        for i, j in hrany:  # průsečíky úseku trasy se stranami TIN
+            p, q = t.body[i], t.body[j]
+            den = (x1 - x0) * (q[1] - p[1]) - (y1 - y0) * (q[0] - p[0])
+            if abs(den) < 1e-12:
+                continue
+            u = ((p[0] - x0) * (q[1] - p[1]) - (p[1] - y0) * (q[0] - p[0])) / den
+            v = ((p[0] - x0) * (y1 - y0) - (p[1] - y0) * (x1 - x0)) / den
+            if 0 <= u <= 1 and 0 <= v <= 1:
+                ts.add(u)
+        for u in sorted(ts):
+            stanice.append((s0 + u * d, x0 + u * (x1 - x0), y0 + u * (y1 - y0)))
+        s0 += d
+    out, posl = [], None
+    for s, x, y in stanice:
+        if posl is not None and abs(s - posl) < 1e-6:
+            continue
+        posl = s
+        out.append((s, t.vyska_v(x, y)))
+    return out

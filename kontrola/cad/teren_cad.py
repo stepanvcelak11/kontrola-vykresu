@@ -125,3 +125,74 @@ def souhrn(model: T.ModelTerenu) -> str:
             f"{model.tin.plocha():.0f} m², výšky {zmin:.2f}–{zmax:.2f} m"
             + (f", vynecháno {model.tin.vynechane} bodů (bez výšky / duplicitní)" if model.tin.vynechane else "")
             + f". Vrstevnice po {model.interval:g} m: {len(model.vrstevnice)} čar, z toho {zes} zesílených.")
+
+
+def kresli_profil(doc, msp, h, prof: list, pocatek, *, prevyseni: float = 10.0, srovnavaci: float | None = None,
+                  krok_popisu: float = 10.0, vyska_textu: float = 1.5, vrstva: str = "PROFIL") -> list:
+    """Podélný profil jako výkres: profil terénu, srovnávací rovina, staničení a výšky po ``krok_popisu``
+    (a na konci), výšky převýšené ``prevyseni``×. Vrací nové prvky (jedna operace)."""
+    from ezdxf.enums import TextEntityAlignment
+    zs = [z for _s, z in prof if z is not None]
+    if len(zs) < 2:
+        raise ValueError("Trasa profilu neprochází modelem terénu.")
+    if srovnavaci is None:
+        srovnavaci = math.floor(min(zs)) - 1.0
+    x0, y0 = pocatek
+    delka = prof[-1][0]
+    a = {"layer": _vrstva(doc, vrstva), "color": 7}
+    nove = []
+
+    def bod(s, z):
+        return (x0 + s, y0 + (z - srovnavaci) * prevyseni)
+
+    usek = []
+    for s, z in prof + [(None, None)]:
+        if z is None:
+            if len(usek) >= 2:
+                nove.append(msp.add_lwpolyline(usek, dxfattribs=dict(a, color=32, lineweight=35)))
+            usek = []
+        else:
+            usek.append(bod(s, z))
+    nove.append(msp.add_line((x0, y0), (x0 + delka, y0), dxfattribs=a))
+    t = msp.add_text(f"S.R. {srovnavaci:.2f}", height=vyska_textu, dxfattribs=a)
+    t.set_placement((x0 - vyska_textu, y0), align=TextEntityAlignment.MIDDLE_RIGHT)
+    nove.append(t)
+    popisy = []
+    s = 0.0
+    while s < delka - 1e-6:
+        popisy.append(s)
+        s += krok_popisu
+    popisy.append(delka)
+    for s in popisy:
+        z = _vyska_na(prof, s)
+        if z is None:
+            continue
+        x, y = bod(s, z)
+        nove.append(msp.add_line((x, y0), (x, y), dxfattribs=dict(a, color=8)))
+        ts = msp.add_text(_staniceni(s), height=vyska_textu, rotation=90, dxfattribs=a)
+        ts.set_placement((x, y0 - 0.5 * vyska_textu), align=TextEntityAlignment.MIDDLE_RIGHT)
+        tz = msp.add_text(f"{z:.2f}", height=vyska_textu, rotation=90, dxfattribs=a)
+        tz.set_placement((x - 0.3 * vyska_textu, y0 + 0.5 * vyska_textu), align=TextEntityAlignment.BOTTOM_LEFT)
+        nove += [ts, tz]
+    pop = msp.add_text(f"Podélný profil – převýšení {prevyseni:g}×, délka {delka:.2f} m", height=1.5 * vyska_textu,
+                       dxfattribs=a)
+    pop.set_placement((x0, y0 + (max(zs) - srovnavaci) * prevyseni + 3 * vyska_textu))
+    nove.append(pop)
+    if h is not None:
+        h.proved("Podélný profil", nove)
+    return nove
+
+
+def _staniceni(s: float) -> str:
+    """Staničení jako v trasování: km,metry („0,025.00“)."""
+    km, m = divmod(s, 1000.0)
+    return f"{int(km)},{m:06.2f}"
+
+
+def _vyska_na(prof, s):
+    for (s0, z0), (s1, z1) in zip(prof, prof[1:]):
+        if s0 - 1e-9 <= s <= s1 + 1e-9:
+            if z0 is None or z1 is None:
+                return z0 if abs(s - s0) < 1e-9 else (z1 if abs(s - s1) < 1e-9 else None)
+            return z0 if s1 - s0 < 1e-12 else z0 + (z1 - z0) * (s - s0) / (s1 - s0)
+    return prof[-1][1] if prof and abs(s - prof[-1][0]) < 1e-9 else None
