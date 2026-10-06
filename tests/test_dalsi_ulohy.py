@@ -334,3 +334,31 @@ def test_vykaz_vymer_gp():
     assert any("125/4" in r and r.rstrip().endswith("600") for r in v.protokol)
     with pytest.raises(ChybaVstupu):
         u_vykaz_vymer(s, {"dosavadni": "125/3: 1 2", "nove": "x: 1 2 3"})
+
+
+def test_polygonovy_porad_uzavreny_a_volny():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import ULOHY, u_polygon_uzavreny, u_polygon_volny
+    A, O = (1000.0, 2000.0), (1100.0, 2050.0)
+    P = [(1050.0, 2080.0), (1010.0, 2150.0), (950.0, 2120.0), (940.0, 2040.0)]
+    pts = [A] + P + [A]
+    seq = [O] + pts + [O]
+    uhly = [(V.smernik(seq[i], seq[i + 1]) - V.smernik(seq[i], seq[i - 1])) % 400 for i in range(1, len(seq) - 1)]
+    delky = [V.delka(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
+    s = SeznamBodu()
+    s.pridej([Bod("O", *O), Bod("A", *A)])
+    jm = ["A", "1", "2", "3", "4", "A"]
+    r = u_polygon_uzavreny(s, {"ao": "O", "a": "A",
+                               "uhly": "\n".join(f"{c} {u + 0.0005!r}" for c, u in zip(jm, uhly)),  # +5 cc
+                               "delky": "\n".join(f"{c} {d!r}" for c, d in zip(jm, delky))})
+    assert r.protokol[0] == "POLYGONOVÝ POŘAD UZAVŘENÝ" and "úhlová odchylka 30 cc" in "\n".join(r.protokol)
+    for n, q in zip(r.nove, P):
+        assert abs(n.y - q[0]) < 0.01 and abs(n.x - q[1]) < 0.01
+    # volný pořad: přesná data → přesné body, poslední bod z pole
+    v = u_polygon_volny(s, {"ao": "O", "a": "A", "posledni": "4",
+                            "uhly": "\n".join(f"{c} {u!r}" for c, u in zip(jm[:4], uhly[:4])),
+                            "delky": "\n".join(f"{c} {d!r}" for c, d in zip(jm[:4], delky[:4]))})
+    assert [n.cislo for n in v.nove] == ["1", "2", "3", "4"]
+    for n, q in zip(v.nove, P):
+        assert abs(n.y - q[0]) < 1e-6 and abs(n.x - q[1]) < 1e-6
+    assert {"Polygonový pořad uzavřený", "Polygonový pořad volný"} <= {u[0] for u in ULOHY}

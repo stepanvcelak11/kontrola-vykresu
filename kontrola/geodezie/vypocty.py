@@ -498,6 +498,25 @@ def polygonovy_porad(a, a_orient, b, b_orient, uhly: list[float], delky: list[fl
     return PolygonovyPorad(body, w, ody, odx, math.hypot(ody, odx), L, strany)
 
 
+def polygonovy_porad_volny(a, a_orient, uhly: list[float], delky: list[float], cisla: list[str]) -> list[tuple[str, P]]:
+    """Volný (jednostranně připojený) pořad: bez kontroly a bez vyrovnání – n úhlů (na A, P1…Pn−1),
+    n délek, n nových bodů."""
+    n = len(cisla)
+    if len(uhly) != n or len(delky) != n or n == 0:
+        raise ValueError(f"Volný pořad s {n} novými body potřebuje {n} úhlů a {n} délek.")
+    if any(d <= 0 for d in delky):
+        raise ValueError("Délky stran musí být kladné.")
+    s = smernik(a_orient, a)
+    y, x = _yx(a)
+    body = []
+    for beta, d, c in zip(uhly, delky, cisla):
+        s = norm_gon(s + beta - 200)
+        y += d * math.sin(gon2rad(s))
+        x += d * math.cos(gon2rad(s))
+        body.append((c, P(y, x)))
+    return body
+
+
 # ------------------------------------------------------------------ oddělení parcely
 def oddeleni_rovnobezne(parcela: list, a, b, vymera_cil: float) -> tuple[list[P], float]:
     """Oddělí od parcely (mnohoúhelník) část dané výměry dělicí čarou rovnoběžnou s přímkou A–B.

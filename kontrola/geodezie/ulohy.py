@@ -748,6 +748,37 @@ def u_polygon(s, h):
     return Vysledek(prot, nove)
 
 
+def u_polygon_uzavreny(s, h):
+    """Uzavřený pořad: začíná i končí na bodě A (orientace na stejný bod) – stejný výpočet jako oboustranně
+    připojený pořad s B = A; úhlová i souřadnicová odchylka se rozdělí."""
+    h = dict(h)
+    h["b"], h["bo"] = h.get("a"), h.get("ao")
+    v = u_polygon(s, h)
+    v.protokol[0:2] = _hlavicka("Polygonový pořad uzavřený")[:2]
+    return v
+
+
+def u_polygon_volny(s, h):
+    ao, a = _bod(s, h, "ao", "orientaci na začátku"), _bod(s, h, "a", "počáteční bod")
+    _ruzne(a, ao)
+    uhly = _radky_cisel(h.get("uhly") or "", 2, "bod úhel[gon]")
+    strany = _radky_cisel(h.get("delky") or "", 2, "bod délka[m] (délka strany k dalšímu bodu)")
+    # nové body: P1…Pn−1 jsou stanoviska z řádků úhlů, poslední bod je jen v poli „Číslo posledního bodu“
+    cisla = [u[0] for u in uhly[1:]] + [_nove_cislo(s, h, "posledni")]
+    try:
+        body = V.polygonovy_porad_volny(a, ao, [u[1] for u in uhly], [d[1] for d in strany], cisla)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    prot = _hlavicka("Polygonový pořad volný (jednostranně připojený)")
+    prot += [f"{ao.cislo} → {a.cislo}, nových bodů {len(body)} – bez kontroly, žádná odchylka se nedá zjistit!",
+             "  bod                délka            Y            X"]
+    nove = []
+    for (c, p), d in zip(body, strany):
+        prot.append(f"  {c:<14} {d[1]:>12.3f} {p.y:>12.3f} {p.x:>12.3f}")
+        nove.append(Bod(c, p.y, p.x, poznamka="volný polygonový pořad"))
+    return Vysledek(prot, nove)
+
+
 def u_oddeleni(s, h):
     parc = _radky_bodu(s, h.get("body") or "")
     if len(parc) < 3:
@@ -882,6 +913,16 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – počátek, nové body, konec", "radky",
            napoveda="levé úhly od zadní k přední záměře, po směru hodin"),
       Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky")], u_polygon),
+    ("Polygonový pořad uzavřený", "Pořad začíná i končí na stejném bodě: úhlové a souřadnicové vyrovnání.",
+     [Pole("ao", "Orientace (bod)"), Pole("a", "Počáteční a koncový bod"),
+      Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – A od orientace, nové body, A k orientaci", "radky",
+           napoveda="levé úhly od zadní k přední záměře; poslední úhel na A je od posledního bodu k orientaci"),
+      Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky")], u_polygon_uzavreny),
+    ("Polygonový pořad volný", "Jednostranně připojený pořad – bez kontroly (jen výjimečně, krátký).",
+     [Pole("ao", "Orientace na začátku (bod)"), Pole("a", "Počáteční bod"),
+      Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – na A a na nových bodech kromě posledního", "radky"),
+      Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky"),
+      Pole("posledni", "Číslo posledního (koncového) bodu", "text")], u_polygon_volny),
     ("Vytyčovací prvky", "Úhel od orientace a délka ze stanoviska pro vytyčení bodů.",
      [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("body", "Vytyčované body (čísla)", "radky")],
      u_vytyceni),
