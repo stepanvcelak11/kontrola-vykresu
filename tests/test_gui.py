@@ -2971,3 +2971,17 @@ def test_ulohy_hledani(window):
     assert not p.lst.currentItem().isHidden()
     p.hledat.clear()
     assert all(not p.lst.item(i).isHidden() for i in range(p.lst.count()))
+
+
+def test_ulohy_radky_ze_souboru(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QPlainTextEdit, QPushButton
+    from kontrola.geodezie.ulohy import ULOHY
+    p = window.vypocty.ulohy
+    p.lst.setCurrentRow([u[0] for u in ULOHY].index("Testování přesnosti ÚM – body"))
+    f = tmp_path / "kontrola.txt"
+    f.write_bytes("4001\t600000.02\t1160000.01\t250.00\n".encode("cp1250"))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(f), "")))
+    b = next(x for x in p.formbox.findChildren(QPushButton) if x.text() == "Ze souboru…")
+    b.click()
+    assert isinstance(p.inputs["kontrolni"], QPlainTextEdit)
+    assert p.inputs["kontrolni"].toPlainText().split() == ["4001", "600000.02", "1160000.01", "250.00"]

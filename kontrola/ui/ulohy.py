@@ -102,6 +102,21 @@ class UlohyPanel(QWidget):
         cur = self.lst.currentItem()
         if prvni is not None and (cur is None or cur.isHidden()):
             self.lst.setCurrentRow(prvni)
+
+    def _ze_souboru(self, pole: QPlainTextEdit):
+        """Řádky (kontrolní body, délky, úhly…) z textového souboru, např. seznamu z kontrolního měření."""
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(self, "Řádky ze souboru", "",
+                                              "Text (*.txt *.csv *.prn *.dat);;Vše (*)")
+        if not path:
+            return
+        data = Path(path).read_bytes()
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = data.decode("cp1250", errors="replace")  # Groma, Kokeš
+        pole.setPlainText(text.replace("\t", " "))
+
     def _show(self, i: int):
         while self.form.rowCount():
             self.form.removeRow(0)
@@ -118,6 +133,14 @@ class UlohyPanel(QWidget):
                 w = QPlainTextEdit()
                 w.setFixedHeight(90)
                 w.setPlaceholderText(p.label)
+                obal = QWidget()
+                ol = QHBoxLayout(obal)
+                ol.setContentsMargins(0, 0, 0, 0)
+                ol.addWidget(w, 1)
+                b = QPushButton("Ze souboru…")
+                b.setToolTip("Načíst řádky z textového souboru (mezery i tabulátory, i seznam souřadnic)")
+                b.clicked.connect(lambda _c=False, pole=w: self._ze_souboru(pole))
+                ol.addWidget(b, 0, Qt.AlignTop)
             else:
                 w = QLineEdit(p.vychozi)
                 if p.typ == "bod":
@@ -128,7 +151,7 @@ class UlohyPanel(QWidget):
                     w.setPlaceholderText("číslo bodu ze seznamu")
             if p.napoveda:
                 w.setToolTip(p.napoveda)
-            self.form.addRow(p.label + ":", w)
+            self.form.addRow(p.label + ":", obal if p.typ == "radky" else w)
             self.inputs[p.key] = w
         self.vysledek = None
         self.b_add.setEnabled(False)
