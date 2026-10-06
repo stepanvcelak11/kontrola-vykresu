@@ -631,9 +631,23 @@ def porovnani_seznamu(puvodni: list, nove: list, kod_kvality: int = 3) -> tuple[
     from .body import klic_cisla
     a = {b.cislo: b for b in puvodni}
     b_ = {b.cislo: b for b in nove}
+    pary = {c: c for c in set(a) & set(b_)}
+    # stejný bod s jiným zápisem čísla: celé číslo KN (610844000130001) ↔ zkrácené (1, 13-1, 130001)
+    from ..checks.seznam import short_numbers
+    volne_b: dict[str, list[str]] = {}
+    for c in set(b_) - set(pary.values()):
+        for t in short_numbers(c):
+            volne_b.setdefault(t, []).append(c)
+    pouzite = set(pary.values())
+    for c in sorted(set(a) - set(pary), key=klic_cisla):
+        kand = {k for t in short_numbers(c) for k in volne_b.get(t, []) if k not in pouzite}
+        if len(kand) == 1:
+            k = kand.pop()
+            pary[c] = k
+            pouzite.add(k)
     out = []
-    for c in sorted(set(a) & set(b_), key=klic_cisla):
-        p, q = a[c], b_[c]
+    for c in sorted(pary, key=klic_cisla):
+        p, q = a[c], b_[pary[c]]
         dy, dx = q.y - p.y, q.x - p.x
         dp = math.hypot(dy, dx)
         dz = (q.z - p.z) if (p.z is not None and q.z is not None) else None
@@ -642,9 +656,10 @@ def porovnani_seznamu(puvodni: list, nove: list, kod_kvality: int = 3) -> tuple[
             mez = mezni_polohova_odchylka(int(kk))
         except ValueError:
             mez = None
-        out.append(RozdilBodu(c, dy, dx, dp, dz, mez, None if mez is None else dp <= mez))
-    jen_a = sorted(set(a) - set(b_), key=klic_cisla)
-    jen_b = sorted(set(b_) - set(a), key=klic_cisla)
+        nazev = c if pary[c] == c else f"{c} = {pary[c]}"
+        out.append(RozdilBodu(nazev, dy, dx, dp, dz, mez, None if mez is None else dp <= mez))
+    jen_a = sorted(set(a) - set(pary), key=klic_cisla)
+    jen_b = sorted(set(b_) - pouzite, key=klic_cisla)
     return out, jen_a, jen_b
 
 

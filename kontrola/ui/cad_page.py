@@ -118,18 +118,64 @@ class CadView(QGraphicsView):
         self._posledni_ulozeni = 0.0
         return True
 
+    # posuvníky QGraphicsView jsou celočíselné: souřadnice S-JTSK (~1,2 mil. m) × měřítko musí zůstat pod 2^31
+    MAX_MERITKO = 1000.0  # px na metr výkresu (1 mm ≈ 1 px)
+    MIN_MERITKO = 1e-5
+
+    def _rozsir_scenu(self, r: QRectF | None = None):
+        """Plocha scény = výkres + okolí viditelného pohledu, aby šlo zoomovat a posouvat i k okraji výkresu
+        (Qt jinak pohled „přilepí“ k obrysu prvků a zoom kolečkem nejde ke kurzoru)."""
+        vid = self.mapToScene(self.viewport().rect()).boundingRect()
+        w, h = max(vid.width(), 1e-3), max(vid.height(), 1e-3)
+        cil = vid.adjusted(-2 * w, -2 * h, 2 * w, 2 * h)
+        if r is not None:
+            self._rozsah_vykresu = QRectF(r)
+        sc = self.scene().sceneRect()
+        meritko = abs(self.transform().m11()) or 1.0
+        if r is None and sc.contains(cil) and max(sc.width(), sc.height()) * meritko < 5e7:
+            return
+        vykres = getattr(self, "_rozsah_vykresu", None)
+        if vykres is not None and max(vykres.width(), vykres.height()) * meritko < 5e7:
+            cil = cil.united(vykres)
+        self.setSceneRect(cil)
+
+    def priblizeni(self, f: float, kde=None):
+        """Zoom o faktor ``f``; bod scény pod ``kde`` (poloha ve viewportu) zůstane pod kurzorem."""
+        s = abs(self.transform().m11()) or 1.0
+        f = max(self.MIN_MERITKO / s, min(self.MAX_MERITKO / s, f))
+        if abs(f - 1.0) < 1e-9:
+            return
+        vp = self.viewport().rect()
+        kde = QPointF(vp.center()) if kde is None else QPointF(kde)
+        pred = self.mapToScene(kde.toPoint())
+        stred = self.mapToScene(vp.center())
+        self.setTransformationAnchor(QGraphicsView.NoAnchor)
+        self.setResizeAnchor(QGraphicsView.NoAnchor)
+        self.scale(f, f)
+        # nový střed tak, aby bod „pred“ zůstal na stejném místě obrazovky
+        novy = QPointF(pred.x() + (stred.x() - pred.x()) / f, pred.y() + (stred.y() - pred.y()) / f)
+        self._rozsir_scenu()
+        self.centerOn(novy)
+        self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
+
     def wheelEvent(self, e):  # noqa: N802
         self.zapamatuj_pohled(vynutit=False)
-        f = 1.0015 ** e.angleDelta().y()
-        self.scale(f, f)
+        self.priblizeni(1.0015 ** e.angleDelta().y(), e.position())
 
     def zoom_all(self, rect: QRectF | None = None):
         r = rect or self.scene().itemsBoundingRect()
         if r.isEmpty():
             return
         self.zapamatuj_pohled()
-        self.fitInView(r.adjusted(-r.width() * 0.03, -r.height() * 0.03, r.width() * 0.03, r.height() * 0.03),
-                       Qt.KeepAspectRatio)
+        okraj = r.adjusted(-r.width() * 0.03, -r.height() * 0.03, r.width() * 0.03, r.height() * 0.03)
+        if okraj.width() < 1e-3 and okraj.height() < 1e-3:  # jediný bod: okolí 10 m
+            okraj = okraj.adjusted(-5, -5, 5, 5)
+        self._rozsir_scenu(okraj)
+        self.fitInView(okraj, Qt.KeepAspectRatio)
+        s = abs(self.transform().m11())
+        if s > self.MAX_MERITKO:
+            self.priblizeni(self.MAX_MERITKO / s)
+        self._rozsir_scenu(okraj)
 
     def mousePressEvent(self, e):  # noqa: N802
         self.modifikatory = e.modifiers()
@@ -187,6 +233,7 @@ class CadView(QGraphicsView):
         if self._pan is not None:
             d = e.position() - self._pan
             self._pan = e.position()
+            self._rozsir_scenu()
             self.horizontalScrollBar().setValue(int(self.horizontalScrollBar().value() - d.x()))
             self.verticalScrollBar().setValue(int(self.verticalScrollBar().value() - d.y()))
             return

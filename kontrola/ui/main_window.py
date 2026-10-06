@@ -32,6 +32,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self, project: Project | None = None):
         super().__init__()
+        from .okna import nainstaluj
+        nainstaluj()  # dlouhé popisky v oknech se zalamují
         self.settings = QSettings("KontrolaVykresu", "KontrolaVykresu")
         self.project: Project | None = None
         self.drawing: Drawing | None = None

@@ -2837,3 +2837,40 @@ def test_cad_ovladani_mysi(window):
     v.najed(110, 60)
     QTest.mouseRelease(v.viewport(), Qt.LeftButton, Qt.NoModifier, b)
     assert len(c.vyber) == 2
+
+
+def test_cad_zoom_kolecko_k_bodum_sjtsk(window):
+    """Body v S-JTSK (souřadnice ~ −1,16 mil.): kolečko zoomuje ke kurzoru i těsně k bodu, měřítko nepřeteče."""
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    v = c.view
+    for t in ("u", "x=-596000 y=-1158250", "x=-595950 y=-1158200", ""):
+        c.zadej(t)
+    c.proved("celý")
+    cil = QPointF(-595990, -1158240)
+    for _ in range(40):
+        p = QPointF(v.mapFromScene(cil))
+        v.wheelEvent(QWheelEvent(p, QPointF(v.mapToGlobal(p.toPoint())), QPoint(0, 0), QPoint(0, 240), Qt.NoButton,
+                                 Qt.NoModifier, Qt.NoScrollPhase, False))
+    assert abs(v.transform().m11()) == pytest.approx(v.MAX_MERITKO)
+    vid = v.mapToScene(v.viewport().rect()).boundingRect()
+    assert vid.contains(cil) and vid.width() < 5
+    v.predchozi_pohled()
+    c.proved("celý")
+    assert v.mapToScene(v.viewport().rect()).boundingRect().width() > 40
+
+
+def test_dialogy_dlouhe_popisky_se_zalamuji(window):
+    """Okno Body ze seznamu není kvůli jednomu dlouhému popisku zbytečně široké."""
+    from kontrola.ui.cad_body import BodyDialog
+    window.show_page("cad")
+    window.cad.novy()
+    from PySide6.QtWidgets import QApplication
+    d = BodyDialog(window.cad)
+    d.show()
+    QApplication.processEvents()
+    assert d.width() < 700
+    d.close()

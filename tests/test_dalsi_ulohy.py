@@ -242,6 +242,17 @@ def test_porovnani_seznamu():
     assert jen_a == ["5"] and jen_b == ["7"]
 
 
+def test_porovnani_seznamu_cela_a_zkracena_cisla():
+    """Seznam učitele s celými čísly KN (610844000130001) ↔ seznam studenta se zkrácenými (1, 2)."""
+    from kontrola.geodezie.body import Bod
+    a = [Bod("610844000130001", 100, 200, 10.0), Bod("610844000130002", 50, 60), Bod("610844000130003", 5, 5)]
+    b = [Bod("1", 100.004, 200.0, 10.01), Bod("2", 50, 60.003), Bod("99", 0, 0)]
+    r, jen_a, jen_b = V.porovnani_seznamu(a, b)
+    assert [x.cislo for x in r] == ["610844000130001 = 1", "610844000130002 = 2"]
+    assert all(x.vyhovuje for x in r) and r[0].dp == pytest.approx(0.004)
+    assert jen_a == ["610844000130003"] and jen_b == ["99"]
+
+
 def test_vymery_davkou():
     from kontrola.geodezie.body import Bod, SeznamBodu
     from kontrola.ui.ulohy import u_vymery_davkou

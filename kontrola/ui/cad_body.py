@@ -43,11 +43,14 @@ class BodyDialog(QDialog):
             for p in self._pv:
                 if p.geometrie in typy or (klic == "znacka" and p.blok):
                     cb.addItem(p.nazev, p)
+            if klic == "znacka":
+                cb.addItem("bod v aktivní hladině", "aktivni")
+            else:
+                cb.addItem("text v aktivní hladině", "aktivni")
             if hodnota is not None:
                 cb.setCurrentIndex(max(0, cb.findText(hodnota.nazev)))
-            elif klic == "znacka" and not self._pv:
-                cb.addItem("bod v aktivní hladině", "aktivni")
-                cb.setCurrentIndex(1)
+            elif klic in ("znacka", "cislo") and not any(p.geometrie in typy for p in self._pv):
+                cb.setCurrentIndex(cb.findData("aktivni"))
             self.cb[klic] = cb
             f.addRow(popis + ":", cb)
         self.cb_spoj = QComboBox()
@@ -130,10 +133,13 @@ class BodyDialog(QDialog):
         for k, cb in self.cb.items():
             d = cb.currentData()
             setattr(n, k, None if d in (None, "aktivni") else d)
-        if self.cb["znacka"].currentData() == "aktivni":
-            from ..cad.zadani import Predvolba
-            k = self.page.kresleni
-            n.znacka = Predvolba(nazev="aktivní", geometrie="bod", nastroj="bod", vrstva=k.vrstva, barva=k.barva)
+        from ..cad.zadani import Predvolba
+        k = self.page.kresleni
+        for klic in ("znacka", "cislo", "vyska", "kod"):
+            if self.cb[klic].currentData() == "aktivni":
+                geom = "bod" if klic == "znacka" else "text"
+                setattr(n, klic, Predvolba(nazev="aktivní", geometrie=geom, nastroj=geom, vrstva=k.vrstva,
+                                           barva=k.barva))
         n.vyska_textu = self.page.vyska_textu
         d = self.cb_spoj.currentData()
         n.spojnice = d if d not in (None, "aktivni") else None
