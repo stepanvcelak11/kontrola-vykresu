@@ -40,5 +40,8 @@ def test_stazeni_a_davka_nahrazeni(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         aktualizace.download(tmp_path / "x.exe")
     assert not (tmp_path / "x.exe").exists()
-    bat = aktualizace.updater_script(1234, r"C:\\t\\n.exe", r"C:\\P\\KontrolaVykresu.exe")
-    assert 'PID eq 1234' in bat and 'move /y' in bat and 'start ""' in bat
+    assert aktualizace.prikaz_instalace("i.exe", True)[1:3] == ["/SILENT", "/SUPPRESSMSGBOXES"]
+    assert aktualizace.prikaz_instalace("i.exe", False) == ["i.exe"]
+    assert not aktualizace.je_nainstalovano(tmp_path / "KontrolaVykresu.exe")
+    (tmp_path / "unins000.exe").write_bytes(b"MZ")
+    assert aktualizace.je_nainstalovano(tmp_path / "KontrolaVykresu.exe")

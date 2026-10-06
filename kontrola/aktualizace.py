@@ -12,7 +12,9 @@ import urllib.request
 
 REPO = "stepanvcelak11/kontrola-vykresu"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
-DOWNLOAD_URL = f"https://github.com/{REPO}/releases/latest/download/KontrolaVykresu.exe"
+# instalátor (doporučený) a přenosný jeden soubor (staré verze se aktualizují na něj)
+DOWNLOAD_URL = f"https://github.com/{REPO}/releases/latest/download/KontrolaVykresu-instalace.exe"
+PRENOSNY_URL = f"https://github.com/{REPO}/releases/latest/download/KontrolaVykresu.exe"
 RELEASES_URL = f"https://github.com/{REPO}/releases/latest"
 
 try:  # soubor vytváří sestavení .exe na GitHubu (Actions); při spuštění ze zdrojů chybí
@@ -71,31 +73,29 @@ def download(dest, progress=None, url: str = DOWNLOAD_URL, timeout: float = 30.0
     return dest
 
 
-def updater_script(pid: int, new_exe, target_exe) -> str:
-    """Dávka pro Windows: počká, až se program zavře, nahradí .exe novým a spustí ho."""
-    return (
-        "@echo off\r\n"
-        ":cekej\r\n"
-        "timeout /t 1 /nobreak >nul\r\n"
-        f'tasklist /fi "PID eq {pid}" | find "{pid}" >nul && goto cekej\r\n'
-        f'move /y "{new_exe}" "{target_exe}" >nul\r\n'
-        f'start "" "{target_exe}"\r\n'
-        'del "%~f0"\r\n'
-    )
-
-
-def install_and_restart(new_exe) -> None:
-    """Spustí dávku nahrazení (jen sestavené .exe na Windows); program se pak musí ukončit."""
-    import os
-    import subprocess
+def je_nainstalovano(exe=None) -> bool:
+    """Program běží z instalace (vedle .exe je odinstalátor Inno Setup), ne jako přenosný jeden soubor."""
     import sys
-    import tempfile
     from pathlib import Path
-    target = Path(sys.executable)
-    bat = Path(tempfile.gettempdir()) / "kontrola_vykresu_aktualizace.bat"
-    bat.write_text(updater_script(os.getpid(), new_exe, target), encoding="cp1250")
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen(["cmd", "/c", str(bat)], creationflags=flags, close_fds=True)  # noqa: S603,S607
+    exe = Path(exe or sys.executable)
+    return any(exe.parent.glob("unins*.exe"))
+
+
+def prikaz_instalace(instalator, tise: bool) -> list[str]:
+    """Spuštění staženého instalátoru. Při aktualizaci nainstalovaného programu tiše (jen průběh),
+    přenosnou verzi převede na instalovanou s běžným průvodcem."""
+    cmd = [str(instalator)]
+    if tise:
+        cmd += ["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"]
+    return cmd
+
+
+def install_and_restart(instalator) -> None:
+    """Spustí stažený instalátor jako běžný viditelný program (žádná skrytá dávka, která by přepisovala
+    běžící .exe – to antiviry právem považují za podezřelé). Program se pak musí ukončit; instalátor
+    ho po dokončení spustí znovu."""
+    import subprocess
+    subprocess.Popen(prikaz_instalace(instalator, je_nainstalovano()), close_fds=True)  # noqa: S603
 
 
 # ------------------------------------------------------------------ spuštění ze zdrojových kódů (bez .exe)

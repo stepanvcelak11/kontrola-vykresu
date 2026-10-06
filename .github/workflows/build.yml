@@ -43,7 +43,31 @@ jobs:
       - name: Číslo sestavení do programu (pro kontrolu aktualizací)
         shell: bash
         run: printf 'BUILD = %s\nCOMMIT = "%s"\n' "${{ github.run_number }}" "${{ github.sha }}" > kontrola/_build.py
+      # složka dist/KontrolaVykresu/ → instalátor; přenosný jeden soubor jen pro staré verze a kdo nechce instalovat
       - run: pyinstaller --noconfirm --clean kontrola_vykresu.spec
+      - name: Přenosný jeden soubor
+        shell: bash
+        run: KV_JEDEN_SOUBOR=1 pyinstaller --noconfirm --workpath build1 kontrola_vykresu.spec
+      - name: Instalátor (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc "/DVerze=1.0.0.${{ github.run_number }}" instalace.iss
+          if ($LASTEXITCODE -ne 0) { throw "Instalátor se nesestavil" }
+      - name: Instalátor se tiše nainstaluje a nainstalovaný program zkontroluje výkres
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist/KontrolaVykresu-instalace.exe -Wait -PassThru -ArgumentList @(
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$env:RUNNER_TEMP\kv", "/TASKS=")
+          if ($p.ExitCode -ne 0) { throw "Instalace skončila kódem $($p.ExitCode)" }
+          Start-Sleep -Seconds 3
+          Get-Process KontrolaVykresu -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (!(Test-Path "$env:RUNNER_TEMP\kv\unins000.exe")) { throw "Chybí odinstalátor" }
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\kv\KontrolaVykresu.exe" -Wait -PassThru -ArgumentList @(
+            "zkontroluj", "ukazky/ukazkovy_vykres.dxf", "--pravidla", "ukazky/konfigurace.yaml", "--csv", "inst.csv")
+          if ($p.ExitCode -ne 1 -or !(Test-Path inst.csv)) { throw "Nainstalovaný program nezkontroloval výkres ($($p.ExitCode))" }
+          Write-Host "Instalace v pořádku."
       - name: Sestavené .exe zkontroluje ukázkový výkres (CSV, Excel, PDF, DXF)
         shell: pwsh
         run: |
@@ -71,7 +95,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: KontrolaVykresu-windows
-          path: dist/KontrolaVykresu.exe
+          path: |
+            dist/KontrolaVykresu.exe
+            dist/KontrolaVykresu-instalace.exe
 
   zverejnit:
     # Stabilní odkaz ke stažení: .../releases/latest/download/KontrolaVykresu.exe
@@ -96,7 +122,11 @@ jobs:
           name: Kontrola výkresu – poslední verze
           body: |
             Sestavení č. ${{ github.run_number }} – automaticky z commitu ${{ github.sha }}.
-            Stáhněte KontrolaVykresu.exe a spusťte (instalace není potřeba).
+            Doporučeno: stáhněte **KontrolaVykresu-instalace.exe** a spusťte (instalace pro vás, bez práv správce;
+            zástupce na ploše a v nabídce Start). Nainstalovaný program už Windows při spuštění neblokuje.
+            Přenosná verze bez instalace: KontrolaVykresu.exe.
             Ukázková data: složka ukazky/ ve zdrojových kódech (Source code .zip).
-          files: dist/KontrolaVykresu.exe
+          files: |
+            dist/KontrolaVykresu.exe
+            dist/KontrolaVykresu-instalace.exe
           make_latest: true

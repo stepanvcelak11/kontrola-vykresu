@@ -1,8 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller: sestavení jednoho souboru KontrolaVykresu.exe
+# PyInstaller: sestavení programu KontrolaVykresu
 # Spuštění:  pyinstaller --noconfirm kontrola_vykresu.spec   (nebo sestavit_exe.bat)
+#
+# Výchozí je SLOŽKA dist/KontrolaVykresu/ (z ní se dělá instalátor instalace.iss). Program se nerozbaluje
+# při každém spuštění do %TEMP%, takže startuje rychle a Windows Defender / SmartScreen ho nepovažuje
+# za podezřelý. KV_JEDEN_SOUBOR=1 sestaví přenosný jeden soubor dist/KontrolaVykresu.exe (bez instalace).
+
+import os
+import re
 
 from PyInstaller.utils.hooks import collect_data_files
+
+JEDEN_SOUBOR = os.environ.get("KV_JEDEN_SOUBOR") == "1"
 
 datas = [
     ("kontrola/resources", "kontrola/resources"),
@@ -38,31 +47,32 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-# úvodní okénko hned po dvojkliku (než se program rozbalí) – zavře ho aplikace, až ukáže hlavní okno
-splash = Splash(
-    "kontrola/resources/splash.png",
-    binaries=a.binaries,
-    datas=a.datas,
-    text_pos=(36, 262),
-    text_size=10,
-    text_color="white",
-    minify_script=True,
-    always_on_top=False,
-)
+# Údaje o programu ve vlastnostech .exe (Windows i antiviry je u neznámého programu čtou)
+VERZE = re.search(r'__version__ = "([^"]+)"', open("kontrola/__init__.py", encoding="utf-8").read()).group(1)
+cisla = tuple(int(x) for x in (VERZE.split(".") + ["0"] * 4)[:4])
+try:
+    from PyInstaller.utils.win32.versioninfo import (FixedFileInfo, StringFileInfo, StringStruct, StringTable,
+                                                     VarFileInfo, VarStruct, VSVersionInfo)
+    udaje = VSVersionInfo(
+        ffi=FixedFileInfo(filevers=cisla, prodvers=cisla),
+        kids=[StringFileInfo([StringTable("040504b0", [
+            StringStruct("CompanyName", "Kontrola výkresu"),
+            StringStruct("FileDescription", "Kontrola výkresu"),
+            StringStruct("FileVersion", VERZE),
+            StringStruct("InternalName", "KontrolaVykresu"),
+            StringStruct("LegalCopyright", "github.com/stepanvcelak11/kontrola-vykresu"),
+            StringStruct("OriginalFilename", "KontrolaVykresu.exe"),
+            StringStruct("ProductName", "Kontrola výkresu"),
+            StringStruct("ProductVersion", VERZE)])]),
+              VarFileInfo([VarStruct("Translation", [0x0405, 1200])])])
+except ImportError:  # pragma: no cover
+    udaje = None
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    splash,
-    splash.binaries,
-    a.binaries,
-    a.datas,
-    [],
-    name="KontrolaVykresu",
-    debug=False,
-    strip=False,
-    upx=False,
-    runtime_tmpdir=None,
-    console=False,
-    icon="kontrola/resources/ikona.ico",
-)
+spolecne = dict(name="KontrolaVykresu", debug=False, strip=False, upx=False, console=False,
+                icon="kontrola/resources/ikona.ico", version=udaje)
+
+if JEDEN_SOUBOR:
+    exe = EXE(pyz, a.scripts, a.binaries, a.datas, [], runtime_tmpdir=None, **spolecne)
+else:
+    exe = EXE(pyz, a.scripts, [], exclude_binaries=True, **spolecne)
+    coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="KontrolaVykresu")

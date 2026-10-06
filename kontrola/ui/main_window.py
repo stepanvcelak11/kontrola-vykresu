@@ -1940,9 +1940,9 @@ class MainWindow(QMainWindow):
             box.setWindowTitle("Nová verze")
             box.setTextFormat(Qt.RichText)
             box.setText(f"Je k dispozici novější verze programu (sestavení č. {latest}, vy máte č. {BUILD}).<br><br>"
-                        f"<a href='{DOWNLOAD_URL}'>Stáhnout KontrolaVykresu.exe</a> "
+                        f"<a href='{DOWNLOAD_URL}'>Stáhnout instalaci</a> "
                         f"(<a href='{RELEASES_URL}'>co je nového</a>)<br><br>"
-                        "Stažený soubor stačí spustit místo starého; projekty a nastavení zůstanou.")
+                        "Projekty a nastavení zůstanou.")
             box.setTextInteractionFlags(Qt.TextBrowserInteraction)
             import sys
             b_now = None
@@ -2025,7 +2025,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(300, self, sleduj)
 
     def update_now(self):
-        """Stáhne novou verzi, nahradí .exe a program spustí znovu (projekty a nastavení zůstanou)."""
+        """Stáhne instalátor nové verze, spustí ho a program ukončí; instalátor ho spustí znovu.
+        Přenosný jeden soubor se tím převede na instalovaný program (zástupce na ploše a v Start)."""
         import tempfile
         from pathlib import Path
 
@@ -2036,7 +2037,7 @@ class MainWindow(QMainWindow):
         dlg.setWindowTitle("Aktualizace")
         dlg.setMinimumDuration(0)
         dlg.setAutoClose(False)
-        dest = Path(tempfile.gettempdir()) / "KontrolaVykresu_nova.exe"
+        dest = Path(tempfile.gettempdir()) / "KontrolaVykresu-instalace.exe"
         cancelled = {"v": False}
         dlg.canceled.connect(lambda: cancelled.update(v=True))
 
@@ -2056,6 +2057,13 @@ class MainWindow(QMainWindow):
         dlg.close()
         if self.project is not None:
             self.project.save()
+        from ..aktualizace import je_nainstalovano
+        if not je_nainstalovano():
+            QMessageBox.information(self, "Aktualizace", "Nová verze se nainstaluje jako běžný program – "
+                                    "na ploše a v nabídce Start bude zástupce „Kontrola výkresu“. Pak už ho "
+                                    "spouštějte odtud; starý soubor KontrolaVykresu.exe můžete smazat.\n\n"
+                                    "Kdyby se ozvalo „Systém Windows ochránil váš počítač“: Další informace → "
+                                    "Přesto spustit (jen tentokrát).")
         install_and_restart(dest)
         self.close()
         QApplication.instance().quit()

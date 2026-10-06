@@ -36,9 +36,18 @@ od učitele nebo ze vzorového výkresu.
 
 ### Hotový program (.exe)
 
-**Stažení:** [KontrolaVykresu.exe](https://github.com/stepanvcelak11/kontrola-vykresu/releases/latest/download/KontrolaVykresu.exe)
-(poslední verze, sestavuje se automaticky po každé změně). Program se neinstaluje, stačí ho
-spustit. Windows může upozornit na neznámého vydavatele: *Další informace → Přesto spustit*.
+**Stažení:** [KontrolaVykresu-instalace.exe](https://github.com/stepanvcelak11/kontrola-vykresu/releases/latest/download/KontrolaVykresu-instalace.exe)
+(poslední verze, sestavuje se automaticky po každé změně). Instaluje se jen pro vás (bez práv
+správce) do `%LOCALAPPDATA%\Programs\KontrolaVykresu`, se zástupcem na ploše a v nabídce Start.
+U staženého instalátoru se Windows může jednou zeptat (*Systém Windows ochránil váš počítač*
+→ *Další informace → Přesto spustit*). Nainstalovaný program se pak spouští bez upozornění,
+rychle (nerozbaluje se při každém startu do `%TEMP%`) a aktualizuje se sám z nabídky
+*Nápověda → Zkontrolovat aktualizace*.
+
+Přenosná verze bez instalace: [KontrolaVykresu.exe](https://github.com/stepanvcelak11/kontrola-vykresu/releases/latest/download/KontrolaVykresu.exe)
+– jeden soubor, který se při každém spuštění rozbaluje, proto startuje pomaleji a Windows Defender
+ho u nepodepsaného programu kontroluje (a občas i blokuje) častěji. Při první aktualizaci se sám
+převede na instalovanou verzi.
 Ukázková data jsou ve složce [`ukazky/`](ukazky/) (celý repozitář stáhnete přes
 *Code → Download ZIP*). Program si můžete sestavit i sami, viz [Sestavení .exe](#sestavení-exe).
 
@@ -972,8 +981,10 @@ sestavit_exe.bat
 ```
 
 Skript vytvoří virtuální prostředí, nainstaluje knihovny, spustí testy a pomocí PyInstalleru
-sestaví jeden soubor **`dist\KontrolaVykresu.exe`**. Konfigurace je v
-`kontrola_vykresu.spec`.
+sestaví složku **`dist\KontrolaVykresu\`** (program `KontrolaVykresu.exe` v ní). Konfigurace je v
+`kontrola_vykresu.spec`; s proměnnou `KV_JEDEN_SOUBOR=1` vznikne přenosný jeden soubor. Instalátor
+`dist\KontrolaVykresu-instalace.exe` sestaví [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+`iscc instalace.iss`.
 
 Stejné sestavení běží automaticky na GitHubu (`.github/workflows/build.yml`). Hotové .exe
 je ke stažení jako artefakt v záložce Actions.

@@ -1,5 +1,5 @@
 @echo off
-rem Sestavení KontrolaVykresu.exe (jeden soubor) pomocí PyInstalleru.
+rem Sestavení programu (složka dist\KontrolaVykresu) pomocí PyInstalleru; instalátor pak: iscc instalace.iss
 rem Předpoklad: nainstalovaný Python 3.11+ (python.org, při instalaci zaškrtnout "Add to PATH").
 chcp 65001 >nul
 setlocal
@@ -22,7 +22,7 @@ echo [4/4] Sestavuji .exe ...
 pyinstaller --noconfirm --clean kontrola_vykresu.spec || goto :chyba
 
 echo.
-echo Hotovo: dist\KontrolaVykresu.exe
+echo Hotovo: dist\KontrolaVykresu\KontrolaVykresu.exe
 goto :eof
 
 :chyba
