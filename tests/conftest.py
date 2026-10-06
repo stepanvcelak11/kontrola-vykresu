@@ -145,3 +145,12 @@ if _TRACE:
         _zapis(f"KONEC exit={exitstatus}, selhalo {len(_selhane)}")
         for t in _selhane[:5]:
             _zapis(t)
+
+
+def pytest_runtest_logreport(report):
+    """V GitHub Actions vypíše selhaný test jako anotaci (čitelná přes API i bez stažení logu)."""
+    if not report.failed or not _os.environ.get("GITHUB_ACTIONS"):
+        return
+    text = str(report.longrepr)[-1500:]
+    text = text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+    print(f"\n::error title={report.nodeid} ({report.when})::{text}", flush=True)
