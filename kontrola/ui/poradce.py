@@ -180,7 +180,7 @@ def _special(text: str, win):
         return ("Stav", f"K opravě zbývá <b>{len(todo)}</b> (chyby {sum(1 for i in todo if i.severity.value == 'chyba')}"
                 f", varování {sum(1 for i in todo if i.severity.value == 'varování')}). Skóre <b>{sk.hodnota}</b>/100 "
                 f"– {escape(sk.popis)}.", "Stav práce")
-    if re.search(r"\b(dal|dalsi|zacit|dele|postu)", t):
+    if re.search(r"\b(dal|dalsi|zacit|dele|postu)|\bted\b", t):
         p = win.project
         if p is not None and not p.rules.pravidla:
             step = "Nahrajte Směrnici a Word se zadáním do záložky <b>Zadání</b>."
@@ -235,12 +235,13 @@ class PoradcePanel(QWidget):
         text = self.q.text().strip()
         if not text:
             return
+        from ..poradce_pokec import nevim, pokec
         sp = _special(text, self.win)
-        res = [sp] if sp else answer(text, win=self.win)
+        pk = None if sp else pokec(text)
+        res = [sp] if sp else [(pk[0], pk[1], "Poradce")] if pk else answer(text, win=self.win)
         out = f"<p style='text-align:right'><b>Vy:</b> {escape(text)}</p>"
         if not res:
-            out += ("<p>Na tohle odpověď v návodech nemám. Zkuste jiná slova, nebo <b>Nápověda → Rychlé tipy</b> "
-                    "a <b>Co znamenají chyby</b>.</p>")
+            out += f"<p>{nevim()}</p>"
         else:
             t, h, s = res[0]
             from .theme import themed
