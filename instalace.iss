@@ -55,4 +55,11 @@ Name: "{userdesktop}\Kontrola výkresu"; Filename: "{app}\KontrolaVykresu.exe"; 
 
 [Run]
 ; při ruční instalaci zaškrtávátko „Spustit“, při tiché aktualizaci z programu se spustí rovnou
-Filename: "{app}\KontrolaVykresu.exe"; Description: "Spustit Kontrolu výkresu"; Flags: nowait postinstall
+; (/SPUSTIT=0 = nespouštět, např. při zkoušce instalátoru na GitHubu)
+Filename: "{app}\KontrolaVykresu.exe"; Description: "Spustit Kontrolu výkresu"; Flags: nowait postinstall; Check: SpustitPo
+
+[Code]
+function SpustitPo: Boolean;
+begin
+  Result := ExpandConstant('{param:SPUSTIT|1}') <> '0';
+end;
