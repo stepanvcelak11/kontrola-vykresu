@@ -245,6 +245,10 @@ Otevřete ukázkový výkres a stiskněte F5.
 * **Kontrola → Porovnat verze výkresu** (Ctrl+D): co se změnilo od předchozí načtené verze
   (nebo proti jinému DXF) – přidané (zeleně), odebrané (červeně čárkovaně), upravené (oranžově)
   a prvky se změněnými atributy (fialově). Kliknutím na řádek se výkres přiblíží na změnu.
+* **Kontrola → Porovnat s výkresem učitele…**: porovná váš výkres s hotovým výkresem učitele ze stejného
+  zaměření s tolerancí (výchozí 10 cm): co chybí, co je navíc, co je v jiné vrstvě, jiné atributy (barva, styl,
+  tloušťka, písmo) a jiné texty; čáry se párují podle pokrytí (nezáleží na rozdělení ani lomových bodech),
+  kresba učitele mimo vaše území se nepočítá. Dole souhrn po vrstvách (počty a délky). I ve webové verzi.
 * **Soubor → Export → Seznam k opravě na tisk** (Ctrl+P): PDF se zbývajícími chybami
   seskupenými podle typu, s políčkem k odškrtnutí, návodem, obrázkem „chyba / správně“ u každé skupiny
   a výřezem výkresu.
