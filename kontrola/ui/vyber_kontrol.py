@@ -149,7 +149,7 @@ class VyberKontrol(QDialog):
         b_set = QPushButton("Uložit jako sadu…")
         b_set.setToolTip("Uloží zaškrtnuté kontroly pod vlastním jménem – sada pak bude i v nabídce u tlačítka "
                          "Zkontrolovat a v ostatních projektech")
-        b_set.clicked.connect(self.save_as_set)
+        b_set.clicked.connect(lambda: self.save_as_set())
         brow.addWidget(b_set)
         b_save = QPushButton("Uložit výběr")
         b_save.clicked.connect(self.save)

@@ -419,8 +419,8 @@ class VypoctyPage(QWidget):
         self.b_porovnat.clicked.connect(lambda: self.porovnat_seznam())
         self.b_add.clicked.connect(self.add_point)
         self.b_del.clicked.connect(self.delete_selected)
-        self.b_bulk.clicked.connect(self.bulk_dialog)
-        self.b_dup.clicked.connect(self.duplicates_dialog)
+        self.b_bulk.clicked.connect(lambda: self.bulk_dialog())  # clicked posílá checked=False
+        self.b_dup.clicked.connect(lambda: self.duplicates_dialog())
         self.b_undo.clicked.connect(self.undo)
         self.b_redo.clicked.connect(self.redo)
         self.b_polar.clicked.connect(lambda: getattr(self.win, "show_vypocet", lambda: None)())

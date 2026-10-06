@@ -433,7 +433,7 @@ class IssuePanel(QWidget):
         self.b_help = QPushButton("?")
         self.b_help.setToolTip("Co to znamená – vysvětlení vybraného typu chyby s obrázkem (a dalších pojmů)")
         self.b_help.setFixedWidth(34)
-        self.b_help.clicked.connect(self.explain)
+        self.b_help.clicked.connect(lambda: self.explain())
         qrow.addWidget(self.b_help)
         self.search = QLineEdit()
         self.search.setPlaceholderText("🔍  Hledat v popisu, vrstvě, čísle chyby…")
