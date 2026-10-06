@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDia
                                QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
+from .flow import RadekTlacitek
 from ..model import GeomType
 from ..rules import (Rule, RuleSet, TextRule, norm_style, parse_allowed_values, parse_color,
                      parse_weight, split_list)
@@ -34,7 +35,7 @@ class RulesEditor(QWidget):
         self.images: list[tuple[str, str]] = []  # (rel, název)
         self._loading = False
         lay = QVBoxLayout(self)
-        row = QHBoxLayout()
+        row = RadekTlacitek()  # v úzkém okně se zalomí
         for text, slot in (("Přidat pravidlo", self.add_rule), ("Smazat vybraná", self.delete_selected),
                            ("Smazat všechna", self.delete_all),
                            ("Načíst YAML…", self.load_yaml), ("Uložit do YAML…", self.save_yaml),

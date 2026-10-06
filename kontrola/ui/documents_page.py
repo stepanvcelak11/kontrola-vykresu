@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QGroupBox, QHBoxL
                                QListWidget, QListWidgetItem, QMessageBox, QPushButton, QSplitter, QTableWidget,
                                QTableWidgetItem, QTextBrowser, QVBoxLayout, QWidget)
 
+from .flow import RadekTlacitek
 from ..importer.dokument import DOC_EXT, document_settings, layer_rules, looks_like_rules_table, read_document, requirements
 
 
@@ -30,7 +31,7 @@ class DocumentsPage(QWidget):
                        "převede na pravidla kontroly. Soubor přetáhněte sem nebo kamkoli do záložky Zadání.")
         intro.setWordWrap(True)
         lay.addWidget(intro)
-        row = QHBoxLayout()
+        row = RadekTlacitek()  # v úzkém okně se zalomí
         b_add = QPushButton("Přidat dokument…")
         b_add.setProperty("primarni", True)
         b_add.clicked.connect(self._pick)

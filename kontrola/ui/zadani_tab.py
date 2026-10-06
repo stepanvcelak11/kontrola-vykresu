@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QMessageBox, QPushButton, QSlider, QSplitter, QTableWidget,
                                QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
+from .flow import RadekTlacitek
 from ..checks.base import fmt_num
 from ..importer import template as tpl
 from ..importer.table import read_table
@@ -95,7 +96,7 @@ class TablePage(QWidget):
         drop = DropArea("Přetáhněte sem tabulku (.xlsx, .xls, .csv, .pdf)")
         drop.filesDropped.connect(lambda fs: [self.import_file(f) for f in fs])
         lay.addWidget(drop)
-        row = QHBoxLayout()
+        row = RadekTlacitek()  # v úzkém okně se zalomí
         b = QPushButton("Importovat tabulku…")
         b.clicked.connect(self._pick)
         b.setProperty("primarni", True)
@@ -216,7 +217,7 @@ class ImagesPage(QWidget):
         super().__init__()
         self.tab = tab
         lay = QVBoxLayout(self)
-        row = QHBoxLayout()
+        row = RadekTlacitek()  # v úzkém okně se zalomí
         b_add = QPushButton("Přidat obrázky…")
         b_add.clicked.connect(self._pick)
         b_del = QPushButton("Odebrat obrázek")
@@ -436,7 +437,7 @@ class TemplatePage(QWidget):
         drop.setMinimumHeight(50)
         drop.filesDropped.connect(lambda fs: self.set_template(fs[0]))
         lay.addWidget(drop)
-        row = QHBoxLayout()
+        row = RadekTlacitek()  # v úzkém okně se zalomí
         b_load = QPushButton("Načíst vzor…")
         b_load.clicked.connect(self._pick)
         b_rules = QPushButton("Vytvořit pravidla ze vzoru")
@@ -701,7 +702,7 @@ class AttachmentsPage(QWidget):
         super().__init__()
         self.tab = tab
         lay = QVBoxLayout(self)
-        top = QHBoxLayout()
+        top = RadekTlacitek()  # v úzkém okně se zalomí
         self.proj_label = QLabel()
         self.proj_label.setWordWrap(True)
         top.addWidget(self.proj_label, 1)
@@ -712,7 +713,7 @@ class AttachmentsPage(QWidget):
         top.addWidget(b_ren)
         top.addWidget(b_dir)
         lay.addLayout(top)
-        row = QHBoxLayout()
+        row = RadekTlacitek()  # v úzkém okně se zalomí
         for text, slot in (("Přidat…", self._add), ("Nahradit…", self._replace), ("Smazat", self._delete),
                            ("Otevřít soubor", self._open)):
             b = QPushButton(text)

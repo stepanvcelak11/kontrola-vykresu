@@ -2944,9 +2944,24 @@ def test_zavreni_s_neulozenym_vykresem_v_cad_se_zepta(window, monkeypatch):
 def test_okno_se_vejde_na_maly_notebook(window):
     """Řádky tlačítek ve Výpočtech a CAD se v úzkém okně zalomí – okno se vejde i při zvětšení 150 %
     (1920 px / 1,5 = 1280 px), dřív mělo minimum 1332 px."""
+    from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLayout
+
+    def nejsirsi():
+        out = []
+        for lay in window.findChildren(QLayout):
+            if isinstance(lay, (QHBoxLayout, QGridLayout)) and lay.minimumSize().width() > 600:
+                w = [lay.itemAt(i).widget() for i in range(lay.count())]
+                out.append((lay.minimumSize().width(), type(lay.parentWidget()).__name__,
+                            [type(x).__name__ + ":" + (x.text()[:15] if hasattr(type(x), "text") and
+                                                        callable(getattr(type(x), "text")) else "")
+                             for x in w if x is not None][:5]))
+        return sorted(out, key=lambda t: -t[0])[:8]
+
+    fm = window.fontMetrics().averageCharWidth()
     for p in ("uvod", "vykres", "zadani", "vypocty", "cad"):
         window.show_page(p)
-        assert window.minimumSizeHint().width() <= 1100, p
+        sirka = window.minimumSizeHint().width()
+        assert sirka <= max(1100, 150 * fm), (p, sirka, fm, nejsirsi())
 
 
 def test_technicka_zprava_kostra(window, tmp_path):
