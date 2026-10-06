@@ -75,6 +75,8 @@ def test_kontrola_exporty_a_nastroje():
     assert Path(o["soubor"]).exists() and "oprav" in o["text"].lower()
     assert "verdikt" in json.loads(W.predikce())
     assert json.loads(W.porovnej(str(vykres)))["zmeny"] == []
+    r = json.loads(W.vykres_ucitele(str(vykres)))
+    assert r["zmeny"] == [] and r["shoda"] > 0.99
     c = next(c for c in j["chyby"] if c["x"] is not None)
     assert json.loads(W.prvek_na(c["x"], c["y"], 0.5)).get("vlastnosti")
 

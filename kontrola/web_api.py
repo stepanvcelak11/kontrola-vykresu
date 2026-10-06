@@ -302,6 +302,18 @@ def porovnej(stary: str) -> str:
         ensure_ascii=False)
 
 
+def vykres_ucitele(ucitel: str, tol: float = 0.10) -> str:
+    """Porovnání s hotovým výkresem učitele: co chybí, přebývá, je v jiné vrstvě nebo má jiné atributy."""
+    from .vzor_ucitele import porovnej as porovnej_vzor
+    p = _potreba_kontroly()
+    r = porovnej_vzor(load_drawing(ucitel), p["d"], tol=float(tol))
+    return json.dumps({"souhrn": r.souhrn(), "poznamky": r.poznamky, "shoda": r.shoda_kresby, "zmeny": [
+        {"druh": z.druh, "vrstva": z.vrstva, "popis": z.popis, "x": z.x, "y": z.y} for z in r.zmeny[:3000]],
+        "vrstvy": [{"vrstva": v.vrstva, "ucitel": v.ucitel_pocet, "vy": v.student_pocet,
+                    "delka_ucitel": round(v.ucitel_delka, 1), "delka_vy": round(v.student_delka, 1),
+                    "chyby": v.chyby} for v in r.vrstvy]}, ensure_ascii=False)
+
+
 def protokol_ucitele(log: str) -> str:
     """Porovnání s protokolem od učitele (.log z MGEO / MicroStationu): co učitel našel a co program."""
     from .protokol_ucitele import compare_with_teacher, read_teacher_log

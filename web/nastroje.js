@@ -95,7 +95,7 @@ $("m_nastroje").addEventListener("click", async (e) => {
   if (!b) return;
   $("m_nastroje").classList.add("skryte");
   if (b.dataset.export) return exportuj(b.dataset.export, b.textContent);
-  ({ oprava: dlgOprava, porovnani: dlgPorovnani, ucitel: dlgUcitel, predikce: dlgPredikce, overeni: dlgOvereni,
+  ({ oprava: dlgOprava, porovnani: dlgPorovnani, vykres_ucitele: dlgVykresUcitele, ucitel: dlgUcitel, predikce: dlgPredikce, overeni: dlgOvereni,
     spojnice: dlgSpojnice, hromadne: dlgHromadne })[b.dataset.nastroj]();
 });
 
@@ -141,6 +141,19 @@ async function dlgPorovnani() {
     skryjStav();
     ukazVysledky(`Proti ${f.nazev}: ${r.souhrn || "beze změn"}`, r.zmeny.map((z) => ({ ...z,
       barva: z.druh.startsWith("přid") ? "info" : z.druh.startsWith("odeb") ? "chyba" : "varování" })), "Výkresy se neliší.");
+  } catch (e) { skryjStav(); chybaDialog(e); }
+}
+// ---------------------------------------------------------------- porovnání s výkresem učitele
+async function dlgVykresUcitele() {
+  const f = await vyberSoubor(".dxf,.dgn");
+  if (!f) return;
+  ukazStav("Porovnávám s výkresem učitele…");
+  try {
+    const r = JSON.parse(await volej("vykres_ucitele", [0.1], f));
+    skryjStav();
+    const barva = (d) => d.startsWith("chybí") ? "chyba" : d.startsWith("navíc") ? "info" : "varování";
+    ukazVysledky(`Proti ${f.nazev}: ${r.souhrn}`, r.zmeny.map((z) => ({ ...z, barva: barva(z.druh) })),
+      r.poznamky.join(" ") || "Výkres odpovídá výkresu učitele.");
   } catch (e) { skryjStav(); chybaDialog(e); }
 }
 // Výsledky nástroje (porovnání, ověření bodů, spojnice) v záložce Výsledky a jako značky ve výkresu
