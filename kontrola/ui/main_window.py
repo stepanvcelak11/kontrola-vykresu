@@ -217,6 +217,9 @@ class MainWindow(QMainWindow):
                                     "Jeden soubor pro prohlížeč: přehledka s kroužky, filtr, návody a výřezy")
         self.a_exp_dxf = self._act("DXF s vrstvou KONTROLA_CHYBY…", lambda: self.export("dxf"))
         self.a_exp_log = self._act("Protokol jako MGEO / GISoft (.log)…", lambda: self.export("log"))
+        self.a_tech_zprava = self._act("Technická zpráva (kostra, Word)…", self.technicka_zprava, None,
+                                       "Kostra technické zprávy k účelové mapě podle Pokynu (kap. 7), "
+                                       "předvyplněná z projektu – místa k doplnění jsou žlutě")
         self.a_print_preview = self._act("Náhled tisku v měřítku (PDF)…", self.print_preview, None,
                                          "Mapa do PDF přesně v měřítku (1:500…) s tloušťkami čar jako na tisku")
         self.a_wip = self._act("Rozpracovaný výkres", self._toggle_wip, None,
@@ -306,7 +309,7 @@ class MainWindow(QMainWindow):
         m_file.addSeparator()
         m_exp = m_file.addMenu("Export")
         for a in (self.a_exp_html, self.a_exp_pdf, self.a_exp_todo, self.a_exp_csv, self.a_exp_xlsx, self.a_exp_dxf,
-                  self.a_exp_log, self.a_print_preview):
+                  self.a_exp_log, self.a_print_preview, self.a_tech_zprava):
             m_exp.addAction(a)
         m_file.addSeparator()
         m_file.addAction(self.a_quit)
@@ -2089,6 +2092,27 @@ class MainWindow(QMainWindow):
         install_and_restart(dest)
         self.close()
         QApplication.instance().quit()
+
+    def technicka_zprava(self, path: str | None = None) -> str | None:
+        """Uloží kostru technické zprávy (.docx nebo .txt) předvyplněnou z projektu."""
+        from ..technicka_zprava import jako_text, osnova, udaje_z_aplikace, uloz_docx
+        if not isinstance(path, str) or not path:
+            start = str(Path(self.settings.value("cesty/vykres", str(Path.home()))) / "technicka_zprava.docx")
+            path, _ = QFileDialog.getSaveFileName(self, "Technická zpráva", start,
+                                                  "Dokument Word (*.docx);;Text (*.txt)")
+            if not path:
+                return None
+        kap = osnova(udaje_z_aplikace(self))
+        try:
+            if path.lower().endswith(".txt"):
+                Path(path).write_text(jako_text(kap), encoding="utf-8")
+            else:
+                uloz_docx(path, kap)
+        except OSError as exc:
+            QMessageBox.warning(self, APP_NAME, f"Zprávu nejde uložit: {exc}")
+            return None
+        self.statusBar().showMessage(f"Technická zpráva uložena: {path} – doplňte žlutě označená místa.", 10000)
+        return path
 
     def open_in_cad(self):
         if self.drawing is None:

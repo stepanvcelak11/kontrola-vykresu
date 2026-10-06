@@ -2947,3 +2947,15 @@ def test_okno_se_vejde_na_maly_notebook(window):
     for p in ("uvod", "vykres", "zadani", "vypocty", "cad"):
         window.show_page(p)
         assert window.minimumSizeHint().width() <= 1100, p
+
+
+def test_technicka_zprava_kostra(window, tmp_path):
+    from kontrola.geodezie.body import Bod
+    from kontrola.importer.dokument import read_document
+    window.vypocty.seznam.pridej([Bod("4001", 600000.0, 1160000.0, 250.0), Bod("4002", 600010.0, 1160005.0)])
+    p = window.technicka_zprava(str(tmp_path / "zprava.docx"))
+    assert p is not None
+    text = read_document(p).text  # platný .docx – přečte ho i import zadání
+    assert "S-JTSK" in text and "2 bodů" in text and "[doplňte]" in text and "4001" in text
+    t = window.technicka_zprava(str(tmp_path / "zprava.txt"))
+    assert "7. Seznam příloh" in (tmp_path / "zprava.txt").read_text(encoding="utf-8") and t
