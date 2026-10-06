@@ -106,3 +106,14 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
    - geometrický plán: ✅ výkaz výměr (dosavadní / nový stav, díly – srovnávací sestavení, kontrola součtů) jako úloha ve Výpočtech; zbývá výkres GP a vyrovnání výměr podle vyhlášky;
    - tachymetrie a geodetické výpočty: další formáty totálních stanic (až budou ukázková data).
 
+5. **Předmět „Mapování“** (kreslení a hlavně kontrola mapy; uživatel může poslat materiály ze školy):
+   - už umí: kresba z kódů a body ze seznamu v CAD, kontrola symbologie podle Směrnice/zadání, topologie
+     (nedotahy, přetahy, křížení bez uzlu, visící konce, překryvy, mezery a překryvy ploch, samoprotnutí),
+     duplicity (i stejná čára s jinými lomovými body), kartografie (popisy přes čáru, vzhůru nohama, malé texty),
+     ✅ porovnání s hotovým výkresem učitele (chybí / navíc / jiná vrstva / atributy / texty, po vrstvách);
+   - podklady (veřejné odkazy): ČSN 01 3410 Mapy velkých měřítek – Základní a účelové mapy, ČSN 01 3411 Mapy velkých
+     měřítek – Kreslení a značky (normy jsou placené, má je knihovna fakulty), vyhláška č. 357/2013 Sb. (katastrální
+     vyhláška, příloha bod 10 – mapové značky, kódy kvality), modul Kontrola a oprava čárové kresby / Kontrola
+     a změna symbologie / Duplicity programu MGEO (gisoft.cz);
+   - zbývá (až budou materiály): náležitosti mapového listu (rám, název, měřítko, legenda, severka), knihovna značek
+     ČSN 01 3411 jako pravidla.
