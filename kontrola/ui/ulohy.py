@@ -32,7 +32,19 @@ class UlohyPanel(QWidget):
         self.lst.setMaximumWidth(260)
         self.lst.setObjectName("seznam_uloh")
         self.lst.setStyleSheet("QListWidget#seznam_uloh::item { padding: 7px 8px; }")
-        sp.addWidget(self.lst)
+        levy = QWidget()
+        levy.setMaximumWidth(260)
+        ll = QVBoxLayout(levy)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(4)
+        from PySide6.QtWidgets import QLineEdit
+        self.hledat = QLineEdit()
+        self.hledat.setPlaceholderText("Hledat úlohu (polygon, přesnost…)")
+        self.hledat.setClearButtonEnabled(True)
+        self.hledat.textChanged.connect(self.filtruj)
+        ll.addWidget(self.hledat)
+        ll.addWidget(self.lst, 1)
+        sp.addWidget(levy)
         right = QWidget()
         rl = QVBoxLayout(right)
         self.popis = QLabel()
@@ -73,6 +85,23 @@ class UlohyPanel(QWidget):
         self.b_pdf.clicked.connect(lambda: self.protokol_pdf())
         self.lst.setCurrentRow(0)
 
+
+    def filtruj(self, text: str):
+        """Schová úlohy, které neodpovídají hledanému textu (bez ohledu na diakritiku, i v popisu)."""
+        import unicodedata
+
+        def bez(t: str) -> str:
+            return unicodedata.normalize("NFKD", t.lower()).encode("ascii", "ignore").decode()
+        slova = bez(text).split()
+        prvni = None
+        for i, (nazev, popis, _pole, _fn) in enumerate(ULOHY):
+            ok = all(w in bez(nazev + " " + popis) for w in slova)
+            self.lst.item(i).setHidden(not ok)
+            if ok and prvni is None:
+                prvni = i
+        cur = self.lst.currentItem()
+        if prvni is not None and (cur is None or cur.isHidden()):
+            self.lst.setCurrentRow(prvni)
     def _show(self, i: int):
         while self.form.rowCount():
             self.form.removeRow(0)

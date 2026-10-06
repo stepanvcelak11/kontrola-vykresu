@@ -2959,3 +2959,15 @@ def test_technicka_zprava_kostra(window, tmp_path):
     assert "S-JTSK" in text and "2 bodů" in text and "[doplňte]" in text and "4001" in text
     t = window.technicka_zprava(str(tmp_path / "zprava.txt"))
     assert "7. Seznam příloh" in (tmp_path / "zprava.txt").read_text(encoding="utf-8") and t
+
+
+def test_ulohy_hledani(window):
+    from kontrola.geodezie.ulohy import ULOHY
+    p = window.vypocty.ulohy
+    p.hledat.setText("presnost")  # bez diakritiky, hledá i v popisu
+    vidim = [ULOHY[i][0] for i in range(p.lst.count()) if not p.lst.item(i).isHidden()]
+    assert vidim and all("přesnost" in v.lower() or "přesnost" in ULOHY[[u[0] for u in ULOHY].index(v)][1].lower()
+                         for v in vidim)
+    assert not p.lst.currentItem().isHidden()
+    p.hledat.clear()
+    assert all(not p.lst.item(i).isHidden() for i in range(p.lst.count()))
