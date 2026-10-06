@@ -516,6 +516,10 @@ class MainWindow(QMainWindow):
                                        else ""))
         for btn in tb.findChildren(QToolButton):
             btn.setMinimumWidth(66)
+        b_open = tb.widgetForAction(self.a_open)
+        if b_open is not None:  # šipka vedle: naposledy otevřené výkresy jedním klikem
+            b_open.setMenu(self.m_recent)
+            b_open.setPopupMode(QToolButton.MenuButtonPopup)
         # nástroje pohledu jako plovoucí lišta nad výkresem (jako ovládání mapy)
         vt = QToolBar("Pohled")
         vt.setObjectName("plovouci_lista")
@@ -677,7 +681,15 @@ class MainWindow(QMainWindow):
         self.a_dark.setChecked(is_dark())
         self.a_dark.blockSignals(False)
 
+    ptat_pri_zavreni = True  # neuložený výkres v CAD (testy vypínají)
+
     def closeEvent(self, event):  # noqa: N802
+        cad = getattr(self, "cad", None)
+        if cad is not None and cad.dok is not None and cad.neulozeno and self.ptat_pri_zavreni:
+            self.show_page("cad")
+            if not cad._zahodit_zmeny():
+                event.ignore()
+                return
         if getattr(self, "vypocty", None) is not None:
             self.vypocty.save()
         if getattr(self, "_mini", None) is not None:

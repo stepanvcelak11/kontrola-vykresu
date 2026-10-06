@@ -25,6 +25,18 @@ from ..cad import upravy as U
 from ..cad.dokument import CadDokument
 from ..cad.uchyty import TYPY, Uchyty, ortho, polarni, zadani_bodu
 
+ZALOHA_MS = 90_000  # automatická záložní kopie neuloženého výkresu
+
+
+def slozka_obnovy() -> Path:
+    """Kam se ukládá záložní kopie neuloženého výkresu (obnoví se po pádu / zavření bez uložení)."""
+    import os
+    d = os.environ.get("KONTROLA_OBNOVA")
+    if d:
+        return Path(d)
+    from .crash import log_dir
+    return log_dir().parent / "obnova_cad"
+
 GON = math.pi / 200
 
 
@@ -528,6 +540,12 @@ class CadPage(QWidget):
         self.vyber: list = []
         self.historie_zmen: U.Historie | None = None
         self.kresleni: U.Kresleni | None = None
+        self._nabidnuta_obnova = False
+        from PySide6.QtCore import QTimer
+        self._t_zaloha = QTimer(self)
+        self._t_zaloha.setInterval(ZALOHA_MS)
+        self._t_zaloha.timeout.connect(self.zaloha)
+        self._t_zaloha.start()
         self.index: U.IndexVyberu | None = None
         self._polozky: dict[int, list] = {}  # id(entity) → položky scény
         self.vyska_textu = 2.5
@@ -860,6 +878,72 @@ class CadPage(QWidget):
     def showEvent(self, e):  # noqa: N802
         super().showEvent(e)
         self.obnov_predvolby()
+        if not self._nabidnuta_obnova:
+            self._nabidnuta_obnova = True
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self, self.nabidni_obnovu)
+
+    # ------------------------------------------------------------ záložní kopie (obnova po pádu)
+    def zaloha(self) -> Path | None:
+        """Uloží kopii neuloženého výkresu stranou (výkres sám ani jeho cesta se nemění)."""
+        if self.dok is None or not self.neulozeno:
+            return None
+        import json
+        import time
+        d = slozka_obnovy()
+        try:
+            p = self.dok.uloz_kopii(d / "neulozeny_vykres.dxf")
+            (d / "info.json").write_text(json.dumps({"puvodni": str(self.dok.path or ""), "cas": time.time()},
+                                                    ensure_ascii=False), encoding="utf-8")
+        except Exception:  # noqa: BLE001 – záloha nikdy nesmí rušit kreslení
+            return None
+        return p
+
+    def zahod_zalohu(self):
+        d = slozka_obnovy()
+        for n in ("neulozeny_vykres.dxf", "info.json"):
+            try:
+                (d / n).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def nabidni_obnovu(self, odpoved=None) -> bool:
+        """Po pádu nebo zavření bez uložení: nabídne obnovit poslední záložní kopii výkresu."""
+        import datetime as dt
+        import json
+        d = slozka_obnovy()
+        p = d / "neulozeny_vykres.dxf"
+        if not p.is_file() or self.dok is not None:
+            return False
+        try:
+            info = json.loads((d / "info.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            info = {}
+        puvodni = info.get("puvodni") or ""
+        kdy = dt.datetime.fromtimestamp(info.get("cas") or p.stat().st_mtime)
+        if odpoved is None:
+            odpoved = QMessageBox.question(
+                self, "Obnovit výkres",
+                f"Našel jsem neuložený výkres z {kdy:%d. %m. %Y %H:%M}"
+                + (f" ({Path(puvodni).name})" if puvodni else "")
+                + " – program se zavřel bez uložení nebo spadl.\n\nObnovit ho?",
+                QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes
+        if not odpoved:
+            self.zahod_zalohu()
+            return False
+        try:
+            dok = CadDokument.otevri(str(p))
+        except ValueError as e:
+            QMessageBox.warning(self, "CAD", str(e))
+            return False
+        dok.path = Path(puvodni) if puvodni else None
+        self.nastav_dokument(dok)
+        self._ulozena_zmena = -1  # obnovený výkres je neuložený – uložit ho na původní místo
+        self._titulek()
+        self.vypis("Obnoven neuložený výkres – uložte ho (Ctrl+S).")
+        if self.win is not None:
+            self.win.show_page("cad")
+        return True
 
     @property
     def predvolba(self):
@@ -1488,7 +1572,10 @@ class CadPage(QWidget):
                                  QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
         if r == QMessageBox.Save:
             return self.uloz() is not None
-        return r == QMessageBox.Discard
+        if r == QMessageBox.Discard:
+            self.zahod_zalohu()
+            return True
+        return False
 
     def otevri(self, path: str | None = None) -> bool:
         if not self._zahodit_zmeny():
@@ -1527,6 +1614,7 @@ class CadPage(QWidget):
         self._ulozena_zmena = self.historie_zmen.zmena if self.historie_zmen else 0
         self._titulek()
         self.vypis(f"Uloženo: {p}")
+        self.zahod_zalohu()
         return p
 
     def zkontroluj(self):

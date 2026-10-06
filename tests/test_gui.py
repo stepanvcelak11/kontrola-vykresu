@@ -26,6 +26,7 @@ def window(tmp_path, monkeypatch):
     app = QApplication.instance() or QApplication([])
     from kontrola.ui.main_window import MainWindow
     w = MainWindow(Project.create(tmp_path / "projekt", "test"))
+    w.ptat_pri_zavreni = False  # neuložený výkres v CAD – dotaz při zavření by testy zastavil
     w.show()
 
     def wait(cond, timeout=60):
@@ -2900,3 +2901,41 @@ def test_porovnani_s_vykresem_ucitele(window, tmp_path):
     assert any("Chybí" in z.popis and z.vrstva == "UCITEL_NAVIC" for z in dlg.changes)
     dlg.table.setCurrentCell(0, 0)
     dlg.close()
+
+
+def test_cad_zalozni_kopie_a_obnova(window):
+    """Neuložený výkres se průběžně zálohuje; po pádu ho CAD nabídne obnovit, po uložení záloha zmizí."""
+    from kontrola.ui.cad_page import slozka_obnovy
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    assert c.zaloha() is None  # beze změn se nezálohuje
+    for s in ("u", "0 0", "10 0"):
+        c.proved(s)
+    c.zrus(tise=True)
+    assert c.neulozeno
+    p = c.zaloha()
+    assert p is not None and p.is_file() and c.dok.path is None and c.neulozeno
+    n = len(list(c.prostor))
+    # „pád“: výkres v paměti zmizí, při dalším otevření CAD se nabídne obnova
+    c.dok = None
+    assert c.nabidni_obnovu(odpoved=True)
+    assert len(list(c.prostor)) == n and c.neulozeno
+    c.uloz(path=str(slozka_obnovy().parent / "ulozeny.dxf"))
+    assert not (slozka_obnovy() / "neulozeny_vykres.dxf").exists() and not c.neulozeno
+
+
+def test_zavreni_s_neulozenym_vykresem_v_cad_se_zepta(window, monkeypatch):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for s in ("u", "0 0", "10 0"):
+        c.proved(s)
+    c.zrus(tise=True)
+    window.show_page("vykres")
+    dotazy = []
+    monkeypatch.setattr(c, "_zahodit_zmeny", lambda: dotazy.append(1) or False)  # „Zrušit“
+    window.ptat_pri_zavreni = True
+    window.close()
+    assert dotazy and window.isVisible() and window.tabs.currentWidget() is c
+    window.ptat_pri_zavreni = False

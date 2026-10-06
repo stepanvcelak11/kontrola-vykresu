@@ -118,6 +118,24 @@ class CadDokument:
         self.zmeneno = False
         return p
 
+    def uloz_kopii(self, path: str | Path) -> Path:
+        """Záložní kopie (automatické ukládání): cesta výkresu ani příznak změny se nemění."""
+        import os
+        import tempfile
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        jmeno = self.doc.filename
+        fd, tmp = tempfile.mkstemp(prefix=f".{p.name}.", suffix=".tmp", dir=str(p.parent))
+        os.close(fd)
+        try:
+            self.doc.saveas(tmp)
+            os.replace(tmp, p)
+        finally:
+            self.doc.filename = jmeno
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        return p
+
     def rozsah(self) -> tuple[float, float, float, float] | None:
         """Rozsah kresby (x0, y0, x1, y1) v souřadnicích DXF.
 

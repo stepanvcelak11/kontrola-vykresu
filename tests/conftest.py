@@ -49,6 +49,7 @@ def check(drawing, check_id, rules=None, config=None, **params):
 def _kalibrace_do_tmp(tmp_path, monkeypatch):
     """Kalibrace podle protokolů učitele se v testech nesmí zapisovat do dokumentů uživatele."""
     monkeypatch.setenv("KONTROLA_KALIBRACE", str(tmp_path / "kalibrace.json"))
+    monkeypatch.setenv("KONTROLA_OBNOVA", str(tmp_path / "obnova_cad"))
 
 
 # ------------------------------------------------------------------ trasování tichých pádů (CI na Windows)
