@@ -9,7 +9,7 @@ prohlédne a znovu zkontroluje. Opravují se jen jednoznačné chyby v toleranci
 * nedotažené linie (konec se přitáhne na nejbližší bod / lomový bod druhé linie),
 * přetažené linie (konec se zkrátí na průsečík),
 * do cílové linie se v místě napojení vloží lomový bod (uzel),
-* volitelně: vrstva, barva a styl čáry podle pravidla.
+* atributy podle pravidla: vrstva, barva, styl a měřítko stylu, tloušťka, výška/šířka/zarovnání a písmo textu.
 
 Upravují se entity LINE a LWPOLYLINE, ostatní typy se jen vypíšou jako neopravitelné.
 """
@@ -44,7 +44,7 @@ class RepairOptions:
     prichytit_vrcholy: bool = True
     body_na_sobe: bool = True
     presun_vrstvy: bool = False
-    symbologie: bool = False
+    symbologie: bool = True
 
     LABELS = {
         "duplicity": "Smazat duplicitní prvky",
@@ -58,7 +58,7 @@ class RepairOptions:
         "prichytit_vrcholy": "Přichytit lomové body ležící těsně u jiné čáry (pod Limitem)",
         "body_na_sobe": "Smazat zdvojené body / značky (stejná vrstva, na sobě)",
         "presun_vrstvy": "Přesunout prvky z vrstvy mimo Směrnici na vrstvu, kam podle vzhledu patří",
-        "symbologie": "Sjednotit vrstvu, barvu a styl podle pravidel",
+        "symbologie": "Opravit atributy podle pravidel (vrstva, barva, styl, tloušťka, výška/šířka/zarovnání textu)",
     }
 
 
@@ -276,6 +276,98 @@ class _Doc:
             e.set_points(pts, format="xyseb")
             e.closed = closed
         return n_added
+
+
+def _platna_tloustka(mm: float) -> int:
+    """Nejbližší povolená tloušťka DXF (setiny mm)."""
+    from ezdxf.lldxf.const import VALID_DXF_LINEWEIGHTS
+    return min(VALID_DXF_LINEWEIGHTS, key=lambda v: abs(v - mm * 100))
+
+
+def oprav_atributy(e, f, r, rules: RuleSet, doc) -> list[str]:
+    """Nastaví entitě atributy podle pravidla (jako „Kontrola a změna symbologie“ GISoft v režimu změna).
+    Vrací seznam provedených změn."""
+    from .checks.attributes import parse_alignment
+    zmeny: list[str] = []
+    linie = f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
+    if r.hladina and not any(c in r.hladina for c in "*?[") and not r.matches_layer(f.layer):
+        if r.hladina not in doc.layers:
+            doc.layers.add(r.hladina)
+        e.dxf.layer = r.hladina
+        zmeny.append(f"vrstva → {r.hladina}")
+    if r.barva is not None:
+        rgb = color_rgb(r.barva, rules.paleta, rules.barevna_tabulka)
+        if rules.paleta == "autocad" and isinstance(r.barva, int):
+            if e.dxf.get("color") != r.barva or e.dxf.hasattr("true_color"):
+                e.dxf.discard("true_color")
+                e.dxf.color = r.barva
+                zmeny.append(f"barva → {r.barva}")
+        elif rgb is not None and (e.rgb != tuple(rgb) or e.dxf.get("color", 256) == 256):
+            e.dxf.color = 7 if e.dxf.get("color", 256) in (0, 256) else e.dxf.color  # ne „dle vrstvy“
+            e.rgb = tuple(rgb)
+            zmeny.append(f"barva → {r.barva}")
+    if r.styl_cary and linie:
+        from .rules import split_alternatives
+        alt = split_alternatives(r.styl_cary)[0].strip()
+        lt = "CONTINUOUS" if alt.upper() in ("CONTINUOUS", "0", "PLNÁ", "PLNA") else alt
+        nalez = next((x.dxf.name for x in doc.linetypes if x.dxf.name.upper() == lt.upper()), None)
+        if nalez and (e.dxf.get("linetype", "BYLAYER") or "").upper() != nalez.upper():
+            e.dxf.linetype = nalez
+            zmeny.append(f"styl → {nalez}")
+    if r.meritko_stylu and linie and abs(float(e.dxf.get("ltscale", 1.0)) - r.meritko_stylu) > 1e-4:
+        e.dxf.ltscale = float(r.meritko_stylu)
+        zmeny.append(f"měřítko stylu → {r.meritko_stylu:g}")
+    if r.tloustka is not None and f.geom_type != GeomType.TEXT and e.dxf.is_supported("lineweight"):
+        mm, _nezname = rules.expected_weights(r)
+        if mm and all(abs(e.dxf.get("lineweight", -1) / 100.0 - w) > 0.051 for w in mm):
+            e.dxf.lineweight = _platna_tloustka(mm[0])
+            zmeny.append(f"tloušťka → {e.dxf.lineweight / 100:.2f} mm")
+    if f.geom_type == GeomType.TEXT and e.dxftype() in ("TEXT", "MTEXT"):
+        h = rules.text_size(r.vyska_textu)
+        vys = "height" if e.dxftype() == "TEXT" else "char_height"
+        if h and abs(float(e.dxf.get(vys, 0.0)) - h) > max(0.005, 0.02 * h):
+            stara = float(e.dxf.get(vys, 0.0)) or h
+            e.dxf.set(vys, h)
+            if e.dxftype() == "MTEXT" and e.dxf.hasattr("width") and stara:
+                e.dxf.width = float(e.dxf.width) * h / stara
+            zmeny.append(f"výška textu → {r.vyska_textu:g}")
+        w = rules.text_size(r.sirka_textu)
+        if w and e.dxftype() == "TEXT":
+            hh = float(e.dxf.get("height", 0.0)) or h
+            if hh and abs(hh * float(e.dxf.get("width", 1.0)) - w) > max(0.005, 0.02 * w):
+                e.dxf.width = w / hh
+                zmeny.append(f"šířka textu → {r.sirka_textu:g}")
+        if r.zarovnani and e.dxftype() == "TEXT":
+            ha, va = parse_alignment(r.zarovnani)
+            stare = (e.dxf.get("halign", 0), e.dxf.get("valign", 0))
+            nove = (stare[0] if ha is None else ha, stare[1] if va is None else va)
+            if nove != stare:
+                bod = e.dxf.align_point if stare != (0, 0) and e.dxf.hasattr("align_point") else e.dxf.insert
+                e.dxf.halign, e.dxf.valign = nove
+                e.dxf.insert = bod
+                e.dxf.align_point = bod  # vkládací bod zůstane na místě, text se zarovná k němu
+                zmeny.append(f"zarovnání → {r.zarovnani}")
+        if r.font:
+            styl = _textovy_styl(doc, r.font)
+            if styl and (e.dxf.get("style", "Standard") or "").lower() != styl.lower():
+                e.dxf.style = styl
+                zmeny.append(f"písmo → {r.font}")
+    return zmeny
+
+
+def _textovy_styl(doc, font: str) -> str | None:
+    """Textový styl ve výkresu, jehož písmo odpovídá fontu z pravidla."""
+    import re as _re
+    def norm(t: str) -> str:
+        return _re.sub(r"[\s_\-]+", "", t.lower())
+    zavorka = _re.search(r"\((.*?)\)", font)
+    hledej = [norm(_re.sub(r"\(.*?\)", "", font))] + ([norm(zavorka.group(1)).rsplit(".", 1)[0]] if zavorka else [])
+    hledej = [h for h in hledej if h]
+    for st in doc.styles:
+        jm = norm(st.dxf.get("font", "") or "") + "|" + norm(st.dxf.name)
+        if any(h in jm for h in hledej):
+            return st.dxf.name
+    return None
 
 
 def _param(check_id: str, name: str, default, config: Config):
@@ -592,32 +684,26 @@ def repair_drawing(drawing: Drawing, rules: RuleSet | None, config: Config, out_
                 rep.counts["Přesunuto na vrstvu podle Směrnice"] += n
                 rep.details.append(f"Vrstva {layer} → {g}: {n} prvků")
 
-    # 4) symbologie podle pravidel
+    # 4) atributy (symbologie) podle pravidel – vrstva, barva, styl, měřítko stylu, tloušťka, text
     if opts.symbologie and rules.pravidla:
-        res = run_checks(drawing, rules, config, only=["symbologie"])
+        res = run_checks(drawing, rules, config, only=["symbologie", "atribut_dle_vrstvy"])
+        hotovo: set[str] = set()
         for iss in res.issues:
             f = by_id.get(iss.feature_ids[0]) if iss.feature_ids else None
-            if f is None:
+            if f is None or f.handle in hotovo:
                 continue
             e = D.entity(f.handle)
             r = ctx.rule_for(f)
             if e is None or r is None:
                 continue
-            if r.hladina and not any(c in r.hladina for c in "*?["):
-                if r.hladina not in D.doc.layers:
-                    D.doc.layers.add(r.hladina)
-                e.dxf.layer = r.hladina
-            if r.barva is not None:
-                rgb = color_rgb(r.barva, rules.paleta, rules.barevna_tabulka)
-                if rules.paleta == "autocad" and isinstance(r.barva, int):
-                    e.dxf.color = r.barva
-                elif rgb is not None:
-                    e.rgb = rgb
-            if r.styl_cary and f.geom_type in (GeomType.LINIE, GeomType.POLYGON):
-                lt = "CONTINUOUS" if r.styl_cary.upper() in ("CONTINUOUS", "0") else r.styl_cary.upper()
-                if lt in D.doc.linetypes:
-                    e.dxf.linetype = lt
-            rep.counts["Sjednocená symbologie"] += 1
+            hotovo.add(f.handle)
+            zmeny = oprav_atributy(e, f, r, rules, D.doc)
+            if zmeny:
+                rep.counts["Opravené atributy (symbologie)"] += 1
+                if len(rep.details) < 400:
+                    rep.details.append(f"{r.nazev or r.kod} [{f.handle}]: " + ", ".join(zmeny))
+            else:
+                rep.skipped.append(f"{iss.message} – atribut nejde v DXF opravit automaticky")
 
     D.doc.saveas(out_path)
     return rep

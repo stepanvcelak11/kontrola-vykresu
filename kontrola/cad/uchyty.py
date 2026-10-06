@@ -146,6 +146,16 @@ def _pata(px, py, u: Usecka):
     return u.x1 + t * dx, u.y1 + t * dy
 
 
+MAX_PRUSECIKY = 80  # prvků pro hledání průsečíků v okolí kurzoru (80² / 2 dvojic)
+
+
+def _vzdalenost_u(px: float, py: float, u: Usecka) -> float:
+    dx, dy = u.x2 - u.x1, u.y2 - u.y1
+    ll = dx * dx + dy * dy
+    t = 0.0 if ll == 0 else max(0.0, min(1.0, ((px - u.x1) * dx + (py - u.y1) * dy) / ll))
+    return math.hypot(px - (u.x1 + t * dx), py - (u.y1 + t * dy))
+
+
 def _prusecik_uu(a: Usecka, b: Usecka):
     d = (a.x2 - a.x1) * (b.y2 - b.y1) - (a.y2 - a.y1) * (b.x2 - b.x1)
     if abs(d) < 1e-15:
@@ -206,25 +216,69 @@ class Uchyty:
         self.cell = span / 150.0
         self.grid: dict[tuple[int, int], list] = {}
         self.velke: list = []  # prvky přes mnoho buněk (zkontrolují se vždy) – ochrana paměti
+        self._podle_handle: dict[str, list] = {}
+        self._vloz(self.us, self.ob, self.body, self.konce)
 
-        def add(obj, x0, y0, x1, y1):
-            c = self.cell
-            i0, i1 = int(math.floor(min(x0, x1) / c)), int(math.floor(max(x0, x1) / c))
-            j0, j1 = int(math.floor(min(y0, y1) / c)), int(math.floor(max(y0, y1) / c))
-            if (i1 - i0 + 1) * (j1 - j0 + 1) > 4000:
-                self.velke.append(obj)
-                return
-            for i in range(i0, i1 + 1):
-                for j in range(j0, j1 + 1):
-                    self.grid.setdefault((i, j), []).append(obj)
-        for u in self.us:
-            add(u, u.x1, u.y1, u.x2, u.y2)
-        for o in self.ob:
-            add(o, o.cx - o.r, o.cy - o.r, o.cx + o.r, o.cy + o.r)
-        for b in self.body:
-            add(b, b[0], b[1], b[0], b[1])
-        for k in self.konce:
-            add(("k",) + k, k[0], k[1], k[0], k[1])
+    @staticmethod
+    def _obalka(o):
+        if isinstance(o, Usecka):
+            return o.x1, o.y1, o.x2, o.y2, o.handle
+        if isinstance(o, Oblouk):
+            return o.cx - o.r, o.cy - o.r, o.cx + o.r, o.cy + o.r, o.handle
+        if o[0] == "k":
+            return o[1], o[2], o[1], o[2], o[3]
+        return o[0], o[1], o[0], o[1], o[2]
+
+    def _bunky(self, x0, y0, x1, y1):
+        c = self.cell
+        i0, i1 = int(math.floor(min(x0, x1) / c)), int(math.floor(max(x0, x1) / c))
+        j0, j1 = int(math.floor(min(y0, y1) / c)), int(math.floor(max(y0, y1) / c))
+        if (i1 - i0 + 1) * (j1 - j0 + 1) > 4000:
+            return None
+        return [(i, j) for i in range(i0, i1 + 1) for j in range(j0, j1 + 1)]
+
+    def _vloz(self, us, ob, body, konce):
+        for o in [*us, *ob, *body, *(("k",) + k for k in konce)]:
+            x0, y0, x1, y1, h = self._obalka(o)
+            self._podle_handle.setdefault(h, []).append(o)
+            bunky = self._bunky(x0, y0, x1, y1)
+            if bunky is None:
+                self.velke.append(o)
+                continue
+            for b in bunky:
+                self.grid.setdefault(b, []).append(o)
+
+    def zmen(self, pridano=(), odebrano=()) -> None:
+        """Doplní / odebere prvky bez přepočtu celého výkresu (úprava velkého výkresu nesmí čekat)."""
+        pryc = {e.dxf.handle for e in odebrano} | {e.dxf.handle for e in pridano}
+        vse: set[int] = set()
+        for h in pryc:
+            objs = self._podle_handle.pop(h, None)
+            if not objs:
+                continue
+            ids = {id(o) for o in objs}
+            for o in objs:
+                bunky = self._bunky(*self._obalka(o)[:4])
+                if bunky is None:
+                    self.velke = [v for v in self.velke if id(v) not in ids]
+                    continue
+                for b in bunky:
+                    seznam = self.grid.get(b)
+                    if seznam:
+                        seznam[:] = [v for v in seznam if id(v) not in ids]
+            vse |= ids
+        if vse:
+            self.us = [u for u in self.us if id(u) not in vse]
+            self.ob = [u for u in self.ob if id(u) not in vse]
+            self.body = [u for u in self.body if id(u) not in vse]
+            self.konce = [k for k in self.konce if k[2] not in pryc]
+        zive = [e for e in pridano if e.dxf.owner is not None and e.is_alive]
+        us, ob, body, konce = primitiva(zive)
+        self.us += us
+        self.ob += ob
+        self.body += body
+        self.konce += konce
+        self._vloz(us, ob, body, konce)
 
     def _blizko(self, x, y, tol):
         c = self.cell
@@ -246,8 +300,10 @@ class Uchyty:
         objs = self._blizko(x, y, tol)
         kand: list[Uchyt] = []
         z = self.zapnute
-        segs = [o for o in objs if isinstance(o, Usecka)]
-        arcs = [o for o in objs if isinstance(o, Oblouk)]
+        # jen prvky, které opravdu procházejí okolím kurzoru (buňka mřížky bývá větší než tolerance)
+        segs = [o for o in objs if isinstance(o, Usecka) and _vzdalenost_u(x, y, o) <= tol]
+        arcs = [o for o in objs if isinstance(o, Oblouk) and abs(math.hypot(x - o.cx, y - o.cy) - o.r) <= tol
+                or isinstance(o, Oblouk) and math.hypot(x - o.cx, y - o.cy) <= tol]
         for o in objs:
             if isinstance(o, tuple) and o[0] == "k" and "konec" in z:
                 kand.append(Uchyt("konec", o[1], o[2], o[3]))
@@ -284,6 +340,10 @@ class Uchyty:
                             kand.append(Uchyt("tecna", *o.bod(aa), o.handle))
         if "prusecik" in z:
             prim = segs + arcs
+            if len(prim) > MAX_PRUSECIKY:  # oddálený pohled na hustý výkres: jen nejbližší (jinak by se zasekl)
+                prim.sort(key=lambda o: _vzdalenost_u(x, y, o) if isinstance(o, Usecka)
+                          else abs(math.hypot(x - o.cx, y - o.cy) - o.r))
+                prim = prim[:MAX_PRUSECIKY]
             for i, a in enumerate(prim):
                 for b in prim[i + 1:]:
                     if a.handle == b.handle and isinstance(a, Usecka) and isinstance(b, Usecka):

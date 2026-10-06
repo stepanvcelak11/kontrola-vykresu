@@ -112,3 +112,30 @@ def test_rozdeleni_v_uzlu(make_dxf, tmp_path):
     d2 = read_dxf(out)
     assert check(d2, "pruseciky_bez_uzlu") == []
     assert len(d2.features) == 4
+
+
+def test_oprava_atributu(make_dxf, tmp_path):
+    """Automatická oprava atributů: barva, styl, tloušťka, výška a zarovnání textu podle pravidel."""
+    from kontrola.model import GeomType
+    from kontrola.rules import Rule, RuleSet
+
+    def build(msp, doc):
+        doc.linetypes.add("DASHED", pattern=[1.0, 0.6, -0.4])
+        msp.add_lwpolyline([(0, 0), (10, 0)], dxfattribs={"layer": "PLOT", "color": 3, "lineweight": 18})
+        msp.add_lwpolyline([(0, 5), (10, 5)], dxfattribs={"layer": "PLOT", "color": 1, "linetype": "DASHED",
+                                                          "lineweight": 35})  # správně
+        msp.add_text("12", dxfattribs={"layer": "POPIS", "height": 1.0, "color": 2}).set_placement((3, 3))
+    d = make_dxf(build, name="vstup.dxf")
+    rs = RuleSet(pravidla=[Rule(kod="P", nazev="Plot", hladina="PLOT", barva=1, styl_cary="DASHED", tloustka=0.35),
+                           Rule(kod="T", nazev="Popis", hladina="POPIS", geometrie=GeomType.TEXT, barva=2,
+                                vyska_textu=2.5, zarovnani="střed uprostřed")], paleta="autocad")
+    assert RepairOptions().symbologie  # ve výchozím stavu zapnuto
+    assert check(d, "symbologie", rules=rs)
+    out = tmp_path / "o.dxf"
+    rep = repair_drawing(d, rs, Config(), out)
+    assert rep.counts["Opravené atributy (symbologie)"] == 2
+    d2 = read_dxf(out)
+    assert check(d2, "symbologie", rules=rs) == []
+    t = next(f for f in d2.features if f.geom_type == GeomType.TEXT)
+    assert t.text_height == pytest.approx(2.5) and (t.halign, t.valign) == (1, 2)
+    assert t.geometry.distance(__import__("shapely").geometry.Point(3, 3)) < 0.01  # zůstal na místě

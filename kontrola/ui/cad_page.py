@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QToolButton,
                                QVBoxLayout, QWidget)
@@ -68,6 +68,12 @@ class CadView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
+        # vykreslený výkres se drží v mezipaměti: pohyb myši (kurzor, úchyty, gumička) překreslí jen popředí
+        self._mezipamet = None
+        self._klic_mezipameti = None
+        self._verze_sceny = 0
+        self._bez_popredi = False
+        self.scene().changed.connect(self._scena_zmenena)
         self.setRenderHint(QPainter.Antialiasing)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
@@ -264,7 +270,47 @@ class CadView(QGraphicsView):
         super().leaveEvent(e)
 
     # ------------------------------------------------------------ kurzor, úchyt, gumička, výběr
+    def _scena_zmenena(self, *_):
+        self._verze_sceny += 1
+        self.viewport().update()
+
+    def zahod_mezipamet(self):
+        self._mezipamet = None
+
+    def paintEvent(self, e):  # noqa: N802
+        vp = self.viewport()
+        try:
+            dpr = vp.devicePixelRatioF()
+            t = self.viewportTransform()
+            bg = self.backgroundBrush().color().rgba()
+            klic = (t.m11(), t.m12(), t.m21(), t.m22(), t.dx(), t.dy(), vp.width(), vp.height(), dpr,
+                    self._verze_sceny, bg, self.renderHints().value)
+            if self._mezipamet is None or self._klic_mezipameti != klic:
+                pm = QPixmap(max(1, round(vp.width() * dpr)), max(1, round(vp.height() * dpr)))
+                pm.setDevicePixelRatio(dpr)
+                pm.fill(self.backgroundBrush().color())
+                qp = QPainter(pm)
+                qp.setRenderHints(self.renderHints())
+                self._bez_popredi = True
+                try:
+                    self.render(qp, QRectF(0, 0, vp.width(), vp.height()), vp.rect(), Qt.IgnoreAspectRatio)
+                finally:
+                    self._bez_popredi = False
+                    qp.end()
+                self._mezipamet, self._klic_mezipameti = pm, klic
+            p = QPainter(vp)
+            p.drawPixmap(0, 0, self._mezipamet)
+            p.setRenderHints(self.renderHints())
+            p.setTransform(t)
+            self.drawForeground(p, self.mapToScene(vp.rect()).boundingRect())
+            p.end()
+        except Exception:  # noqa: BLE001 – při potížích obyčejné kreslení Qt
+            self._mezipamet = None
+            super().paintEvent(e)
+
     def drawForeground(self, p: QPainter, rect):  # noqa: N802
+        if self._bez_popredi:
+            return
         s = 1.0 / max(1e-12, abs(self.transform().m11()))
         if self.zvyraznene:
             p.setRenderHint(QPainter.Antialiasing, True)
@@ -1363,9 +1409,13 @@ class CadPage(QWidget):
         nevybiratelne = skryte | zamcene
         viditelne = [e for e in msp if e.dxf.get("layer", "0") not in skryte]
         if pridano is not None and self.index is not None and getattr(self.index, "msp", None) is msp:
-            self.view.uchyty = Uchyty(viditelne + [e for r in getattr(self, "reference", []) if self._je_model()
-                                                   and r.viditelna and r.uchyty and r.pripojena
-                                                   for e in r.prvky_pro_uchyty()], self.zapnute_uchyty)
+            if self.view.uchyty is not None and getattr(self, "_uchyty_msp", None) is msp:
+                self.view.uchyty.zmen([e for e in pridano if e.dxf.get("layer", "0") not in skryte], odebrano)
+            else:
+                self.view.uchyty = Uchyty(viditelne + [e for r in getattr(self, "reference", []) if self._je_model()
+                                                       and r.viditelna and r.uchyty and r.pripojena
+                                                       for e in r.prvky_pro_uchyty()], self.zapnute_uchyty)
+                self._uchyty_msp = msp
             self.index.zmen(pridano, odebrano, lambda e: e.dxf.get("layer", "0") in nevybiratelne)
             return
         if self._je_model():
@@ -1373,6 +1423,7 @@ class CadPage(QWidget):
                 if r.viditelna and r.uchyty and r.pripojena:
                     viditelne += r.prvky_pro_uchyty()
         self.view.uchyty = Uchyty(viditelne, self.zapnute_uchyty)
+        self._uchyty_msp = msp
         self.index = U.IndexVyberu(msp, (lambda e: e.dxf.get("layer", "0") in nevybiratelne) if nevybiratelne
                                    else None)
 
