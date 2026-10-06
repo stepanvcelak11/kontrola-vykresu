@@ -26,7 +26,8 @@ class ZapisnikPanel(QWidget):
         self._plneni = False
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 8, 0, 0)
-        bar = QHBoxLayout()
+        from .flow import RadekTlacitek
+        bar = RadekTlacitek()  # v úzkém okně se zalomí
         self.b_nacist = QPushButton("Načíst…")
         self.b_nacist.setToolTip("Zápisník Gromy (.zap) nebo Leica GSI")
         self.b_ulozit = QPushButton("Uložit .zap…")

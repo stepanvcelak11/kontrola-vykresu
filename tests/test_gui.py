@@ -2939,3 +2939,11 @@ def test_zavreni_s_neulozenym_vykresem_v_cad_se_zepta(window, monkeypatch):
     window.close()
     assert dotazy and window.isVisible() and window.tabs.currentWidget() is c
     window.ptat_pri_zavreni = False
+
+
+def test_okno_se_vejde_na_maly_notebook(window):
+    """Řádky tlačítek ve Výpočtech a CAD se v úzkém okně zalomí – okno se vejde i při zvětšení 150 %
+    (1920 px / 1,5 = 1280 px), dřív mělo minimum 1332 px."""
+    for p in ("uvod", "vykres", "zadani", "vypocty", "cad"):
+        window.show_page(p)
+        assert window.minimumSizeHint().width() <= 1100, p

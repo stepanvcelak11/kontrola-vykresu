@@ -74,7 +74,8 @@ class GrafikaBodu(QWidget):
         self.mod = "vyber"
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 8, 0, 0)
-        bar = QHBoxLayout()
+        from .flow import RadekTlacitek
+        bar = RadekTlacitek()  # v úzkém okně se zalomí
         self.ch_cisla = QCheckBox("Čísla")
         self.ch_vysky = QCheckBox("Výšky")
         self.ch_kody = QCheckBox("Kódy")

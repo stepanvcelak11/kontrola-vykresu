@@ -331,7 +331,8 @@ class VypoctyPage(QWidget):
         outer = lay
         lay = QVBoxLayout(seznam_w)
         lay.setContentsMargins(0, 8, 0, 0)
-        bar = QHBoxLayout()
+        from .flow import RadekTlacitek
+        bar = RadekTlacitek()  # v úzkém okně (notebook, zvětšení 150 %) se zalomí
         self.b_import = QPushButton("Import…")
         self.b_import.setToolTip("Načíst seznam souřadnic z TXT / CSV (formát se rozpozná, jde upravit)")
         self.b_export = QPushButton("Export…")
