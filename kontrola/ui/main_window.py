@@ -274,6 +274,9 @@ class MainWindow(QMainWindow):
         self.a_compare = self._act("Porovnat verze výkresu…", self.compare_versions, "Ctrl+D",
                                    "Co se změnilo od předchozí načtené verze (nebo proti jinému DXF): "
                                    "přidané, odebrané a upravené prvky barevně ve výkresu")
+        self.a_vzor_ucitele = self._act("Porovnat s výkresem učitele…", self.porovnej_s_ucitelem, None,
+                                        "Co oproti hotovému výkresu učitele chybí, přebývá, je v jiné vrstvě nebo "
+                                        "má jiné atributy (tolerantní párování kresby)")
         self.a_teacher = self._act("Porovnat s protokolem učitele…", self.compare_teacher, None,
                                    "Načíst protokol od učitele (GISoft / MGEO .log) a porovnat s nálezy programu")
         self.a_mgeo_cfg = self._act("Nastavení topologie od učitele (MGEO .clean.xml)…", self.nacti_mgeo_cleaner, None,
@@ -382,6 +385,7 @@ class MainWindow(QMainWindow):
         m_check.addAction(self.a_spojnice)
         m_check.addAction(self.a_batch)
         m_check.addAction(self.a_compare)
+        m_check.addAction(self.a_vzor_ucitele)
         m_check.addAction(self.a_vypocet)
         m_check.addAction(self.a_teacher)
         m_check.addAction(self.a_mgeo_cfg)
@@ -1765,6 +1769,62 @@ class MainWindow(QMainWindow):
         dlg.show()
         self.tabs.setCurrentWidget(self.split)
         self.statusBar().showMessage(f"Porovnání verzí: {len(changes)} změn.", 8000)
+
+    def porovnej_s_ucitelem(self, path: str | None = None):
+        """Porovnání s hotovým výkresem učitele (stejné zaměření kreslené učitelem)."""
+        if self.drawing is None:
+            QMessageBox.information(self, APP_NAME, "Nejdřív otevřete svůj výkres.")
+            return
+        if path is None:
+            start = self.settings.value("cesty/vykres_ucitele", self.settings.value("cesty/vykres", str(Path.home())))
+            path, _ = QFileDialog.getOpenFileName(self, "Hotový výkres od učitele", start, DRAWING_FILTER)
+            if not path:
+                return
+        self.settings.setValue("cesty/vykres_ucitele", str(path))
+        if self.task is not None and self.task.is_running():
+            QMessageBox.information(self, APP_NAME, "Počkejte na dokončení probíhající úlohy.")
+            return
+        oda = self.project.config.oda_cesta if self.project else None
+        self._run_task(lambda progress, cancelled: load_drawing(Path(path), lambda p, m="": progress(int(p), m), oda),
+                       self._ukaz_vzor_ucitele, f"Načítám {Path(path).name}…", self._load_failed)
+
+    def _ukaz_vzor_ucitele(self, ucitel: Drawing):
+        from html import escape
+
+        from PySide6.QtGui import QColor
+
+        from ..vzor_ucitele import ATRIBUTY, CHYBI, DRUHY, JINA_VRSTVA, JINY_TEXT, NAVIC, porovnej
+        from .compare_dialog import CompareDialog
+        tol = 0.10
+        try:
+            tol = max(0.02, float(self.project.config.tolerance) * 10) if self.project else 0.10
+        except (AttributeError, TypeError, ValueError):
+            pass
+        r = porovnej(ucitel, self.drawing, tol=min(tol, 0.25))
+        if getattr(self, "_compare_dlg", None) is not None:
+            self._compare_dlg.close()
+        barvy = {CHYBI: QColor("#DC2626"), NAVIC: QColor("#16A34A"), JINA_VRSTVA: QColor("#F59E0B"),
+                 JINY_TEXT: QColor("#0EA5E9"), ATRIBUTY: QColor("#7C3AED")}
+        name = lambda d: Path(d.source_path or d.path).name  # noqa: E731
+        hl = (f"<b>Učitel:</b> {escape(name(ucitel))}<br><b>Vy:</b> {escape(name(self.drawing))}<br><br>"
+              f"<b>{escape(r.souhrn())}</b>" + "".join(f"<br><i>{escape(p)}</i>" for p in r.poznamky))
+        radky = "".join(
+            f"<tr><td>{escape(v.vrstva)}</td><td align='right'>{v.ucitel_pocet}</td>"
+            f"<td align='right'>{v.student_pocet}</td><td align='right'>{v.ucitel_delka:.1f}</td>"
+            f"<td align='right'>{v.student_delka:.1f}</td><td align='right'><b>{v.chyby or ''}</b></td></tr>"
+            for v in r.vrstvy)
+        vrstvy = ("<b>Po vrstvách</b><table cellspacing='0' cellpadding='3' width='100%'><tr><th align='left'>Vrstva"
+                  "</th><th>prvků učitel</th><th>vy</th><th>délka učitel (m)</th><th>vy</th><th>rozdílů</th></tr>"
+                  + radky + "</table>") if r.vrstvy else ""
+        dlg = CompareDialog(self.view, r.zmeny, name(ucitel), name(self.drawing), self, druhy=DRUHY, barvy=barvy,
+                            titulek="Porovnání s výkresem učitele", hlavicka=hl, carkovane=(CHYBI,),
+                            dalsi_html=vrstvy)
+        dlg.otherRequested.connect(lambda: self.porovnej_s_ucitelem())
+        dlg.finished.connect(lambda *_: setattr(self, "_compare_dlg", None))
+        self._compare_dlg = dlg
+        dlg.show()
+        self.tabs.setCurrentWidget(self.split)
+        self.statusBar().showMessage("Porovnání s výkresem učitele: " + r.souhrn(), 10000)
 
     def _set_autoupdate(self, on: bool):
         self.settings.setValue("aktualizace/kontrolovat", bool(on))

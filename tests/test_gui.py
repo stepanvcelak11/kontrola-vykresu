@@ -2874,3 +2874,28 @@ def test_dialogy_dlouhe_popisky_se_zalamuji(window):
     QApplication.processEvents()
     assert d.width() < 700
     d.close()
+
+
+def test_porovnani_s_vykresem_ucitele(window, tmp_path):
+    import shutil
+
+    import ezdxf
+    w = window
+    p = tmp_path / "student.dxf"
+    shutil.copy(UKAZKA, p)
+    w.load_drawing_file(p, add_to_project=False)
+    assert w._wait(lambda: _idle(w) and w.drawing is not None, 30)
+    doc = ezdxf.readfile(p)
+    bb = [f.geometry.bounds for f in w.drawing.features if f.geometry is not None and not f.geometry.is_empty]
+    x0, y0 = min(b[0] for b in bb), min(b[1] for b in bb)
+    x1, y1 = max(b[2] for b in bb), max(b[3] for b in bb)
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    doc.modelspace().add_line((cx, cy), (cx + 5, cy), dxfattribs={"layer": "UCITEL_NAVIC"})
+    u = tmp_path / "ucitel.dxf"
+    doc.saveas(u)
+    w.porovnej_s_ucitelem(str(u))
+    assert w._wait(lambda: _idle(w) and getattr(w, "_compare_dlg", None) is not None, 30)
+    dlg = w._compare_dlg
+    assert any("Chybí" in z.popis and z.vrstva == "UCITEL_NAVIC" for z in dlg.changes)
+    dlg.table.setCurrentCell(0, 0)
+    dlg.close()

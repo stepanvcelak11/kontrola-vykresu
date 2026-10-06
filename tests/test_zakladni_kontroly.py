@@ -72,6 +72,20 @@ def test_duplicitni_linie_i_opacny_smer(make_dxf):
     assert issues[0].message == "Duplicitní prvek (2×)"
 
 
+def test_duplicitni_cara_s_jinymi_lomovymi_body(make_dxf):
+    """Stejná čára s lomovým bodem navíc na přímce, uzavřená čára s jiným počátkem = duplicita."""
+    def build(msp, doc):
+        msp.add_line((0, 0), (10, 0))
+        msp.add_lwpolyline([(0, 0), (4, 0), (10, 0)])
+        msp.add_lwpolyline([(20, 0), (30, 0), (30, 10), (20, 10)], close=True)
+        msp.add_lwpolyline([(30, 10), (20, 10), (20, 0), (30, 0)], close=True)
+        msp.add_lwpolyline([(0, 5), (4, 5)])  # jen část jiné čáry – to není duplicita
+        msp.add_line((0, 5), (10, 5))
+    d = make_dxf(build)
+    zpravy = sorted(i.message for i in check(d, "duplicity"))
+    assert len(zpravy) == 2, zpravy
+
+
 def test_duplicitni_body_a_ruzne_hladiny(make_dxf):
     def build(msp, doc):
         msp.add_point((1, 1))

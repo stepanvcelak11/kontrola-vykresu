@@ -426,6 +426,36 @@ class Duplicity(Check):
             elif first.dxftype == "INSERT":
                 msg = f"Duplicitní značka (buňka) {first.block_name or ''} ({len(fs)}×)".replace("  ", " ")
             yield ctx.issue(self, fs, msg, geometry=first.geometry)
+        # stejná čára jinak zapsaná: jiný počet lomových bodů na přímce, uzavřená čára s jiným počátkem
+        # (jako modul Duplicity MGEO – geometrické porovnání, ne jen shoda souřadnic)
+        hlasene = {id(f) for fs in groups.values() if len(fs) > 1 for f in fs}
+        lin = [f for f in feats if f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and id(f) not in hlasene]
+        if len(lin) < 2:
+            return
+        geoms = np.array([f.geometry.boundary if f.geom_type == GeomType.POLYGON else f.geometry for f in lin],
+                         dtype=object)
+        eps = max(ctx.precision, 1e-4)
+        tree = shapely.STRtree(geoms)
+        a, b = tree.query(geoms, predicate="dwithin", distance=eps)
+        m = a < b
+        spojene: dict[int, set[int]] = {}
+        for i, j in zip(a[m], b[m]):
+            fi, fj = lin[i], lin[j]
+            if same_layer and fi.layer.upper() != fj.layer.upper():
+                continue
+            li, lj = geoms[i].length, geoms[j].length
+            if abs(li - lj) > 10 * eps or li <= 10 * eps:
+                continue
+            if geoms[i].hausdorff_distance(geoms[j]) <= 10 * eps:
+                spojene.setdefault(i, {i}).add(j)
+        videno: set[int] = set()
+        for i, skup in spojene.items():
+            if i in videno:
+                continue
+            videno |= skup
+            fs = [lin[k] for k in sorted(skup)]
+            yield ctx.issue(self, fs, f"Duplicitní prvek ({len(fs)}×) – stejná čára s jinými lomovými body",
+                            geometry=fs[0].geometry)
 
 
 @register
