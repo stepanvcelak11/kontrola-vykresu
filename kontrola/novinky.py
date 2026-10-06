@@ -8,6 +8,20 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (6, "6. října 2026", [
+        "<b>Instalace</b> místo jednoho .exe: Windows program při spuštění neblokuje, startuje rychleji a "
+        "aktualizace proběhne sama (Nápověda → Zkontrolovat aktualizace).",
+        "<b>Levá lišta</b>: Otevřít výkres je dole u Nastavení (už se neplete s Kontrolou), šipka vedle "
+        "nabídne naposledy otevřené výkresy.",
+        "<b>CAD</b> se při zavření zeptá na neuložený výkres, každou 1,5 minuty ukládá záložní kopii a po pádu "
+        "nabídne výkres obnovit.",
+        "<b>Malý notebook</b>: okno se vejde i při zvětšení 125–150 %, řádky tlačítek se zalomí.",
+        "<b>Výpočty → Úlohy</b>: hledání úlohy, polygonový pořad <b>uzavřený</b> a <b>volný</b>, "
+        "<b>testování přesnosti ÚM</b> (kontrolní body a délky podle ČSN 01 3410 a Pokynu pro tvorbu ÚM).",
+        "<b>Technická zpráva</b> (Soubor → Export): kostra podle Pokynu, předvyplněná z projektu.",
+        "<b>Porovnat s výkresem učitele</b> (Kontrola), <b>náležitosti mapového listu</b> (rám, měřítko, "
+        "severka…), lepší <b>duplicity</b>, <b>kurzíva z DGN</b>, oprava atributů v Automatické opravě.",
+    ]),
     (5, "1. října 2026 – noc", [
         "<b>CAD</b> (nová stránka v levé liště): DXF výkres na plátně, zoom a posun, souřadnice S-JTSK, "
         "úchyty (koncový bod, střed, průsečík, kolmice, tečna), ortho a polární režim, příkazový řádek "

@@ -97,8 +97,9 @@ FUNKCE = [
         ("Zápisník", "Zápisník .zap z Gromy nebo GSI z Leicy: úpravy stanovisek a záměr, uložení .zap, polární "
          "metoda dávkou s protokolem jako Groma, vyrovnání sítě MNČ s elipsami chyb.", "_zapisnik"),
         ("Úlohy", "Směrník a délka, rajón, protínání, volné stanovisko, transformace, výměry, staničení, ortogonální "
-         "metoda, polygonový pořad, průsečíky, vytyčovací prvky, nivelace, oddělení parcely, S-JTSK ↔ WGS84; "
-         "protokol do PDF.", "_ulohy"),
+         "metoda, polygonový pořad (připojený, uzavřený, volný), průsečíky, vytyčovací prvky, nivelace, oddělení "
+         "parcely, S-JTSK ↔ WGS84, testování přesnosti ÚM (ČSN 01 3410); protokol do PDF. Kostra technické "
+         "zprávy v Soubor → Export.", "_ulohy"),
         ("QTrig", "Body zakázky z terénní aplikace QTrig přes firemní cloud (přírůstkově, i hlídání každou minutu) "
          "nebo z exportu; nivelační zápisník a zápisník směrů z QTrig.", "_qtrig"),
     ]),
