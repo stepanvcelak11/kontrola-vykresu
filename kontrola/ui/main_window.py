@@ -464,8 +464,15 @@ class MainWindow(QMainWindow):
             self.page_group.addAction(act)
             tb.addAction(act)
             self.a_page[key] = act
+        # mezera + oddělovač: akce nejsou stránky (dřív se Otevřít pletlo s Výkresem a Kontrolou)
+        def _mezera(v=10):
+            w = QWidget()
+            w.setFixedHeight(v)
+            tb.addWidget(w)
+        _mezera()
         tb.addSeparator()
-        for a in (self.a_open, self.a_check, self.a_recheck, self.a_ready):
+        _mezera(6)
+        for a in (self.a_check, self.a_recheck, self.a_ready):
             tb.addAction(a)
         tb.addAction(self.a_exp_pdf)
         a_por = self.poradce_dock.toggleViewAction()
@@ -477,6 +484,9 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         tb.addWidget(spacer)
+        # soubory dole u nastavení – daleko od Kontroly, aby se při spěchu nekliklo vedle
+        tb.addAction(self.a_open)
+        tb.addSeparator()
         tb.addAction(self.a_settings)
         # klasická nabídka (Soubor, Zobrazení, Kontrola, Nápověda) schovaná pod ☰
         self.a_menu = QAction("Nabídka", self)
@@ -495,7 +505,7 @@ class MainWindow(QMainWindow):
             if not act.shortcut().isEmpty():
                 self.addAction(act)
         # krátké popisky pod ikonou (celé znění je v tooltipu)
-        for act, short in ((self.a_open, "Otevřít"), (self.a_check, "Kontrola"), (self.a_recheck, "Znovu"),
+        for act, short in ((self.a_open, "Otevřít\nvýkres"), (self.a_check, "Kontrola"), (self.a_recheck, "Znovu"),
                            (self.a_ready, "Odevzdat"), (self.a_exp_pdf, "Protokol"), (a_por, "Poradce"), (self.a_settings, "Nastavení"),
                            (self.a_menu, "Nabídka")):
             act.setIconText(short)
