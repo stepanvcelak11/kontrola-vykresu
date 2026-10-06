@@ -779,6 +779,103 @@ def u_polygon_volny(s, h):
     return Vysledek(prot, nove)
 
 
+def _trida(h) -> int:
+    t = str(h.get("trida") or "3").strip()[:1]
+    return int(t) if t in ("1", "2", "3", "4", "5") else 3
+
+
+def u_test_souradnic(s, h):
+    """Testování přesnosti ÚM: výsledné souřadnice ze seznamu × nezávislé kontrolní určení."""
+    trida = _trida(h)
+    k = 1.0 if str(h.get("k") or "").startswith("1") else 2.0
+    povrch = h.get("povrch") or "zpevněný"
+    dvojice, chybi = [], []
+    for i, line in enumerate((h.get("kontrolni") or "").splitlines(), 1):
+        parts = line.replace(";", " ").split()
+        if not parts:
+            continue
+        if len(parts) < 3:
+            raise ChybaVstupu(f"Řádek {i}: zadejte „číslo Y X [Z]“.")
+        try:
+            cis = [float(t.replace(",", ".")) for t in parts[1:4]]
+        except ValueError:
+            cis = []
+        if len(cis) < 2 or not all(math.isfinite(v) for v in cis):
+            raise ChybaVstupu(f"Řádek {i}: souřadnice musí být čísla.")
+        b = s.najdi(parts[0])
+        if b is None:
+            chybi.append(parts[0])
+            continue
+        kz = cis[2] if len(cis) > 2 else None
+        dvojice.append((b.cislo, (b.y, b.x, b.z), (cis[0], cis[1], kz)))
+    if not dvojice:
+        raise ChybaVstupu("Žádný z kontrolních bodů není v seznamu souřadnic.")
+    t = V.test_presnosti_souradnic(dvojice, trida, k, povrch)
+    u_xy, u_h, _ = V.TRIDY_PRESNOSTI[trida]
+    ano = lambda ok: "vyhovuje" if ok else "NEVYHOVUJE"  # noqa: E731
+    prot = _hlavicka("Testování přesnosti souřadnic a výšek (ČSN 01 3410)")
+    prot += [f"třída přesnosti {trida}: u_xy = {u_xy:.2f} m, u_H = {u_h:.2f} m; k = {k:g} "
+             f"({'stejná přesnost obou určení' if k == 2 else 'kontrolní určení výrazně přesnější'})",
+             "  bod                 ΔY       ΔX       Δp           ΔH"]
+    for c, dy, dx, dp, ok, dh, okh in t.radky:
+        hh = "" if dh is None else f"{dh:>9.3f}{'' if okh else '  !'}"
+        prot.append(f"  {c:<14} {dy:>8.3f} {dx:>8.3f} {dp:>8.3f}{'' if ok else ' !'}   {hh}")
+    prot += ["",
+             f"N = {t.n}" + (f" – méně než N_min = {V.N_MIN}, statistický test je jen orientační"
+                                  if t.n < V.N_MIN else ""),
+             f"1) |Δp| ≤ 1,7·u_xy = {t.mez_dp:.3f} m: {ano(all(r[4] for r in t.radky))}"
+             + ("" if all(r[4] for r in t.radky) else f" (označeno !: {sum(not r[4] for r in t.radky)})"),
+             f"2) s_x = {t.s_x:.3f} m, s_y = {t.s_y:.3f} m, s_xy = {t.s_xy:.3f} m ≤ ω·u_xy = {t.mez_sxy:.3f} m: "
+             f"{ano(t.s_xy <= t.mez_sxy)}",
+             f"Přesnost souřadnic: {ano(t.vyhovuje).upper()}"]
+    if t.n_h:
+        prot += ["",
+                 f"Výšky (N = {t.n_h}, {povrch} povrch):",
+                 f"1) |ΔH| ≤ 2·u_H·√k = {t.mez_dh:.3f} m: {ano(all(r[6] for r in t.radky if r[6] is not None))}",
+                 f"2) s_H = {t.s_h:.3f} m ≤ {t.mez_sh:.3f} m: {ano(t.s_h <= t.mez_sh)}",
+                 f"Přesnost výšek: {ano(t.vyhovuje_h).upper()}"]
+    if chybi:
+        prot.append(f"V seznamu chybí body: {', '.join(chybi)}")
+    return Vysledek(prot)
+
+
+def u_test_delek(s, h):
+    trida = _trida(h)
+    mereni = []
+    for i, line in enumerate((h.get("delky") or "").splitlines(), 1):
+        parts = line.replace(";", " ").split()
+        if not parts:
+            continue
+        if len(parts) < 3:
+            raise ChybaVstupu(f"Řádek {i}: zadejte „bod bod délka“.")
+        try:
+            dk = float(parts[2].replace(",", "."))
+        except ValueError:
+            dk = math.nan
+        if not math.isfinite(dk) or dk <= 0:
+            raise ChybaVstupu(f"Řádek {i}: „{parts[2]}“ není kladná délka.")
+        a, b = s.najdi(parts[0]), s.najdi(parts[1])
+        if a is None or b is None:
+            raise ChybaVstupu(f"Řádek {i}: bod {parts[0] if a is None else parts[1]} není v seznamu souřadnic.")
+        mereni.append((a.cislo, b.cislo, a, b, dk))
+    if not mereni:
+        raise ChybaVstupu("Zadejte kontrolní délky (řádek: bod bod délka).")
+    t = V.test_presnosti_delek(mereni, trida)
+    prot = _hlavicka("Testování přesnosti – kontrolní délky (ČSN 01 3410)")
+    prot += [f"třída přesnosti {trida}: u_xy = {V.TRIDY_PRESNOSTI[trida][0]:.2f} m, "
+             "u_d = 1,5·u_xy·(d + 12)/(d + 20)",
+             "  od        do           d_m        d_k       Δd      u_d"]
+    for a, b, dm, dk, dd, ud, ok2, ok1 in t.radky:
+        prot.append(f"  {a:<9} {b:<9} {dm:>9.3f} {dk:>9.3f} {dd:>8.3f} {ud:>8.3f}"
+                    + ("" if ok1 else ("  (> u_d)" if ok2 else "  ! > 2·u_d")))
+    vse2 = all(r[6] for r in t.radky)
+    prot += ["",
+             f"I.  |Δd| ≤ 2·u_d u všech délek: {'ano' if vse2 else 'NE'}",
+             f"II. |Δd| ≤ u_d u {t.podil * 100:.0f} % délek (potřeba aspoň 60 %): {'ano' if t.podil >= 0.6 else 'NE'}",
+             f"Relativní přesnost: {'VYHOVUJE' if t.vyhovuje else 'NEVYHOVUJE'}"]
+    return Vysledek(prot)
+
+
 def u_oddeleni(s, h):
     parc = _radky_bodu(s, h.get("body") or "")
     if len(parc) < 3:
@@ -913,6 +1010,18 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – počátek, nové body, konec", "radky",
            napoveda="levé úhly od zadní k přední záměře, po směru hodin"),
       Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky")], u_polygon),
+    ("Testování přesnosti ÚM – body", "Výsledné souřadnice × nezávislé kontrolní zaměření: Δp, s_xy, výšky "
+     "(Pokyn pro tvorbu ÚM 5.1 b, 5.2; ČSN 01 3410).",
+     [Pole("trida", "Třída přesnosti", "volba", "3", ("1", "2", "3", "4", "5")),
+      Pole("k", "Kontrolní určení", "volba", "2 – stejná přesnost",
+           ("2 – stejná přesnost", "1 – výrazně přesnější")),
+      Pole("povrch", "Povrch (pro výšky)", "volba", "zpevněný", ("zpevněný", "nezpevněný")),
+      Pole("kontrolni", "Kontrolní určení (řádek: číslo Y X [Z])", "radky",
+           napoveda="čísla bodů ze seznamu souřadnic, souřadnice z kontrolního měření")], u_test_souradnic),
+    ("Testování přesnosti ÚM – délky", "Kontrolní délky přímých spojnic × délky ze souřadnic "
+     "(Pokyn pro tvorbu ÚM 5.1 a; ČSN 01 3410).",
+     [Pole("trida", "Třída přesnosti", "volba", "3", ("1", "2", "3", "4", "5")),
+      Pole("delky", "Kontrolní délky (řádek: bod bod délka[m])", "radky")], u_test_delek),
     ("Polygonový pořad uzavřený", "Pořad začíná i končí na stejném bodě: úhlové a souřadnicové vyrovnání.",
      [Pole("ao", "Orientace (bod)"), Pole("a", "Počáteční a koncový bod"),
       Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – A od orientace, nové body, A k orientaci", "radky",

@@ -517,6 +517,104 @@ def polygonovy_porad_volny(a, a_orient, uhly: list[float], delky: list[float], c
     return body
 
 
+# ------------------------------------------------------------------ testování přesnosti účelové mapy (ČSN 01 3410)
+# třída přesnosti → (u_xy, u_H, u_v) [m]; 3. třída podle Pokynu pro tvorbu ÚM (tab. 5.1), ostatní podle ČSN 01 3410
+TRIDY_PRESNOSTI = {1: (0.04, 0.03, 0.13), 2: (0.08, 0.07, 0.33), 3: (0.14, 0.12, 0.50),
+                   4: (0.26, 0.18, 0.88), 5: (0.50, 0.35, 1.75)}
+N_MIN = 100  # minimální rozsah reprezentativního výběru
+
+
+def omega_2n(n: int) -> float:
+    """Koeficient ω_2N (Pokyn tab. 5.2): N 100–300 → 1,10, nad 300 → 1,00 (menší výběr: 1,10 orientačně)."""
+    return 1.10 if n <= 300 else 1.00
+
+
+def omega_n(n: int) -> float:
+    """Koeficient ω_N pro výšky (Pokyn tab. 5.4): N 100–499 → 1,05, od 500 → 1,00."""
+    return 1.05 if n < 500 else 1.00
+
+
+def u_delky(d: float, u_xy: float) -> float:
+    """Kritérium pro délku spojnice (vztah 5.2): u_d = 1,5 · u_xy · (d + 12) / (d + 20)."""
+    return 1.5 * u_xy * (d + 12) / (d + 20)
+
+
+@dataclass
+class TestSouradnic:
+    radky: list  # (číslo, ΔY, ΔX, Δp, vyhovuje, ΔH | None, vyhovuje_H | None)
+    n: int
+    s_x: float
+    s_y: float
+    s_xy: float
+    mez_dp: float
+    mez_sxy: float
+    vyhovuje: bool
+    n_h: int = 0
+    s_h: float | None = None
+    mez_dh: float | None = None
+    mez_sh: float | None = None
+    vyhovuje_h: bool | None = None
+
+
+def test_presnosti_souradnic(dvojice: list, trida: int = 3, k: float = 2.0,
+                             povrch: str = "zpevněný") -> TestSouradnic:
+    """Testování přesnosti ÚM (Pokyn 5.1 b, 5.2): ``dvojice`` = (číslo, výsledný bod, kontrolní bod),
+    body (y, x[, z]). k = 2 při stejné přesnosti obou určení, k = 1 při výrazně přesnějším kontrolním."""
+    if not dvojice:
+        raise ValueError("Žádné body k porovnání.")
+    u_xy, u_h, _u_v = TRIDY_PRESNOSTI[trida]
+    mez_dp = 1.7 * u_xy
+    radky, sdx, sdy, sdh, nh = [], 0.0, 0.0, 0.0, 0
+    mez_dh = 2 * u_h * math.sqrt(k)
+    for c, m, kk in dvojice:
+        dy, dx = m[0] - kk[0], m[1] - kk[1]
+        dp = math.hypot(dy, dx)
+        dh = None
+        if len(m) > 2 and len(kk) > 2 and m[2] is not None and kk[2] is not None:
+            dh = m[2] - kk[2]
+            sdh += dh * dh
+            nh += 1
+        radky.append((c, dy, dx, dp, dp <= mez_dp, dh, None if dh is None else abs(dh) <= mez_dh))
+        sdx += dx * dx
+        sdy += dy * dy
+    n = len(dvojice)
+    s_x, s_y = math.sqrt(sdx / (k * n)), math.sqrt(sdy / (k * n))
+    s_xy = math.sqrt(0.5 * (s_x ** 2 + s_y ** 2))
+    mez_sxy = omega_2n(n) * u_xy
+    t = TestSouradnic(radky, n, s_x, s_y, s_xy, mez_dp, mez_sxy,
+                      all(r[4] for r in radky) and s_xy <= mez_sxy)
+    if nh:
+        t.n_h = nh
+        t.s_h = math.sqrt(sdh / (k * nh))
+        t.mez_dh = mez_dh
+        t.mez_sh = (3 if povrch.startswith("nezp") else 1) * omega_n(nh) * u_h
+        t.vyhovuje_h = all(r[6] for r in radky if r[6] is not None) and t.s_h <= t.mez_sh
+    return t
+
+
+@dataclass
+class TestDelek:
+    radky: list  # (od, do, d_m, d_k, Δd, u_d, ≤2u, ≤u)
+    podil: float  # podíl délek s |Δd| ≤ u_d
+    vyhovuje: bool
+
+
+def test_presnosti_delek(mereni: list, trida: int = 3, k: float = 1.0) -> TestDelek:
+    """Pokyn 5.1 a): ``mereni`` = (od, do, bod_od, bod_do, d_k) – délka z kontrolního měření.
+    Vyhovuje: všechna |Δd| ≤ 2·u_d·k a aspoň 60 % |Δd| ≤ u_d·k."""
+    if not mereni:
+        raise ValueError("Žádné kontrolní délky.")
+    u_xy = TRIDY_PRESNOSTI[trida][0]
+    radky = []
+    for a, b, pa, pb, dk in mereni:
+        dm = delka(pa, pb)
+        dd = dm - dk
+        ud = u_delky(dm, u_xy) * k
+        radky.append((a, b, dm, dk, dd, ud, abs(dd) <= 2 * ud, abs(dd) <= ud))
+    podil = sum(r[7] for r in radky) / len(radky)
+    return TestDelek(radky, podil, all(r[6] for r in radky) and podil >= 0.6)
+
+
 # ------------------------------------------------------------------ oddělení parcely
 def oddeleni_rovnobezne(parcela: list, a, b, vymera_cil: float) -> tuple[list[P], float]:
     """Oddělí od parcely (mnohoúhelník) část dané výměry dělicí čarou rovnoběžnou s přímkou A–B.

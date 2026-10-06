@@ -362,3 +362,27 @@ def test_polygonovy_porad_uzavreny_a_volny():
     for n, q in zip(v.nove, P):
         assert abs(n.y - q[0]) < 1e-6 and abs(n.x - q[1]) < 1e-6
     assert {"Polygonový pořad uzavřený", "Polygonový pořad volný"} <= {u[0] for u in ULOHY}
+
+
+def test_testovani_presnosti_um():
+    """Pokyn pro tvorbu ÚM 5.1/5.2: 3. třída u_xy 0,14 m – Δp ≤ 0,238 m, s_xy ≤ 1,1·0,14; délky u_d."""
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_test_delek, u_test_souradnic
+    assert V.u_delky(8.0, 0.14) == pytest.approx(1.5 * 0.14 * 20 / 28)
+    s = SeznamBodu()
+    rnd = random.Random(3)
+    radky = []
+    for i in range(20):
+        y, x, z = 600000 + rnd.uniform(0, 200), 1160000 + rnd.uniform(0, 200), 250 + rnd.uniform(0, 5)
+        s.pridej([Bod(str(i), y, x, z)])
+        radky.append(f"{i} {y + rnd.gauss(0, 0.03):.3f} {x + rnd.gauss(0, 0.03):.3f} {z + rnd.gauss(0, 0.02):.3f}")
+    t = "\n".join(u_test_souradnic(s, {"trida": "3", "kontrolni": "\n".join(radky)}).protokol)
+    assert "Přesnost souřadnic: VYHOVUJE" in t and "Přesnost výšek: VYHOVUJE" in t and "N = 20 " in t
+    radky[0] = "0 1 1 1"  # hrubá chyba
+    t = "\n".join(u_test_souradnic(s, {"trida": "3", "kontrolni": "\n".join(radky)}).protokol)
+    assert "Přesnost souřadnic: NEVYHOVUJE" in t
+    b0, b1 = s.najdi("0"), s.najdi("1")
+    d = math.hypot(b0.y - b1.y, b0.x - b1.x)
+    ok = "\n".join(u_test_delek(s, {"delky": f"0 1 {d + 0.02:.3f}"}).protokol)
+    spatne = "\n".join(u_test_delek(s, {"delky": f"0 1 {d + 1:.3f}"}).protokol)
+    assert "Relativní přesnost: VYHOVUJE" in ok and "Relativní přesnost: NEVYHOVUJE" in spatne
