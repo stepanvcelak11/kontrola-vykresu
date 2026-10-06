@@ -344,3 +344,78 @@ class PopisVzhuruNohama(Check):
             a = (f.rotation or 0.0) % 360
             if 90 + r < a < 270 - r:
                 yield ctx.issue(self, f, f"Popis „{f.text.strip()}“ je vzhůru nohama (natočení {a:.0f}°)")
+
+
+def _bez_diakritiky(s: str) -> str:
+    import unicodedata
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
+
+
+# (klíč, co chybí, regulární výraz na texty bez diakritiky)
+_NALEZITOSTI = [
+    ("meritko", "měřítko mapy (např. „1 : 500“)", r"\b1\s*:\s*\d{2,5}\b"),
+    ("jtsk", "souřadnicový systém (S-JTSK)", r"jtsk"),
+    ("bpv", "výškový systém (Bpv)", r"\bbpv\b|balt"),
+    ("zpracovatel", "kdo mapu vyhotovil („Vyhotovil: …“)", r"vyhotovil|zpracoval|vypracoval|autor|kreslil"),
+    ("datum", "datum nebo rok vyhotovení", r"\b(19|20)\d\d\b"),
+]
+
+
+def _ma_ram(ctx: CheckContext, feats: list[Feature]) -> bool:
+    """Mapový rám: uzavřený obdélník, který obepíná (skoro) celou kresbu."""
+    import shapely.geometry as sg
+    geoms = [f.geometry for f in feats if f.geometry is not None and not f.geometry.is_empty]
+    if not geoms:
+        return True
+    x0, y0, x1, y1 = shapely.GeometryCollection(geoms).bounds
+    plocha = max((x1 - x0) * (y1 - y0), 1e-9)
+    for f in feats:
+        if not f.is_linear or not (f.closed or f.geom_type == GeomType.POLYGON):
+            continue
+        g = f.geometry
+        poly = g if g.geom_type == "Polygon" else sg.Polygon(g.coords) if g.geom_type == "LineString" else None
+        if poly is None or not poly.is_valid or poly.area < 0.6 * plocha:
+            continue
+        if poly.area / max(poly.minimum_rotated_rectangle.area, 1e-9) > 0.98:  # obdélník (i natočený)
+            return True
+    return False
+
+
+@register
+class NalezitostiMapy(Check):
+    id = "nalezitosti_mapy"
+    nazev = "Náležitosti mapového listu"
+    skupina = "Kartografie"
+    popis = ("Hotová mapa (předmět Mapování, účelová mapa podle ČSN 01 3410) má mít rám, měřítko, souřadnicový "
+             "a výškový systém (S-JTSK, Bpv), severku, kdo ji vyhotovil a kdy. Kontrola hledá tyto popisy "
+             "ve výkresu – co vaše zadání nevyžaduje, vypněte v parametrech.")
+    vychozi_zavaznost = Severity.INFO
+    vychozi_zapnuto = False
+    parametry = [Param("ram", "Vyžadovat mapový rám", "bool", True),
+                 Param("severka", "Vyžadovat severku", "bool", True)] + [
+        Param(k, "Vyžadovat " + popis.split(" (")[0], "bool", True) for k, popis, _ in _NALEZITOSTI]
+
+    def run(self, ctx: CheckContext):
+        feats = ctx.features()
+        if not feats:
+            return
+        texty = [_bez_diakritiky(f.text) for f in feats if f.text]
+        for f in feats:
+            texty += [_bez_diakritiky(t[0]) for t in f.display_texts]
+            texty += [_bez_diakritiky(str(v)) for v in f.attributes.values()]
+        vse = "\n".join(texty)
+        geoms = [f.geometry for f in feats if f.geometry is not None and not f.geometry.is_empty]
+        x0, y0, x1, y1 = shapely.GeometryCollection(geoms).bounds
+        roh = (x1, y0)  # pravý dolní roh – tam bývá popisové pole
+        chybi = []
+        if ctx.param("ram", True) and not _ma_ram(ctx, feats):
+            chybi.append("mapový rám (uzavřený obdélník kolem kresby)")
+        if ctx.param("severka", True):
+            bloky = " ".join(_bez_diakritiky(f.block_name or "") for f in feats)
+            if not re.search(r"sever|north|smer_s|\bs\b", bloky) and not re.search(r"^\s*(s|sever)\s*$", vse, re.M):
+                chybi.append("severka (buňka/blok se jménem „severka“ nebo text „S“)")
+        for k, popis, vzor in _NALEZITOSTI:
+            if ctx.param(k, True) and not re.search(vzor, vse):
+                chybi.append(popis)
+        for c in chybi:
+            yield ctx.issue(self, None, f"Na mapě chybí {c}", at=roh)

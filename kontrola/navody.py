@@ -66,6 +66,9 @@ _ATTR = {
     "cislo_bodu_daleko": "Přesuňte číslo hned k bodu (vpravo nahoru). Pokud se posunul bod, vraťte ho na "
                          "souřadnice ze seznamu (Ověřit seznam souřadnic).",
     "popis_vzhuru_nohama": "Otočte text o 180° (Otočit – Rotate), aby se četl zdola nebo zprava.",
+    "nalezitosti_mapy": "Doplňte chybějící údaj do popisového pole mapy (obvykle vpravo dole): Umístit text – "
+                        "Place Text, rám jako Umístit obdélník – Place Block, severku jako buňku. Co zadání "
+                        "nevyžaduje, vypněte v Nastavení kontrol.",
     "kontrola_ploch": "Doplňte do plochy popis / definiční bod (číslo parcely, značku druhu pozemku) na vrstvu "
                       "popisů, nebo smažte přebytečný. Plocha musí být z hranic uzavřená.",
     "nepovolene_hladiny": "Celá vrstva není ve Směrnici. Všechny její prvky najednou: Správce vrstev (Level "

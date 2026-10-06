@@ -409,3 +409,31 @@ def test_vypnuta_vrstva(make_dxf):
     iss = check(make_dxf(build, name="vypnuta.dxf"), "vypnuta_vrstva")
     assert sorted((i.layer, len(i.feature_ids)) for i in iss) == [("POMOC", 1), ("STARE", 2)]
     assert "zmrazené" in next(i.message for i in iss if i.layer == "POMOC")
+
+
+def test_nalezitosti_mapoveho_listu(make_dxf):
+    def holy(msp, doc):
+        msp.add_line((0, 0), (50, 30), dxfattribs={"layer": "L"})
+        msp.add_text("12", dxfattribs={"layer": "T", "height": 1.0, "insert": (5, 5)})
+
+    from kontrola.config import Config
+
+    def cfg():
+        c = Config()
+        c.settings("nalezitosti_mapy").zapnuto = True  # ve výchozím stavu vypnutá
+        return c
+
+    chybi = [i.message for i in check(make_dxf(holy), "nalezitosti_mapy", config=cfg())]
+    assert len(chybi) == 7 and any("rám" in m for m in chybi) and any("severka" in m for m in chybi)
+
+    def mapa(msp, doc):
+        msp.add_line((0, 0), (50, 30), dxfattribs={"layer": "L"})
+        msp.add_lwpolyline([(-5, -5), (55, -5), (55, 35), (-5, 35)], close=True, dxfattribs={"layer": "RAM"})
+        doc.blocks.new("SEVERKA").add_line((0, 0), (0, 1))
+        msp.add_blockref("SEVERKA", (50, 30))
+        for t in ("Měřítko 1 : 500", "Souřadnicový systém S-JTSK, výškový systém Bpv",
+                  "Vyhotovil: Jan Novák", "V Brně dne 6. 10. 2026"):
+            msp.add_text(t, dxfattribs={"layer": "POPIS", "height": 1.0, "insert": (30, -3)})
+
+    assert check(make_dxf(mapa), "nalezitosti_mapy", config=cfg()) == []
+    assert len(check(make_dxf(holy), "nalezitosti_mapy", config=cfg(), ram=False, severka=False, bpv=False)) == 4

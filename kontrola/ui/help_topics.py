@@ -359,6 +359,14 @@ TOPICS: dict[str, tuple[str, str]] = {
         "Popis vzhůru nohama",
         "Text natočený mezi 90° a 270° se čte vzhůru nohama. Popisy se otáčejí tak, aby se četly zdola nebo "
         "zprava.<br><br><b>Oprava:</b> Otočit (Rotate) o 180°, nebo v Atributech textu změnit natočení."),
+    "nalezitosti_mapy": (
+        "Náležitosti mapového listu",
+        "Hotová mapa (předmět Mapování, účelová mapa podle ČSN 01 3410) má kromě kresby i <b>mapový rám</b>, "
+        "<b>měřítko</b>, <b>souřadnicový a výškový systém</b> (S-JTSK, Bpv), <b>severku</b>, kdo ji "
+        "<b>vyhotovil</b> a <b>kdy</b>. Kontrola je ve výchozím stavu vypnutá – zapněte ji v Nastavení kontrol, "
+        "až kreslíte mapový list; jednotlivé náležitosti jdou vypnout v jejích parametrech.<br><br>"
+        "<b>Oprava:</b> doplňte chybějící text do popisového pole (obvykle vpravo dole), rám jako obdélník kolem "
+        "celé kresby, severku jako buňku."),
     "kontrola_ploch": (
         "Kontrola ploch",
         "Z hraničních čar se sestaví plochy (parcely, druhy pozemků) a hlídá se, že každá má <b>právě jeden</b> popis "
