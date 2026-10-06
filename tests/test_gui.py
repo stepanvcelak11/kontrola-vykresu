@@ -2872,7 +2872,8 @@ def test_dialogy_dlouhe_popisky_se_zalamuji(window):
     d = BodyDialog(window.cad)
     d.show()
     QApplication.processEvents()
-    assert d.width() < 700
+    assert d.width() < 700, (d.width(), [(type(c).__name__, c.sizeHint().width()) for c in d.children()
+                                         if hasattr(c, "sizeHint") and c.sizeHint().width() > 400])
     d.close()
 
 

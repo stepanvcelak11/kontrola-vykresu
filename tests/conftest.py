@@ -147,10 +147,18 @@ if _TRACE:
             _zapis(t)
 
 
+_trasovani_logreport = globals().get("pytest_runtest_logreport")
+
+
 def pytest_runtest_logreport(report):
     """V GitHub Actions vypíše selhaný test jako anotaci (čitelná přes API i bez stažení logu)."""
+    if _trasovani_logreport is not None:
+        _trasovani_logreport(report)
     if not report.failed or not _os.environ.get("GITHUB_ACTIONS"):
         return
     text = str(report.longrepr)[-1500:]
     text = text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
-    print(f"\n::error title={report.nodeid} ({report.when})::{text}", flush=True)
+    radek = f"\n::error title={report.nodeid} ({report.when})::{text}"
+    # konzole Windows (cp1252) neumí češtinu – chyba při výpisu by shodila celý pytest (INTERNALERROR)
+    enc = getattr(sys.stdout, "encoding", None) or "ascii"
+    print(radek.encode(enc, "replace").decode(enc), flush=True)

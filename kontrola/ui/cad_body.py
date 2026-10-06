@@ -65,7 +65,12 @@ class BodyDialog(QDialog):
         self.podle_kodu.setChecked(True)
         self.preskocit = QCheckBox("Přeskočit body, jejichž číslo už ve výkresu je")
         self.preskocit.setChecked(True)
-        self.v3d = QCheckBox("Ve 3D – značky a spojnice ve výšce bodu (Z), pro 3D výkres a model terénu")
+        self.v3d = QCheckBox("Ve 3D (ve výšce bodu Z)")
+        self.v3d.setToolTip("Značky a spojnice ve výšce bodu (Z) – pro 3D výkres a model terénu")
+        # dlouhé názvy předvoleb nesmí okno roztáhnout (celý název je v rozbalení)
+        for c in (self.zdroj, *self.cb.values(), self.cb_spoj):
+            c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            c.setMinimumContentsLength(24)
         f.addRow(self.podle_kodu)
         f.addRow(self.preskocit)
         f.addRow(self.v3d)
