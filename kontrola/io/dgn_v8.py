@@ -362,8 +362,11 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             x, y, text, h, wf, rot, just = geo[1:]
             ha, va = _JUST.get(just, (0, 0))
             font_id, = struct.unpack_from("<I", e, 108)
-            add(Point(x, y), GeomType.TEXT, "TEXT", e, text=text, text_height=h, width_factor=wf, rotation=rot,
-                halign=ha, valign=va, font=fonts.get(font_id, f"font č. {font_id}"))
+            f = add(Point(x, y), GeomType.TEXT, "TEXT", e, text=text, text_height=h, width_factor=wf, rotation=rot,
+                    halign=ha, valign=va, font=fonts.get(font_id, f"font č. {font_id}"))
+            kurziva = _text_italic(e)
+            if kurziva is not None:
+                f.attributes["KURZIVA"] = "1" if kurziva else "0"
         elif kind == "points":
             for p in geo[1]:
                 add(Point(*p), GeomType.BOD, "POINT", e)
@@ -371,8 +374,8 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             progress(min(95, 100 * off // max(1, n)), "Čtu DGN…")
     close_chain()
     close_cell()
-    d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Řez písma (tučné, "
-                      "kurzíva) se z DGN nečte a nekontroluje.")
+    d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Kurzíva se z DGN čte, "
+                      "tučný řez ne (nekontroluje se).")
     if skipped:
         d.warnings.append("Nepřečtené prvky: " + ", ".join(f"typ {k}: {v}×" for k, v in sorted(skipped.items())))
     return d
@@ -464,6 +467,19 @@ def _just_point(x: float, y: float, length: float, height: float, rot: float, ju
     fy = {0: 1.0, 1: 0.5, 2: 0.0}.get(just % 3, 0.0)  # nahoře, uprostřed, dole
     dx, dy = length * fx, height * fy
     return x + dx * math.cos(rot) - dy * math.sin(rot), y + dx * math.sin(rot) + dy * math.cos(rot)
+
+
+def _text_italic(e: bytes) -> bool | None:
+    """Kurzíva (sklon písma) textu V8: příznak „slant“ (bit 0x08) v připojených parametrech textu
+    (linkage 0x80D4 za řetězcem). None = parametry nejsou (řez se nedá určit)."""
+    i = len(e)
+    while True:
+        i = e.rfind(b"\xd4\x80", 176, i)
+        if i < 0:
+            return None
+        if e[i - 1] & 0x10 and i + 6 <= len(e):
+            flags, = struct.unpack_from("<I", e, i + 2)
+            return bool(flags & 0x08)
 
 
 def _cell_origin(e: bytes, s: float) -> tuple[float, float, float, float, float]:

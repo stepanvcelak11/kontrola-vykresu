@@ -666,6 +666,12 @@ class DrawingView(QGraphicsView):
         item = QGraphicsSimpleTextItem(f.text.replace("\n", " ")[:200], parent)
         font = QFont("Arial")
         font.setPixelSize(100)
+        from ..rules import rez_pisma
+        tucne, kurziva = rez_pisma(f)
+        font.setBold(bool(tucne))
+        font.setItalic(bool(kurziva))
+        if "narrow" in (f.font or "").lower():
+            font.setStretch(QFont.Condensed)
         item.setFont(font)
         item.setBrush(QBrush(display_color(f.color_rgb, self.light_bg)))
         fm = QFontMetricsF(font)

@@ -623,6 +623,19 @@ def parse_bool(value: Any) -> bool | None:
     return None
 
 
+def rez_pisma(f) -> tuple[bool | None, bool | None]:
+    """(tučně, kurzíva) textu: z atributů načtených z výkresu (DGN příznak sklonu, DXF příznaky stylu / sklon),
+    jinak odhad z názvu fontu. None = nedá se určit (DGN bez údaje)."""
+    a = getattr(f, "attributes", {}) or {}
+    z_dgn = a.get("ZDROJ") == "DGN"
+    bold, italic = (None, None) if z_dgn else font_style(getattr(f, "font", ""))
+    if a.get("KURZIVA") in ("0", "1"):
+        italic = a["KURZIVA"] == "1"
+    if a.get("TUCNE") in ("0", "1"):
+        bold = a["TUCNE"] == "1"
+    return bold, italic
+
+
 def font_style(font: str | None) -> tuple[bool, bool]:
     """Odhad řezu písma z názvu stylu a souboru fontu → (tučně, kurzíva).
 

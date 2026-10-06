@@ -218,11 +218,12 @@ def _text_diffs(r, f: Feature, rs=None) -> list[str]:
         if abs(w - w_exp) > tol(w_exp):
             got, exp = show(w, r.sirka_textu)
             out.append(f"šířka textu {got} (má být {exp})")
-    if (r.tucne is not None or r.kurziva is not None) and f.font and f.attributes.get("ZDROJ") != "DGN":
-        bold, italic = font_style(f.font)
-        if r.tucne is not None and bold != r.tucne:
+    if (r.tucne is not None or r.kurziva is not None) and f.font:
+        from ..rules import rez_pisma
+        bold, italic = rez_pisma(f)
+        if r.tucne is not None and bold is not None and bold != r.tucne:
             out.append("písmo " + ("není tučné" if r.tucne else "je tučné") + f" ({f.font})")
-        if r.kurziva is not None and italic != r.kurziva:
+        if r.kurziva is not None and italic is not None and italic != r.kurziva:
             out.append("písmo " + ("není kurzíva" if r.kurziva else "je kurzíva") + f" ({f.font})")
     if r.zarovnani:
         h, v = parse_alignment(r.zarovnani)

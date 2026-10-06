@@ -429,12 +429,30 @@ class _Loader:
         h, v = _text_align(e)
         style_name = e.dxf.get("style", "Standard") or "Standard"
         font = style_name
+        rez: dict[str, str] = {}
         try:
             st = self.doc.styles.get(style_name)
             if st is not None and st.dxf.get("font"):
                 font = f"{style_name} ({st.dxf.font})"
+            if st is not None:
+                _rodina, italic, bold = st.get_extended_font_data()
+                if _rodina:  # TrueType s příznaky řezu (MicroStation je při exportu zapisuje)
+                    rez = {"KURZIVA": "1" if italic else "0", "TUCNE": "1" if bold else "0"}
+                if abs(float(st.dxf.get("oblique", 0.0) or 0.0)) > 1e-6:
+                    rez["KURZIVA"] = "1"
         except Exception:
             pass
+        if t == "TEXT" and abs(float(e.dxf.get("oblique", 0.0) or 0.0)) > 1e-6:
+            rez["KURZIVA"] = "1"  # sklon písma = kurzíva
+        if t == "MTEXT":
+            raw = e.text or ""
+            if re.search(r"\\f[^;|]*\|[^;]*i1", raw):
+                rez["KURZIVA"] = "1"
+            if re.search(r"\\f[^;|]*\|[^;]*b1", raw):
+                rez["TUCNE"] = "1"
+        if rez:
+            base = dict(base)
+            base["attributes"] = {**base.get("attributes", {}), **rez}
         wf = e.dxf.get("width", 1.0) if t == "TEXT" else 1.0
         return self._new(dxftype=t, geom_type=GeomType.TEXT, geometry=Point(p), vertices=[p],
                          text=text.strip(), text_height=height, rotation=rotation,

@@ -44,3 +44,25 @@ def test_pravidla_ze_vzoru_ucitele():
     shoda = sum(min(r.ucitel, r.program) for r in rows)
     navic = sum(max(0, r.program - r.ucitel) for r in rows)
     assert shoda >= 15 and navic <= 6  # bez pravidel učitele: shoda 14, navíc přes 1000
+
+
+HUSOVICE = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+
+
+@pytest.mark.skipif(not (HUSOVICE / "Husovice_Včelák_mapa.dgn").exists(), reason="chybí výkres Husovice")
+def test_kurziva_z_dgn_i_dxf():
+    """Čísla bodů jsou kurzívou (příznak sklonu v DGN, styl „Arial Narrow IF“ v DXF), výšky ne – kontrola
+    řezu písma podle pravidel zadání nehlásí chybu ani u DGN, ani u DXF."""
+    from conftest import check
+
+    from kontrola.io import read_dxf
+    from kontrola.io.dgn_v8 import read_dgn
+    from kontrola.rules import RuleSet, rez_pisma
+    rs = RuleSet.load(HUSOVICE / "pravidla_zadani2.yaml")
+    for d in (read_dgn(HUSOVICE / "Husovice_Včelák_mapa.dgn"), read_dxf(HUSOVICE / "Husovice_Včelák_mapa.dxf")):
+        texty = [f for f in d.features if f.geom_type.name == "TEXT"]
+        cisla = [f for f in texty if f.layer == "GS01-body-čísla"]
+        vysky = [f for f in texty if "výšky" in f.layer]
+        assert cisla and all(rez_pisma(f)[1] for f in cisla)
+        assert vysky and not any(rez_pisma(f)[1] for f in vysky)
+        assert not [i for i in check(d, "symbologie", rules=rs) if "kurzív" in i.message]
