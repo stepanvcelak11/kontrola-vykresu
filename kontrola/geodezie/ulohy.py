@@ -1081,6 +1081,91 @@ def u_wgs(s, h):
     return Vysledek(prot, nove)
 
 
+
+def u_kruznice_3b(s, h):
+    """Kružnice třemi body: střed a poloměr (Groma – Kružnice ze tří bodů)."""
+    a, b, c = _bod(s, h, "a", "bod 1"), _bod(s, h, "b", "bod 2"), _bod(s, h, "c", "bod 3")
+    ax, ay, bx, by, cx, cy = a.y, a.x, b.y, b.x, c.y, c.x
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-9 * max(1.0, V.delka(a, b) * V.delka(b, c)):
+        raise ChybaVstupu("Body leží na přímce – kružnice jimi neprochází.")
+    # těžiště jako počátek kvůli přesnosti na velkých souřadnicích S-JTSK
+    oy, ox = (ay + by + cy) / 3, (ax + bx + cx) / 3
+    ax, ay, bx, by, cx, cy = ax - ox, ay - oy, bx - ox, by - oy, cx - ox, cy - oy
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    uy = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+    ux = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+    sy, sx = uy + ox, ux + oy  # uy je Y (první souřadnice), ux je X
+    r = math.hypot(a.y - sy, a.x - sx)
+    prot = _hlavicka("Kružnice ze tří bodů")
+    prot += [f"body {a.cislo}, {b.cislo}, {c.cislo}",
+             f"  střed  Y = {_f(sy)}   X = {_f(sx)}",
+             f"  poloměr r = {_f(r)} m, obvod {_f(2 * math.pi * r)} m"]
+    nove = []
+    n = (h.get("nove") or "").strip()
+    if n:
+        nove.append(Bod(n, sy, sx, poznamka="střed kružnice"))
+    return Vysledek(prot, nove)
+
+
+def u_uhel(s, h):
+    """Vrcholový úhel ze souřadnic: v bodě V od levého ramene L k pravému P (po směru hodin)."""
+    v, l_, p_ = _bod(s, h, "v", "vrchol"), _bod(s, h, "l", "levé rameno"), _bod(s, h, "p", "pravé rameno")
+    _ruzne(v, l_)
+    _ruzne(v, p_)
+    sl, sp = V.smernik(v, l_), V.smernik(v, p_)
+    w = V.norm_gon(sp - sl)
+    prot = _hlavicka("Úhel ze souřadnic")
+    prot += [f"vrchol {v.cislo}: směrník na {l_.cislo} {_f(sl, 4)} gon, na {p_.cislo} {_f(sp, 4)} gon",
+             f"  úhel ω = {_f(w, 4)} gon  ({_f(w * 0.9, 4)}°), doplněk do 400 gon {_f(400 - w, 4)} gon",
+             f"  délky {v.cislo}–{l_.cislo} {_f(V.delka(v, l_))} m, {v.cislo}–{p_.cislo} {_f(V.delka(v, p_))} m"]
+    return Vysledek(prot)
+
+
+def u_bod_na_primce(s, h):
+    """Bod na přímce A–B: ve vzdálenosti od A (i za B / před A), nebo dělení úsečky na n dílů."""
+    a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    _ruzne(a, b)
+    dab = V.delka(a, b)
+    ey, ex = (b.y - a.y) / dab, (b.x - a.x) / dab
+    prot = _hlavicka("Bod na přímce")
+    nove = []
+    dily = (h.get("dily") or "").strip()
+    if dily:
+        try:
+            n = int(dily)
+        except ValueError:
+            raise ChybaVstupu("Počet dílů musí být celé číslo.") from None
+        if not 2 <= n <= 1000:
+            raise ChybaVstupu("Počet dílů 2 až 1000.")
+        zac = _nove_cislo(s, h)
+        cisla = _rada_cisel(zac, n - 1)
+        prot.append(f"úsečka {a.cislo}–{b.cislo} ({_f(dab)} m) rozdělena na {n} dílů po {_f(dab / n)} m")
+        for i, c in enumerate(cisla, 1):
+            t = dab * i / n
+            nove.append(Bod(c, a.y + ey * t, a.x + ex * t, _z_interp(a, b, i / n), poznamka="dělení úsečky"))
+    else:
+        t = _cislo(h, "d", "vzdálenost od A")
+        c = _nove_cislo(s, h)
+        prot.append(f"přímka {a.cislo}–{b.cislo} ({_f(dab)} m), vzdálenost od {a.cislo} {_f(t)} m")
+        nove.append(Bod(c, a.y + ey * t, a.x + ex * t, _z_interp(a, b, t / dab), poznamka="bod na přímce"))
+    for bb in nove:
+        prot.append(f"  {bb.cislo:<14} Y = {_f(bb.y)}   X = {_f(bb.x)}" + (f"   Z = {_f(bb.z)}" if bb.z is not None
+                                                                         else ""))
+    return Vysledek(prot, nove)
+
+
+def _z_interp(a, b, t):
+    return None if a.z is None or b.z is None else a.z + (b.z - a.z) * t
+
+
+def _rada_cisel(zac: str, n: int) -> list[str]:
+    m = re.match(r"^(.*?)(\d+)$", zac)
+    if not m:
+        return [f"{zac}{i}" for i in range(1, n + 1)]
+    pre, num = m.group(1), m.group(2)
+    return [f"{pre}{int(num) + i:0{len(num)}d}" for i in range(n)]
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -1148,6 +1233,15 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      "(Pokyn pro tvorbu ÚM 5.1 a; ČSN 01 3410).",
      [Pole("trida", "Třída přesnosti", "volba", "3", ("1", "2", "3", "4", "5")),
       Pole("delky", "Kontrolní délky (řádek: bod bod délka[m])", "radky")], u_test_delek),
+    ("Kružnice ze tří bodů", "Střed a poloměr kružnice procházející třemi body.",
+     [Pole("a", "Bod 1"), Pole("b", "Bod 2"), Pole("c", "Bod 3"),
+      Pole("nove", "Číslo středu (nepovinné)", "text")], u_kruznice_3b),
+    ("Úhel ze souřadnic", "Vrcholový úhel ve vrcholu od levého k pravému rameni (po směru hodin).",
+     [Pole("v", "Vrchol"), Pole("l", "Levé rameno (bod)"), Pole("p", "Pravé rameno (bod)")], u_uhel),
+    ("Bod na přímce", "Bod na přímce A–B ve vzdálenosti od A, nebo dělení úsečky na stejné díly.",
+     [Pole("a", "Bod A"), Pole("b", "Bod B"), Pole("d", "Vzdálenost od A [m]", "m"),
+      Pole("dily", "nebo počet dílů (dělení úsečky)", "text"),
+      Pole("nove", "Číslo nového (prvního) bodu", "text")], u_bod_na_primce),
     ("Průsečíky", "Průsečík dvou přímek, přímky a kružnice nebo dvou kružnic.",
      [Pole("druh", "Druh", "volba", "dvou přímek", ("dvou přímek", "přímky a kružnice", "dvou kružnic")),
       Pole("a", "Bod A"), Pole("b", "Bod B"),

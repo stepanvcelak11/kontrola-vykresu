@@ -16,6 +16,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "přesnosti), přístroj a jeho přesnost, korekce délek – měřítko Křovákova zobrazení, redukce z nadmořské "
         "výšky, fyzikální korekce – a mezní odchylky polygonových pořadů. Korekce se použijí v rajónu, polygonech, "
         "volném stanovisku a protínání z délek a vypíšou se do protokolu.",
+        "<b>Výpočty – nové úlohy</b>: Kružnice ze tří bodů, Úhel ze souřadnic, Bod na přímce (i dělení úsečky). "
+        "Polární metoda dávkou (Zápisník) bere korekce délek z Nastavení výpočtů.",
         "<b>CAD → Kontrola živě</b>: co nakreslíte v CAD, se po přepnutí na Výkres samo zkontroluje – bez "
         "ukládání a nahrávání.",
     ]),

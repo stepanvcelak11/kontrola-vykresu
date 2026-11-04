@@ -203,7 +203,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         msgs.append(f"Měřítkový koeficient (Křovák + nadmořská výška): {koeficient:.10f} "
                     f"({(koeficient - 1) * 1e5:+.1f} mm/100 m).")
     else:
-        msgs.append(f"Měřítkový koeficient zadaný ručně: {koeficient:.10f}.")
+        msgs.append(f"Měřítkový koeficient zadaný (Nastavení výpočtů): {koeficient:.10f}.")
     m = koeficient
 
     # výšky stanovisek: nivelační bod, pak obousměrná převýšení mezi stanovisky

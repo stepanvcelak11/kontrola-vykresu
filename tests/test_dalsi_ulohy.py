@@ -463,3 +463,25 @@ def test_nastaveni_vypoctu_korekce_delek_v_rajonu():
         assert abs(u - 0.025 * 2) < 1e-12 and abs(p - (0.0025 * 20 + 0.04)) < 1e-12
     finally:
         N.nastav(puvodni)
+
+
+def test_kruznice_uhel_a_bod_na_primce():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_bod_na_primce, u_kruznice_3b, u_uhel
+    rnd = random.Random(5)
+    for _ in range(50):
+        sy, sx, r = 700000 + rnd.uniform(-5e4, 5e4), 1100000 + rnd.uniform(-5e4, 5e4), rnd.uniform(1, 500)
+        uh = sorted(rnd.uniform(0, 2 * math.pi) for _ in range(3))
+        s = SeznamBodu()
+        s.body[:] = [Bod(str(i), sy + r * math.sin(t), sx + r * math.cos(t)) for i, t in enumerate(uh)]
+        v = u_kruznice_3b(s, {"a": "0", "b": "1", "c": "2", "nove": "S"})
+        assert abs(v.nove[0].y - sy) < 1e-5 and abs(v.nove[0].x - sx) < 1e-5
+    s = SeznamBodu()
+    s.body[:] = [Bod("1", 0.0, 0.0), Bod("2", 0.0, 10.0), Bod("3", 10.0, 0.0), Bod("4", 0.0, 20.0, None)]
+    assert "100.0000 gon" in "\n".join(u_uhel(s, {"v": "1", "l": "2", "p": "3"}).protokol)
+    with pytest.raises(Exception):
+        u_kruznice_3b(s, {"a": "1", "b": "2", "c": "4"})
+    r = u_bod_na_primce(s, {"a": "1", "b": "2", "d": "25", "nove": "9"})
+    assert (r.nove[0].y, r.nove[0].x) == (0.0, 25.0)
+    r = u_bod_na_primce(s, {"a": "1", "b": "3", "dily": "5", "nove": "P08"})
+    assert [b.cislo for b in r.nove] == ["P08", "P09", "P10", "P11"] and r.nove[-1].y == 8.0

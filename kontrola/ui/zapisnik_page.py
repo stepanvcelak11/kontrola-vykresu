@@ -244,8 +244,17 @@ class ZapisnikPanel(QWidget):
             self.info.setText("⚠ V seznamu souřadnic nejsou dané body – importujte je na záložce Seznam souřadnic.")
             return None
         st = Z.pro_vypocet(self.stanoviska)
+        from ..geodezie.nastaveni import aktualni
+        nast, koef = aktualni(), None
+        if nast.korekce_zapnuta:  # Nastavení výpočtů má přednost (jinak Křovák + výška automaticky)
+            zn = {b.cislo: b for b in self.page.seznam.body}
+            sb = [zn[s_.bod] for s_ in st if s_.bod in zn]
+            if sb:
+                zz = [b.z for b in sb if b.z is not None]
+                koef, _ = nast.faktor_delky(sum(b.y for b in sb) / len(sb), sum(b.x for b in sb) / len(sb),
+                                            sum(zz) / len(zz) if zz else None)
         try:
-            self.vysledek = compute(st, dane)
+            self.vysledek = compute(st, dane, koeficient=koef)
         except Exception as e:  # noqa: BLE001 – výpočet nesmí shodit aplikaci
             self.info.setText(f"⚠ Výpočet se nepovedl: {e}")
             return None
