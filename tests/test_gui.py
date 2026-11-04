@@ -3062,3 +3062,16 @@ def test_qtrig_body_rovnou_do_cad_a_do_kontroly(window, tmp_path, monkeypatch):
         d.close()
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_ulozi_a_otevre_dgn(window, tmp_path):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "@10,0", ""):
+        c.zadej(t)
+    p = c.uloz(path=str(tmp_path / "vykres.dgn"))
+    assert p is not None and p.suffix == ".dgn" and p.stat().st_size % 512 == 0
+    assert "DGN: 1× úsečka" in c.historie.toPlainText()
+    assert c.otevri(str(p))
+    assert [e.dxftype() for e in c.dok.msp] == ["LINE"] and c.dok.path == p

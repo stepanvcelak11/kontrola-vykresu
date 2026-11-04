@@ -532,6 +532,14 @@ def _load_drawing(path: str | Path, progress: ProgressFn | None = None,
     suffix = p.suffix.lower()
     if suffix == ".dxf":
         return read_dxf(p, progress)
+    if suffix == ".dgn":
+        from .dgn import dgn_version
+        if dgn_version(p) == "V7":  # DGN V7 se čte přímo (přesná čísla hladin, barev, tlouštěk a stylů)
+            from .dgn_v7 import DgnV7Error, read_dgn_v7
+            try:
+                return read_dgn_v7(p, progress)
+            except DgnV7Error as e:
+                raise DrawingLoadError(str(e)) from e
     if suffix in (".dgn", ".dwg"):
         from .dgn import convert_to_dxf
         # DXF se stejným názvem vedle DGN (uložený z MicroStationu / dávkovým převodem)

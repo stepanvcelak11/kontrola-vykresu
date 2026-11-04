@@ -45,6 +45,8 @@ class CadDokument:
         self.path = Path(path) if path else None
         self.zprava = ZpravaNacteni()
         self.zmeneno = False
+        self.ms_barvy: dict[str, int] = {}  # handle → barva MicroStationu (z DGN)
+        self.souhrn_dgn = None  # souhrn posledního uložení do DGN
         self._souhrn()
 
     @staticmethod
@@ -56,9 +58,11 @@ class CadDokument:
         return doc
 
     @classmethod
-    def otevri(cls, path: str | Path) -> "CadDokument":
+    def otevri(cls, path: str | Path, rs=None) -> "CadDokument":
         """Otevře DXF; poškozený soubor se zkusí opravit (ezdxf.recover) a ve zprávě je, co se stalo."""
         p = Path(path)
+        if p.suffix.lower() == ".dgn":
+            return cls._otevri_dgn(p, rs)
         opravy: list[str] = []
         try:
             doc = ezdxf.readfile(p)
@@ -78,6 +82,26 @@ class CadDokument:
         d.zprava.opravy = opravy
         return d
 
+    @classmethod
+    def _otevri_dgn(cls, p: Path, rs=None) -> "CadDokument":
+        """DGN V7 (i uložený z CAD) přímo s buňkami; DGN V8 přes vlastní čtení (buňky jako značky)."""
+        from ..io.dgn import dgn_version
+        verze = dgn_version(p)
+        if verze == "V7":
+            from ..io.dgn_v7 import DgnV7Error, do_ezdxf
+            try:
+                doc, ms_barvy, pozn = do_ezdxf(p, rs)
+            except (DgnV7Error, OSError) as e:
+                raise ValueError(f"{p.name}: {e}") from None
+        elif verze == "V8":
+            doc, ms_barvy, pozn = _v8_do_ezdxf(p, rs)
+        else:
+            raise ValueError(f"{p.name} není výkres DGN.")
+        d = cls(doc, p)
+        d.ms_barvy = ms_barvy
+        d.zprava.opravy = pozn
+        return d
+
     def _souhrn(self):
         z = self.zprava
         z.verze = NAZEV_VERZE.get(self.doc.dxfversion, self.doc.dxfversion)
@@ -89,12 +113,19 @@ class CadDokument:
     def msp(self):
         return self.doc.modelspace()
 
-    def uloz(self, path: str | Path | None = None, verze: str | None = None) -> Path:
+    def uloz(self, path: str | Path | None = None, verze: str | None = None, rs=None,
+             ms_barvy: dict | None = None) -> Path:
         """Uloží DXF (ASCII). Verze jde jen zvýšit (např. R12 → R2000); nižší než původní se odmítne,
         aby se nic neztratilo. Zápis přes dočasný soubor – při chybě zůstane původní soubor celý."""
         p = Path(path) if path else self.path
         if p is None:
             raise ValueError("Výkres ještě nemá jméno – použijte Uložit jako.")
+        if p.suffix.lower() == ".dgn":  # MicroStation: DGN V7 (hladiny, barvy, tloušťky, styly, buňky)
+            from .export_dgn import exportuj
+            self.souhrn_dgn = exportuj(self.doc, self.doc.modelspace(), p, rs, ms_barvy)
+            self.path = p
+            self.zmeneno = False
+            return p
         if verze:
             cil = VERZE[verze]
             if cil < self.doc.dxfversion:
@@ -213,3 +244,67 @@ def _dekoduj_unicode(doc: Drawing) -> None:
 def sjtsk(x: float, y: float) -> tuple[float, float]:
     """DXF (x, y) → S-JTSK (Y, X): výkresy z MicroStationu mají souřadnice se znaménkem minus."""
     return -x, -y
+
+
+def _v8_do_ezdxf(p: Path, rs=None):
+    """DGN V8 → ezdxf pro úpravy v CAD: čáry, plochy, oblouky (jako lomené čáry), texty a buňky jako
+    vložené bloky (kresba buňky se z výkresu V8 nečte – blok je značka bodu, kresbu doplní knihovna .CEL)."""
+    from ..io.dgn_v8 import DgnError, read_dgn
+    from ..model import GeomType
+    from . import symbologie as SY
+    try:
+        d = read_dgn(p)
+    except (DgnError, OSError) as e:
+        raise ValueError(f"{p.name}: {e}") from None
+    doc = ezdxf.new("R2013", setup=True)
+    doc.header["$INSUNITS"] = 6
+    SY.zajisti_styly(doc)
+    msp = doc.modelspace()
+    ms_barvy: dict[str, int] = {}
+    for f in d.features:
+        if f.layer not in doc.layers:
+            doc.layers.add(f.layer)
+        a = {"layer": f.layer}
+        mb = f.attributes.get("MS_BARVA")
+        if mb is not None:
+            try:
+                a["color"] = SY.ms_na_aci(int(mb), rs)
+            except ValueError:
+                pass
+        if f.geom_type != GeomType.TEXT:
+            wt = f.attributes.get("MS_TLOUSTKA")
+            if wt is not None and wt.isdigit() and int(wt) <= 31:
+                a["lineweight"] = SY.wt_na_lw(int(wt), rs)[0]
+            st = f.attributes.get("MS_STYL", "0")
+            if st.lstrip("-").isdigit() and 0 <= int(st) <= 7:
+                a["linetype"] = SY.styl_na_typ(st)
+        g = f.geometry
+        if f.dxftype == "INSERT" and f.block_name:
+            jm = f.block_name
+            if jm not in doc.blocks:
+                doc.blocks.new(jm).add_point((0, 0))
+            e = msp.add_blockref(jm, (g.x, g.y), dxfattribs={**a, "rotation": f.rotation or 0.0,
+                                                             "xscale": f.scale[0] or 1.0, "yscale": f.scale[1] or 1.0})
+        elif f.geom_type == GeomType.TEXT:
+            e = msp.add_text(f.text or "", height=f.text_height or 1.0, rotation=f.rotation or 0.0,
+                             dxfattribs={**a, "width": f.width_factor or 1.0})
+            from ezdxf.enums import TextEntityAlignment as TA
+            al = {(0, 0): TA.LEFT, (0, 1): TA.BOTTOM_LEFT, (0, 2): TA.MIDDLE_LEFT, (0, 3): TA.TOP_LEFT,
+                  (1, 0): TA.CENTER, (1, 1): TA.BOTTOM_CENTER, (1, 2): TA.MIDDLE_CENTER, (1, 3): TA.TOP_CENTER,
+                  (2, 0): TA.RIGHT, (2, 1): TA.BOTTOM_RIGHT, (2, 2): TA.MIDDLE_RIGHT, (2, 3): TA.TOP_RIGHT}
+            e.set_placement((g.x, g.y), align=al.get((f.halign, f.valign), TA.LEFT))
+        elif f.geom_type == GeomType.BOD:
+            e = msp.add_point((g.x, g.y), dxfattribs=a)
+        elif f.geom_type == GeomType.POLYGON:
+            pts = [tuple(c[:2]) for c in g.exterior.coords][:-1]
+            e = msp.add_lwpolyline(pts, close=True, dxfattribs=a)
+        else:
+            pts = [tuple(c[:2]) for c in g.coords]
+            e = msp.add_line(pts[0], pts[1], dxfattribs=a) if len(pts) == 2 else \
+                msp.add_lwpolyline(pts, dxfattribs=a)
+        if mb is not None and mb.isdigit():
+            ms_barvy[e.dxf.handle] = int(mb)
+    pozn = list(d.warnings)
+    if any(f.dxftype == "INSERT" for f in d.features):
+        pozn.append("Buňky z DGN V8 jsou jen značky bodu – kresbu načtete příkazem „knihovna buněk“ (.CEL).")
+    return doc, ms_barvy, pozn

@@ -434,7 +434,7 @@ class CadPage(QWidget):
         "vyber": "výběr podle atributů („vyber 58“, „vyber barva 3“, „vyber typ text; hladina 59“)",
         "celý": "celý výkres (zoom)", "přiblížit": "přiblížit oknem (Window Area)",
         "předchozí pohled": "vrátit předchozí pohled (View Previous)", "vzdálenost": "změřit vzdálenost a směrník mezi dvěma body",
-        "otevři": "otevřít DXF", "ulož": "uložit DXF", "nápověda": "seznam příkazů",
+        "otevři": "otevřít DXF nebo DGN (V7, V8)", "ulož": "uložit DXF, nebo DGN V7 pro MicroStation", "nápověda": "seznam příkazů",
         "bod": "bod", "úsečka": "úsečky (řetězec, Enter = konec, z = zpět o bod)",
         "polylinie": "lomená čára (k = uzavřít, Enter = konec)", "obdélník": "obdélník ze dvou rohů",
         "kružnice": "kružnice (střed a poloměr)", "oblouk": "oblouk třemi body", "elipsa": "elipsa",
@@ -912,6 +912,7 @@ class CadPage(QWidget):
         self._historie_prostoru = {}
         self.historie_zmen = U.Historie(dok.msp)
         self.kresleni = U.Kresleni(dok.msp, self.historie_zmen)
+        self.kresleni.ms_barvy_prvku.update(getattr(dok, "ms_barvy", {}) or {})
         self._historie_prostoru[dok.msp.name] = (self.historie_zmen, self.kresleni)
         from ..cad import reference as R
         self.reference = R.najdi(dok.doc, dok.path.parent if dok.path else None)
@@ -1743,11 +1744,12 @@ class CadPage(QWidget):
         if not self._zahodit_zmeny():
             return False
         if path is None:
-            path, _ = QFileDialog.getOpenFileName(self, "Otevřít výkres DXF", "", "DXF (*.dxf)")
+            path, _ = QFileDialog.getOpenFileName(self, "Otevřít výkres", "",
+                                                  "Výkresy (*.dxf *.dgn);;DXF (*.dxf);;DGN MicroStation (*.dgn)")
         if not path:
             return False
         try:
-            dok = CadDokument.otevri(path)
+            dok = CadDokument.otevri(path, self._pravidla())
         except ValueError as e:
             QMessageBox.warning(self, "CAD", str(e))
             return False
@@ -1765,17 +1767,20 @@ class CadPage(QWidget):
             return None
         if path is None and (jako or self.dok.path is None):
             path, _ = QFileDialog.getSaveFileName(self, "Uložit výkres", str(self.dok.path or "vykres.dxf"),
-                                                  "DXF R2000 (*.dxf)")
+                                                  "DXF R2000 (*.dxf);;DGN V7 – MicroStation (*.dgn)")
             if not path:
                 return None
         try:
-            p = self.dok.uloz(path)
+            ms_barvy = dict(self.kresleni.ms_barvy_prvku) if self.kresleni is not None else {}
+            p = self.dok.uloz(path, rs=self._pravidla(), ms_barvy=ms_barvy)
         except (OSError, ValueError) as e:
             QMessageBox.warning(self, "CAD", f"Výkres nejde uložit: {e}")
             return None
         self._ulozena_zmena = self.historie_zmen.zmena if self.historie_zmen else 0
         self._titulek()
         self.vypis(f"Uloženo: {p}")
+        if p.suffix.lower() == ".dgn" and self.dok.souhrn_dgn is not None:
+            self.vypis(self.dok.souhrn_dgn.text())
         self.zahod_zalohu()
         return p
 
