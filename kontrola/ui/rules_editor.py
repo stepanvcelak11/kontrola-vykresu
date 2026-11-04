@@ -53,6 +53,16 @@ class RulesEditor(QWidget):
         self.extra_layers.setPlaceholderText("např. RAM, POPIS_*")
         self.extra_layers.editingFinished.connect(self._sync)
         row2.addWidget(self.extra_layers, 1)
+        from PySide6.QtWidgets import QComboBox
+        row2.addSpacing(12)
+        row2.addWidget(QLabel("Výkres kreslen v:"))
+        self.program = QComboBox()
+        self.program.addItem("MicroStation", "microstation")
+        self.program.addItem("Kokeš", "kokes")
+        self.program.setToolTip("Kokeš: barva 100 = barva 0 MicroStationu, styl −13 = styl 4, font 2 = font 1 "
+                                "a čáry se ověřují kreslícím klíčem ze sloupce KK Směrnice (podle Zadání Kokeš)")
+        self.program.currentIndexChanged.connect(self._program_zmenen)
+        row2.addWidget(self.program)
         lay.addLayout(row2)
         self.table = QTableWidget(0, len(COLS))
         self.table.setHorizontalHeaderLabels(COLS)
@@ -105,6 +115,7 @@ class RulesEditor(QWidget):
         for r in rules.pravidla:
             self._append_row(r)
         self.extra_layers.setText(", ".join(rules.povolene_hladiny))
+        self.program.setCurrentIndex(max(0, self.program.findData(rules.program or "microstation")))
         self._loading = False
         self._update_count()
 
@@ -173,6 +184,7 @@ class RulesEditor(QWidget):
             tucne=old.tucne if old else None, kurziva=old.kurziva if old else None,
             meritko_stylu=old.meritko_stylu if old else None, meritko_bunky=old.meritko_bunky if old else None,
             topologie=old.topologie if old else True,
+            kreslici_klic=old.kreslici_klic if old else None,
         )
 
     def _sync(self, *_):
@@ -186,6 +198,12 @@ class RulesEditor(QWidget):
         self.rules.pravidla[:] = rules
         self.rules.povolene_hladiny[:] = split_list(self.extra_layers.text())
         self._update_count()
+        self.rulesChanged.emit()
+
+    def _program_zmenen(self, _i=None):
+        if self._loading:
+            return
+        self.rules.program = self.program.currentData() or "microstation"
         self.rulesChanged.emit()
 
     def _update_count(self):

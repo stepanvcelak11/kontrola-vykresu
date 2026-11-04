@@ -386,3 +386,24 @@ def test_testovani_presnosti_um():
     ok = "\n".join(u_test_delek(s, {"delky": f"0 1 {d + 0.02:.3f}"}).protokol)
     spatne = "\n".join(u_test_delek(s, {"delky": f"0 1 {d + 1:.3f}"}).protokol)
     assert "Relativní přesnost: VYHOVUJE" in ok and "Relativní přesnost: NEVYHOVUJE" in spatne
+
+
+def test_redukce_delky():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.sjtsk import meritko_zobrazeni
+    from kontrola.geodezie.ulohy import ChybaVstupu, u_redukce
+    # Křovák: na základní rovnoběžce 0,9999, Praha asi −96 ppm, západ Čech kladné
+    assert abs(meritko_zobrazeni(500000, 1200000) - 0.9999) < 2e-6
+    assert -100e-6 < meritko_zobrazeni(743000, 1043000) - 1 < -90e-6
+    assert meritko_zobrazeni(870000, 1110000) > 1
+    s = SeznamBodu()
+    s.body = [Bod("1", 743000.0, 1043000.0, 250.0), Bod("2", 743100.0, 1043000.0, 252.0)]
+    p = "\n".join(u_redukce(s, {"d": "100.0123", "z": "99", "a": "1", "b": "2"}).protokol)
+    assert "vodorovná 100.0000 m" in p and "H = 251.0 m" in p and "-3.9 mm" in p
+    assert "d = 99.9864 m" in p and "rozdíl měřená − souřadnicová -13.6 mm" in p
+    p = "\n".join(u_redukce(s, {"d": "50", "H": "0"}).protokol)
+    assert "d = 50.0000 m" in p and "nezapočte" in p
+    import pytest
+    for h in ({"d": "-1"}, {"d": "10", "z": "500"}, {"d": "10", "H": "123456"}, {"d": "x"}):
+        with pytest.raises(ChybaVstupu):
+            u_redukce(s, h)

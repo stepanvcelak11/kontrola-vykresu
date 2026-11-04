@@ -24,7 +24,7 @@ from .settings_dialog import SettingsDialog
 from .worker import BackgroundTask
 from .zadani_tab import ZadaniTab
 
-DRAWING_FILTER = ("Výkresy (*.dxf *.dgn *.dwg *.vfk *.shp *.geojson);;DXF (*.dxf);;DGN (*.dgn);;"
+DRAWING_FILTER = ("Výkresy (*.dxf *.dgn *.dwg *.vfk *.shp *.geojson *.vyk);;DXF (*.dxf);;DGN (*.dgn);;"
                   "VFK – katastr (*.vfk);;GIS – Shapefile, GeoJSON (*.shp *.geojson *.json);;Všechny soubory (*)")
 
 

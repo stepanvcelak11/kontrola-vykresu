@@ -571,6 +571,9 @@ def _load_drawing(path: str | Path, progress: ProgressFn | None = None,
             return (read_shapefile if suffix == ".shp" else read_geojson)(p, progress)
         except (GisError, OSError, struct.error) as e:
             raise DrawingLoadError(str(e)) from e
+    if suffix in (".vyk", ".vtx", ".ss"):
+        from ..kokes import navod
+        raise DrawingLoadError(navod(p.name))
     raise DrawingLoadError(f"Nepodporovaný formát souboru: {p.suffix}. Použijte DXF (z MicroStationu, Kokeše "
                            "i Atlasu DMT jde výkres uložit/exportovat jako DXF), VFK z katastru, nebo "
                            "Shapefile / GeoJSON z GIS.")

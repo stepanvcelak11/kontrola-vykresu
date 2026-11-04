@@ -3039,6 +3039,17 @@ def test_qtrig_body_rovnou_do_cad_a_do_kontroly(window, tmp_path, monkeypatch):
         assert len([e for e in c.dok.msp if e.dxf.layer == "PLOTY"]) == 0  # Zpět odebere novou linii
         c.undo()
         assert len(list([e for e in c.dok.msp if e.dxf.layer == "PLOTY"][0].vertices())) == 3  # a vrátí starou
+        # ručně opravená linie (smazaná) se dalším bodem z terénu znovu nenakreslí
+        c.redo()
+        c.redo()
+        plot = [e for e in c.dok.msp if e.dxf.layer == "PLOTY"]
+        assert len(plot) == 1
+        c.vyber = plot
+        c.proved("smaž")
+        body.append({"name": "T5", "lat": 50.08 + 5e-5, "lng": 14.42, "kod": "PL"})
+        j.write_text(_json.dumps(body), encoding="utf-8")
+        d.nacti_soubor(str(j))
+        assert not [e for e in c.dok.msp if e.dxf.layer == "PLOTY"]
         # kontrola bez přiloženého seznamu porovná výkres s body z Výpočtů (i z QTrig)
         assert not w.project.attachments("seznamy")
         cesta = w.seznam_pro_kontrolu()

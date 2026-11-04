@@ -8,6 +8,20 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (7, "4. listopadu 2026", [
+        "<b>Kódování v QTrig → výkres</b>: při měření dáváte bodům kódy (v QTrig tlačítka Začátek / Konec / "
+        "Uzavřít linie a kódovník z kanceláře), body se stáhnou rovnou do výkresu v CAD a z kódů se nakreslí "
+        "značky, linie a plochy – i průběžně při hlídání zakázky. Špatné spojení opravíte běžným kreslením, "
+        "ručně upravená linie se už nepřepíše.",
+        "<b>CAD rychleji</b>: vlastní klávesové zkratky (tlačítko Zkratky…, F2 úsečka, F4 polylinie, Ctrl+1…9 "
+        "druh prvku), vlastní zkratky příkazového řádku, historie řádku šipkami, mezerník = naposledy použité "
+        "příkazy, <b>Nahradit buňku</b> a <b>Kopie textu se zvýšením čísla</b>.",
+        "<b>Kontrola</b> hlásí špatnou buňku na hladině, tloušťku i u čáry s neuloženým stylem a bez přiloženého "
+        "seznamu porovná výkres s body z Výpočtů (i z QTrig). Ověřeno mutačními testy na výkresech od učitele.",
+        "<b>Kokeš</b>: v Zadání → Pravidla „Výkres kreslen v: Kokeš“ – kreslící klíče ze sloupce KK Směrnice, "
+        "barva 100 = 0, styl −13 = 4, texty klíčem 1xx; soubory .vyk/.ss poradí, jak je exportovat.",
+        "<b>Výpočty → Úlohy</b>: Redukce délky do S-JTSK (vodorovná, nulový horizont, měřítko Křováka v místě).",
+    ]),
     (6, "6. října 2026", [
         "<b>Instalace</b> místo jednoho .exe: Windows program při spuštění neblokuje, startuje rychleji a "
         "aktualizace proběhne sama (Nápověda → Zkontrolovat aktualizace).",

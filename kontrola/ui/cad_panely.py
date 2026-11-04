@@ -16,7 +16,8 @@ SKUPINY = [
     ("Kreslení", ["úsečka", "polylinie", "obdélník", "mnohoúhelník", "kružnice", "oblouk", "elipsa", "křivka",
                   "bod", "text", "popisek", "šrafa", "kóta", "kóta úhlu", "kóta poloměru", "vlož"]),
     ("Úpravy", ["posun", "kopie", "otoč", "měřítko", "zrcadli", "pole", "rovnoběžka", "ořež", "prodluž", "zaobli",
-                "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "uprav text", "smaž"]),
+                "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "uprav text", "zvyš text", "nahraď buňku",
+                "smaž"]),
     ("Výběr", ["vše", "ohrada", "podobné", "vyber", "skupina"]),
     ("Měření", ["vzdálenost", "délka", "výměra", "info"]),
     ("Geodézie", ["body", "kódy", "kódovník", "vrstevnice", "profil", "mračno", "síť", "transformace", "georeference", "oměrné míry", "převod atributů"]),
@@ -25,7 +26,8 @@ SKUPINY = [
 NAZVY = {"vlož": "Vložit buňku", "body": "Body ze seznamu", "vrstvy": "Správce hladin", "celý": "Celý výkres",
          "info": "Informace o prvku", "vše": "Vybrat vše", "vyber": "Výběr podle atributů",
          "podobné": "Vybrat podobné", "ohrada": "Výběr ohradou", "skupina": "Skupina prvků",
-         "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť", "vrstevnice": "Vrstevnice a TIN", "profil": "Podélný profil", "kódy": "Kresba z kódů", "kódovník": "Kódovník", "georeference": "Georeference rastru", "mračno": "Mračno bodů"}
+         "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť", "vrstevnice": "Vrstevnice a TIN", "profil": "Podélný profil", "kódy": "Kresba z kódů", "kódovník": "Kódovník", "georeference": "Georeference rastru", "mračno": "Mračno bodů", "zvyš text": "Kopie textu se zvýšením čísla",
+         "nahraď buňku": "Nahradit buňku"}
 
 
 class PaletaNastroju(QScrollArea):

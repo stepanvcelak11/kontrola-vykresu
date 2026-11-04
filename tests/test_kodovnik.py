@@ -64,3 +64,20 @@ def test_kresba_z_kodu_3d():
     pl = msp.query("POLYLINE").first
     assert [round(v.dxf.location.z, 2) for v in pl.vertices] == [250.0, 251.5] and r["linie"] == 1
     assert msp.query("POINT").first.dxf.location.z == 250.0
+
+
+def test_viceslovny_kod_z_qtrig():
+    """QTrig nabízí kódy s mezerou („hrana asfaltu“) – s kódovníkem jsou jedním kódem, i s /Z /K /U."""
+    from kontrola.geodezie.body import Bod
+    from kontrola.geodezie.kodovnik import Kod, Kodovnik, sestav
+    kv = Kodovnik([Kod("hrana asfaltu", "hrana", "linie"), Kod("roh budovy", "budova", "plocha")])
+    body = [Bod("1", 1, 1, kod="hrana asfaltu"), Bod("2", 2, 1, kod="hrana asfaltu"),
+            Bod("3", 3, 1, kod="hrana asfaltu/K"), Bod("4", 4, 1, kod="hrana asfaltu/Z"),
+            Bod("5", 5, 1, kod="hrana asfaltu"),
+            Bod("6", 0, 5, kod="roh budovy"), Bod("7", 5, 5, kod="roh budovy"), Bod("8", 5, 9, kod="roh budovy/U")]
+    kr = sestav(body, kv)
+    assert not kr.nezname
+    hrany = [[b.cislo for b in x.body] for x in kr.linie if x.kod.kod == "hrana asfaltu"]
+    assert hrany == [["1", "2", "3"], ["4", "5"]]
+    bud = [x for x in kr.linie if x.kod.kod == "roh budovy"]
+    assert len(bud) == 1 and bud[0].uzavrena

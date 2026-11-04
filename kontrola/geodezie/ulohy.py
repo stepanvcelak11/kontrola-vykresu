@@ -631,6 +631,57 @@ def u_trig_vyska(s, h):
     return Vysledek(prot, nove)
 
 
+R_ZEME = 6_380_000.0  # střední poloměr Země pro redukci z nadmořské výšky (jako Groma)
+
+
+def u_redukce(s, h):
+    """Redukce měřené délky do S-JTSK: šikmá → vodorovná → nulový horizont → zobrazení (Křovák)."""
+    from .sjtsk import meritko_zobrazeni
+    d = _cislo(h, "d", "měřenou délku")
+    if d <= 0:
+        raise ChybaVstupu("Délka musí být kladná.")
+    z = _cislo_nepovinne(h, "z", "zenitový úhel", None)
+    vys = _cislo_nepovinne(h, "H", "nadmořskou výšku", None)
+    a = _bod(s, h, "a", "bod A") if (h.get("a") or "").strip() else None
+    b = _bod(s, h, "b", "bod B") if (h.get("b") or "").strip() else None
+    if vys is None:
+        zs = [x.z for x in (a, b) if x is not None and x.z is not None]
+        vys = sum(zs) / len(zs) if zs else 0.0
+    if not -500 <= vys <= 5000:
+        raise ChybaVstupu("Nadmořská výška má být v metrech (−500 až 5000).")
+    prot = _hlavicka("Redukce délky")
+    dv = d
+    if z is not None:
+        if not 0 < z < 400:
+            raise ChybaVstupu("Zenitový úhel má být v gonech (0–400).")
+        dv = d * abs(math.sin(V.gon2rad(z)))
+        prot.append(f"šikmá délka {_f(d, 4)} m, zenitový úhel {_f(z, 4)} gon → vodorovná {_f(dv, 4)} m")
+    else:
+        prot.append(f"vodorovná délka {_f(dv, 4)} m")
+    d0 = dv * R_ZEME / (R_ZEME + vys)
+    prot.append(f"redukce z nadmořské výšky H = {_f(vys, 1)} m (R = 6380 km): {_f((d0 - dv) * 1000, 1)} mm "
+                f"→ {_f(d0, 4)} m")
+    m = 1.0
+    if a is not None:
+        y, x = ((a.y + b.y) / 2, (a.x + b.x) / 2) if b is not None else (a.y, a.x)
+        if not (400_000 < y < 950_000 and 900_000 < x < 1_300_000):
+            raise ChybaVstupu("Body nejsou v S-JTSK – měřítko zobrazení se počítá jen pro souřadnice v ČR.")
+        m = meritko_zobrazeni(y, x)
+        prot.append(f"měřítko Křovákova zobrazení v místě: m = {m:.8f} ({(m - 1) * 1e6:+.1f} ppm): "
+                    f"{_f((d0 * m - d0) * 1000, 1)} mm")
+    else:
+        prot.append("měřítko zobrazení: zadejte bod A (případně B), jinak se nezapočte")
+    ds = d0 * m
+    prot.append(f"délka v S-JTSK  d = {_f(ds, 4)} m   (celková redukce {_f((ds - dv) * 1000, 1)} mm, "
+                f"{(ds / dv - 1) * 1e6:+.1f} ppm)")
+    if a is not None and b is not None:
+        _ruzne(a, b)
+        dsour = V.delka(a, b)
+        prot.append(f"délka ze souřadnic {a.cislo}–{b.cislo}: {_f(dsour, 4)} m, rozdíl měřená − souřadnicová "
+                    f"{_f((ds - dsour) * 1000, 1)} mm")
+    return Vysledek(prot)
+
+
 def u_nivelace(s, h):
     a, b = _bod(s, h, "a", "počáteční bod"), _bod(s, h, "b", "koncový bod")
     if a.z is None or b.z is None:
@@ -1039,6 +1090,12 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("st", "Stanovisko (s výškou)"), Pole("d", "Šikmá délka [m]", "m"), Pole("z", "Zenitový úhel [gon]", "gon"),
       Pole("vp", "Výška přístroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
       Pole("nove", "Číslo bodu (nepovinné)", "text")], u_trig_vyska),
+    ("Redukce délky", "Měřená délka do S-JTSK: na vodorovnou, do nulového horizontu a měřítkem Křovákova "
+     "zobrazení v místě; s body A, B porovná se souřadnicovou délkou (jako Redukce délek v Gromě).",
+     [Pole("d", "Měřená délka [m]", "m"),
+      Pole("z", "Zenitový úhel [gon] (nepovinné – prázdné = délka je vodorovná)", "gon"),
+      Pole("H", "Nadmořská výška [m] (nepovinné – jinak z výšek bodů)", "m"),
+      Pole("a", "Bod A (nepovinné – poloha pro měřítko)"), Pole("b", "Bod B (nepovinné)")], u_redukce),
     ("Nivelační pořad", "Výšky bodů pořadu mezi dvěma výškově danými body, rozdělení uzávěru úměrně délkám.",
      [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
       Pole("oddily", "Oddíly (řádek: cílový bod převýšení délka)", "radky"),

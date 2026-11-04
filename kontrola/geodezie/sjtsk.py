@@ -138,3 +138,15 @@ def stupne_text(v: float, kladne: str, zaporne: str) -> str:
     m = int((v - d) * 60)
     sec = (v - d - m / 60) * 3600
     return f"{d}°{m:02d}'{sec:06.3f}\"{s}"
+
+
+def meritko_zobrazeni(y: float, x: float) -> float:
+    """Měřítko Křovákova zobrazení v bodě (Y, X kladné) – poměr délky v rovině S-JTSK k délce na elipsoidu.
+
+    Zobrazení je konformní, měřítko nezávisí na směru: spočte se z malého kroku po poledníku."""
+    phi, lam = krovak_inv(y, x)
+    dphi = 1e-6
+    y1, x1 = krovak(phi - dphi / 2, lam)
+    y2, x2 = krovak(phi + dphi / 2, lam)
+    m_pol = BESSEL_A * (1 - _E2) / (1 - _E2 * math.sin(phi) ** 2) ** 1.5  # poloměr křivosti poledníku
+    return math.hypot(y2 - y1, x2 - x1) / (m_pol * dphi)

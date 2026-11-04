@@ -220,6 +220,16 @@ def rozloz(kody: str) -> list[tuple[str, str, str | None]]:
     return out
 
 
+def _casti_kodu(text: str, kodovnik: "Kodovnik") -> list[tuple[str, str, str | None]]:
+    """Kódy bodu; víceslovný kód z kódovníku („hrana asfaltu/Z“ z QTrig) zůstane jedním kódem."""
+    t = (text or "").strip()
+    m = re.match(r"^(.*?)(?:/([ZKUzku]))?$", t)
+    cely = (m.group(1) if m else t).strip()
+    if re.search(r"\s", cely) and kodovnik.najdi(cely) is not None:
+        return [(cely, "", RIDICI[m.group(2).upper()] if m and m.group(2) else None)]
+    return rozloz(t)
+
+
 def _odvozeny(kod: str, predvolby) -> Kod | None:
     """Kód mimo kódovník podle zadání: buňka (bodová značka) nebo styl čáry (linie)."""
     k = kod.strip().upper()
@@ -253,7 +263,7 @@ def sestav(body, kodovnik: Kodovnik | None = None, predvolby=()) -> Kresba:
             kr.varovani.append(f"Linie {lin.kod.kod} má jen bod {lin.body[0].cislo} – nekreslí se.")
 
     for b in sorted(body, key=lambda b: klic_cisla(b.cislo)):
-        for kod, cislo, ridici in rozloz(getattr(b, "kod", "") or ""):
+        for kod, cislo, ridici in _casti_kodu(getattr(b, "kod", "") or "", kodovnik):
             if kod.upper() not in pamet:
                 pamet[kod.upper()] = kodovnik.najdi(kod) or _odvozeny(kod, predvolby)
             k = pamet[kod.upper()]

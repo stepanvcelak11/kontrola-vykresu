@@ -439,3 +439,34 @@ def test_vymera_s_oblouky():
                             format="xyseb", close=True)
     assert U.vymera_prvku(p2) == pytest.approx(4 - math.pi / 2, abs=1e-12)  # půlkruh dovnitř
     assert U.vymera_prvku(k.kruznice((0, 0), 2)) == pytest.approx(4 * math.pi)
+
+
+def test_nahrad_bunky_a_zvys_text():
+    import ezdxf
+    import pytest
+
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    for n in ("3.13", "3.14"):
+        doc.blocks.new(n).add_circle((0, 0), 0.5)
+    h = U.Historie(msp)
+    a = msp.add_blockref("3.13", (10, 20), dxfattribs={"layer": "22", "color": 3, "rotation": 30, "xscale": 2,
+                                                        "yscale": 2})
+    nove = U.nahrad_bunky(doc, msp, h, [a], "3.14")
+    e = nove[0]
+    assert e.dxf.name == "3.14" and e.dxf.layer == "22" and e.dxf.color == 3 and e.dxf.rotation == 30
+    assert e.dxf.xscale == 2 and tuple(e.dxf.insert)[:2] == (10, 20) and a.dxf.owner is None
+    h.krok_zpet()
+    assert a.dxf.owner is not None and e.dxf.owner is None
+    with pytest.raises(ValueError):
+        U.nahrad_bunky(doc, msp, h, [a], "neni")
+    assert U.zvys_cislo("12") == "13" and U.zvys_cislo("P009") == "P010" and U.zvys_cislo("4001/2") == "4001/3"
+    assert U.zvys_cislo("99", 1) == "100" and U.zvys_cislo("5", -1) == "4" and U.zvys_cislo("bod 7a", 2) == "bod 9a"
+    with pytest.raises(ValueError):
+        U.zvys_cislo("bez čísla")
+    t = msp.add_text("101", dxfattribs={"layer": "59", "height": 1}).set_placement((0, 0))
+    c = U.kopie_textu_se_zvysenim(msp, h, t, (5, 5))
+    c2 = U.kopie_textu_se_zvysenim(msp, h, c, (10, 5))
+    assert (c.dxf.text, c2.dxf.text) == ("102", "103") and c2.dxf.layer == "59"
+    assert tuple(c2.dxf.insert)[:2] == (10, 5)

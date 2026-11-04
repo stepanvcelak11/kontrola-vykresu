@@ -1,4 +1,5 @@
-"""Název odevzdávaného souboru podle zadání MicroStation: Prijmeni_cz_ax_tx.dgn.
+"""Název odevzdávaného souboru podle zadání: Prijmeni_cz_ax_tx.dgn (MicroStation), u Kokeše
+Prijmeni_cz_ax_tx.vyk a seznam Prijmeni_cz_ax_tx.ss (export do DXF se jmenuje stejně).
 
 cz = číslo zadání, a = pořadí opravy po atributové kontrole, t = pořadí opravy po topologické kontrole
 (např. Vcelak_13_a0_t0.dgn – první odevzdání, Vcelak_13_a1_t0.dgn – po první opravě atributů).
@@ -32,6 +33,7 @@ def zhodnot(path: str | Path) -> Hodnoceni | None:
     """Vrátí hodnocení názvu, nebo None, když soubor vzor zadání vůbec nepoužívá."""
     p = Path(path)
     stem = p.stem
+    ext = p.suffix.lower() if p.suffix.lower() in (".dgn", ".vyk", ".ss") else ".dgn"
     if not POKUS.match(stem):
         return None
     m = VZOR.match(stem)
@@ -39,16 +41,16 @@ def zhodnot(path: str | Path) -> Hodnoceni | None:
         cist = _bez_diakritiky(stem)
         rada = ""
         if cist != stem and VZOR.match(cist):
-            rada = f" – bez diakritiky: {cist}.dgn"
+            rada = f" – bez diakritiky: {cist}{ext}"
         else:
             parts = cist.split("_")
             if len(parts) >= 2 and parts[1].isdigit():
-                rada = f" – např. {parts[0]}_{parts[1]}_a0_t0.dgn"
-        return Hodnoceni(False, f"Název „{p.name}“ neodpovídá vzoru ze zadání Prijmeni_cz_ax_tx.dgn{rada}")
+                rada = f" – např. {parts[0]}_{parts[1]}_a0_t0{ext}"
+        return Hodnoceni(False, f"Název „{p.name}“ neodpovídá vzoru ze zadání Prijmeni_cz_ax_tx{ext}{rada}")
     base = f"{m['prijmeni']}_{m['cz']}"
     a, t = int(m["a"]), int(m["t"])
-    dalsi_a = f"{base}_a{a + 1}_t{t}.dgn"
-    dalsi_t = f"{base}_a{a}_t{t + 1}.dgn"
+    dalsi_a = f"{base}_a{a + 1}_t{t}{ext}"
+    dalsi_t = f"{base}_a{a}_t{t + 1}{ext}"
     text = (f"Název „{p.stem}“ odpovídá vzoru Prijmeni_cz_ax_tx (zadání {m['cz']}, oprava atributů {a}, "
             f"topologie {t}). Po další opravě: {dalsi_a} (atributy) nebo {dalsi_t} (topologie).")
     return Hodnoceni(True, text, dalsi_a, dalsi_t)

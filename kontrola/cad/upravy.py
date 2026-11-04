@@ -10,6 +10,7 @@ Vše pracuje v souřadnicích DXF (x, y) v plné přesnosti (float64).
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 
 from ezdxf.math import Matrix44
@@ -1833,3 +1834,55 @@ def kota_polomeru(msp, h: Historie, e, bod, vyska_textu: float = 2.5, attrs: dic
     d.render()
     h.proved("Kóta poloměru", [d.dimension])
     return d.dimension
+
+
+# ------------------------------------------------------------------ nástroje MicroStationu pro rychlejší opravy
+def nahrad_bunky(doc, msp, h: Historie, bunky, nazev: str) -> list:
+    """Nahradí buňky jinou buňkou (Replace Cell): stejný bod, natočení, měřítko, hladina a barva."""
+    if nazev not in doc.blocks or nazev.startswith("*"):
+        raise ValueError(f"Buňka {nazev} ve výkresu není.")
+    stare = [e for e in bunky if e.dxftype() == "INSERT"]
+    if not stare:
+        raise ValueError("Vyberte buňky (bloky), které se mají nahradit.")
+    nove = []
+    for e in stare:
+        a = {k: e.dxf.get(k) for k in ("layer", "color", "lineweight", "true_color", "linetype", "rotation",
+                                       "xscale", "yscale", "zscale") if e.dxf.hasattr(k)}
+        ins = msp.add_blockref(nazev, e.dxf.insert, dxfattribs=a)
+        if any(x.dxftype() == "ATTDEF" for x in doc.blocks.get(nazev)):
+            ins.add_auto_attribs({})
+        nove.append(ins)
+    h.proved(f"Nahradit buňku ({len(nove)}×)", nove, stare)
+    return nove
+
+
+_CISLO = re.compile(r"(-?\d+)(?!.*\d)")
+
+
+def zvys_cislo(text: str, krok: int = 1) -> str:
+    """Zvýší poslední číslo v textu (Copy and Increment Text): „12“ → „13“, „P009“ → „P010“, „4001/2“ → „4001/3“."""
+    m = _CISLO.search(text or "")
+    if m is None:
+        raise ValueError(f"V textu „{text}“ není číslo k navýšení.")
+    s = m.group(1)
+    n = int(s) + krok
+    zaporne = n < 0
+    cislo = str(abs(n)).zfill(len(s.lstrip("-")) if s.lstrip("-").startswith("0") else 1)
+    return text[:m.start(1)] + ("-" if zaporne else "") + cislo + text[m.end(1):]
+
+
+def kopie_textu_se_zvysenim(msp, h: Historie, e, bod, krok: int = 1):
+    """Kopie textu do bodu s číslem zvýšeným o krok – vrátí novou kopii (z ní se pokračuje dál)."""
+    if e.dxftype() != "TEXT":
+        raise ValueError("Zvyšovat jde jednořádkový text.")
+    c = _kopie(e)
+    c.dxf.text = zvys_cislo(e.dxf.text, krok)
+    x, y = _xy(bod)
+    dx, dy = x - e.dxf.insert.x, y - e.dxf.insert.y
+    c.dxf.insert = (x, y, e.dxf.insert.z)
+    if c.dxf.hasattr("align_point"):
+        p = c.dxf.align_point
+        c.dxf.align_point = (p.x + dx, p.y + dy, p.z)
+    msp.add_entity(c)
+    h.proved(f"Kopie textu {c.dxf.text}", [c])
+    return c

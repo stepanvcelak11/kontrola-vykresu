@@ -14,7 +14,9 @@ NAPOVEDA = ("<b>Kódy u bodů</b> (v totální stanici, QTrig nebo seznamu souř
             "PL (spojuje se v pořadí čísel bodů), <code>PL/Z</code> začátek nové linie, <code>PL/K</code> konec, "
             "<code>PL/U</code> uzavřít, <code>PL#2</code> druhá souběžná linie, víc kódů oddělte mezerou "
             "(<code>PL BUD/Z</code>). Kód, který tu není, se hledá v zadání: číslo buňky (3.13 strom) → značka, "
-            "číslo stylu (2.13 plot) → linie.")
+            "číslo stylu (2.13 plot) → linie.<br><b>QTrig:</b> kódovník uložte tlačítkem „Uložit jako…“ (CSV) a v QTrig "
+            "u kódu bodu dejte „Načíst kódovník…“ – kódy se v terénu nabízejí jako první a tlačítka Začátek / Konec / "
+            "Uzavřít doplní /Z, /K, /U. Body pak v CAD nakreslí příkaz „kódy“ nebo QTrig s volbou „rovnou do výkresu“.")
 
 
 def soubor_kodovniku(win) -> Path:

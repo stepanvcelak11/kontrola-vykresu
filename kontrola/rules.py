@@ -483,6 +483,7 @@ class Rule:
     tucne: bool | None = None  # řez písma (None = nekontroluje se)
     kurziva: bool | None = None
     topologie: bool = True  # False = prvky se nekontrolují topologicky (vstupy, sdružené značky)
+    kreslici_klic: str | None = None  # Kokeš: kreslící klíč(e) – „1-4“, „20“ (sloupec KK ve Směrnici)
 
     def __post_init__(self):
         if self.geometrie is not None and not isinstance(self.geometrie, GeomType):
@@ -516,7 +517,7 @@ class Rule:
         if self.typy_prvku:
             d["typy_prvku"] = list(self.typy_prvku)
         for k in ("vyska_textu", "sirka_textu", "font", "zarovnani", "tucne", "kurziva", "meritko_stylu",
-                  "meritko_bunky"):
+                  "meritko_bunky", "kreslici_klic"):
             v = getattr(self, k)
             if v not in (None, ""):
                 d[k] = v
@@ -552,6 +553,7 @@ class Rule:
             tucne=parse_bool(d.get("tucne")),
             meritko_stylu=fnum("meritko_stylu"),
             meritko_bunky=fnum("meritko_bunky"),
+            kreslici_klic=(str(d["kreslici_klic"]).strip() if d.get("kreslici_klic") not in (None, "") else None),
             kurziva=parse_bool(d.get("kurziva")),
             topologie=bool(d.get("topologie", True)),
             hladina=(str(d["hladina"]).strip() if d.get("hladina") else None),
@@ -661,6 +663,7 @@ class RuleSet:
     barevna_tabulka: dict[int, tuple[int, int, int]] = field(default_factory=dict)  # načtený color.tbl
     mapa_tloustek: dict[int, float] = field(default_factory=dict)  # tloušťka MicroStationu → mm v DXF
     meritko: int | None = None  # výšky/šířky textu v pravidlech jsou v mm na papíře v tomto měřítku
+    program: str = "microstation"  # odkud výkres je: microstation / kokes (převody čísel podle zadání)
 
     def text_size(self, value: float | None) -> float | None:
         """Výška/šířka textu z pravidla převedená na jednotky výkresu (m)."""
@@ -768,6 +771,8 @@ class RuleSet:
     # ------------------------------------------------------------ YAML
     def to_dict(self) -> dict:
         d: dict[str, Any] = {"paleta": self.paleta}
+        if self.program != "microstation":
+            d["program"] = self.program
         if self.meritko:
             d["meritko"] = int(self.meritko)
         if self.mapa_tloustek:
@@ -789,6 +794,7 @@ class RuleSet:
             povolene_hladiny=split_list(d.get("povolene_hladiny")),
             paleta=str(d.get("paleta", "microstation")).lower(),
             rozsah=d.get("rozsah"),
+            program=str(d.get("program", "microstation") or "microstation").lower(),
         )
         try:
             rs.meritko = int(d["meritko"]) if d.get("meritko") else None

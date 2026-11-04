@@ -419,6 +419,8 @@ class CadPage(QWidget):
 
     PRIKAZY = {
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
+        "nahraď buňku": "nahradit vybrané buňky jinou buňkou – stejný bod, natočení a měřítko (Replace Cell)",
+        "zvyš text": "kopírovat text se zvýšeným číslem kliknutím (Copy and Increment Text – čísla bodů)",
         "qtrig": "body ze zakázky QTrig rovnou do výkresu – značky, čísla a linie z kódů (i průběžně z terénu)",
         "zkratky": "nastavit klávesové zkratky (funkční klávesy) a zkratky příkazového řádku",
         "předvolba": "druh prvku podle pořadí v poli Kreslím („předvolba 2“, i klávesou Ctrl+2)",
@@ -473,6 +475,9 @@ class CadPage(QWidget):
     }
     ALIASY = {
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
+        "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
+        "vymen bunku": "nahraď buňku", "vyměň buňku": "nahraď buňku",
+        "increment text": "zvyš text", "zvys text": "zvyš text", "it": "zvyš text", "copy increment": "zvyš text",
         "predvolba": "předvolba", "recent": "naposledy", "teren": "qtrig", "terén": "qtrig",
         "z terenu": "qtrig", "z terénu": "qtrig",
         "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
@@ -1215,7 +1220,8 @@ class CadPage(QWidget):
 
         Vkládají se jen body, které ve výkresu z terénu ještě nejsou (značka nebo buňka podle kódu, číslo
         a výška v hladinách podle zadání). Linie a plochy z kódů se doplní – linie, ke které přibyl bod,
-        se nakreslí znovu (stará se odebere), ostatní kresba zůstane. Vše jde vrátit přes Zpět."""
+        se nakreslí znovu (stará se odebere), ostatní kresba zůstane. Linie upravené nebo smazané ručně
+        se už nepřekreslují (oprava špatného spojení zůstane). Vše jde vrátit přes Zpět."""
         from ..cad import body_seznam as BS
         from ..cad import kresba_z_kodu as KZ
         from ..geodezie import kodovnik as KV
@@ -1254,7 +1260,9 @@ class CadPage(QWidget):
                 drive = stav["linie"].get(klic)
                 if drive is not None and drive[0] == cisla:
                     continue
-                if drive is not None and drive[1].dxf.owner is not None:
+                if drive is not None and drive[1].dxf.owner is None:
+                    continue  # linii jste ručně upravili nebo smazali – už ji nepřekreslujeme
+                if drive is not None:
                     stare.append(drive[1])
                 zmenene.append((klic, cisla, lin))
             if stare:
@@ -3301,6 +3309,44 @@ class CadPage(QWidget):
         ins = U.vytvor_blok(self.dok.doc, self.prostor, self.historie_zmen, ents, nazev, b)
         self._hotovo_vyber([ins])
         self.vypis(f"Blok {nazev} vytvořen z {len(ents)} prvků.")
+
+    def n_nahrad_bunku(self):
+        """Replace Cell: vybrané (nebo klikané) buňky nahradí jinou – opravy po kontrole „buňka … má být …“."""
+        bunky = [e for e in self.vyber if e.dxftype() == "INSERT"]
+        if not bunky:
+            e, _k = yield Pozadavek("prvek", "Nahradit buňku – klikněte na buňku (nebo ji předem vyberte):")
+            if e.dxftype() != "INSERT":
+                raise ValueError("To není buňka.")
+            bunky = [e]
+        jmena = U.bloky(self.dok.doc)
+        p = self.predvolba
+        vychozi = getattr(self, "_aktivni_bunka", None) or ""
+        if p is not None and p.blok:
+            from ..rules import block_matches, split_alternatives
+            vhodne = [j for j in jmena if any(block_matches(v, j) for v in split_alternatives(p.blok))]
+            vychozi = vhodne[0] if vhodne else vychozi
+        self.vypis("Buňky: " + ", ".join(jmena[:40]) + ("…" if len(jmena) > 40 else ""))
+        nazev = yield Pozadavek("text", f"Nahradit {len(bunky)} buněk buňkou [{vychozi or '?'}]:", vychozi=vychozi)
+        nove = U.nahrad_bunky(self.dok.doc, self.prostor, self.historie_zmen, bunky, (nazev or "").strip())
+        self._po_zmene(nove, bunky)
+        self.vyber = []
+        self.vypis(f"Nahrazeno {len(nove)} buněk buňkou {nazev}.")
+
+    def n_zvys_text(self):
+        """Copy and Increment Text: klik na text s číslem, pak každý klik = kopie s číslem o krok vyšším."""
+        e, _k = yield Pozadavek("prvek", "Zvýšit text – klikněte na text s číslem (např. číslo bodu):")
+        if e.dxftype() != "TEXT":
+            raise ValueError("Klikněte na jednořádkový text s číslem.")
+        U.zvys_cislo(e.dxf.text)  # ověří, že v textu číslo je
+        krok = yield Pozadavek("cislo", "Krok [1]:", vychozi=1.0)
+        krok = int(round(krok or 1))
+        while True:
+            b = yield self._bod_req(f"Umístění textu {U.zvys_cislo(e.dxf.text, krok)} (Enter = konec):",
+                                    volitelne=True)
+            if b is None:
+                return
+            e = U.kopie_textu_se_zvysenim(self.prostor, self.historie_zmen, e, b, krok)
+            self._po_zmene([e], [])
 
     def n_vloz(self):
         jmena = U.bloky(self.dok.doc)

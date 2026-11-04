@@ -91,6 +91,11 @@ class Symbologie(Check):
         unknown_colors: set = set()
         ms_weights: set = set()
         n_dle_hladiny = 0
+        kokes = (rs.program or "") == "kokes"
+        if kokes:
+            from dataclasses import replace
+
+            from .. import kokes as K
         feats = ctx.features()
         for i, f in enumerate(feats):
             if i % 2000 == 0:
@@ -109,6 +114,16 @@ class Symbologie(Check):
             dle_hladiny = f.bylayer if f.attributes.get("ZDROJ") == "DGN" else frozenset()
             if dle_hladiny:
                 n_dle_hladiny += 1
+            klic = None
+            if kokes:  # převody podle Zadání Kokeš: barva 100 = 0, styl −13 = 4, kreslící klíč
+                klic = K.klic_prvku(f)
+                zmena = {}
+                if str(f.attributes.get("MS_BARVA", "")) == "100":
+                    zmena["attributes"] = dict(f.attributes, MS_BARVA="0")
+                if klic is None and str(f.linetype).strip() == "-13":
+                    zmena["linetype"] = "4"
+                if zmena:
+                    f = replace(f, **zmena)
             if do_color and r.barva is not None and "barva" not in dle_hladiny:
                 if not color_known(r.barva, pal, table) and "MS_BARVA" not in f.attributes:
                     unknown_colors.add(r.barva)
@@ -123,6 +138,13 @@ class Symbologie(Check):
             unexported = False
             if "styl" in dle_hladiny:
                 pass
+            elif kokes and klic is not None and f.geom_type == GeomType.TEXT:
+                xx = K.barva_textu_z_klice(klic)
+                if do_color and xx is not None and isinstance(r.barva, int) and xx != r.barva:
+                    diffs.append(f"textový klíč {klic} = barva {xx} (má být klíč {100 + r.barva})")
+            elif kokes and klic is not None and linear:
+                if do_style and r.kreslici_klic and not K.klic_v_rozsahu(r.kreslici_klic, klic):
+                    diffs.append(f"kreslící klíč {klic} (má být {r.kreslici_klic})")
             elif do_style and r.styl_cary and linear and f.linetype == "VLASTNI_STYL":
                 # DGN: vlastní styl čáry – jeho název je v knihovně stylů, ne ve výkresu
                 if not re.search(r"\d+\.\d+", str(r.styl_cary)):
