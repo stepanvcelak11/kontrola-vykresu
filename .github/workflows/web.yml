@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   sestaveni:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright 1.56 na 26.04 neinstaluje prohlížeč
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
