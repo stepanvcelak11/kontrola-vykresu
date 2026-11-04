@@ -1,4 +1,4 @@
-PySide6>=6.6
+PySide6>=6.6,<6.11  # 6.12.0 padá na chybě v počítání referencí (none_dealloc)
 ezdxf>=1.2
 shapely>=2.0
 numpy>=1.24

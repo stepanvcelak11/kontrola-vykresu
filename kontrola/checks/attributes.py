@@ -9,7 +9,7 @@ import numpy as np
 import shapely
 
 from ..model import Feature, GeomType
-from ..rules import (color_known, color_matches, font_style, layer_matches, layer_number, linetype_matches,
+from ..rules import (block_matches, color_known, color_matches, font_style, layer_matches, layer_number, linetype_matches,
                      weight_values)
 from .base import Check, CheckContext, Param, Severity, fmt_num, register
 
@@ -72,6 +72,8 @@ class Symbologie(Check):
         Param("kontrolovat_styl", "Kontrolovat styl čáry", "bool", True),
         Param("kontrolovat_tloustku", "Kontrolovat tloušťku", "bool", True),
         Param("kontrolovat_text", "Kontrolovat výšku, šířku a zarovnání textu", "bool", True),
+        Param("kontrolovat_bunku", "Kontrolovat název buňky", "bool", True,
+              "Buňka (blok) na hladině musí být ta, kterou pro hladinu předepisuje pravidlo."),
         Param("kontrolovat_font", "Kontrolovat font textu", "bool", True,
               "Porovná název fontu z pravidla s fontem textového stylu v DXF (např. CS WORKING → cs_Working.shx)."),
     ]
@@ -82,11 +84,13 @@ class Symbologie(Check):
         do_weight = bool(ctx.param("kontrolovat_tloustku", True))
         do_text = bool(ctx.param("kontrolovat_text", True))
         do_font = bool(ctx.param("kontrolovat_font", True))
+        do_cell = bool(ctx.param("kontrolovat_bunku", True))
         rs = ctx.rules
         pal, table = rs.paleta, rs.barevna_tabulka
         wmap = rs.mapa_tloustek
         unknown_colors: set = set()
         ms_weights: set = set()
+        n_dle_hladiny = 0
         feats = ctx.features()
         for i, f in enumerate(feats):
             if i % 2000 == 0:
@@ -97,7 +101,15 @@ class Symbologie(Check):
             diffs = []
             if r.hladina and not r.matches_layer(f.layer):
                 diffs.append(f"vrstva {f.layer} (má být {r.hladina})")
-            if do_color and r.barva is not None:
+            if do_cell and r.blok and f.dxftype == "INSERT" and f.block_name and \
+                    not block_matches(r.blok, f.block_name):
+                diffs.append(_spatna_bunka(f, r, rs))
+            # DGN čtený přímo: hodnota „dle hladiny“ (ByLevel) se z tabulky hladin nečte – nehlásí se jako
+            # špatná barva/tloušťka/styl, to hlásí kontrola „Atribut dle vrstvy“
+            dle_hladiny = f.bylayer if f.attributes.get("ZDROJ") == "DGN" else frozenset()
+            if dle_hladiny:
+                n_dle_hladiny += 1
+            if do_color and r.barva is not None and "barva" not in dle_hladiny:
                 if not color_known(r.barva, pal, table) and "MS_BARVA" not in f.attributes:
                     unknown_colors.add(r.barva)
                 elif not color_matches(r.barva, f, pal, table):
@@ -109,7 +121,9 @@ class Symbologie(Check):
                     diffs.append(f"barva {got} (má být {r.barva})")
             linear = f.geom_type in (GeomType.LINIE, GeomType.POLYGON)
             unexported = False
-            if do_style and r.styl_cary and linear and f.linetype == "VLASTNI_STYL":
+            if "styl" in dle_hladiny:
+                pass
+            elif do_style and r.styl_cary and linear and f.linetype == "VLASTNI_STYL":
                 # DGN: vlastní styl čáry – jeho název je v knihovně stylů, ne ve výkresu
                 if not re.search(r"\d+\.\d+", str(r.styl_cary)):
                     diffs.append(f"styl vlastní (id {f.attributes.get('MS_STYL')}) (má být {r.styl_cary})")
@@ -124,21 +138,14 @@ class Symbologie(Check):
             if r.meritko_bunky and f.dxftype == "INSERT" and \
                     abs(abs(f.scale[0]) - r.meritko_bunky) > 1e-4 * max(1.0, r.meritko_bunky):
                 diffs.append(f"měřítko buňky {fmt_num(abs(f.scale[0]), 3)} (má být {fmt_num(r.meritko_bunky, 3)})")
-            if unexported and not diffs:
-                iss = ctx.issue(self, f, f"{r.nazev or r.kod}: styl v DXF je Continuous – uživatelský styl "
-                                         f"{r.styl_cary} MicroStation do DXF neuložil, ověřte ho v DGN"
-                                         + (f" (měřítko stylu {fmt_num(f.ltscale, 3)} odpovídá)"
-                                            if r.meritko_stylu and abs(f.ltscale - r.meritko_stylu) <= 1e-4 else ""))
-                iss.severity = Severity.VAROVANI
-                yield iss
-                continue
             if do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT and \
                     f.attributes.get("MS_TLOUSTKA") is not None:
                 wants = [int(w) for w in weight_values(r.tloustka) if float(w).is_integer() and 0 <= w <= 31]
                 got = int(f.attributes["MS_TLOUSTKA"])
                 if wants and got not in wants:
                     diffs.append(f"tloušťka {got} (má být {' nebo '.join(map(str, wants))})")
-            elif do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT:
+            elif do_weight and r.tloustka is not None and f.geom_type != GeomType.TEXT and \
+                    "tloušťka" not in dle_hladiny:
                 # tloušťka MicroStationu (wt 0–31) se v DXF ověří přes převodní tabulku na mm
                 expected, unknown = rs.expected_weights(r)
                 ms_weights.update(unknown)
@@ -152,14 +159,39 @@ class Symbologie(Check):
             if f.geom_type == GeomType.TEXT and do_font and r.font and not f.font.startswith("font č.") and \
                     _norm_font(r.font) not in _norm_font(f.font):  # z DGN se písmo nečte
                 diffs.append(f"font {f.font or '–'} (má být {r.font})")
+            if unexported and not diffs:
+                iss = ctx.issue(self, f, f"{r.nazev or r.kod}: styl v DXF je Continuous – uživatelský styl "
+                                         f"{r.styl_cary} MicroStation do DXF neuložil, ověřte ho v DGN"
+                                         + (f" (měřítko stylu {fmt_num(f.ltscale, 3)} odpovídá)"
+                                            if r.meritko_stylu and abs(f.ltscale - r.meritko_stylu) <= 1e-4 else ""))
+                iss.severity = Severity.VAROVANI
+                yield iss
+                continue
             if diffs:
+                if unexported:
+                    diffs.append(f"styl {r.styl_cary} ověřte v DGN (do DXF se neuložil)")
                 yield ctx.issue(self, f, f"{_what(f)} (pravidlo „{r.nazev or r.kod}“): " + ", ".join(diffs))
         if unknown_colors:
             ctx.notes.append("barvy MicroStationu " + ", ".join(map(str, sorted(unknown_colors, key=str)))
                              + " nelze ověřit bez barevné tabulky – načtěte color.tbl v Nastavení kontrol → Obecné.")
+        if n_dle_hladiny:
+            ctx.notes.append(f"{n_dle_hladiny} prvků má barvu, styl nebo tloušťku „dle hladiny“ (ByLevel) – tyto "
+                             "hodnoty se z DGN neověřují (hlásí je kontrola Atribut dle vrstvy).")
         if ms_weights:
             ctx.notes.append("tloušťky MicroStationu (wt " + ", ".join(map(str, sorted(ms_weights)))
                              + ") se ověřují jen s převodní tabulkou tlouštěk (mapa_tloustek v pravidlech).")
+
+
+def _spatna_bunka(f: Feature, r, rs) -> str:
+    """Popis chybné buňky – s výčtem buněk, které pravidla na této hladině připouštějí."""
+    povolene = []
+    for x in rs.pravidla:
+        if x.blok and x.matches_layer(f.layer) and x.blok not in povolene:
+            povolene.append(x.blok)
+    if not povolene:
+        povolene = [r.blok]
+    ukazka = " nebo ".join(povolene[:4]) + ("…" if len(povolene) > 4 else "")
+    return f"buňka {f.block_name} (má být {ukazka})"
 
 
 def _custom_style_not_exported(expected: str, f: Feature, linetypes: set[str]) -> bool:

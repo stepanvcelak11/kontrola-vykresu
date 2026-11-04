@@ -3000,3 +3000,54 @@ def test_ulohy_radky_ze_souboru(window, tmp_path, monkeypatch):
     b.click()
     assert isinstance(p.inputs["kontrolni"], QPlainTextEdit)
     assert p.inputs["kontrolni"].toPlainText().split() == ["4001", "600000.02", "1160000.01", "250.00"]
+
+
+def test_qtrig_body_rovnou_do_cad_a_do_kontroly(window, tmp_path, monkeypatch):
+    """QTrig → seznam souřadnic → výkres v CAD (body a linie z kódů, i přírůstkově) → kontrola proti bodům."""
+    import json as _json
+
+    from kontrola import qtrig as Q
+    from kontrola.geodezie.kodovnik import Kod, Kodovnik
+    from kontrola.ui.kodovnik_dialog import soubor_kodovniku
+    from PySide6.QtCore import QSettings
+    monkeypatch.setattr("kontrola.ui.qtrig_dialog._nastaveni",
+                        lambda: QSettings(str(tmp_path / "s.ini"), QSettings.IniFormat))
+    w = window
+    Kodovnik([Kod("PL", "plot", "linie", vrstva="PLOTY")]).uloz(soubor_kodovniku(w))
+    p = w.vypocty
+    puvodni = list(p.seznam.body)
+    d = p.qtrig_dialog(Q.Klient(otevri=lambda *a, **k: None))
+    try:
+        d.do_cad.setChecked(True)
+        j = tmp_path / "moje_body.json"
+        body = [{"name": f"T{i}", "lat": 50.08 + i * 1e-5, "lng": 14.42, "kod": "PL"} for i in range(1, 4)]
+        j.write_text(_json.dumps(body), encoding="utf-8")
+        d.nacti_soubor(str(j))
+        c = w.cad
+        assert c.dok is not None
+        plot = [e for e in c.dok.msp if e.dxf.layer == "PLOTY"]
+        assert len(plot) == 1 and len(list(plot[0].vertices())) == 3
+        assert "Do výkresu: 3 bodů, 1 linií" in d.stav.text()
+        # další bod z terénu: plot se prodlouží (stará linie pryč), body se neopakují
+        body.append({"name": "T4", "lat": 50.08 + 4e-5, "lng": 14.42, "kod": "PL"})
+        j.write_text(_json.dumps(body), encoding="utf-8")
+        d.nacti_soubor(str(j))
+        plot = [e for e in c.dok.msp if e.dxf.layer == "PLOTY"]
+        assert len(plot) == 1 and len(list(plot[0].vertices())) == 4
+        assert "Do výkresu: 1 bodů" in d.stav.text()
+        c.undo()
+        assert len([e for e in c.dok.msp if e.dxf.layer == "PLOTY"]) == 0  # Zpět odebere novou linii
+        c.undo()
+        assert len(list([e for e in c.dok.msp if e.dxf.layer == "PLOTY"][0].vertices())) == 3  # a vrátí starou
+        # kontrola bez přiloženého seznamu porovná výkres s body z Výpočtů (i z QTrig)
+        assert not w.project.attachments("seznamy")
+        cesta = w.seznam_pro_kontrolu()
+        assert cesta.endswith("seznam_pro_kontrolu.txt") and "T4" in open(cesta, encoding="utf-8").read()
+        # v CAD jde QTrig otevřít příkazem
+        d.do_cad.setChecked(False)
+        c.proved("terén")
+        assert d.do_cad.isChecked()
+    finally:
+        d.close()
+        p.seznam.body[:] = puvodni
+        p._after_change()

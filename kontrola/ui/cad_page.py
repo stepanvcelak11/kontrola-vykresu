@@ -419,6 +419,10 @@ class CadPage(QWidget):
 
     PRIKAZY = {
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
+        "qtrig": "body ze zakázky QTrig rovnou do výkresu – značky, čísla a linie z kódů (i průběžně z terénu)",
+        "zkratky": "nastavit klávesové zkratky (funkční klávesy) a zkratky příkazového řádku",
+        "předvolba": "druh prvku podle pořadí v poli Kreslím („předvolba 2“, i klávesou Ctrl+2)",
+        "naposledy": "nabídka naposledy použitých příkazů (i mezerník ve výkresu)",
         "vlož ze schránky": "vložit prvky ze schránky na stejné souřadnice (Ctrl+V)",
         "uprav text": "upravit text kliknutím (Edit Text)",
         "délka": "celková délka vybraných čar (Measure Length)", "síť": "křížky souřadnicové sítě po intervalu (např. 100 m) s popisy",
@@ -468,6 +472,9 @@ class CadPage(QWidget):
         "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
+        "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
+        "predvolba": "předvolba", "recent": "naposledy", "teren": "qtrig", "terén": "qtrig",
+        "z terenu": "qtrig", "z terénu": "qtrig",
         "copyclip": "kopíruj do schránky", "kopiruj do schranky": "kopíruj do schránky",
         "pasteclip": "vlož ze schránky", "vloz ze schranky": "vlož ze schránky", "paste": "vlož ze schránky",
         "divide": "body po prvku", "measure": "body po prvku", "bpp": "body po prvku",
@@ -591,6 +598,11 @@ class CadPage(QWidget):
         self.b_vrstvy = QPushButton("Hladiny…")
         self.b_vrstvy.setToolTip("Správce hladin: zapnutí, zámek, barva, typ čáry, nová, přejmenovat, smazat")
         bar.addWidget(self.b_vrstvy)
+        self.b_zkratky = QPushButton("Zkratky…")
+        self.b_zkratky.setToolTip("Klávesové zkratky: funkční klávesy pro nástroje a příkazy (F2 úsečka, F4 "
+                                  "polylinie, Ctrl+1…9 druh prvku…) a vlastní zkratky příkazového řádku")
+        self.b_zkratky.clicked.connect(lambda: self.nastav_zkratky())
+        bar.addWidget(self.b_zkratky)
         # zadání (méně časté akce v nabídce)
         self.b_novy_zadani = QPushButton("Nový podle zadání")
         self.b_novy_zadani.setToolTip("Založí výkres se všemi hladinami, styly čar, písmy a buňkami podle pravidel "
@@ -787,6 +799,17 @@ class CadPage(QWidget):
             sc = QShortcut(QKeySequence(key), self)
             sc.setContext(Qt.WidgetWithChildrenShortcut)
             sc.activated.connect(fn)
+        from ..cad import zkratky as Z
+        self.historie_radku = Z.HistorieRadku()
+        self._nedavne: list[str] = []
+        self._zkratky_sc: list = []
+        self.vlastni_zkratky: dict[str, str] = {}
+        self.vlastni_aliasy: dict[str, str] = {}
+        mezernik = QShortcut(QKeySequence("Space"), self.view)
+        mezernik.setContext(Qt.WidgetShortcut)
+        mezernik.activated.connect(lambda: self.nabidka_naposledy())
+        self.prikaz.installEventFilter(self)
+        self.pouzij_zkratky()
         self._aktualizuj_tlacitka()
         self.vypis("CAD – otevřete DXF nebo začněte nový výkres. Příkazy: „?“")
 
@@ -801,6 +824,66 @@ class CadPage(QWidget):
                 f.paste()
             return
         self.proved(prikaz)
+
+    # ------------------------------------------------------------ vlastní zkratky
+    def pouzij_zkratky(self) -> None:
+        """Načte vlastní klávesové zkratky a zkratky příkazového řádku z nastavení a zapojí je."""
+        from PySide6.QtGui import QKeySequence, QShortcut
+
+        from ..cad import zkratky as Z
+        from .cad_zkratky import klavesy_aplikace, nactene_aliasy, nactene_zkratky
+        for sc in self._zkratky_sc:
+            sc.setEnabled(False)
+            sc.deleteLater()
+        self._zkratky_sc = []
+        self.vlastni_zkratky = nactene_zkratky()
+        self.vlastni_aliasy = nactene_aliasy()
+        obsazene = {**Z.PEVNE, **klavesy_aplikace(self.win)}
+        for k, prikaz in self.vlastni_zkratky.items():
+            if k in obsazene:  # pevné klávesy a nabídky aplikace mají přednost
+                continue
+            sc = QShortcut(QKeySequence(k), self)
+            sc.setContext(Qt.WidgetWithChildrenShortcut)
+            sc.activated.connect(lambda p=prikaz: self.zkratka(p))
+            self._zkratky_sc.append(sc)
+
+    def zkratka(self, prikaz: str) -> None:
+        """Klávesová zkratka: spustí příkaz (běžící nástroj se ukončí jako v MicroStationu)."""
+        if self.dok is None and not prikaz.lower().startswith(("otevři", "o ", "zkratky")):
+            self.vypis("Nejdřív otevřete výkres nebo začněte nový.")
+            return
+        self.proved(prikaz)
+
+    def nastav_zkratky(self) -> None:
+        from .cad_zkratky import ZkratkyDialog
+        ZkratkyDialog(self).exec()
+
+    def nabidka_naposledy(self, pozice=None):
+        """Mezerník ve výkresu: nabídka naposledy použitých příkazů u kurzoru."""
+        from PySide6.QtGui import QCursor
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+        if not self._nedavne:
+            m.addAction("(zatím žádný příkaz)").setEnabled(False)
+        for p in self._nedavne:
+            a = m.addAction(p)
+            a.triggered.connect(lambda _c=False, p=p: self.proved(p))
+        m.addSeparator()
+        m.addAction("Klávesové zkratky…").triggered.connect(lambda: self.nastav_zkratky())
+        self._menu_naposledy = m
+        if pozice is not False:
+            m.popup(pozice or QCursor.pos())
+        return m
+
+    def eventFilter(self, obj, ev):  # noqa: N802
+        from PySide6.QtCore import QEvent
+        if obj is getattr(self, "prikaz", None) and ev.type() == QEvent.KeyPress and \
+                ev.key() in (Qt.Key_Up, Qt.Key_Down) and not ev.modifiers():
+            t = self.historie_radku.zpet() if ev.key() == Qt.Key_Up else self.historie_radku.vpred()
+            if t is not None:
+                self.prikaz.setText(t)
+            return True
+        return super().eventFilter(obj, ev)
 
     # ------------------------------------------------------------ režimy
     def _ortho(self, on):
@@ -1126,6 +1209,82 @@ class CadPage(QWidget):
         if modal:
             d.exec()
         return d
+
+    def body_z_terenu(self, body, linie: bool = True) -> dict:
+        """Body z terénu (QTrig) rovnou do výkresu, i průběžně při hlídání zakázky.
+
+        Vkládají se jen body, které ve výkresu z terénu ještě nejsou (značka nebo buňka podle kódu, číslo
+        a výška v hladinách podle zadání). Linie a plochy z kódů se doplní – linie, ke které přibyl bod,
+        se nakreslí znovu (stará se odebere), ostatní kresba zůstane. Vše jde vrátit přes Zpět."""
+        from ..cad import body_seznam as BS
+        from ..cad import kresba_z_kodu as KZ
+        from ..geodezie import kodovnik as KV
+        from ..geodezie.kodovnik import Kresba
+        if self.dok is None:
+            self.novy_podle_zadani(vzory=None) if self._pravidla() is not None else self.novy()
+        if self.dok is None:
+            return {"body": 0, "linie": 0, "prekresleno": 0}
+        if not self._je_model():
+            self.nastav_model("Model")
+        self.sjtsk = True
+        pridano, odebrano = [], []
+        stav = self.__dict__.setdefault("_teren", {"body": set(), "linie": {}})
+        if not stav["body"]:  # body, které už ve výkresu jsou (čísla bodů jako texty)
+            stav["body"] = {t.dxf.text.strip() for t in self.prostor.query("TEXT")}
+        nove = [b for b in body if b.cislo not in stav["body"]]
+        vysl = {"body": 0, "linie": 0, "prekresleno": 0}
+        if nove:
+            nast = BS.vychozi_nastaveni(self._predvolby)
+            nast.preskocit_existujici = False
+            r = BS.vloz_body(self.prostor, self.historie_zmen, nove, nast, self._predvolby, self.kresleni)
+            stav["body"] |= {b.cislo for b in nove}
+            vysl["body"] = r["vlozeno"]
+            pridano += r["prvky"]
+        if linie:
+            from .kodovnik_dialog import nacti_kodovnik
+            v = getattr(self.win, "vypocty", None)
+            vsechny = [b for b in (v.seznam.body if v is not None else body) if (b.kod or "").strip()]
+            kv = nacti_kodovnik(self.win, self._predvolby) if self.win is not None else KV.Kodovnik.ze_zadani(
+                self._predvolby)
+            kr = KV.sestav(vsechny, kv, self._predvolby)
+            zmenene, stare = [], []
+            for lin in kr.linie:
+                klic = (lin.kod.kod, lin.cislo, lin.body[0].cislo if lin.body else "")
+                cisla = tuple(b.cislo for b in lin.body) + (lin.uzavrena,)
+                drive = stav["linie"].get(klic)
+                if drive is not None and drive[0] == cisla:
+                    continue
+                if drive is not None and drive[1].dxf.owner is not None:
+                    stare.append(drive[1])
+                zmenene.append((klic, cisla, lin))
+            if stare:
+                self.historie_zmen.proved(f"Linie z terénu – překreslení ({len(stare)})", odebrano=stare)
+                vysl["prekresleno"] = len(stare)
+                odebrano += stare
+            if zmenene:
+                r = KZ.kresli(self.dok.doc, self.prostor, self.historie_zmen,
+                              Kresba(linie=[x[2] for x in zmenene]), self._predvolby, self.kresleni)
+                prvky = r["prvky"]
+                if len(prvky) == len(zmenene):  # linie, která nešla nakreslit, by pořadí posunula
+                    for (klic, cisla, _lin), e in zip(zmenene, prvky):
+                        stav["linie"][klic] = (cisla, e)
+                vysl["linie"] = len(prvky)
+                pridano += prvky
+        if any(vysl.values()):
+            self._po_zmene(pridano, odebrano)
+            self.vypis(f"Z terénu: {vysl['body']} nových bodů, {vysl['linie']} linií a ploch z kódů"
+                       + (f" (z toho {vysl['prekresleno']} prodloužených)" if vysl["prekresleno"] else "") + ".")
+        return vysl
+
+    def n_qtrig(self):
+        """Okno QTrig: body ze zakázky rovnou do výkresu (i hlídání – nové body přibývají každou minutu)."""
+        v = getattr(self.win, "vypocty", None)
+        if v is None:
+            raise ValueError("QTrig je dostupný v hlavním okně aplikace (Výpočty).")
+        d = v.qtrig_dialog()
+        d.do_cad.setChecked(True)
+        return
+        yield  # generátor kvůli jednotnému volání příkazů
 
     def atributy_zadani(self, modal: bool = True):
         if self.win is None or getattr(self.win, "project", None) is None:
@@ -1902,6 +2061,7 @@ class CadPage(QWidget):
     def _enter(self):
         t = self.prikaz.text().strip()
         self.prikaz.clear()
+        self.historie_radku.pridej(t)
         self.zadej(t)
 
     def zadej(self, t: str):
@@ -1992,6 +2152,8 @@ class CadPage(QWidget):
         return a[0] + (k[0] - a[0]) / u * d, a[1] + (k[1] - a[1]) / u * d
 
     def _je_prikaz(self, t: str) -> bool:
+        from ..cad import zkratky as Z
+        t = Z.rozbal_alias(t, getattr(self, "vlastni_aliasy", {}))
         slovo = (t.strip().split() or [""])[0].lower()
         return t.lower() in self.ALIASY or slovo in self.ALIASY or slovo in self.PRIKAZY
 
@@ -2094,6 +2256,8 @@ class CadPage(QWidget):
 
     def proved(self, t: str):
         """Příkaz nebo souřadnice z příkazového řádku."""
+        from ..cad import zkratky as Z
+        t = Z.rozbal_alias(t, getattr(self, "vlastni_aliasy", {}))
         if self._keyiny(t):
             self.vypis(f"> {t}")
             return
@@ -2113,6 +2277,8 @@ class CadPage(QWidget):
         if self._gen is not None or self._prikaz:
             self.zrus(tise=True)
         self.vypis(f"> {t}")
+        if cmd not in ("naposledy", "nápověda"):
+            self._nedavne = Z.nedavne(self._nedavne, t.strip())
         if cmd == "celý":
             self.view.zoom_all()
         elif cmd == "předchozí pohled":
@@ -2123,6 +2289,9 @@ class CadPage(QWidget):
             self.vypis("Zkratky: u úsečka, pl polylinie, kr kružnice, ob oblouk, t text, m posun, cp kopie, "
                        "ro otoč, sc měřítko, mi zrcadli, of rovnoběžka, tr ořež, ex prodluž, f zaobli, "
                        "x rozpoj, j spoj, Delete smaž. Enter na prázdném řádku zopakuje poslední příkaz.")
+            self.vypis("Vlastní klávesy (příkaz „zkratky“): " + ", ".join(
+                f"{k} {v}" for k, v in sorted(self.vlastni_zkratky.items())[:14])
+                + ". Mezerník ve výkresu = naposledy použité příkazy, ↑ ↓ v příkazovém řádku = historie.")
             self.vypis("Souřadnice: „Y X“ (S-JTSK), „x=… y=…“, „@dx,dy“, „@délka<směrník[g]“. "
                        "Úchyty F3, Ortho F8, Polární F10, Esc zruší příkaz / výběr. Kolečko = zoom, "
                        "prostřední/pravé tlačítko = posun. Výběr: klik, okno zleva doprava (celé prvky), "
@@ -2231,6 +2400,20 @@ class CadPage(QWidget):
             self.novy_list(arg)
         elif cmd == "atributy":
             self.atributy_zadani()
+        elif cmd == "zkratky":
+            self.nastav_zkratky()
+        elif cmd == "naposledy":
+            self.nabidka_naposledy()
+        elif cmd == "předvolba":
+            try:
+                n = int(arg.strip())
+            except ValueError:
+                n = 0
+            if not 1 <= n <= len(self._predvolby):
+                self.vypis(f"Předvolba {arg.strip() or '?'} není – v poli Kreslím je {len(self._predvolby)} druhů "
+                           "prvků (načtěte pravidla zadání).")
+            else:
+                self.predvolby_cb.setCurrentIndex(n)
         elif cmd == "prvek":
             if not arg:
                 self.vypis("Druhy prvků: " + "; ".join(p.nazev for p in self._predvolby[:40]))

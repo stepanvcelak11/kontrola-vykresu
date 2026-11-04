@@ -66,6 +66,12 @@ class QTrigDialog(QDialog):
         f.addRow(self.smazat)
         self.hlidat = QCheckBox("Hlídat zakázku – stahovat nové body každou minutu, dokud je okno otevřené")
         f.addRow(self.hlidat)
+        self.do_cad = QCheckBox("Stažené body rovnou do výkresu v CAD – značky, čísla a linie z kódů")
+        self.do_cad.setToolTip("Nové body se vloží do otevřeného výkresu (nebo nového podle zadání) a linie z kódů "
+                               "se doplní; při hlídání zakázky přibývá kresba z terénu průběžně")
+        self.do_cad.setChecked(s.value("qtrig/do_cad", "0") == "1")
+        self.do_cad.toggled.connect(lambda on: _nastaveni().setValue("qtrig/do_cad", "1" if on else "0"))
+        f.addRow(self.do_cad)
         self.b_sync = QPushButton("Stáhnout body zakázky")
         self.b_sync.setDefault(True)
         self.b_odhlas = QPushButton("Odhlásit")
@@ -299,7 +305,24 @@ class QTrigDialog(QDialog):
         self._obnov_stav(text)
         if any(vysl):
             self.page.message("QTrig: " + text)
+        if self.do_cad.isChecked():
+            text += self._do_cad(body)
+            self._obnov_stav(text)
         return vysl
+
+    def _do_cad(self, body) -> str:
+        """Body (bez smazaných) do výkresu v CAD; vrátí doplněk hlášky."""
+        win = getattr(self.page, "win", None)
+        cad = getattr(win, "cad", None)
+        if cad is None or not body:
+            return ""
+        try:
+            r = cad.body_z_terenu(body)
+        except Exception as e:  # noqa: BLE001 – kresba nesmí zastavit stahování
+            return f" Do CAD se body nevložily: {e}"
+        if not any(r.values()):
+            return " Ve výkresu už vše je."
+        return f" Do výkresu: {r['body']} bodů, {r['linie']} linií z kódů."
 
     # ------------------------------------------------------------ soubor
     def nacti_soubor(self, cesta: str | None = None):
@@ -321,7 +344,10 @@ class QTrigDialog(QDialog):
             nove, zmenene, _s = Q.sloucit(self.page.seznam, obsah)
             self.page.model.refresh()
             self.page._after_change()
-            self._obnov_stav(f"{jmeno}: {len(obsah)} bodů – nové {nove}, změněné {zmenene}.")
+            text = f"{jmeno}: {len(obsah)} bodů – nové {nove}, změněné {zmenene}."
+            if self.do_cad.isChecked():
+                text += self._do_cad(obsah)
+            self._obnov_stav(text)
         elif isinstance(obsah, Q.NivelaceQTrig):
             try:
                 vysky, prot = Q.nivelace_vypocet(obsah)

@@ -743,6 +743,27 @@ class MainWindow(QMainWindow):
             project = Project.new_in_default_location("Můj projekt")
         self.set_project(project)
 
+    def seznam_pro_kontrolu(self) -> str:
+        """Seznam souřadnic, se kterým Kontrola porovná výkres.
+
+        Přednost má seznam přiložený v Zadání → Podklady. Když tam žádný není, použijí se body ze stránky
+        Výpočty (měření, výpočty a body stažené z QTrig) – uloží se do textového seznamu v projektu."""
+        seznamy = self.project.attachments("seznamy")
+        if seznamy:
+            return str(seznamy[0].path)
+        v = getattr(self, "vypocty", None)
+        body = list(getattr(getattr(v, "seznam", None), "body", []) or [])
+        if not body or getattr(self.project, "root", None) is None:
+            return ""
+        from ..geodezie.formaty import uloz_soubor
+        cesta = Path(self.project.root) / "vypocty" / "seznam_pro_kontrolu.txt"
+        try:
+            cesta.parent.mkdir(parents=True, exist_ok=True)
+            uloz_soubor(cesta, body, sloupce=["cislo", "y", "x", "z"], des_xy=3, des_z=3)
+        except OSError:
+            return ""
+        return str(cesta)
+
     def new_project(self, nazev: str | None = None, qtrig: bool | None = None, podklady: list[str] | None = None):
         """Nový projekt: název, volitelně body ze zakázky QTrig a podklady (zadání, Směrnice, výkres, seznam)."""
         if not isinstance(nazev, str):  # z nabídky přijde „checked“ (bool)
@@ -922,8 +943,7 @@ class MainWindow(QMainWindow):
         from .ready_dialog import ReadyDialog, checklist_for, record_history
         cfg = copy.deepcopy(self.project.config)
         cfg.rozpracovany = False
-        seznamy = self.project.attachments("seznamy")
-        cfg.seznam_souradnic = str(seznamy[0].path) if seznamy else ""
+        cfg.seznam_souradnic = self.seznam_pro_kontrolu()
         drawing, rules = self.drawing, self.project.rules
         states = self.project.issue_states()
 
@@ -1281,8 +1301,7 @@ class MainWindow(QMainWindow):
                                                     "nebo přetažením souboru do okna).")
             return
         drawing, rules, config = self.drawing, self.project.rules, self.project.config
-        seznamy = self.project.attachments("seznamy")
-        config.seznam_souradnic = str(seznamy[0].path) if seznamy else ""
+        config.seznam_souradnic = self.seznam_pro_kontrolu()
 
         def job(progress, cancelled):
             return run_checks(drawing, rules, config, progress, cancelled)

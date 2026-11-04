@@ -105,7 +105,7 @@ class Issue:
         m = re.match(r"^.+? \(pravidlo „([^“]+)“\): (.*)$", self.message)
         if m:
             keys = [k for k in ("vrstva", "barva", "styl", "měřítko stylu", "tloušťka", "výška textu", "šířka textu",
-                                "písmo", "font", "zarovnání", "měřítko buňky")
+                                "písmo", "font", "zarovnání", "měřítko buňky", "buňka")
                     if re.search(r"(^|, )" + re.escape(k) + r"\b", m.group(2))]
             return f"{m.group(1)}: {', '.join(keys)}" if keys else f"{m.group(1)}: {m.group(2)}"
         return self.message
