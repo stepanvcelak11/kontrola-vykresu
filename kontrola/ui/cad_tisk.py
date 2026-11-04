@@ -31,6 +31,10 @@ class TiskDialog(QDialog):
         self.meritko.setPrefix("1:")
         self.oblast = QComboBox()
         self.oblast.addItems(["celý výkres", "aktuální pohled"])
+        self.arch = T.nacti_arch(page.dok.doc) if self.model else None
+        if self.arch is not None:
+            self.oblast.addItem(f"arch ({self.arch.popis()})")
+            self.oblast.setCurrentIndex(2)
         self.soubor = QLineEdit(str(self._vychozi_soubor()))
         b = QPushButton("…")
         b.clicked.connect(self._vyber)
@@ -73,6 +77,12 @@ class TiskDialog(QDialog):
             r = pg.view.mapToScene(pg.view.viewport().rect()).boundingRect()
             oblast = (r.left(), r.top(), r.right(), r.bottom())
         try:
+            if self.arch is not None and self.oblast.currentIndex() == 2:
+                self.vysledek = T.tisk_archu(pg.dok.doc, pg.prostor, self.soubor.text(), self.arch,
+                                             nazev=pg.dok.path.stem if pg.dok.path else "")
+                pg.vypis(f"Vytištěno do PDF: {self.soubor.text()} (arch {self.arch.popis()})")
+                self.accept()
+                return
             self.vysledek = T.tisk_pdf(pg.dok.doc, pg.prostor, self.soubor.text(), papir=self.papir.currentText(),
                                        na_sirku=self.orientace.currentIndex() == 0,
                                        meritko=float(self.meritko.value()) or None, oblast=oblast,

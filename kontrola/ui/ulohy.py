@@ -62,7 +62,10 @@ class UlohyPanel(QWidget):
         self.b_copy = QPushButton("Kopírovat protokol")
         self.b_pdf = QPushButton("Protokol PDF…")
         self.b_pdf.setToolTip("Výpočetní protokol (tento výpočet, nebo všechny výpočty projektu) do PDF")
-        for b in (self.b_calc, self.b_add, self.b_copy, self.b_pdf):
+        self.b_nast = QPushButton("Nastavení výpočtů…")
+        self.b_nast.setToolTip("Účel měření (katastr / polohopis), přístroj, korekce délek (měřítko, výška), "
+                               "mezní odchylky – jako Nastavení v Gromě")
+        for b in (self.b_calc, self.b_add, self.b_copy, self.b_pdf, self.b_nast):
             row.addWidget(b)
         row.addStretch(1)
         rl.addLayout(row)
@@ -83,8 +86,18 @@ class UlohyPanel(QWidget):
         self.b_add.clicked.connect(self.pridej)
         self.b_copy.clicked.connect(self._copy)
         self.b_pdf.clicked.connect(lambda: self.protokol_pdf())
+        self.b_nast.clicked.connect(lambda: self.nastaveni_vypoctu())
+        from .nastaveni_vypoctu import nacti
+        nacti()
         self.lst.setCurrentRow(0)
 
+
+    def nastaveni_vypoctu(self, modal: bool = True):
+        from .nastaveni_vypoctu import NastaveniVypoctuDialog
+        d = NastaveniVypoctuDialog(self)
+        if modal and d.exec():
+            self.chyba.setText("Nastavení výpočtů uloženo – použije se při dalším výpočtu.")
+        return d
 
     def filtruj(self, text: str):
         """Schová úlohy, které neodpovídají hledanému textu (bez ohledu na diakritiku, i v popisu)."""

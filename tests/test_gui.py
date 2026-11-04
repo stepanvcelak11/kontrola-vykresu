@@ -3151,3 +3151,58 @@ def test_cad_kolmice_osa_a_pohledy(window, tmp_path):
     p = c.uloz(path=str(tmp_path / "p.dxf"))
     import ezdxf
     assert "Roh" in ezdxf.readfile(p).views
+
+
+def test_cad_arch_pod_vykresem_a_tisk(window, tmp_path):
+    from kontrola.cad import tisk as T
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "@300,0", ""):
+        c.zadej(t)
+    c.proved("arch A3 1000")
+    c.zadej("x=150 y=0")
+    a = T.nacti_arch(c.dok.doc)
+    assert a is not None and a.papir == "A3" and a.meritko == 1000
+    x0, y0, x1, y1 = a.obdelnik()
+    assert (round(x0, 6), round(x1, 6)) == (-60, 360) and round(y1 - y0, 6) == 297
+    assert len(c._arch_polozky) == 2
+    p = c.uloz(path=str(tmp_path / "arch.dxf"))
+    import ezdxf
+    b = T.nacti_arch(ezdxf.readfile(p))
+    assert b == a
+    d = c.tisk_pdf(modal=False)
+    assert d.oblast.currentIndex() == 2
+    d.soubor.setText(str(tmp_path / "arch.pdf"))
+    d.tisk()
+    assert (tmp_path / "arch.pdf").stat().st_size > 500 and d.vysledek["papir"] == (420.0, 297.0)
+    c.proved("arch smaž")
+    assert T.nacti_arch(c.dok.doc) is None and not c._arch_polozky
+
+
+def test_cad_zive_do_kontroly_a_nastaveni_vypoctu(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "@10,0", ""):
+        c.zadej(t)
+    window.show_page("vykres")
+    assert window._wait(lambda: window.drawing is not None and "kontrola_cad_zive" in str(window.drawing.path)
+                        and _idle(window))
+    stav = window._cad_stav_v_kontrole
+    assert window.prevezmi_z_cad() is False  # beze změny se znovu nenačítá
+    window.show_page("cad")
+    for t in ("u", "x=0 y=5", "@10,0", ""):
+        c.zadej(t)
+    assert window._stav_cad() != stav
+    from kontrola.geodezie import nastaveni as N
+    puvodni = N.aktualni()
+    try:
+        d = window.vypocty.ulohy.nastaveni_vypoctu(modal=False)
+        if True:
+            d.m_rezim.setCurrentText("ručně")
+            d.m_rucne.setValue(0.9999)
+            d._ok()
+            assert N.aktualni().meritko_rucne == 0.9999 and N.aktualni().korekce_zapnuta
+    finally:
+        N.nastav(puvodni)

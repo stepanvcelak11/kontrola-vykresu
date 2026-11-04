@@ -139,3 +139,143 @@ def ramecek_a_razitko(layout, h=None, udaje: dict | None = None, okraj: float = 
     if h is not None:
         h.proved("Rámeček a razítko", nove)
     return nove
+
+
+# ------------------------------------------------------------------ arch (papír pod výkresem v modelu)
+# Jako v tiskovém dialogu MicroStationu: nastaví se velikost papíru a měřítko, obdélník papíru se v modelu
+# posune pod výkres a tiskne se přesně to, co je na papíře. Uloží se do výkresu (vlastní vlastnosti DXF).
+from dataclasses import dataclass  # noqa: E402
+
+_ARCH_KLICE = ("ARCH_PAPIR", "ARCH_SIRKA", "ARCH_VYSKA", "ARCH_MERITKO", "ARCH_X", "ARCH_Y")
+
+
+@dataclass
+class Arch:
+    papir: str = "A3"  # název (A4…A0) nebo „vlastní“
+    sirka: float = 420.0  # mm (už podle orientace)
+    vyska: float = 297.0
+    meritko: float = 1000.0  # 1:N
+    x: float = 0.0  # levý dolní roh papíru v souřadnicích modelu (m)
+    y: float = 0.0
+
+    @property
+    def rozmer_m(self) -> tuple[float, float]:
+        return self.sirka * self.meritko / 1000.0, self.vyska * self.meritko / 1000.0
+
+    def obdelnik(self) -> tuple[float, float, float, float]:
+        w, h = self.rozmer_m
+        return self.x, self.y, self.x + w, self.y + h
+
+    def na_stred(self, cx: float, cy: float) -> None:
+        w, h = self.rozmer_m
+        self.x, self.y = cx - w / 2, cy - h / 2
+
+    def popis(self) -> str:
+        return f"{self.papir} {self.sirka:g} × {self.vyska:g} mm, 1:{self.meritko:g}"
+
+
+def papir_z_textu(text: str, na_sirku: bool = True) -> tuple[str, float, float]:
+    """„A3“, „A4 na výšku“, „594x420“, „vlastní 500 300“ → (název, šířka, výška) v mm."""
+    import re
+    t = (text or "").strip().lower()
+    vyska_napred = "výšku" in t or "vysku" in t or "portrait" in t
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*[x×* ]\s*(\d+(?:[.,]\d+)?)", t)
+    if m:
+        w, h = float(m.group(1).replace(",", ".")), float(m.group(2).replace(",", "."))
+        if w <= 0 or h <= 0:
+            raise ValueError("Rozměry papíru musí být kladné.")
+        return "vlastní", w, h
+    m = re.search(r"\ba([0-4])\b", t)
+    nazev = f"A{m.group(1)}" if m else "A3"
+    w, h = rozmer_papiru(nazev, na_sirku and not vyska_napred)
+    return nazev, w, h
+
+
+def arch_z_textu(text: str) -> tuple[str, float, float, float | None]:
+    """„A3 1000“, „A4 na výšku 1:500“, „500x300 2000“ → (název, šířka, výška, měřítko nebo None)."""
+    import re
+    t = (text or "").strip()
+    meritko = None
+    m = re.search(r"1\s*:\s*(\d+(?:[.,]\d+)?)", t)
+    if m:
+        meritko = float(m.group(1).replace(",", "."))
+        t = t[:m.start()] + t[m.end():]
+    else:
+        bez = re.sub(r"\d+(?:[.,]\d+)?\s*[x×*]\s*\d+(?:[.,]\d+)?", " ", t)
+        cisla = re.findall(r"(?<![\w.,])(\d+)(?![\w.,])", bez)
+        if cisla:
+            meritko = float(cisla[-1])
+            t = re.sub(rf"(?<![\w.,]){cisla[-1]}(?![\w.,])\s*$", "", t.rstrip())
+    nazev, w, h = papir_z_textu(t)
+    return nazev, w, h, meritko
+
+
+def _slovnik(doc, vytvor: bool):
+    rd = doc.rootdict
+    if "KONTROLA_ARCH" in rd:
+        return rd["KONTROLA_ARCH"]
+    return rd.add_new_dict("KONTROLA_ARCH") if vytvor else None
+
+
+def nacti_arch(doc) -> Arch | None:
+    d = _slovnik(doc, False)
+    hodn = {}
+    if d is not None:
+        for k in _ARCH_KLICE:
+            if k in d:
+                hodn[k] = d[k].dxf.get("value", "")
+    else:  # starší uložení do vlastních vlastností
+        cv = doc.header.custom_vars
+        hodn = {k: cv.get(k) for k in _ARCH_KLICE if cv.has_tag(k)}
+    if "ARCH_MERITKO" not in hodn:
+        return None
+    try:
+        return Arch(hodn.get("ARCH_PAPIR") or "A3", float(hodn["ARCH_SIRKA"]), float(hodn["ARCH_VYSKA"]),
+                    float(hodn["ARCH_MERITKO"]), float(hodn["ARCH_X"]), float(hodn["ARCH_Y"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def uloz_arch(doc, a: Arch | None) -> None:
+    d = _slovnik(doc, a is not None)
+    if a is None:
+        if d is not None:
+            del doc.rootdict["KONTROLA_ARCH"]
+        return
+    for k, v in zip(_ARCH_KLICE, (a.papir, f"{a.sirka:.3f}", f"{a.vyska:.3f}", f"{a.meritko:g}", f"{a.x:.3f}",
+                                  f"{a.y:.3f}")):
+        if k in d:
+            d[k].dxf.value = v
+        else:
+            d.add_dict_var(k, v)
+
+
+def tisk_archu(doc, layout, cesta, a: Arch, nazev: str = "") -> dict:
+    """Vytiskne přesně to, co leží na archu (papír v modelu), v měřítku archu."""
+    x0, y0, x1, y1 = a.obdelnik()
+    return _tisk_oblasti(doc, layout, cesta, a.sirka, a.vyska, a.meritko, (x0, y0, x1 - x0, y1 - y0), nazev)
+
+
+def _tisk_oblasti(doc, layout, cesta, pw, ph, meritko, rect, nazev) -> dict:
+    from PySide6.QtCore import QMarginsF, QRectF, QSizeF, Qt
+    from PySide6.QtGui import QPageLayout, QPageSize, QPainter, QPdfWriter
+    zdroj = QRectF(*rect)
+    sc = _scena(doc, layout)
+    cesta = Path(cesta)
+    cesta.parent.mkdir(parents=True, exist_ok=True)
+    w = QPdfWriter(str(cesta))
+    w.setResolution(1200)
+    w.setTitle(nazev or cesta.stem)
+    w.setCreator("Kontrola výkresu – CAD")
+    w.setPageLayout(QPageLayout(QPageSize(QSizeF(pw, ph), QPageSize.Millimeter), QPageLayout.Portrait,
+                                QMarginsF(0, 0, 0, 0), QPageLayout.Millimeter))
+    p = QPainter(w)
+    try:
+        cil = QRectF(0, 0, w.width(), w.height())
+        p.translate(0, cil.height())
+        p.scale(1, -1)
+        sc.render(p, cil, zdroj, Qt.IgnoreAspectRatio)
+    finally:
+        p.end()
+    return {"papir": (pw, ph), "meritko": meritko, "oblast": (zdroj.left(), zdroj.top(), zdroj.right(),
+                                                             zdroj.bottom())}

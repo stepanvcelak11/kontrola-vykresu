@@ -1117,6 +1117,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "layers_dock"):
             return
         on_drawing = self.tabs.widget(index) is self.split
+        if on_drawing:
+            self.prevezmi_z_cad()
         docks = (self.layers_dock, getattr(self, "inspector_dock", None))
         if on_drawing:
             for d in docks:
@@ -1127,6 +1129,41 @@ class MainWindow(QMainWindow):
                 if d is not None:
                     d._was_visible = d.isVisible()
                     d.hide()
+
+    def _stav_cad(self):
+        cad = getattr(self, "cad", None)
+        if cad is None or cad.dok is None:
+            return None
+        zmeny = [h.zmena for h, _k in getattr(cad, "_historie_prostoru", {}).values()]
+        if cad.historie_zmen is not None:
+            zmeny.append(cad.historie_zmen.zmena)
+        return id(cad.dok), max(zmeny or [0])
+
+    def prevezmi_z_cad(self, vynutit: bool = False) -> bool:
+        """Živé propojení CAD → Kontrola: co se v CAD nakreslilo, je po přepnutí na Výkres hned zkontrolované –
+        bez ukládání a nahrávání. Kontroluje se kopie v paměti (soubor výkresu se nemění)."""
+        stav = self._stav_cad()
+        if stav is None or not self.settings.value("cad/zive_kontrola", True, type=bool):
+            return False
+        if not vynutit and (stav == getattr(self, "_cad_stav_v_kontrole", None) or stav[1] == 0
+                            and getattr(self, "_cad_stav_v_kontrole", None) is None and self.drawing is not None):
+            return False
+        if self.task is not None and self.task.is_running():
+            return False
+        from PySide6.QtCore import QStandardPaths
+        cad = self.cad
+        d = Path(QStandardPaths.writableLocation(QStandardPaths.TempLocation) or Path.home()) / "kontrola_cad_zive"
+        jmeno = (cad.dok.path.stem if cad.dok.path else "vykres_z_CAD") + ".dxf"
+        try:
+            kopie = cad.dok.uloz_kopii(d / jmeno)
+        except (OSError, ValueError) as exc:
+            self.statusBar().showMessage(f"Výkres z CAD nejde předat kontrole: {exc}", 8000)
+            return False
+        self._cad_stav_v_kontrole = stav
+        self.statusBar().showMessage("Kontroluji výkres rozkreslený v CAD (neuložená kopie)…", 6000)
+        self.load_drawing_file(kopie, add_to_project=False, keep_view=self.drawing is not None,
+                               after=lambda _d: self.run_checks())
+        return True
 
     def _toggle_wip(self, on: bool):
         if self.project is None or self._syncing_wip:

@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, tisk do PDF („arch A3 1000“, „arch smaž“)",
         "pohled": "uložené pohledy (Saved Views): „pohled ulož Náměstí“, „pohled Náměstí“, „pohled“ = seznam",
         "nahraď buňku": "nahradit vybrané buňky jinou buňkou – stejný bod, natočení a měřítko (Replace Cell)",
         "zvyš text": "kopírovat text se zvýšeným číslem kliknutím (Copy and Increment Text – čísla bodů)",
@@ -480,6 +481,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
         "saved views": "pohled", "sv": "pohled", "pohledy": "pohled", "uloz pohled": "pohled",
         "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
         "vymen bunku": "nahraď buňku", "vyměň buňku": "nahraď buňku",
@@ -1471,6 +1473,8 @@ class CadPage(QWidget):
         self._kresli_reference()
         if not self._je_model():
             self._kresli_ramecky_vyrezu()
+        else:
+            self._kresli_arch()
         self._obnov_indexy()
 
     def _kresli_papir(self):
@@ -1487,6 +1491,94 @@ class CadPage(QWidget):
         pen = QPen(QColor("#9CA3AF"), 0)
         r = sc.addRect(QRectF(x0, y0, w, h), pen, QBrush(QColor("#15171C")))
         r.setZValue(-30)
+
+    def _kresli_arch(self):
+        """Arch v modelu: obrys papíru (oranžově) a tisknutelná oblast 10 mm od okraje (tečkovaně)."""
+        from PySide6.QtGui import QPen
+
+        from ..cad import tisk as T
+        for it in getattr(self, "_arch_polozky", []):
+            try:
+                if it.scene() is not None:
+                    it.scene().removeItem(it)
+            except RuntimeError:
+                pass
+        self._arch_polozky = []
+        if self.dok is None or not self._je_model():
+            return
+        a = T.nacti_arch(self.dok.doc)
+        if a is None:
+            return
+        sc = self.view.scene()
+        x0, y0, x1, y1 = a.obdelnik()
+        o = 10.0 * a.meritko / 1000.0
+        r1 = sc.addRect(QRectF(x0, y0, x1 - x0, y1 - y0), QPen(QColor("#F59E0B"), 0))
+        r2 = sc.addRect(QRectF(x0 + o, y0 + o, x1 - x0 - 2 * o, y1 - y0 - 2 * o), QPen(QColor("#F59E0B"), 0, Qt.DotLine))
+        for r in (r1, r2):
+            r.setZValue(60)
+        self._arch_polozky = [r1, r2]
+
+    def n_arch(self, arg: str = ""):
+        """Arch = papír pod výkresem (tiskový dialog MicroStationu: velikost papíru, měřítko, posun hranice)."""
+        from ..cad import tisk as T
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete výkres.")
+            return
+        if not self._je_model():
+            self.vypis("Arch se pokládá pod model – na listu je papír dán listem (tisk 1:1).")
+            return
+        a = T.nacti_arch(self.dok.doc)
+        slova = arg.strip().split()
+        if slova and slova[0].lower() in ("smaž", "smaz", "vypni", "off"):
+            T.uloz_arch(self.dok.doc, None)
+            self.dok.zmeneno = True
+            self._kresli_arch()
+            self.vypis("Arch odstraněn.")
+            return
+        if slova and slova[0].lower() in ("tisk", "pdf"):
+            self.tisk_pdf()
+            return
+        if a is None or (slova and slova[0].lower() not in ("posun", "posuň")):
+            text = arg.strip()
+            if not text:
+                text = (yield Pozadavek("text", "Papír [A3] (A4–A0, „A4 na výšku“, nebo rozměr „500x300“ mm):",
+                                        volitelne=True)) or "A3"
+            nazev, w, h, meritko = T.arch_z_textu(text)
+            if meritko is None:
+                rs = self._pravidla()
+                vych = float(rs.meritko) if rs is not None and rs.meritko else (a.meritko if a else 1000.0)
+                meritko = yield Pozadavek("cislo", f"Měřítko 1: [{vych:g}]", vychozi=vych)
+                meritko = float(meritko or vych)
+            if meritko <= 0:
+                self.vypis("Měřítko musí být kladné.")
+                return
+            stary = a
+            a = T.Arch(nazev, w, h, meritko)
+            if stary is not None:
+                cx, cy = (stary.obdelnik()[0] + stary.obdelnik()[2]) / 2, (stary.obdelnik()[1] + stary.obdelnik()[3]) / 2
+            else:
+                from ezdxf import bbox
+                ext = bbox.extents(self.prostor, fast=True)
+                cx, cy = ((ext.extmin.x + ext.extmax.x) / 2, (ext.extmin.y + ext.extmax.y) / 2) if ext.has_data \
+                    else (0.0, 0.0)
+            a.na_stred(cx, cy)
+        wm, hm = a.rozmer_m
+
+        def nahled(x, y):
+            return [_obdelnik((x - wm / 2, y - hm / 2), (x + wm / 2, y + hm / 2))]
+
+        T.uloz_arch(self.dok.doc, a)
+        self.dok.zmeneno = True
+        self._kresli_arch()
+        b = yield self._bod_req(f"Arch {a.popis()} – klikněte střed papíru (posun pod výkres), Enter = ponechat:",
+                                volitelne=True, nahled=nahled)
+        if b is not None and not isinstance(b, str):
+            a.na_stred(b[0], b[1])
+            T.uloz_arch(self.dok.doc, a)
+            self._kresli_arch()
+        x0, y0, x1, y1 = a.obdelnik()
+        self.vypis(f"Arch {a.popis()}: {x0:.2f} {y0:.2f} – {x1:.2f} {y1:.2f}. Tisk do PDF vytiskne obsah archu "
+                   "(„arch posun“ = posunout, „arch smaž“ = zrušit).")
 
     def _kresli_ramecky_vyrezu(self):
         from PySide6.QtGui import QPen
@@ -2421,6 +2513,9 @@ class CadPage(QWidget):
             self.atributy_zadani()
         elif cmd == "pohled":
             self._pohled(arg)
+        elif cmd == "arch":
+            self._posledni_prikaz = cmd
+            self._spust(self.n_arch(arg))
         elif cmd == "zkratky":
             self.nastav_zkratky()
         elif cmd == "naposledy":

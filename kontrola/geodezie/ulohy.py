@@ -94,6 +94,21 @@ def _hlavicka(nazev: str) -> list[str]:
     return [t, "=" * len(t), f"Vypočteno: {dt.datetime.now():%d.%m.%Y %H:%M}"]
 
 
+def _korekce(body: list) -> tuple[float, list[str]]:
+    """Násobitel měřených vodorovných délek podle Nastavení výpočtů (měřítko, výška, ppm) v těžišti bodů
+    a řádek do protokolu (prázdný, když jsou korekce vypnuté)."""
+    from .nastaveni import aktualni
+    n = aktualni()
+    if not n.korekce_zapnuta:
+        return 1.0, []
+    body = [b for b in body if b is not None]
+    y = sum(b.y for b in body) / len(body) if body else None
+    x = sum(b.x for b in body) / len(body) if body else None
+    zz = [b.z for b in body if b.z is not None]
+    k, popis = n.faktor_delky(y, x, sum(zz) / len(zz) if zz else None)
+    return k, [n.popis_korekce(k, popis)]
+
+
 # ------------------------------------------------------------------ úlohy
 def u_smernik(s, h):
     a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
@@ -115,6 +130,8 @@ def u_rajon(s, h):
     if d <= 0:
         raise ChybaVstupu("Délka musí být kladná.")
     n = _nove_cislo(s, h)
+    k, kor = _korekce([st])
+    d_m, d = d, d * k
     posun = V.norm_gon(V.smernik(st, o) - so)
     sig = V.norm_gon(sm + posun)
     p = V.rajon(st, sig, d)
@@ -124,7 +141,9 @@ def u_rajon(s, h):
     prot = _hlavicka("Rajón (polární bod)")
     prot += [f"stanovisko {st.cislo}, orientace na {o.cislo}: směrník {_f(V.smernik(st, o), 4)} gon, "
              f"směr {_f(so, 4)} gon → posun {_f(posun, 4)} gon",
-             f"bod {n}: směr {_f(sm, 4)} gon → směrník {_f(sig, 4)} gon, délka {_f(d)} m",
+             *kor,
+             f"bod {n}: směr {_f(sm, 4)} gon → směrník {_f(sig, 4)} gon, délka {_f(d_m)} m"
+             + (f" → {_f(d)} m" if kor else ""),
              f"  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None else "")]
     return Vysledek(prot, [Bod(n, p.y, p.x, z, poznamka="rajón")])
 
@@ -206,11 +225,13 @@ def u_z_delek(s, h):
     da, db = _cislo(h, "da", "délku z A"), _cislo(h, "db", "délku z B")
     n = _nove_cislo(s, h)
     vlevo = (h.get("strana") or "vlevo") == "vlevo"
+    k, kor = _korekce([a, b])
+    da, db = da * k, db * k
     try:
         p = V.protinani_z_delek(a, b, da, db, vlevo=vlevo)
     except ValueError as e:
         raise ChybaVstupu(str(e)) from None
-    prot = _hlavicka("Protínání z délek")
+    prot = _hlavicka("Protínání z délek") + kor
     prot += [f"{a.cislo}–{b.cislo}: {_f(V.delka(a, b))} m, dA = {_f(da)} m, dB = {_f(db)} m, bod "
              f"{'vlevo' if vlevo else 'vpravo'} od směru {a.cislo}→{b.cislo}",
              f"bod {n}:  Y = {_f(p.y)}   X = {_f(p.x)}"]
@@ -253,11 +274,13 @@ def u_volne(s, h):
         except ValueError:
             raise ChybaVstupu(f"Řádek {i}: směr a délka musí být čísla (délka kladná).") from None
     n = _nove_cislo(s, h)
+    k, kor = _korekce([m[1] for m in mer])
+    mer = [(c, b, sm_, d_ * k) for c, b, sm_, d_ in mer]
     try:
         vs = V.volne_stanovisko(mer, meritko_volne=(h.get("meritko") == "volné"))
     except ValueError as e:
         raise ChybaVstupu(str(e)) from None
-    prot = _hlavicka("Volné stanovisko (MNČ)")
+    prot = _hlavicka("Volné stanovisko (MNČ)") + kor
     prot += [f"stanovisko {n}:  Y = {_f(vs.stanovisko.y)}   X = {_f(vs.stanovisko.x)}",
              f"orientační posun {_f(vs.posun, 4)} gon, měřítko {vs.meritko:.7f}, "
              f"střední souřadnicová chyba m0 = {_f(vs.m0)} m", "", "opravy na známých bodech:",
@@ -834,15 +857,24 @@ def u_polygon(s, h):
     if len(uhly) < 2:
         raise ChybaVstupu("Zadejte vrcholové úhly na počátečním bodě, všech nových bodech a koncovém bodě.")
     cisla = [u[0] for u in uhly[1:-1]]
+    from .nastaveni import aktualni
+    k, kor = _korekce([a, b])
+    strany = [(c, d * k) for c, d in strany]
     try:
         r = V.polygonovy_porad(a, ao, b, bo, [u[1] for u in uhly], [d[1] for d in strany], cisla)
     except ValueError as e:
         raise ChybaVstupu(str(e)) from None
-    mez_u = 0.0060 * math.sqrt(len(uhly))  # orientační mez 60 cc·√n (k ověření podle předpisu)
-    prot = _hlavicka("Polygonový pořad oboustranně připojený a orientovaný")
+    nast = aktualni()
+    mez_u, mez_p = nast.mez_polygonu(len(cisla), r.delka)
+    ok = abs(r.uhlova_odchylka) <= mez_u and r.polohova <= mez_p
+    prot = _hlavicka("Polygonový pořad oboustranně připojený a orientovaný") + kor
     prot += [f"{ao.cislo} → {a.cislo} … {b.cislo} → {bo.cislo}, nových bodů {len(cisla)}, délka {_f(r.delka)} m",
-             f"úhlová odchylka {r.uhlova_odchylka * 10000:.0f} cc (orientačně mezní {mez_u * 10000:.0f} cc)",
-             f"souřadnicové odchylky dY = {_f(r.dy)} m, dX = {_f(r.dx)} m, polohová {_f(r.polohova)} m",
+             f"úhlová odchylka {r.uhlova_odchylka * 10000:.0f} cc, mezní {mez_u * 10000:.0f} cc"
+             + ("" if abs(r.uhlova_odchylka) <= mez_u else "  ← PŘEKROČENA"),
+             f"souřadnicové odchylky dY = {_f(r.dy)} m, dX = {_f(r.dx)} m, polohová {_f(r.polohova)} m, "
+             f"mezní {_f(mez_p)} m" + ("" if r.polohova <= mez_p else "  ← PŘEKROČENA"),
+             f"(mezní odchylky pro třídu {nast.polygon_trida} – Nastavení výpočtů) → "
+             + ("pořad VYHOVUJE" if ok else "pořad NEVYHOVUJE"),
              "  bod                 směrník        délka            Y            X"]
     nove = []
     for i, (c, p) in enumerate(r.body):
@@ -868,11 +900,13 @@ def u_polygon_volny(s, h):
     strany = _radky_cisel(h.get("delky") or "", 2, "bod délka[m] (délka strany k dalšímu bodu)")
     # nové body: P1…Pn−1 jsou stanoviska z řádků úhlů, poslední bod je jen v poli „Číslo posledního bodu“
     cisla = [u[0] for u in uhly[1:]] + [_nove_cislo(s, h, "posledni")]
+    k, kor = _korekce([a])
+    strany = [(c, d * k) for c, d in strany]
     try:
         body = V.polygonovy_porad_volny(a, ao, [u[1] for u in uhly], [d[1] for d in strany], cisla)
     except ValueError as e:
         raise ChybaVstupu(str(e)) from None
-    prot = _hlavicka("Polygonový pořad volný (jednostranně připojený)")
+    prot = _hlavicka("Polygonový pořad volný (jednostranně připojený)") + kor
     prot += [f"{ao.cislo} → {a.cislo}, nových bodů {len(body)} – bez kontroly, žádná odchylka se nedá zjistit!",
              "  bod                délka            Y            X"]
     nove = []

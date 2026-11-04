@@ -8,6 +8,17 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (9, "6. listopadu 2026", [
+        "<b>Arch (papír) v CAD</b>: příkaz „arch“ (nebo tlačítko v paletě Zobrazení) položí pod výkres papír "
+        "zvolené velikosti (A4–A0 i vlastní rozměr) v měřítku, myší ho posunete kam potřebujete a Tisk do PDF "
+        "vytiskne přesně to, co je na papíře. Arch se uloží do výkresu.",
+        "<b>Nastavení výpočtů</b> (Výpočty → Úlohy): účel měření (katastr s kódem kvality / polohopis s třídou "
+        "přesnosti), přístroj a jeho přesnost, korekce délek – měřítko Křovákova zobrazení, redukce z nadmořské "
+        "výšky, fyzikální korekce – a mezní odchylky polygonových pořadů. Korekce se použijí v rajónu, polygonech, "
+        "volném stanovisku a protínání z délek a vypíšou se do protokolu.",
+        "<b>CAD → Kontrola živě</b>: co nakreslíte v CAD, se po přepnutí na Výkres samo zkontroluje – bez "
+        "ukládání a nahrávání.",
+    ]),
     (8, "5. listopadu 2026", [
         "<b>Kokeš</b> – nová stránka v levé liště: seznam souřadnic s čísly bodů KN (k.ú., ZPMZ, pořadové číslo, "
         "zobrazení 13-1) a kódy kvality, kreslící klíče ze Směrnice (dvojklik = kreslit klíčem v CAD), tabulky "

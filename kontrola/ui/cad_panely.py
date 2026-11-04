@@ -22,14 +22,14 @@ SKUPINY = [
     ("Výběr", ["vše", "ohrada", "podobné", "vyber", "skupina"]),
     ("Měření", ["vzdálenost", "délka", "výměra", "info"]),
     ("Geodézie", ["body", "kódy", "kódovník", "vrstevnice", "profil", "mračno", "síť", "transformace", "georeference", "oměrné míry", "převod atributů"]),
-    ("Zobrazení", ["celý", "přiblížit", "předchozí pohled", "vrstvy"]),
+    ("Zobrazení", ["celý", "přiblížit", "předchozí pohled", "vrstvy", "arch"]),
 ]
 NAZVY = {"vlož": "Vložit buňku", "body": "Body ze seznamu", "vrstvy": "Správce hladin", "celý": "Celý výkres",
          "info": "Informace o prvku", "vše": "Vybrat vše", "vyber": "Výběr podle atributů",
          "podobné": "Vybrat podobné", "ohrada": "Výběr ohradou", "skupina": "Skupina prvků",
          "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť", "vrstevnice": "Vrstevnice a TIN", "profil": "Podélný profil", "kódy": "Kresba z kódů", "kódovník": "Kódovník", "georeference": "Georeference rastru", "mračno": "Mračno bodů", "zvyš text": "Kopie textu se zvýšením čísla",
          "nahraď buňku": "Nahradit buňku",
-         "kolmice": "Kolmice z bodu na prvek", "osa úhlu": "Osa úhlu"}
+         "kolmice": "Kolmice z bodu na prvek", "osa úhlu": "Osa úhlu", "arch": "Arch (papír) pod výkresem"}
 
 
 class PaletaNastroju(QScrollArea):

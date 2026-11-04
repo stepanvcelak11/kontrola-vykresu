@@ -437,3 +437,29 @@ def test_protinani_vpred_ze_smeru():
     h["ora"] = ""
     with pytest.raises(ChybaVstupu, match="orientaci"):
         u_vpred_smery(s, h)
+
+
+def test_nastaveni_vypoctu_korekce_delek_v_rajonu():
+    from kontrola.geodezie import nastaveni as N
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.sjtsk import meritko_zobrazeni
+    from kontrola.geodezie.ulohy import u_rajon
+    s = SeznamBodu()
+    s.body[:] = [Bod("1", 740000.0, 1050000.0, 400.0), Bod("2", 740100.0, 1050000.0, 400.0)]
+    h = {"st": "1", "o": "2", "so": "0", "sm": "100", "d": "100", "nove": "5"}
+    puvodni = N.aktualni()
+    try:
+        N.nastav(N.NastaveniVypoctu())
+        r0 = u_rajon(s, h)
+        assert abs(r0.nove[0].x - 1049900.0) < 1e-6 and not any("Korekce" in t for t in r0.protokol)
+        N.nastav(N.NastaveniVypoctu(meritko_rezim="Křovák ze souřadnic", vyska_rezim="z výšek bodů"))
+        r = u_rajon(s, h)
+        k = meritko_zobrazeni(740000.0, 1050000.0) * N.R_ZEME / (N.R_ZEME + 400.0)
+        assert abs((1050000.0 - r.nove[0].x) - 100 * k) < 1e-6
+        assert any("Korekce délek" in t and "měřítko zobrazení" in t for t in r.protokol)
+        n2 = N.NastaveniVypoctu.z_dict(N.NastaveniVypoctu(ucel="polohopis", trida_presnosti=4).do_dict())
+        assert n2.mxy == 0.26 and "třída přesnosti 4" in n2.popis_ucelu()
+        u, p = N.NastaveniVypoctu().mez_polygonu(2, 400.0)
+        assert abs(u - 0.025 * 2) < 1e-12 and abs(p - (0.0025 * 20 + 0.04)) < 1e-12
+    finally:
+        N.nastav(puvodni)
