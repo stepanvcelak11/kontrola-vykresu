@@ -101,3 +101,34 @@ def test_smernice_sloupec_kk():
     td, hi, m = import_table(SMERNICE)
     r = generate_rules(td.rows, hi, m, str(SMERNICE)).rules.by_code()
     assert r["Budovy zděné, betonové"].kreslici_klic == "1-4" and r["Plot drátěný"].kreslici_klic == "20"
+
+
+def test_cisla_kn_a_seznam():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    assert K.cislo_kn("610844", 13, 1) == "610844000130001" and K.cislo_kn(None, 13, 25) == "000130025"
+    assert K.rozloz_cislo("610844000130001") == ("610844", 13, 1) and K.rozloz_cislo("15") == (None, None, 15)
+    assert K.rozloz_cislo("A12") is None and K.zkracene("000130025") == "13-25" and K.zkracene("7") == "7"
+    with pytest.raises(ValueError):
+        K.cislo_kn("12", 13, 1)
+    s = SeznamBodu()
+    s.body = [Bod("1", 1, 2), Bod("2", 3, 4), Bod("P5", 5, 6)]
+    assert K.na_cisla_kn(s, None, 13, ["1"]) == 1 and s.body[0].cislo == "000130001" and s.body[1].cislo == "2"
+    s.zpet()
+    assert s.body[0].cislo == "1"
+    s.body.append(Bod("000130002", 0, 0))
+    with pytest.raises(ValueError, match="už v seznamu"):
+        K.na_cisla_kn(s, None, 13)
+    t = K.seznam_text([Bod("000130001", 743000.123, 1043000.5, 250.0, kvalita=3)])
+    assert t.split() == ["000130001", "743000.12", "1043000.50", "250.00", "3"]
+
+
+def test_tabulky_kokese():
+    rs = RuleSet(pravidla=[Rule("A", "Budovy", hladina="5", barva=0, styl_cary="0,2,4,7", kreslici_klic="1-4",
+                                tloustka=2),
+                           Rule("B", "Popis povrchů", hladina="9", barva=75, geometrie="text", font="CS_WORKING")])
+    t = K.tabulky(rs)
+    assert [b[:2] for b in t["barvy"]] == [(100, 0), (75, 75)]
+    assert t["cary"] == [("1-4", "Budovy", "5", "100", "0,2,-13,7", "2")]
+    assert t["texty"] == [(175, 75, "Popis povrchů")] and ("1", "2") in t["fonty"]
+    h = K.tabulky_html(rs)
+    assert "Tabulka barev" in h and "-13" in h and "175" in h

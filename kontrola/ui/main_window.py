@@ -79,6 +79,9 @@ class MainWindow(QMainWindow):
         from .cad_page import CadPage
         self.cad = CadPage(self)
         self.tabs.addTab(self.cad, "CAD")
+        from .kokes_page import KokesPage
+        self.kokes = KokesPage(self)
+        self.tabs.addTab(self.kokes, "Kokeš")
         self.tabs.currentChanged.connect(self._tab_changed)
         self.setCentralWidget(self.tabs)
 
@@ -459,7 +462,9 @@ class MainWindow(QMainWindow):
                                ("vykres", "Výkres", "Výkres a seznam chyb"),
                                ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady"),
                                ("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)"),
-                               ("cad", "CAD", "Kreslení v DXF (jako MicroStation)")):
+                               ("cad", "CAD", "Kreslení v DXF a DGN (jako MicroStation)"),
+                               ("kokes", "Kokeš", "Seznam souřadnic KN, kreslící klíče, tabulky a katastr "
+                                                  "(jako Kokeš)")):
             act = QAction(text, self)
             act.setCheckable(True)
             act.setToolTip(tip)
@@ -571,7 +576,8 @@ class MainWindow(QMainWindow):
 
     def show_page(self, key: str):
         w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani,
-             "vypocty": getattr(self, "vypocty", None), "cad": getattr(self, "cad", None)}.get(key)
+             "vypocty": getattr(self, "vypocty", None), "cad": getattr(self, "cad", None),
+             "kokes": getattr(self, "kokes", None)}.get(key)
         if w is not None:
             from .crash import step
             step(f"stránka {key}")
@@ -583,7 +589,8 @@ class MainWindow(QMainWindow):
         w = self.tabs.currentWidget()
         key = ("uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split
                else "vypocty" if w is getattr(self, "vypocty", None)
-               else "cad" if w is getattr(self, "cad", None) else "zadani")
+               else "cad" if w is getattr(self, "cad", None)
+               else "kokes" if w is getattr(self, "kokes", None) else "zadani")
         self.a_page[key].setChecked(True)
 
     def _popup_main_menu(self):
@@ -619,7 +626,8 @@ class MainWindow(QMainWindow):
                 w = self.tabs.widget(i)
                 name = "uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split else \
                     "zadani" if w is self.zadani else "vypocty" if w is getattr(self, "vypocty", None) else \
-                    "cad" if w is getattr(self, "cad", None) else None
+                    "cad" if w is getattr(self, "cad", None) else \
+                    "kokes" if w is getattr(self, "kokes", None) else None
                 if name:
                     self.tabs.setTabIcon(i, icon(name, accent() if i == self.tabs.currentIndex()
                                                  else themed("#6B7280")))

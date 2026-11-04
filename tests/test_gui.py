@@ -3075,3 +3075,48 @@ def test_cad_ulozi_a_otevre_dgn(window, tmp_path):
     assert "DGN: 1× úsečka" in c.historie.toPlainText()
     assert c.otevri(str(p))
     assert [e.dxftype() for e in c.dok.msp] == ["LINE"] and c.dok.path == p
+
+
+def test_stranka_kokes(window, tmp_path):
+    from kontrola.geodezie.body import Bod
+    from kontrola.rules import Rule, RuleSet
+    w = window
+    w.show_page("kokes")
+    assert w.a_page["kokes"].isChecked()
+    k = w.kokes
+    p = w.vypocty
+    puvodni = list(p.seznam.body)
+    try:
+        p.seznam.body[:] = [Bod("1", 743000.0, 1043000.0, 250.0), Bod("2", 743010.0, 1043000.0),
+                            Bod("4001", 743020.0, 1043000.0)]
+        k.obnov()
+        assert k.tab.rowCount() == 3 and "3 bez kódu kvality" in k.stav.text()
+        k.ku.setText("610844")
+        k.zpmz.setValue(13)
+        assert k.na_kn() == 3
+        assert p.seznam.najdi("610844000130001") is not None
+        assert k.tab.item(0, 1).text() == "13-1"
+        k.tab.selectRow(0)
+        assert k.nastav_kvalitu() == 1 and p.seznam.najdi("610844000130001").kvalita == 3
+        k.zpet()
+        assert p.seznam.najdi("610844000130001").kvalita is None
+        f = k.export_ss(str(tmp_path / "ss.txt"))
+        assert "610844000130001" in f.read_text(encoding="cp1250")
+        # kreslící klíče a tabulky ze Směrnice
+        rs = RuleSet(pravidla=[Rule("BUD", "Budovy zděné", hladina="5", barva=94, styl_cary="0,4",
+                                    kreslici_klic="1-4"),
+                               Rule("POP", "Popis povrchů", hladina="9", barva=75, geometrie="text")])
+        w.project.rules = rs
+        w.zadani.rules_editor.set_rules(rs)
+        k.obnov()
+        assert k.klice.rowCount() == 1 and k.klice.item(0, 4).text() == "0,-13"
+        assert "175" in k.html.toHtml()
+        assert k.uloz_tabulky(str(tmp_path / "t.html")).exists()
+        k.b_rezim.setChecked(True)
+        assert w.project.rules.program == "kokes"
+        assert k.kreslit_klicem(0) and w.cad.predvolba is not None and w.cad.predvolba.nazev.endswith("Budovy zděné")
+        assert k.otevri_ulohu("Výkaz výměr GP")
+        assert w.vypocty.ulohy.lst.currentItem().text() == "Výkaz výměr GP"
+    finally:
+        p.seznam.body[:] = puvodni
+        p._after_change()
