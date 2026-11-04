@@ -8,6 +8,15 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (8, "5. listopadu 2026", [
+        "<b>Kokeš</b> – nová stránka v levé liště: seznam souřadnic s čísly bodů KN (k.ú., ZPMZ, pořadové číslo, "
+        "zobrazení 13-1) a kódy kvality, kreslící klíče ze Směrnice (dvojklik = kreslit klíčem v CAD), tabulky "
+        "pro Kokeš podle zadání (barvy s RGB, čáry, textové klíče 1xx, fonty), katastr a GP.",
+        "<b>CAD ukládá a otevírá DGN</b> pro MicroStation (V7 – hladiny, barvy, tloušťky, styly a buňky v číslech "
+        "Směrnice) a otevře i DGN V8. Kontrola čte DGN V7 bez převodníku.",
+        "<b>CAD</b>: Kolmice z bodu na prvek, Osa úhlu, Uložené pohledy („pohled ulož …“).",
+        "<b>Výpočty</b>: Protínání vpřed ze směrů (orientace vážené délkami, jako v Gromě).",
+    ]),
     (7, "4. listopadu 2026", [
         "<b>Kódování v QTrig → výkres</b>: při měření dáváte bodům kódy (v QTrig tlačítka Začátek / Konec / "
         "Uzavřít linie a kódovník z kanceláře), body se stáhnou rovnou do výkresu v CAD a z kódů se nakreslí "

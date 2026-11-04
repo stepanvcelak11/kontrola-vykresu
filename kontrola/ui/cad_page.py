@@ -419,6 +419,9 @@ class CadPage(QWidget):
 
     PRIKAZY = {
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
+        "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
+        "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "pohled": "uložené pohledy (Saved Views): „pohled ulož Náměstí“, „pohled Náměstí“, „pohled“ = seznam",
         "nahraď buňku": "nahradit vybrané buňky jinou buňkou – stejný bod, natočení a měřítko (Replace Cell)",
         "zvyš text": "kopírovat text se zvýšeným číslem kliknutím (Copy and Increment Text – čísla bodů)",
         "qtrig": "body ze zakázky QTrig rovnou do výkresu – značky, čísla a linie z kódů (i průběžně z terénu)",
@@ -475,6 +478,9 @@ class CadPage(QWidget):
     }
     ALIASY = {
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
+        "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
+        "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "saved views": "pohled", "sv": "pohled", "pohledy": "pohled", "uloz pohled": "pohled",
         "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
         "vymen bunku": "nahraď buňku", "vyměň buňku": "nahraď buňku",
         "increment text": "zvyš text", "zvys text": "zvyš text", "it": "zvyš text", "copy increment": "zvyš text",
@@ -2413,6 +2419,8 @@ class CadPage(QWidget):
             self.novy_list(arg)
         elif cmd == "atributy":
             self.atributy_zadani()
+        elif cmd == "pohled":
+            self._pohled(arg)
         elif cmd == "zkratky":
             self.nastav_zkratky()
         elif cmd == "naposledy":
@@ -3314,6 +3322,67 @@ class CadPage(QWidget):
         ins = U.vytvor_blok(self.dok.doc, self.prostor, self.historie_zmen, ents, nazev, b)
         self._hotovo_vyber([ins])
         self.vypis(f"Blok {nazev} vytvořen z {len(ents)} prvků.")
+
+    def _pohled(self, arg: str):
+        """Uložené pohledy jako v MicroStationu (jsou ve výkresu, zůstanou po uložení)."""
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete výkres.")
+            return
+        a = arg.strip()
+        if not a:
+            jm = U.pohledy(self.dok.doc)
+            self.vypis("Uložené pohledy: " + (", ".join(jm) if jm else "žádné – „pohled ulož název“ uloží "
+                                                                         "současný pohled"))
+            return
+        slovo, _, zbytek = a.partition(" ")
+        if slovo.lower() in ("ulož", "uloz", "save") and zbytek.strip():
+            r = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
+            U.uloz_pohled(self.dok.doc, zbytek, r.left(), r.top(), r.right(), r.bottom())
+            self.dok.zmeneno = True
+            self.vypis(f"Pohled „{zbytek.strip()}“ uložen.")
+            return
+        if slovo.lower() in ("smaž", "smaz", "delete") and zbytek.strip():
+            if zbytek.strip() in self.dok.doc.views:
+                self.dok.doc.views.remove(zbytek.strip())
+                self.vypis(f"Pohled „{zbytek.strip()}“ smazán.")
+            return
+        try:
+            x0, y0, x1, y1 = U.pohled(self.dok.doc, a)
+        except ValueError as e:
+            self.vypis(str(e))
+            return
+        self.view.zoom_all(QRectF(x0, y0, x1 - x0, y1 - y0))
+
+    def n_kolmice(self):
+        """Construct Perpendicular: prvek, pak bod → úsečka z bodu do paty kolmice (opakovaně)."""
+        e, _k = yield Pozadavek("prvek", "Kolmice – klikněte na prvek (čára, oblouk, kružnice):")
+        while True:
+            b = yield self._bod_req("Bod, ze kterého vede kolmice (Enter = konec):", volitelne=True,
+                                    nahled=lambda x, y: self._nahled_kolmice(e, (x, y)))
+            if b is None:
+                return
+            p = U.pata_kolmice(e, b)
+            if math.hypot(p[0] - b[0], p[1] - b[1]) < 1e-9:
+                self.vypis("⚠ Bod leží na prvku – kolmice má nulovou délku.")
+                continue
+            self.kresleni.usecka(b, p)
+            self.vypis(f"Kolmice délky {math.hypot(p[0] - b[0], p[1] - b[1]):.3f} m, pata {p[0]:.3f} {p[1]:.3f}")
+
+    def _nahled_kolmice(self, e, b):
+        try:
+            p = U.pata_kolmice(e, b)
+        except ValueError:
+            return []
+        return [[b, p]]
+
+    def n_osa_uhlu(self):
+        """Construct Bisector: dvě čáry → osa úhlu z jejich průsečíku."""
+        e1, k1 = yield Pozadavek("prvek", "Osa úhlu – první čára (klikněte na rameno úhlu):")
+        e2, k2 = yield Pozadavek("prvek", "Druhá čára (rameno téhož úhlu):")
+        d = yield Pozadavek("cislo", "Délka osy [k bližšímu kliknutí]:", vychozi=0.0)
+        p, q = U.osa_uhlu(e1, k1, e2, k2, d or None)
+        self.kresleni.usecka(p, q)
+        self.vypis(f"Osa úhlu z průsečíku {p[0]:.3f} {p[1]:.3f}, délka {math.hypot(q[0] - p[0], q[1] - p[1]):.3f} m")
 
     def n_nahrad_bunku(self):
         """Replace Cell: vybrané (nebo klikané) buňky nahradí jinou – opravy po kontrole „buňka … má být …“."""

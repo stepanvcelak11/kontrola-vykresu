@@ -407,3 +407,33 @@ def test_redukce_delky():
     for h in ({"d": "-1"}, {"d": "10", "z": "500"}, {"d": "10", "H": "123456"}, {"d": "x"}):
         with pytest.raises(ChybaVstupu):
             u_redukce(s, h)
+
+
+def test_protinani_vpred_ze_smeru():
+    import pytest
+
+    from kontrola.geodezie import vypocty as V
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import ChybaVstupu, u_vpred_smery
+    s = SeznamBodu()
+    A, B, O1, O2, P = (Bod("A", 1000, 5000), Bod("B", 1100, 5000), Bod("O1", 1000, 5200), Bod("O2", 1150, 4900),
+                       Bod("P", 1040, 5080))
+    s.body = [A, B, O1, O2]
+
+    def smer(st, c, posun):
+        return V.norm_gon(V.smernik(st, c) - posun)
+    h = {"a": "A", "b": "B", "ora": f"O1 {smer(A, O1, 12.3456):.7f}\nO2 {smer(A, O2, 12.3456) + 0.0010:.7f}",
+         "orb": f"O1 {smer(B, O1, 350):.7f}", "sa": f"{smer(A, P, 12.3456):.7f}", "sb": f"{smer(B, P, 350):.7f}",
+         "nove": "P"}
+    v = u_vpred_smery(s, h)
+    b = v.nove[0]
+    # druhá orientace má chybu 10 cc → průměr vážený délkami posune bod jen o pár milimetrů
+    assert abs(b.y - 1040) < 0.01 and abs(b.x - 5080) < 0.01 and isinstance(b.y, float)
+    t = "\n".join(v.protokol)
+    assert "oprava" in t and "orientační posun" in t
+    h["ora"] = "O9 10"
+    with pytest.raises(ChybaVstupu, match="O9"):
+        u_vpred_smery(s, h)
+    h["ora"] = ""
+    with pytest.raises(ChybaVstupu, match="orientaci"):
+        u_vpred_smery(s, h)

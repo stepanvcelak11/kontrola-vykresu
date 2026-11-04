@@ -3120,3 +3120,34 @@ def test_stranka_kokes(window, tmp_path):
     finally:
         p.seznam.body[:] = puvodni
         p._after_change()
+
+
+def test_cad_kolmice_osa_a_pohledy(window, tmp_path):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "@10,0", ""):
+        c.zadej(t)
+    for t in ("u", "x=0 y=0", "@0,10", ""):
+        c.zadej(t)
+    c.view.zoom_all()
+    c.proved("kolmice")
+    c._klik(5.0, 0.0)
+    c.zadej("x=4 y=6")
+    c.zadej("")
+    car = [e for e in c.dok.msp if e.dxftype() == "LINE"]
+    assert len(car) == 3 and (round(car[-1].dxf.end.x, 6), round(car[-1].dxf.end.y, 6)) == (4, 0)
+    c.proved("osa úhlu")
+    c._klik(8.0, 0.0)
+    c._klik(0.0, 8.0)
+    c.zadej("2")
+    o = [e for e in c.dok.msp if e.dxftype() == "LINE"][-1]
+    assert abs(o.dxf.end.x - o.dxf.end.y) < 1e-9 and abs(o.dxf.end.x - 2 ** 0.5) < 1e-9
+    c.proved("pohled ulož Roh")
+    c.view.zoom_all()
+    c.proved("pohled")
+    assert "Roh" in c.historie.toPlainText()
+    c.proved("pohled Roh")
+    p = c.uloz(path=str(tmp_path / "p.dxf"))
+    import ezdxf
+    assert "Roh" in ezdxf.readfile(p).views

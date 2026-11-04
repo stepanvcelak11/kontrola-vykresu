@@ -470,3 +470,31 @@ def test_nahrad_bunky_a_zvys_text():
     c2 = U.kopie_textu_se_zvysenim(msp, h, c, (10, 5))
     assert (c.dxf.text, c2.dxf.text) == ("102", "103") and c2.dxf.layer == "59"
     assert tuple(c2.dxf.insert)[:2] == (10, 5)
+
+
+def test_kolmice_osa_uhlu_a_pohledy():
+    import ezdxf
+    import pytest
+
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    l = msp.add_line((0, 0), (10, 0))
+    assert U.pata_kolmice(l, (3, 5)) == pytest.approx((3, 0))
+    assert U.pata_kolmice(l, (15, 5)) == pytest.approx((10, 0))  # mimo úsečku → nejbližší konec
+    k = msp.add_circle((0, 0), 5)
+    assert U.pata_kolmice(k, (10, 0)) == pytest.approx((5, 0))
+    pl = msp.add_lwpolyline([(0, 0), (10, 0), (10, 10)])
+    assert U.pata_kolmice(pl, (12, 4)) == pytest.approx((10, 4))
+    l2 = msp.add_line((0, 0), (0, 10))
+    p, q = U.osa_uhlu(l, (5, 0), l2, (0, 5), 2 ** 0.5)
+    assert p == pytest.approx((0, 0)) and q == pytest.approx((1, 1))
+    p, q = U.osa_uhlu(l, (5, 0), l2, (0, -5))  # druhý úhel (dolní kvadrant)
+    assert q[0] > 0 and q[1] < 0
+    with pytest.raises(ValueError):
+        U.osa_uhlu(l, (5, 0), msp.add_line((0, 1), (10, 1)), (5, 1))
+    U.uloz_pohled(doc, "Náměstí", 0, 0, 100, 50)
+    U.uloz_pohled(doc, "Náměstí", 10, 10, 20, 20)  # přepíše
+    assert U.pohledy(doc) == ["Náměstí"] and U.pohled(doc, "náměstí") == pytest.approx((10, 10, 20, 20))
+    with pytest.raises(ValueError):
+        U.pohled(doc, "není")

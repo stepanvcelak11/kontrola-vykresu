@@ -1886,3 +1886,85 @@ def kopie_textu_se_zvysenim(msp, h: Historie, e, bod, krok: int = 1):
     msp.add_entity(c)
     h.proved(f"Kopie textu {c.dxf.text}", [c])
     return c
+
+
+def pata_kolmice(e, bod) -> tuple[float, float]:
+    """Nejbližší bod prvku k bodu (pata kolmice) – u kružnice a oblouku přesně, jinak po úsecích."""
+    x, y = _xy(bod)
+    t = e.dxftype()
+    if t in ("CIRCLE", "ARC"):
+        c, r = e.dxf.center, e.dxf.radius
+        d = math.hypot(x - c.x, y - c.y)
+        if d < EPS:
+            raise ValueError("Bod je ve středu kružnice – kolmice není určená.")
+        return c.x + (x - c.x) / d * r, c.y + (y - c.y) / d * r
+    g = geometrie(e)
+    if g is None or g.geom_type == "Point":
+        raise ValueError("Ke kolmici vyberte čáru, lomenou čáru, oblouk nebo kružnici.")
+    from shapely.geometry import Point
+    p = g.interpolate(g.project(Point(x, y)))
+    return p.x, p.y
+
+
+def _usek_u_kliku(e, klik):
+    """Úsek prvku (dva body) nejblíž kliknutí – u úsečky ona sama, u lomené čáry nejbližší strana."""
+    t = e.dxftype()
+    if t == "LINE":
+        return _xy(e.dxf.start), _xy(e.dxf.end)
+    if t in ("LWPOLYLINE", "POLYLINE"):
+        pts, zavr = _body_polylinie(e)
+        i = _nejblizsi_segment([p[:2] for p in pts], _xy(klik), zavr)
+        a, b = pts[i][:2], pts[(i + 1) % len(pts)][:2]
+        return (a[0], a[1]), (b[0], b[1])
+    raise ValueError("Osa úhlu: vyberte úsečky nebo strany lomené čáry.")
+
+
+def osa_uhlu(e1, klik1, e2, klik2, delka: float | None = None) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Osa úhlu dvou přímek (Construct Bisector): z průsečíku do úhlu, ve kterém leží obě kliknutí."""
+    a1, b1 = _usek_u_kliku(e1, klik1)
+    a2, b2 = _usek_u_kliku(e2, klik2)
+    p = _prusecik_primek(a1, b1, a2, b2)
+    if p is None:
+        raise ValueError("Čáry jsou rovnoběžné – osa úhlu neexistuje.")
+
+    def smer(a, b, k):
+        ux, uy = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(ux, uy)
+        ux, uy = ux / n, uy / n
+        kx, ky = _xy(k)
+        if (kx - p[0]) * ux + (ky - p[1]) * uy < 0:
+            ux, uy = -ux, -uy
+        return ux, uy
+    u1, u2 = smer(a1, b1, klik1), smer(a2, b2, klik2)
+    bx, by = u1[0] + u2[0], u1[1] + u2[1]
+    n = math.hypot(bx, by)
+    if n < 1e-12:
+        raise ValueError("Kliknutí jsou na opačných stranách přímky – zvolte úhel menší než 200 gon.")
+    if delka is None:
+        delka = min(_dist(p, _xy(klik1)), _dist(p, _xy(klik2)))
+    return p, (p[0] + bx / n * delka, p[1] + by / n * delka)
+
+
+# ------------------------------------------------------------------ uložené pohledy (Saved Views)
+def uloz_pohled(doc, nazev: str, x0: float, y0: float, x1: float, y1: float):
+    """Pojmenovaný pohled do výkresu (tabulka VIEW v DXF – zůstane i po uložení)."""
+    nazev = nazev.strip()
+    if not nazev:
+        raise ValueError("Zadejte název pohledu.")
+    if nazev in doc.views:
+        doc.views.remove(nazev)
+    return doc.views.new(nazev, dxfattribs={"center": ((x0 + x1) / 2, (y0 + y1) / 2), "width": abs(x1 - x0),
+                                            "height": abs(y1 - y0)})
+
+
+def pohled(doc, nazev: str) -> tuple[float, float, float, float]:
+    """Rozsah uloženého pohledu (x0, y0, x1, y1)."""
+    for v in doc.views:
+        if v.dxf.name.lower() == nazev.strip().lower():
+            c, w, h = v.dxf.center, v.dxf.width, v.dxf.height
+            return c.x - w / 2, c.y - h / 2, c.x + w / 2, c.y + h / 2
+    raise ValueError(f"Pohled „{nazev}“ ve výkresu není.")
+
+
+def pohledy(doc) -> list[str]:
+    return sorted(v.dxf.name for v in doc.views)

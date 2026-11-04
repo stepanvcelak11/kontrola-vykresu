@@ -148,6 +148,58 @@ def u_vpred_uhly(s, h):
     return Vysledek(prot, [Bod(n, p.y, p.x, poznamka="protínání vpřed")])
 
 
+def _orientace(s, h, key: str, st: Bod, nazev: str) -> tuple[float, list[str]]:
+    """Řádky „bod směr“ → průměrný orientační posun stanoviska [gon] a řádky protokolu."""
+    radky = [r.split() for r in (h.get(key) or "").replace(",", ".").splitlines() if r.strip()]
+    if not radky:
+        raise ChybaVstupu(f"Zadejte aspoň jednu orientaci na stanovisku {nazev} (řádek: bod směr).")
+    posuny, prot = [], []
+    for r in radky:
+        if len(r) < 2:
+            raise ChybaVstupu(f"Orientace „{' '.join(r)}“: zadejte číslo bodu a směr v gonech.")
+        b = s.najdi(r[0])
+        if b is None:
+            raise ChybaVstupu(f"Orientační bod {r[0]} v seznamu souřadnic není.")
+        _ruzne(st, b)
+        try:
+            smer = float(r[1])
+        except ValueError:
+            raise ChybaVstupu(f"Směr „{r[1]}“ na bod {r[0]} není číslo.") from None
+        posuny.append((b.cislo, V.norm_gon(V.smernik(st, b) - smer), V.delka(st, b)))
+    # průměr posunů vážený délkami (jako Groma), přes 0/400 gon
+    ref = posuny[0][1]
+    vazeny = sum(((o - ref + 200) % 400 - 200) * d for _c, o, d in posuny) / sum(d for *_x, d in posuny)
+    prumer = V.norm_gon(ref + vazeny)
+    for c, o, d in posuny:
+        prot.append(f"  {nazev}: orientace na {c}: posun {_f(o, 4)} gon, délka {_f(d)} m, oprava "
+                    f"{_f((((prumer - o + 200) % 400) - 200) * 10000 + 0.0, 1).replace('-0.0', '0.0')} cc")
+    return prumer, prot
+
+
+def u_vpred_smery(s, h):
+    """Protínání vpřed ze směrů: na obou stanoviscích orientace a směr na určovaný bod (jako v Gromě)."""
+    a, b = _bod(s, h, "a", "stanovisko A"), _bod(s, h, "b", "stanovisko B")
+    _ruzne(a, b)
+    oa, pa = _orientace(s, h, "ora", a, a.cislo)
+    ob, pb = _orientace(s, h, "orb", b, b.cislo)
+    sa, sb = _cislo(h, "sa", "směr z A na bod"), _cislo(h, "sb", "směr z B na bod")
+    n = _nove_cislo(s, h)
+    sig_a, sig_b = V.norm_gon(sa + oa), V.norm_gon(sb + ob)
+    try:
+        p = V.protinani_vpred_smerniky(a, sig_a, b, sig_b)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    gama = abs(((sig_a - sig_b + 200) % 400) - 200)
+    prot = _hlavicka("Protínání vpřed ze směrů")
+    prot += pa + pb
+    prot += [f"stanovisko {a.cislo}: orientační posun {_f(oa, 4)} gon, směr {_f(sa, 4)} → směrník {_f(sig_a, 4)} gon",
+             f"stanovisko {b.cislo}: orientační posun {_f(ob, 4)} gon, směr {_f(sb, 4)} → směrník {_f(sig_b, 4)} gon",
+             f"úhel protnutí {_f(min(gama, 200 - gama) if gama > 100 else gama, 4)} gon"
+             + ("  (POZOR: ostrý úhel protnutí, výsledek je nejistý)" if min(gama, 200 - gama) < 30 else ""),
+             f"bod {n}:  Y = {_f(p.y)}   X = {_f(p.x)}"]
+    return Vysledek(prot, [Bod(n, float(p.y), float(p.x), poznamka="protínání vpřed ze směrů")])
+
+
 def u_z_delek(s, h):
     a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
     _ruzne(a, b)
@@ -1005,6 +1057,12 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Protínání vpřed z úhlů", "Bod z úhlů α (v A) a β (v B) měřených od základny A–B.",
      [Pole("a", "Bod A"), Pole("b", "Bod B"), Pole("alfa", "Úhel α [gon]", "gon"), Pole("beta", "Úhel β [gon]", "gon"),
       Pole("nove", "Číslo nového bodu", "text")], u_vpred_uhly),
+    ("Protínání vpřed ze směrů", "Bod ze směrů měřených na dvou stanoviscích; každé se orientuje na známé body "
+     "(posun vážený délkami), jako v Gromě.",
+     [Pole("a", "Stanovisko A"), Pole("ora", "Orientace na A (řádek: bod směr)", "radky"),
+      Pole("sa", "Směr z A na určovaný bod [gon]", "gon"),
+      Pole("b", "Stanovisko B"), Pole("orb", "Orientace na B (řádek: bod směr)", "radky"),
+      Pole("sb", "Směr z B na určovaný bod [gon]", "gon"), Pole("nove", "Číslo nového bodu", "text")], u_vpred_smery),
     ("Protínání z délek", "Bod ze dvou měřených délek od známých bodů.",
      [Pole("a", "Bod A"), Pole("b", "Bod B"), Pole("da", "Délka z A [m]", "m"), Pole("db", "Délka z B [m]", "m"),
       Pole("strana", "Bod leží", "volba", "vlevo", ("vlevo", "vpravo"), "vlevo / vpravo od směru A → B na mapě"),
