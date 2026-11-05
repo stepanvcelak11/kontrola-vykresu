@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "vzorek": "vzorek plochy (Pattern Area): uzavřenou plochu vyplní buňkami – značky kultur do sponu",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
         "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, tisk do PDF („arch A3 1000“, „arch smaž“)",
         "pohled": "uložené pohledy (Saved Views): „pohled ulož Náměstí“, „pohled Náměstí“, „pohled“ = seznam",
@@ -482,7 +483,8 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
-        "font": "písmo", "pismo": "písmo", "ft": "písmo", "text attributes": "písmo", "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
+        "pattern": "vzorek", "pattern area": "vzorek", "patt": "vzorek", "vzorkování": "vzorek",
+        "značky plochy": "vzorek", "font": "písmo", "pismo": "písmo", "ft": "písmo", "text attributes": "písmo", "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
         "saved views": "pohled", "sv": "pohled", "pohledy": "pohled", "uloz pohled": "pohled",
         "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
         "vymen bunku": "nahraď buňku", "vyměň buňku": "nahraď buňku",
@@ -3603,6 +3605,36 @@ class CadPage(QWidget):
                               attrs=attrs)
             if self.kresleni.ms_barva is not None and attrs.get("color", 256) != 256:
                 self.kresleni.ms_barvy_prvku[ins.dxf.handle] = self.kresleni.ms_barva
+
+    def n_vzorek(self):
+        """Pattern Area: uzavřený prvek → plocha vyplněná buňkami (značkami kultur) v mřížce, do sponu."""
+        e, _k = yield Pozadavek("prvek", "Vzorek plochy – klikněte na uzavřený prvek (hranici plochy):")
+        plocha = U.plocha_prvku(self.index.geometrie(e) if self.index is not None else None)
+        jmena = U.bloky(self.dok.doc)
+        if not jmena:
+            raise ValueError("Ve výkresu nejsou žádné buňky – nahrajte knihovnu buněk nebo vytvořte blok.")
+        p = self.predvolba
+        vych = getattr(self, "_aktivni_bunka", None) or (p.blok if p is not None and p.blok in jmena else jmena[0])
+        nazev = yield Pozadavek("text", f"Buňka [{vych}]:", vychozi=vych)
+        if nazev not in jmena:
+            raise ValueError(f"Buňka {nazev} ve výkresu není.")
+        rs = self._pravidla()
+        mer = float(rs.meritko) if rs is not None and rs.meritko else 1000.0
+        krok = round(mer * 0.015, 3) or 10.0  # ~15 mm v měřítku mapy
+        dx = yield Pozadavek("cislo", f"Rozestup v řadě [{krok:g}] m:", vychozi=krok)
+        dy = yield Pozadavek("cislo", f"Rozestup řad [{dx:g}] m:", vychozi=dx)
+        uh = yield Pozadavek("cislo", "Natočení řad ve stupních [0]:", vychozi=0.0)
+        mv = (p.meritko_bunky if p is not None and p.meritko_bunky else None) or 1.0
+        m = yield Pozadavek("cislo", f"Měřítko buňky [{mv:g}]:", vychozi=mv)
+        sp = yield Pozadavek("text", "Do sponu (každá druhá řada posunutá) [a]/n:", vychozi="a")
+        od = yield Pozadavek("cislo", f"Odsazení od hranice [{dx / 3:.3g}] m:", vychozi=round(dx / 3, 3))
+        nove = U.vzorek_plochy(self.dok.doc, self.prostor, self.historie_zmen, plocha, nazev, dx, dy, uh, m,
+                               self.kresleni.vrstva, self.kresleni._attr(),
+                               spon=not str(sp or "a").strip().lower().startswith("n"), odsazeni=od or 0.0)
+        if self.kresleni.ms_barva is not None:
+            for ins in nove:
+                self.kresleni.ms_barvy_prvku[ins.dxf.handle] = self.kresleni.ms_barva
+        self.vypis(f"Vzorek plochy: {len(nove)}× {nazev} (výměra plochy {plocha.area:.1f} m²).")
 
     # ------------------------------------------------------------ výřez na listu
     def n_vyrez(self):

@@ -3229,3 +3229,20 @@ def test_cad_pismo_a_zarovnani_textu(window):
     assert t.dxf.style == st and abs(t.dxf.width - 0.8) < 1e-9 and t.dxf.halign == 2
     with __import__("pytest").raises(ValueError):
         U.styl_pisma(c.dok.doc, "Neexistující písmo XYZ")
+
+
+def test_cad_vzorek_plochy(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    blk = c.dok.doc.blocks.new("STROM")
+    blk.add_circle((0, 0), 0.5)
+    for t in ("polylinie", "x=0 y=0", "@50,0", "@0,30", "@-50,0", "k"):
+        c.zadej(t)
+    c.view.zoom_all()
+    c.proved("vzorek")
+    c._klik(25.0, 0.0)
+    for t in ("STROM", "5", "5", "0", "1", "a", "1"):
+        c.zadej(t)
+    ins = [e for e in c.dok.msp if e.dxftype() == "INSERT"]
+    assert len(ins) > 30 and "Vzorek plochy" in c.historie.toPlainText()

@@ -2016,3 +2016,73 @@ def styl_pisma(doc, pismo: str) -> str:
 ZAROVNANI_MS = {"LT": "TOP_LEFT", "LC": "MIDDLE_LEFT", "LB": "BOTTOM_LEFT", "CT": "TOP_CENTER",
                 "CC": "MIDDLE_CENTER", "CB": "BOTTOM_CENTER", "RT": "TOP_RIGHT", "RC": "MIDDLE_RIGHT",
                 "RB": "BOTTOM_RIGHT"}
+
+
+# ------------------------------------------------------------------ vzorek plochy (Pattern Area)
+def body_vzorku(plocha, dx: float, dy: float, natoceni_deg: float = 0.0, spon: bool = True,
+                odsazeni: float = 0.0, max_bodu: int = 20000) -> list[tuple[float, float]]:
+    """Body pravidelné mřížky uvnitř plochy (shapely Polygon) – řady natočené o úhel, „do sponu“ = každá druhá
+    řada posunutá o půl kroku (tak se rozmisťují značky kultur v mapách)."""
+    from shapely import affinity
+    from shapely.geometry import Point
+    if dx <= EPS or dy <= EPS:
+        raise ValueError("Rozestupy značek musí být kladné.")
+    vnitrek = plocha.buffer(-odsazeni) if odsazeni > 0 else plocha
+    if vnitrek.is_empty:
+        raise ValueError("Plocha je pro dané odsazení od hranice příliš malá.")
+    c = plocha.centroid
+    otoc = affinity.rotate(vnitrek, -natoceni_deg, origin=c)
+    x0, y0, x1, y1 = otoc.bounds
+    n = ((x1 - x0) / dx + 2) * ((y1 - y0) / dy + 2)
+    if n > max_bodu * 4:
+        raise ValueError(f"Příliš mnoho značek (asi {int(n)}) – zvětšete rozestupy.")
+    import math as _m
+    out = []
+    ux, uy = _m.cos(_m.radians(natoceni_deg)), _m.sin(_m.radians(natoceni_deg))
+    # mřížka ukotvená v těžišti, aby značky ležely souměrně
+    i0, i1 = int(_m.floor((y0 - c.y) / dy)) - 1, int(_m.ceil((y1 - c.y) / dy)) + 1
+    for i in range(i0, i1 + 1):
+        y = c.y + i * dy
+        posun = dx / 2 if (spon and i % 2) else 0.0
+        j0, j1 = int(_m.floor((x0 - c.x - posun) / dx)) - 1, int(_m.ceil((x1 - c.x - posun) / dx)) + 1
+        for j in range(j0, j1 + 1):
+            x = c.x + posun + j * dx
+            if otoc.contains(Point(x, y)):
+                lx, ly = x - c.x, y - c.y
+                out.append((c.x + lx * ux - ly * uy, c.y + lx * uy + ly * ux))
+                if len(out) > max_bodu:
+                    raise ValueError("Příliš mnoho značek – zvětšete rozestupy.")
+    return out
+
+
+def plocha_prvku(geom):
+    """Shapely plocha z geometrie uzavřeného prvku (polylinie, kružnice…), jinak ValueError."""
+    from shapely.geometry import Polygon
+    from shapely.ops import polygonize
+    if geom is None or geom.is_empty:
+        raise ValueError("Prvek nemá geometrii.")
+    if geom.geom_type in ("Polygon", "MultiPolygon"):
+        return geom
+    if geom.geom_type == "LineString" and geom.is_ring:
+        return Polygon(geom.coords)
+    pol = list(polygonize(geom))
+    if not pol:
+        raise ValueError("Prvek není uzavřený – vyberte uzavřenou polylinii, tvar nebo kružnici.")
+    return max(pol, key=lambda p: p.area)
+
+
+def vzorek_plochy(doc, msp, h: Historie, plocha, nazev: str, dx: float, dy: float, natoceni_deg: float = 0.0,
+                  meritko: float = 1.0, vrstva: str = "0", attrs: dict | None = None, spon: bool = True,
+                  odsazeni: float = 0.0, natocit_znacky: bool = False) -> list:
+    """Vyplní plochu buňkami v mřížce (Pattern Area). Všechny značky = jedno Zpět."""
+    if nazev not in doc.blocks or nazev.startswith("*"):
+        raise ValueError(f"Blok {nazev} ve výkresu není.")
+    body = body_vzorku(plocha, dx, dy, natoceni_deg, spon, odsazeni)
+    if not body:
+        raise ValueError("Do plochy se při těchto rozestupech nevejde žádná značka.")
+    a = {k: v for k, v in (attrs or {}).items() if k in ("color", "lineweight", "true_color")}
+    rot = natoceni_deg if natocit_znacky else 0.0
+    nove = [msp.add_blockref(nazev, b, dxfattribs={**a, "layer": vrstva, "xscale": meritko, "yscale": meritko,
+                                                   "zscale": meritko, "rotation": rot}) for b in body]
+    h.proved("Vzorek plochy", nove)
+    return nove

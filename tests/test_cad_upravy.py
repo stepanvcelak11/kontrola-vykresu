@@ -498,3 +498,32 @@ def test_kolmice_osa_uhlu_a_pohledy():
     assert U.pohledy(doc) == ["Náměstí"] and U.pohled(doc, "náměstí") == pytest.approx((10, 10, 20, 20))
     with pytest.raises(ValueError):
         U.pohled(doc, "není")
+
+
+def test_vzorek_plochy_do_sponu():
+    import ezdxf
+    from shapely.geometry import Polygon
+
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new("R2013")
+    blk = doc.blocks.new("LOUKA")
+    blk.add_line((-0.5, 0), (0.5, 0))
+    msp = doc.modelspace()
+    h = U.Historie(msp)
+    pl = Polygon([(0, 0), (100, 0), (100, 60), (0, 60)])
+    nove = U.vzorek_plochy(doc, msp, h, pl, "LOUKA", 10, 10, spon=True, odsazeni=2)
+    assert all(pl.buffer(-2).contains(__import__("shapely").geometry.Point(e.dxf.insert.x, e.dxf.insert.y))
+               for e in nove)
+    radky = sorted({round(e.dxf.insert.y, 6) for e in nove})
+    assert len(radky) == 5 and abs(radky[1] - radky[0] - 10) < 1e-9
+    xs0 = {round(e.dxf.insert.x % 10, 6) for e in nove if round(e.dxf.insert.y, 6) == radky[0]}
+    xs1 = {round(e.dxf.insert.x % 10, 6) for e in nove if round(e.dxf.insert.y, 6) == radky[1]}
+    assert len(xs0) == 1 and len(xs1) == 1 and abs(abs(xs0.pop() - xs1.pop()) - 5) < 1e-9  # do sponu
+    assert len(h.zpet) == 1
+    h.krok_zpet()
+    assert not list(msp.query("INSERT"))
+    otoc = U.body_vzorku(pl, 10, 10, natoceni_deg=30)
+    assert otoc and all(pl.contains(__import__("shapely").geometry.Point(p)) for p in otoc)
+    import pytest
+    with pytest.raises(ValueError):
+        U.vzorek_plochy(doc, msp, h, pl, "NENI", 10, 10)
