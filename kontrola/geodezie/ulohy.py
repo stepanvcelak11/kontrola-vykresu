@@ -1477,6 +1477,43 @@ def u_polygon_jednostranne_orientovany(s, h):
         nove.append(Bod(c, y, x, poznamka="polygonový pořad jednostranně orientovaný"))
     return Vysledek(prot, nove)
 
+
+def u_trig_oboustranne(s, h):
+    """Oboustranně měřené převýšení A ↔ B: průměr vylučuje zakřivení Země i refrakci; rozdíl tam–zpět je kontrolou."""
+    a = _bod(s, h, "a", "bod A (s výškou)")
+    if a.z is None:
+        raise ChybaVstupu(f"Bod {a.cislo} nemá výšku.")
+    d1, z1 = _cislo(h, "d1", "šikmou délku A→B"), _cislo(h, "z1", "zenit A→B")
+    d2, z2 = _cislo(h, "d2", "šikmou délku B→A"), _cislo(h, "z2", "zenit B→A")
+    vp1 = _cislo(h, "vp1", "výšku přístroje na A") if (h.get("vp1") or "").strip() else 0.0
+    vc1 = _cislo(h, "vc1", "výšku cíle na B") if (h.get("vc1") or "").strip() else 0.0
+    vp2 = _cislo(h, "vp2", "výšku přístroje na B") if (h.get("vp2") or "").strip() else 0.0
+    vc2 = _cislo(h, "vc2", "výšku cíle na A") if (h.get("vc2") or "").strip() else 0.0
+    if min(d1, d2) <= 0:
+        raise ChybaVstupu("Délky musí být kladné.")
+    tam = d1 * math.cos(V.gon2rad(z1)) + vp1 - vc1
+    zpet = d2 * math.cos(V.gon2rad(z2)) + vp2 - vc2
+    dh = (tam - zpet) / 2
+    rozdil = tam + zpet  # bez zakřivení a refrakce by byl 0 – zbývá jejich vliv a chyby měření
+    dv = (d1 * math.sin(V.gon2rad(z1)) + d2 * math.sin(V.gon2rad(z2))) / 2
+    oprava = dv * dv * (1 - 0.13) / (2 * 6380000.0)
+    n = (h.get("nove") or "").strip()
+    prot = _hlavicka("Trigonometrické převýšení oboustranně")
+    prot += [f"A = {a.cislo} (H = {_f(a.z)} m), vodorovná délka {_f(dv)} m",
+             f"  tam  A→B: šikmá {_f(d1)} m, zenit {_f(z1, 4)} gon, vp {_f(vp1)}, vc {_f(vc1)} → Δh {_f(tam, 4)} m",
+             f"  zpět B→A: šikmá {_f(d2)} m, zenit {_f(z2, 4)} gon, vp {_f(vp2)}, vc {_f(vc2)} → Δh {_f(zpet, 4)} m",
+             f"  průměrné převýšení A→B Δh = {_f(dh, 4)} m (zakřivení a refrakce se vyloučí)",
+             f"  součet tam + zpět {_f(rozdil * 1000, 1)} mm (očekávaný vliv zakřivení a refrakce "
+             f"{_f(2 * oprava * 1000, 1)} mm)",
+             f"  H_B = {_f(a.z + dh)} m"]
+    vysky = {}
+    nove = []
+    if n:
+        b = s.najdi(n)
+        if b is not None:
+            vysky[b.cislo] = a.z + dh
+    return Vysledek(prot, nove, vysky)
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -1608,6 +1645,12 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("st", "Stanovisko (s výškou)"), Pole("d", "Šikmá délka [m]", "m"), Pole("z", "Zenitový úhel [gon]", "gon"),
       Pole("vp", "Výška přístroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
       Pole("nove", "Číslo bodu (nepovinné)", "text")], u_trig_vyska),
+    ("Trigonometrická výška oboustranně", "Převýšení měřené tam i zpět – průměr bez vlivu zakřivení a refrakce.",
+     [Pole("a", "Bod A (s výškou)"), Pole("d1", "Šikmá délka A→B [m]", "m"), Pole("z1", "Zenit A→B [gon]", "gon"),
+      Pole("vp1", "Výška přístroje na A [m]", "m"), Pole("vc1", "Výška cíle na B [m]", "m"),
+      Pole("d2", "Šikmá délka B→A [m]", "m"), Pole("z2", "Zenit B→A [gon]", "gon"),
+      Pole("vp2", "Výška přístroje na B [m]", "m"), Pole("vc2", "Výška cíle na A [m]", "m"),
+      Pole("nove", "Bod B ze seznamu (výška se zapíše)", "text")], u_trig_oboustranne),
     ("Redukce délky", "Měřená délka do S-JTSK: na vodorovnou, do nulového horizontu a měřítkem Křovákova "
      "zobrazení v místě; s body A, B porovná se souřadnicovou délkou (jako Redukce délek v Gromě).",
      [Pole("d", "Měřená délka [m]", "m"),

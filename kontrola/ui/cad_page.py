@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "čára pod úhlem": "čára z bodu pod zadaným úhlem k prvku (Construct Line at Active Angle), ° nebo gon",
         "zarovnej": "zarovnat vybrané prvky podle hrany vzorového prvku (Align Elements) – vlevo, vpravo, nahoru…",
         "popis souřadnic": "popis souřadnic Y, X bodu s odkazovou čarou (vytyčovací výkresy)",
         "text po prvku": "text podél čáry (název ulice, vodního toku) natočený po směru čáry, čitelně",
@@ -488,6 +489,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "cara pod uhlem": "čára pod úhlem", "line at angle": "čára pod úhlem", "pod úhlem": "čára pod úhlem",
         "align": "zarovnej", "align elements": "zarovnej", "zarovnat": "zarovnej", "zarovnání prvků": "zarovnej",
         "popis souradnic": "popis souřadnic", "souřadnice bodu": "popis souřadnic", "id coordinates": "popis souřadnic",
         "text along": "text po prvku", "place text along": "text po prvku", "popis čáry": "text po prvku",
@@ -3124,6 +3126,26 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_cara_pod_uhlem(self):
+        """Construct Line at Active Angle: čára z bodu na prvku pod úhlem k němu (úhel v ° nebo „50g“ v gonech)."""
+        e, k = yield Pozadavek("prvek", "Čára pod úhlem – klikněte na prvek (rameno úhlu):")
+        p = yield self._bod_req("Počátek čáry (bod na prvku nebo libovolný):", k)
+        t = yield Pozadavek("text", "Úhel od prvku [90] (stupně, nebo s „g“ v gonech, např. 50g):", vychozi="90")
+        t = str(t or "90").strip().lower().replace(",", ".")
+        try:
+            uhel = float(t[:-1]) * 0.9 if t.endswith("g") else float(t)
+        except ValueError:
+            raise ValueError("Úhel zadejte číslem (např. 45 nebo 50g).") from None
+        sm = U.smer_prvku(e, p)
+        r = math.radians(sm + uhel)
+        d = yield self._bod_req("Délka [m] nebo klikněte konec:", p, slova=(),
+                                nahled=lambda x, y: [_linie([p, (p[0] + math.cos(r) * math.hypot(x - p[0], y - p[1]),
+                                                                p[1] + math.sin(r) * math.hypot(x - p[0], y - p[1]))])])
+        delka = math.hypot(d[0] - p[0], d[1] - p[1])
+        q = (p[0] + math.cos(r) * delka, p[1] + math.sin(r) * delka)
+        self.kresleni.usecka(p, q)
+        self.vypis(f"Čára pod úhlem {uhel:g}° ({uhel / 0.9:.4f} gon), délka {delka:.3f} m.")
 
     def n_zarovnej(self):
         """Align Elements by Edge: vybrané prvky zarovná podle hrany vzorového prvku."""

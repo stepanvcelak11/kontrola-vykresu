@@ -2190,3 +2190,17 @@ def zarovnej(msp, h: Historie, ents, vzor, hrana: str) -> list:
     if nove:
         h.proved("Zarovnání", nove, stare)
     return nove
+
+
+def smer_prvku(e, bod) -> float:
+    """Směr tečny prvku [°] v bodě nejbližším zadanému (úsečka, polylinie, oblouk, kružnice)."""
+    import math as _m
+
+    from shapely.geometry import Point
+    g = geometrie(e)
+    if g is None or g.geom_type not in ("LineString", "LinearRing"):
+        raise ValueError("Klikněte na úsečku, polylinii, oblouk nebo kružnici.")
+    t = g.project(Point(_xy(bod)))
+    L = g.length
+    a, b = g.interpolate(max(0.0, t - 1e-3 * max(L, 1))), g.interpolate(min(L, t + 1e-3 * max(L, 1)))
+    return _m.degrees(_m.atan2(b.y - a.y, b.x - a.x))

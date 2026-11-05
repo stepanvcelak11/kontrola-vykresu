@@ -3316,3 +3316,20 @@ def test_cad_arch_natoceny(window, tmp_path):
     assert (tmp_path / "otoceny.pdf").stat().st_size > 500
     c.proved("arch otoč 0")
     assert abs(T.nacti_arch(c.dok.doc).natoceni) < 1e-9
+
+
+def test_cad_cara_pod_uhlem(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    c.view.zoom_all()
+    c.proved("čára pod úhlem")
+    c._klik(5.0, 0.0)
+    for t in ("x=5 y=0", "50g", "x=5 y=4"):
+        c.zadej(t)
+    car = [e for e in c.dok.msp if e.dxftype() == "LINE"][-1]
+    import math
+    assert abs(math.degrees(math.atan2(car.dxf.end.y - car.dxf.start.y, car.dxf.end.x - car.dxf.start.x)) - 45) < 1e-6
+    assert abs(math.dist((car.dxf.end.x, car.dxf.end.y), (5, 0)) - 4) < 1e-9

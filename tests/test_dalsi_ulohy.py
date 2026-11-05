@@ -610,3 +610,18 @@ def test_polygon_jednostranne_orientovany():
     ey = sum(0.01 * (P[i + 1].y - P[i].y) / V.delka(P[i], P[i + 1]) for i in range(1, 4))
     ex = sum(0.01 * (P[i + 1].x - P[i].x) / V.delka(P[i], P[i + 1]) for i in range(1, 4))
     assert f"polohová {math.hypot(ey, ex):.3f}" in "\n".join(r.protokol)
+
+
+def test_trig_oboustranne_vylouci_zakriveni():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_trig_oboustranne
+    s = SeznamBodu()
+    s.body[:] = [Bod("A", 0.0, 0.0, 300.0), Bod("B", 0.0, 800.0)]
+    dv, dh_true, k = 800.0, 12.345, 0.87 / (2 * 6380000.0)
+    # tam: změřené převýšení obsahuje −vliv zakřivení a refrakce (přístroj vidí cíl níž), zpět stejně
+    tam_m = dh_true - dv * dv * k
+    zpet_m = -dh_true - dv * dv * k
+    z1, z2 = V.rad2gon(math.atan2(dv, tam_m)), V.rad2gon(math.atan2(dv, zpet_m))
+    r = u_trig_oboustranne(s, {"a": "A", "d1": f"{math.hypot(dv, tam_m):.6f}", "z1": f"{z1:.8f}",
+                               "d2": f"{math.hypot(dv, zpet_m):.6f}", "z2": f"{z2:.8f}", "nove": "B"})
+    assert abs(r.vysky["B"] - (300 + dh_true)) < 1e-4
