@@ -326,6 +326,7 @@ def u_volne(s, h):
         for c, vy, vx in vs.opravy:
             prot.append(f"  {c:<18} {vy:>9.3f} {vx:>9.3f} {math.hypot(vy, vx):>9.3f}")
         vs_st = vs.stanovisko
+        prot += _orientace_volneho(n, vs_st, mer)
     z_st = None
     vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
     s_vyskou = [(b, d_, z, vc) for b, d_, z, vc in trig if b.z is not None]
@@ -341,6 +342,27 @@ def u_volne(s, h):
         rozp = max(hs) - min(hs)
         prot.append(f"  průměr H = {_f(z_st)} m, rozpětí {rozp * 1000:.0f} mm")
     return Vysledek(prot, [Bod(n, vs_st.y, vs_st.x, z_st, poznamka="volné stanovisko")])
+
+
+def _orientace_volneho(n: str, st, mer: list) -> list[str]:
+    """Orientace osnovy na vypočteném volném stanovisku jako v Gromě: posun = prostý průměr
+    (směrník − směr), opravy směrů a délek (ze souřadnic − měřená)."""
+    rows = []
+    for c, b, hz, d in mer:
+        sm = V.smernik(st, b)
+        rows.append((c, hz, sm, d, math.hypot(b.y - st.y, b.x - st.x) - d))
+    ref = (rows[0][2] - rows[0][1]) % 400
+    posun = (ref + sum(((sm - hz - ref + 200) % 400) - 200 for _c, hz, sm, _d, _v in rows) / len(rows)) % 400
+    vv = [((sm - hz - posun + 200) % 400) - 200 for _c, hz, sm, _d, _v in rows]
+    # V or. jako v Gromě: (směrník − směr) − posun
+    out = ["", f"Orientace osnovy na bodě {n}", "",
+           f"  {'bod':<18} {'Hz':>9} {'Směrník':>9} {'V or.':>8} {'Délka':>9} {'V délky':>8}"]
+    for (c, hz, sm, d, vd), v in zip(rows, vv):
+        out.append(f"  {c:<18} {hz:>9.4f} {sm:>9.4f} {v:>8.4f} {d:>9.3f} {vd:>8.3f}")
+    out.append(f"Orientační posun [g]: {posun:.4f} (směrník nulového směru, prostý průměr jako v Gromě)")
+    if len(vv) > 1:
+        out.append(f"m0 = SQRT([vv]/(n-1)) [g]: {math.sqrt(sum(v * v for v in vv) / (len(vv) - 1)):.4f}")
+    return out
 
 
 def _volne_mnc(n: str, mer: list, jen_smery: list) -> tuple[tuple[float, float], float, list[str]]:

@@ -329,3 +329,36 @@ def test_polygon_jako_protokol_gromy():
     for n in v.nove:
         gy, gx = groma[n.cislo]
         assert abs(n.y - gy) <= 0.0011 and abs(n.x - gx) <= 0.0011, n.cislo
+
+
+@pytest.mark.parametrize("druh,meritko,st,opravy,posun", [
+    ("shodnostní", "pevné (1)", (656888.509, 1128700.478),
+     {"932030220": (0.050, 0.006), "932032070": (0.048, -0.007), "932032300": (-0.042, -0.090),
+      "932032080": (-0.056, 0.091)}, 67.6702),
+    ("podobnostní", "volné", (656888.499, 1128700.468),
+     {"932030220": (0.020, 0.008), "932032070": (0.076, 0.000), "932032300": (-0.055, -0.015),
+      "932032080": (-0.042, 0.006)}, 67.6696),
+])
+def test_transformace_a_volne_stanovisko_jako_groma(druh, meritko, st, opravy, posun):
+    """Školní cvičení 07 (přílohy 4–7, protokoly Gromy): transformace z místní soustavy a volné stanovisko."""
+    from kontrola.geodezie import ulohy as U
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    f = {n: fn for n, _p, _pole, fn in U.ULOHY}
+    sjtsk = {"932032070": (657070.21, 1128676.93), "932032300": (656656.57, 1129352.27),
+             "932030220": (656493.10, 1128621.08), "932032080": (656934.11, 1127751.66)}
+    mist = {"4009": (5000.000, 10000.000), "932030220": (5000.000, 10403.352), "932032070": (4941.160, 9826.536),
+            "932032300": (5684.777, 10099.030), "932032080": (4060.672, 10142.039)}
+    s = SeznamBodu()
+    s.pridej([Bod(c, *v) for c, v in mist.items()])
+    v = f["Transformace"](s, {"druh": druh, "identicke": "\n".join(f"{c} {y} {x}" for c, (y, x) in sjtsk.items()),
+                              "transformovat": "4009", "jung": "ne", "predpona": ""})
+    assert (round(v.nove[0].y, 3), round(v.nove[0].x, 3)) == st
+    for c, (vy, vx) in opravy.items():
+        r = next(x for x in v.protokol if x.strip().startswith(c)).split()
+        assert abs(float(r[1]) - vy) <= 0.0011 and abs(float(r[2]) - vx) <= 0.0011, c
+    s = SeznamBodu()
+    s.pridej([Bod(c, *v) for c, v in sjtsk.items()])
+    m = "932032070 40.5334 183.172\n932032300 310.5709 691.901\n932030220 219.7141 403.352\n932032080 129.2683 950.006"
+    v = f["Volné stanovisko"](s, {"mereni": m, "meritko": meritko, "metoda": "transformace", "vp": "", "nove": "4009"})
+    assert (round(v.nove[0].y, 3), round(v.nove[0].x, 3)) == st
+    assert f"Orientační posun [g]: {posun:.4f}" in "\n".join(v.protokol)
