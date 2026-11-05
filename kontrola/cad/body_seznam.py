@@ -99,6 +99,11 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                         nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
                 else:
                     nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
+            else:  # bez zadání: bod v aktivní hladině
+                nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
+            if nast.cislo is None and nast.znacka is None and pk is None:  # bez zadání: číslo bodu vedle
+                vys = nast.vyska_textu or 1.0
+                nove.append(k.text((x + 0.6 * vys, y + 0.3 * vys), str(b.cislo), vys))
             for pv_txt, text, posun in ((nast.cislo, b.cislo, (0.6, 0.3)),
                                          (nast.vyska, None if b.z is None else f"{b.z:.{nast.des_vysky}f}",
                                           (0.6, -1.4)),

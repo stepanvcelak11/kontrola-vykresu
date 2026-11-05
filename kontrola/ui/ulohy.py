@@ -62,10 +62,13 @@ class UlohyPanel(QWidget):
         self.b_copy = QPushButton("Kopírovat protokol")
         self.b_pdf = QPushButton("Protokol PDF…")
         self.b_pdf.setToolTip("Výpočetní protokol (tento výpočet, nebo všechny výpočty projektu) do PDF")
+        self.b_cad = QPushButton("Do výkresu (CAD)")
+        self.b_cad.setToolTip("Vypočtené body rovnou do výkresu v CAD (značka nebo buňka, číslo a výška podle zadání)")
+        self.b_cad.setEnabled(False)
         self.b_nast = QPushButton("Nastavení výpočtů…")
         self.b_nast.setToolTip("Účel měření (katastr / polohopis), přístroj, korekce délek (měřítko, výška), "
                                "mezní odchylky – jako Nastavení v Gromě")
-        for b in (self.b_calc, self.b_add, self.b_copy, self.b_pdf, self.b_nast):
+        for b in (self.b_calc, self.b_add, self.b_cad, self.b_copy, self.b_pdf, self.b_nast):
             row.addWidget(b)
         row.addStretch(1)
         rl.addLayout(row)
@@ -87,10 +90,22 @@ class UlohyPanel(QWidget):
         self.b_copy.clicked.connect(self._copy)
         self.b_pdf.clicked.connect(lambda: self.protokol_pdf())
         self.b_nast.clicked.connect(lambda: self.nastaveni_vypoctu())
+        self.b_cad.clicked.connect(lambda: self.do_cad())
         from .nastaveni_vypoctu import nacti
         nacti()
         self.lst.setCurrentRow(0)
 
+
+    def do_cad(self) -> dict | None:
+        """Nové body výpočtu do výkresu v CAD (jako body z terénu – bez spojování linií)."""
+        win = getattr(self.page, "win", None)
+        cad = getattr(win, "cad", None) if win is not None else None
+        if cad is None or not self.vysledek or not self.vysledek.nove:
+            return None
+        v = cad.body_z_terenu(list(self.vysledek.nove), linie=False)
+        self.chyba.setText(f"<span style='color:#16A34A'>✓ Do výkresu v CAD vloženo {v.get('body', 0)} bodů "
+                           "(už vložené se nevkládají znovu).</span>")
+        return v
 
     def nastaveni_vypoctu(self, modal: bool = True):
         from .nastaveni_vypoctu import NastaveniVypoctuDialog
@@ -168,6 +183,7 @@ class UlohyPanel(QWidget):
             self.inputs[p.key] = w
         self.vysledek = None
         self.b_add.setEnabled(False)
+        self.b_cad.setEnabled(False)
         self.chyba.clear()
 
     def hodnoty(self) -> dict:
@@ -200,6 +216,7 @@ class UlohyPanel(QWidget):
             self.chyba.setText(f"<span style='color:#DC2626'>⚠ {escape(str(e))}</span>")
             self.vysledek = None
             self.b_add.setEnabled(False)
+            self.b_cad.setEnabled(False)
             return None
         except Exception as e:  # noqa: BLE001 – výpočet nesmí shodit aplikaci
             self.chyba.setText(f"<span style='color:#DC2626'>⚠ Výpočet se nepovedl: {escape(str(e))}</span>")
@@ -208,6 +225,7 @@ class UlohyPanel(QWidget):
         self.chyba.clear()
         self.vystup.setPlainText("\n".join(self.vysledek.protokol))
         self.b_add.setEnabled(bool(self.vysledek.nove or self.vysledek.vysky))
+        self.b_cad.setEnabled(bool(self.vysledek.nove))
         self.page.protokol_append(self.vysledek.protokol)
         return self.vysledek
 

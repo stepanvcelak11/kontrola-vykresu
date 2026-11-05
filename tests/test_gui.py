@@ -3430,3 +3430,18 @@ def test_cad_orez_ohradou(window):
     assert len(pl) == 1 and not [e for e in c.dok.msp if e.dxftype() == "LINE"]
     c.undo()
     assert [e for e in c.dok.msp if e.dxftype() == "LINE"]
+
+
+def test_ulohy_body_do_cad(window):
+    from kontrola.geodezie.body import Bod
+    v = window.vypocty
+    v.seznam.body[:] = [Bod("1", 1000.0, 2000.0), Bod("2", 1100.0, 2000.0)]
+    u = v.ulohy
+    i = [n for n, *_ in __import__("kontrola.geodezie.ulohy", fromlist=["ULOHY"]).ULOHY].index("Rajón (polární bod)")
+    u.lst.setCurrentRow(i)
+    u.nastav(st="1", o="2", so="0", sm="100", d="50", nove="7")
+    u.vypocitej()
+    assert u.b_cad.isEnabled()
+    r = u.do_cad()
+    assert r["body"] == 1 and window.cad.dok is not None
+    assert "7" in {t.dxf.text for t in window.cad.dok.msp.query("TEXT")} and window.cad.dok.msp.query("POINT")
