@@ -319,13 +319,13 @@ class VypoctyPage(QWidget):
         self.spojnice = Spojnice()
         self._path: Path | None = None
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 12, 16, 12)
-        head = QLabel("<span style='font-size:16pt;font-weight:800'>Výpočty</span>"
-                      "&nbsp;&nbsp;<span style='color:gray'>seznam souřadnic projektu</span>")
-        lay.addWidget(head)
-        from PySide6.QtWidgets import QTabWidget
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        # rozvržení jako Groma 14: menu, lišta nastavení, datová okna, stavový řádek
+        from .groma_okna import DatovaOkna, ListaNastaveni, OknoProtokolu, postav_menu
+        self.lista = ListaNastaveni()
+        self.tabs = DatovaOkna()
+        lay.addWidget(self.lista)
         lay.addWidget(self.tabs, 1)
         seznam_w = QWidget()
         outer = lay
@@ -362,6 +362,9 @@ class VypoctyPage(QWidget):
             bar.addWidget(b)
         bar.addStretch(1)
         lay.addLayout(bar)
+        for b in (self.b_import, self.b_export, self.b_porovnat, self.b_qtrig, self.b_bulk, self.b_dup,
+                  self.b_polar, self.b_kody, self.b_kodovnik):
+            b.hide()  # jsou v menu (Soubor, Souřadnice, Měření) jako v Gromě
         frow = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText("Hledat číslo, kód, poznámku…")
@@ -395,6 +398,7 @@ class VypoctyPage(QWidget):
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+        self.seznam_okno = seznam_w
         self.tabs.addTab(seznam_w, "Seznam souřadnic")
         from .grafika_bodu import GrafikaBodu
         self.grafika = GrafikaBodu(self)
@@ -402,10 +406,26 @@ class VypoctyPage(QWidget):
         self.grafika.vybrano.connect(self._vyber_z_grafiky)
         from .zapisnik_page import ZapisnikPanel
         self.zapisnik = ZapisnikPanel(self)
-        self.tabs.addTab(self.zapisnik, "Zápisník")
+        self.tabs.addTab(self.zapisnik, "Seznam měření (zápisník)", viditelne=False)
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)
-        self.tabs.addTab(self.ulohy, "Úlohy")
+        self.tabs.addTab(self.ulohy, "Výpočetní okno", viditelne=False)
+        self.protokol = OknoProtokolu()
+        self.tabs.addTab(self.protokol, "Protokol", viditelne=False)
+        self.menu = postav_menu(self)
+        outer.insertWidget(0, self.menu)
+        # stavový řádek: aktivní seznam, počet položek, počet označených
+        stav = QHBoxLayout()
+        stav.setContentsMargins(6, 2, 6, 2)
+        self.stav_seznam = QLabel("Aktivní seznam: seznam_bodu")
+        self.stav_pocet = QLabel()
+        self.stav_oznaceno = QLabel()
+        for w in (self.stav_seznam, self.stav_pocet, self.stav_oznaceno):
+            w.setStyleSheet("color: gray; padding: 0 8px;")
+            stav.addWidget(w)
+        stav.addStretch(1)
+        outer.addLayout(stav)
+        self.lista.hledej.connect(self._najdi_bod)
         self.tabs.currentChanged.connect(lambda i: self.ulohy._completer_model.setStringList(
             [b.cislo for b in self.seznam.body]))
         lay = outer
@@ -437,6 +457,7 @@ class VypoctyPage(QWidget):
         QShortcut(QKeySequence.Delete, self.table, activated=self.delete_selected)
         self.table.selectionModel().selectionChanged.connect(
             lambda *_a: self.grafika.oznac([b.cislo for b in self.selected()]))
+        self.table.selectionModel().selectionChanged.connect(lambda *_a: self._stav())
         self.des.setValue(2)
         self._refresh()
 
@@ -454,6 +475,8 @@ class VypoctyPage(QWidget):
         self.model.seznam = self.seznam
         from ..geodezie.spojnice import Spojnice
         self.spojnice = Spojnice.nacti(self._path.with_name("spojnice.json")) if self._path else Spojnice()
+        self.protokol.nacti(self._path.with_name("protokol.txt") if self._path else None)
+        self.stav_seznam.setText(f"Aktivní seznam: {self._path.name if self._path else '–'}")
         self._refresh()
 
     def uloz_spojnice(self) -> None:
@@ -473,6 +496,7 @@ class VypoctyPage(QWidget):
             self._path.parent.mkdir(parents=True, exist_ok=True)
             with open(self._path.with_name("protokol.txt"), "a", encoding="utf-8") as fh:
                 fh.write("\n".join(radky) + "\n\n")
+            self.protokol.nacti(self._path.with_name("protokol.txt"))
         except OSError as e:
             self.message(f"Protokol nejde zapsat: {e}", True)
 
@@ -527,6 +551,28 @@ class VypoctyPage(QWidget):
         self.proxy.invalidate()
         n, m = self.proxy.rowCount(), len(self.seznam)
         self.count.setText(f"{m} bodů" if n == m else f"{n} z {m} bodů")
+        self._stav()
+
+    def _stav(self):
+        if hasattr(self, "stav_pocet"):
+            self.stav_pocet.setText(f"Položek: {len(self.seznam)}")
+            self.stav_oznaceno.setText(f"Označeno: {len(self.table.selectionModel().selectedRows())}")
+        if hasattr(self, "a_zpet"):
+            self.a_zpet.setEnabled(self.seznam.lze_zpet())
+            self.a_vpred.setEnabled(self.seznam.lze_znovu())
+
+    def _najdi_bod(self, cislo: str):
+        """Lišta nastavení → Najít bod: vybere první bod, jehož číslo začíná zadaným textem."""
+        cislo = cislo.strip()
+        if not cislo:
+            return
+        for r in range(self.proxy.rowCount()):
+            i = self.proxy.index(r, 0)
+            if str(self.proxy.data(i)).startswith(cislo):
+                self.tabs.otevri(self.seznam_okno)
+                self.table.selectRow(r)
+                self.table.scrollTo(i)
+                return
 
     def _decimals(self, d: int):
         self.model.des_xy = self.model.des_z = d

@@ -3445,3 +3445,26 @@ def test_ulohy_body_do_cad(window):
     r = u.do_cad()
     assert r["body"] == 1 and window.cad.dok is not None
     assert "7" in {t.dxf.text for t in window.cad.dok.msp.query("TEXT")} and window.cad.dok.msp.query("POINT")
+
+
+def test_vypocty_rozvrzeni_jako_groma(window):
+    """Výpočty jako Groma 14: menu Výpočty otevře výpočetní okno s úlohou, Najít bod vybere bod."""
+    from kontrola.geodezie.body import Bod
+    v = window.vypocty
+    titulky = [a.text().replace("&", "") for a in v.menu.actions()]
+    assert titulky[:6] == ["Soubor", "Editace", "Souřadnice", "Měření", "Výpočty", "Okno"]
+    v.seznam.body[:] = [Bod("1", 1000.0, 2000.0), Bod("25", 1100.0, 2000.0)]
+    v._refresh()
+    polar = next(a for a in v.menu_vypocty.actions() if a.text().startswith("Polární metoda"))
+    polar.trigger()
+    assert v.tabs.currentWidget() is v.ulohy and not v.tabs.okno(v.ulohy).isHidden()
+    assert v.ulohy.lst.currentItem().text() == "Rajón (polární bod)"
+    v.lista.najit.setText("25")
+    assert [b.cislo for b in v.selected()] == ["25"]
+    v.lista.kod_kvality.setCurrentIndex(v.lista.kod_kvality.findData(5))
+    from kontrola.geodezie import nastaveni as N
+    assert N.aktualni().kod_kvality == 5
+    v.tabs.okno(v.ulohy).close()  # křížek okno jen schová
+    assert not not v.tabs.okno(v.ulohy).isHidden()
+    v.tabs.setCurrentWidget(v.zapisnik)
+    assert not v.tabs.okno(v.zapisnik).isHidden()
