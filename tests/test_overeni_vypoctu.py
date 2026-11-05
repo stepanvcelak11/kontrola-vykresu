@@ -240,6 +240,9 @@ def test_polarni_metoda_shoda_se_seznamem_gromy():
         if b.kontrolni or g is None:
             continue
         n += 1
+        if b.bod == "10":  # určen dvakrát – Groma ho má uložit jako průměr (známá chyba v seznamu studenta)
+            assert (round(b.y, 3), round(b.x, 3), round(b.z, 3)) == (595977.264, 1158238.567, 258.571)
+            continue
         assert abs(b.y - abs(g.a)) <= 0.0006 and abs(b.x - abs(g.b)) <= 0.0006, b.bod
         assert b.z is None or g.z is None or abs(b.z - g.z) <= 0.0015, b.bod
     assert n >= 110
@@ -283,3 +286,24 @@ def test_ulohy_nespadnou_na_spatnych_datech():
             except Exception as e:  # noqa: BLE001
                 pady.append(f"{nazev}: {type(e).__name__}: {e} ← {h}")
     assert not pady, "\n".join(pady[:10])
+
+
+def test_rajon_01_jako_protokol_gromy():
+    """Úloha 01 (rajón) proti protokolu Gromy: souřadnice podrobných bodů, orientační posun a bod 2 určený
+    ze dvou stanovisek uložený jako průměr 591359.459 1062164.863."""
+    from kontrola.checks.seznam import read_point_list
+    from kontrola.geodezie.protokol import protokol_polarni
+    from kontrola.vypocet import compute, read_zap
+    d = Path(__file__).resolve().parents[1] / "podklady" / "groma-01-rajon"
+    st, dane = read_zap(d / "01_zap.zap"), read_point_list(d / "01_SezSour.txt")
+    r = compute(st, dane, koeficient=0.9999021514)
+    assert round(r.posuny["4001"], 4) == 128.9942 and round(r.posuny["4003"], 4) == 243.0302
+    groma = {"1": (591366.171, 1062161.511), "3": (591354.073, 1062154.110), "4": (591360.804, 1062150.756),
+             "2": (591359.459, 1062164.863)}
+    for b in r.body:
+        if not b.kontrolni:
+            assert (round(b.y, 3), round(b.x, 3)) == groma[b.bod], b.bod
+    t = protokol_polarni(r, st, dane)
+    assert "Kontrolní určení bodu číslo 2" in t and "Polohová odchylka: 0.055, Stř. souř. chyba: 0.039" in t
+    dy, dx = map(float, next(x for x in t.splitlines() if x.startswith("Rozdíl ")).split()[1:3])
+    assert abs(dy - -0.053) <= 0.0011 and abs(dx - 0.013) <= 0.0011  # Groma: −0.053 0.013 (zaokrouhlení na mm)

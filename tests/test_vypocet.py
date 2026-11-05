@@ -38,6 +38,14 @@ def test_husovice_jako_groma(tmp_path):
     res = compute(stations, known)
     student = read_point_list(P / "Husovice_Včelák_seznam.txt")
     bad, rows = compare(res, student, known=known)
+    # jediný rozdíl: bod 10 je určen dvakrát, Groma (0014.pro) ho ukládá jako průměr, student má první určení
+    assert [b.bod for b in bad] == ["10"] and "Groma ukládá průměr" in bad[0].poznamka
+    bez10 = [p for p in student if not p.cislo.endswith("0010")]
+    bad, _ = compare(res, bez10, known=known)
+    assert [b.bod for b in bad] == ["10"] and "chybí" in bad[0].poznamka
+    student = [ListPoint(p.cislo, 595977.264, 1158238.567, 258.571) if p.cislo.endswith("0010") else p
+               for p in student]
+    bad, rows = compare(res, student, known=known)
     assert bad == []
     assert max(r.dxy for r in rows if r.dxy is not None) < 0.002
     # chyba ve výpočtu (přehozená číslice) se najde
@@ -75,7 +83,8 @@ def test_diagnoza_typickych_chyb():
     d = diagnose(r, compare(r, p, known=known)[1])
     assert any("prohozená" in x for x in d)
     # správný seznam → žádná diagnóza
-    assert diagnose(r, compare(r, read_point_list(Z / "Husovice_Včelák_seznam.txt"), known=known)[1]) == []
+    d = diagnose(r, compare(r, read_point_list(Z / "Husovice_Včelák_seznam.txt"), known=known)[1])
+    assert len(d) == 1 and d[0].startswith("Bod 10: uloženo jen první určení")
 
 
 @pytest.mark.skipif(not (P / "zap_husovice.zap").exists(), reason="podklady nejsou k dispozici")

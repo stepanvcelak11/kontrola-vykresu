@@ -82,6 +82,13 @@ class Result:
     posuny: dict[str, float] = field(default_factory=dict)  # orientační posun na stanovisku [g]
     protokol: list[dict] = field(default_factory=list)  # mezivýsledky po stanoviscích (pro výpočetní protokol)
     obousmerne: list[dict] = field(default_factory=list)  # délky a převýšení měřené tam i zpět
+    prumery: list[dict] = field(default_factory=list)  # body určené dvakrát a uložené jako průměr (jako Groma)
+
+
+# Groma (Nastavení → Výpočty, školní Groma.ini PntAverage_maxVXY / maxVZ): bod se stejným číslem se uloží
+# jako průměr, pokud se obě určení neliší víc než o tuto mez [m]
+PRUMER_MAX_VXY = 0.350
+PRUMER_MAX_VZ = 0.350
 
 
 def _merge_faces(obs: list[Obs]) -> list[Obs]:
@@ -296,7 +303,8 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
                 ob = next((v for k, v in prumer_d.items() if k[0] == st.bod
                            and short_numbers(k[1]) & short_numbers(o.bod)), None)
                 if ob is not None:
-                    dm = ob  # obousměrně měřená délka – průměr tam a zpět
+                    dm = ob  # obousměrně měřená délka – průměr tam a zpět (Groma po „Zpracování obousměrně
+                    # měřených délek“, protokol 0014.pro z Husovic)
                 dd = dm - w
                 orow["v_delky"] = -dd  # ze souřadnic − měřená
                 orow["delka_mer"] = dm
@@ -366,6 +374,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             seen.add(o.bod)
     # druhé (kontrolní) určení bodu z jiného stanoviska
     first: dict[frozenset, Point] = {}
+    prumery: list[dict] = []
     for b in body:
         key = frozenset(short_numbers(b.bod))
         prev = next((p for k, p in first.items() if k & key), None)
@@ -374,11 +383,21 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             continue
         dxy = math.hypot(b.y - prev.y, b.x - prev.x)
         dz = (b.z - prev.z) if (b.z is not None and prev.z is not None) else None
+        ok = dxy <= PRUMER_MAX_VXY and (dz is None or abs(dz) <= PRUMER_MAX_VZ)
+        zaznam = {"bod": b.bod, "stary": (prev.y, prev.x, prev.z), "novy": (b.y, b.x, b.z),
+                  "stanovisko": b.stanovisko, "dxy": dxy, "dz": dz, "prumer": ok}
+        if ok:  # jako Groma: uloží se průměr obou určení
+            prev.y, prev.x = (prev.y + b.y) / 2, (prev.x + b.x) / 2
+            if dz is not None:
+                prev.z = (prev.z + b.z) / 2
+        zaznam["ulozeny"] = (prev.y, prev.x, prev.z)
+        prumery.append(zaznam)
         kontroly.append(Kontrola("Kontrolní určení", f"{prev.stanovisko} / {b.stanovisko}", b.bod,
                                  f"{dxy * 1000:.0f} mm" + (f", výška {dz * 1000:+.0f} mm" if dz is not None else ""),
-                                 dxy <= 0.05 and (dz is None or abs(dz) <= 0.05),
-                                 "rozdíl dvou nezávislých určení téhož bodu z různých stanovisek"))
-    return Result(body, st_pts, m, msgs, kontroly, posuny, protokol, obousmerne)
+                                 ok, "rozdíl dvou určení téhož bodu z různých stanovisek; "
+                                 + (f"uložen průměr (do {PRUMER_MAX_VXY:.2f} m jako v Gromě)" if ok else
+                                    f"víc než {PRUMER_MAX_VXY:.2f} m – průměr se neukládá, zkontrolujte číslo bodu")))
+    return Result(body, st_pts, m, msgs, kontroly, posuny, protokol, obousmerne, prumery)
 
 
 @dataclass
@@ -422,6 +441,13 @@ def compare(res: Result, student: list[ListPoint], tol_xy: float = 0.01, tol_z: 
             bad.append(f"poloha o {math.hypot(dy, dx):.3f} m")
         if dz is not None and abs(dz) > tol_z:
             bad.append(f"výška o {dz:+.3f} m")
+        q = next((q for q in res.prumery if q["prumer"] and short_numbers(q["bod"]) & short_numbers(b.bod)), None)
+        if bad and q is not None:
+            for t, nazev in ((q["stary"], "první"), (q["novy"], "druhé")):
+                if math.hypot(abs(sp.a) - t[0], abs(sp.b) - t[1]) <= 0.0015:  # opsáno na mm
+                    bad = [f"uloženo jen {nazev} určení – bod je určen dvakrát a Groma ukládá průměr "
+                           f"({b.y:.3f} {b.x:.3f}" + (f" {b.z:.3f}" if b.z is not None else "") + ")"]
+                    break
         rows.append(Rozdil(b.bod, b.stanovisko, dy, dx, dz, ", ".join(bad) or "v pořádku", b, sp))
     for p in student:
         if p.cislo not in used and not any(_find({p.cislo: p}, s.bod) for s in res.stanoviska.values()) \
@@ -471,6 +497,9 @@ def diagnose(res: Result, rows: list[Rozdil], tol_xy: float = 0.01, tol_z: float
     out: list[str] = []
     by_st: dict[str, list[Rozdil]] = {}
     for r in rows:
+        if r.poznamka.startswith("uloženo jen"):  # příčina už je známá (chybí průměr dvou určení)
+            out.append(f"Bod {r.bod}: {r.poznamka}.")
+            continue
         if r.vypocet is not None and r.student is not None:
             by_st.setdefault(r.stanovisko, []).append(r)
     for st, rs in by_st.items():

@@ -182,6 +182,30 @@ def oddil_polarni(res: Result, kody_kvality: dict[str, int] | None = None) -> li
             r.append(f"{d['bod']:<17} {d['hz']:>9.4f} {d['z_uhel']:>9.4f} {d['dh']:>8.3f} {d['vc']:>7.3f} "
                      f"{d['delka']:>9.3f} {d['y']:>12.3f} {d['x']:>13.3f} {_c(d['z'], 3, 9)}"
                      + ("  kontrolní určení" if d["kontrolni"] else ""))
+        for q in getattr(res, "prumery", []):
+            if q["stanovisko"] == s["stanovisko"]:
+                r += oddil_kontrolni_urceni(q)
+    return r
+
+
+def oddil_kontrolni_urceni(q: dict) -> list[str]:
+    """Blok „Kontrolní určení bodu“ jako v Gromě: starý, nový, rozdíl a uložený (průměr)."""
+    # rozdíl z vypsaných (zaokrouhlených) hodnot – jako v Gromě, aby protokol „seděl“ při ruční kontrole
+    (y1, x1, z1), (y2, x2, z2), (yu, xu, zu) = (
+        tuple(None if v is None else round(v, 3) for v in t) for t in (q["stary"], q["novy"], q["ulozeny"]))
+    hz = z1 is not None and z2 is not None
+    zh = lambda v: f" {v:>9.3f}" if hz and v is not None else ""  # noqa: E731
+    r = ["", *_pod(f"Kontrolní určení bodu číslo {q['bod']}"),
+         f"{'Bod':<10} {'Y':>12} {'X':>12}" + (f" {'Z':>9}" if hz else ""), "-" * 61,
+         f"{'Starý':<10} {y1:>12.3f} {x1:>12.3f}{zh(z1)}",
+         f"{'Nový':<10} {y2:>12.3f} {x2:>12.3f}{zh(z2)}",
+         f"{'Rozdíl':<10} {y1 - y2:>12.3f} {x1 - x2:>12.3f}{zh((z1 - z2) if hz else None)}"
+         f"   Polohová odchylka: {q['dxy']:.3f}, Stř. souř. chyba: {q['dxy'] / 2 ** 0.5:.3f}",
+         "-" * 61]
+    if q["prumer"]:
+        r += [f"{'Uložený':<10} {yu:>12.3f} {xu:>12.3f}{zh(zu)}", f"{'':<10} {'(Průměr)':>12} {'(Průměr)':>12}"]
+    else:
+        r += ["Rozdíl je větší než mez pro průměrování – ponechán původní bod."]
     return r
 
 
