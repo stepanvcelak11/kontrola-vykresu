@@ -1166,6 +1166,79 @@ def _rada_cisel(zac: str, n: int) -> list[str]:
     pre, num = m.group(1), m.group(2)
     return [f"{pre}{int(num) + i:0{len(num)}d}" for i in range(n)]
 
+
+def u_polygon_vetknuty(s, h):
+    """Vetknutý pořad: připojený na A a B, ale bez orientací – tvar z měření, poloha a natočení z A a B
+    (podobnostní transformace); kontrolou je jen délka (měřítko pořadu)."""
+    a, b = _bod(s, h, "a", "počáteční bod"), _bod(s, h, "b", "koncový bod")
+    _ruzne(a, b)
+    uhly = _radky_cisel(h.get("uhly") or "", 2, "bod úhel[gon]")
+    strany = _radky_cisel(h.get("delky") or "", 2, "bod délka[m] (délka strany k dalšímu bodu)")
+    if not uhly:
+        raise ChybaVstupu("Zadejte vrcholové úhly na nových bodech pořadu.")
+    if len(strany) != len(uhly) + 1:
+        raise ChybaVstupu(f"Pořad s {len(uhly)} novými body potřebuje {len(uhly) + 1} délek stran.")
+    if any(d[1] <= 0 for d in strany):
+        raise ChybaVstupu("Délky stran musí být kladné.")
+    k, kor = _korekce([a, b])
+    delky = [d[1] * k for d in strany]
+    sig, y, x, volne = 0.0, 0.0, 0.0, []
+    for i, d in enumerate(delky):
+        if i:
+            sig = V.norm_gon(sig + uhly[i - 1][1] - 200)
+        y += d * math.sin(V.gon2rad(sig))
+        x += d * math.cos(V.gon2rad(sig))
+        volne.append((y, x))
+    dv = math.hypot(*volne[-1])
+    dab = V.delka(a, b)
+    if dv < 1e-9:
+        raise ChybaVstupu("Pořad se vrací do počátku – vetknutý pořad nejde vypočítat.")
+    q = dab / dv
+    rot = V.gon2rad(V.smernik(a, b)) - math.atan2(volne[-1][0], volne[-1][1])
+    c, sn = math.cos(rot) * q, math.sin(rot) * q
+    from .nastaveni import aktualni
+    _mu, mez_p = aktualni().mez_polygonu(len(uhly), sum(delky))
+    odch = dv - dab
+    prot = _hlavicka("Polygonový pořad vetknutý (bez orientací)") + kor
+    prot += [f"{a.cislo} … {b.cislo}, nových bodů {len(uhly)}, délka pořadu {_f(sum(delky))} m",
+             f"vzdálenost {a.cislo}–{b.cislo}: ze souřadnic {_f(dab)} m, z měření {_f(dv)} m, odchylka "
+             f"{_f(odch)} m (mezní {_f(mez_p)} m)" + ("" if abs(odch) <= mez_p else "  ← PŘEKROČENA"),
+             f"měřítko pořadu q = {q:.7f}, stočení {_f(V.norm_gon(V.rad2gon(rot)), 4)} gon",
+             "úhlová kontrola není (chybí orientace) – pořad používejte jen výjimečně",
+             "  bod                 Y            X"]
+    nove = []
+    for (c_, _u), (vy, vx) in zip(uhly, volne[:-1]):
+        py = a.y + vx * sn + vy * c
+        px = a.x + vx * c - vy * sn
+        prot.append(f"  {c_:<14} {py:>12.3f} {px:>12.3f}")
+        nove.append(Bod(c_, py, px, poznamka="vetknutý polygonový pořad"))
+    return Vysledek(prot, nove)
+
+
+def u_centrace(s, h):
+    """Centrace směrů měřených na excentrickém stanovisku S' (excentricita e, směr na centr S):
+    centrační změny a směry z centru, přesně ze souřadnic v místní soustavě."""
+    e = _cislo(h, "e", "excentricitu e")
+    fs = _cislo(h, "fs", "směr na centr")
+    if e < 0:
+        raise ChybaVstupu("Excentricita musí být kladná.")
+    rad = _radky_cisel(h.get("smery") or "", 3, "bod směr[gon] délka[m]")
+    if not rad:
+        raise ChybaVstupu("Zadejte měřené směry: bod směr délka.")
+    sy, sx = e * math.sin(V.gon2rad(fs)), e * math.cos(V.gon2rad(fs))
+    prot = _hlavicka("Centrace směrů (excentrické stanovisko)")
+    prot += [f"excentricita e = {_f(e)} m, směr na centr {_f(fs, 4)} gon",
+             "  bod            měřený směr     délka   centrační změna   centrovaný směr",
+             "                    [gon]         [m]         [cc]              [gon]"]
+    for c, phi, d in rad:
+        if d <= e:
+            raise ChybaVstupu(f"Bod {c}: délka musí být větší než excentricita.")
+        py, px = d * math.sin(V.gon2rad(phi)), d * math.cos(V.gon2rad(phi))
+        cen = V.norm_gon(V.rad2gon(math.atan2(py - sy, px - sx)))
+        delta = (cen - phi + 200) % 400 - 200
+        prot.append(f"  {c:<14} {phi:>12.4f} {d:>10.3f} {delta * 10000:>14.1f} {cen:>18.4f}")
+    return Vysledek(prot)
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -1269,6 +1342,15 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – na A a na nových bodech kromě posledního", "radky"),
       Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky"),
       Pole("posledni", "Číslo posledního (koncového) bodu", "text")], u_polygon_volny),
+    ("Polygonový pořad vetknutý", "Pořad připojený na dva body bez orientací – poloha a natočení z koncových bodů, "
+     "kontrolou je jen délka.",
+     [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
+      Pole("uhly", "Vrcholové úhly na nových bodech (řádek: bod úhel)", "radky"),
+      Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu), o jednu víc než úhlů", "radky")],
+     u_polygon_vetknuty),
+    ("Centrace směrů", "Excentrické stanovisko: centrační změny a směry převedené na centr (přesný výpočet).",
+     [Pole("e", "Excentricita e [m]", "m"), Pole("fs", "Směr na centr [gon]", "gon"),
+      Pole("smery", "Měřené směry (řádek: bod směr délka)", "radky")], u_centrace),
     ("Vytyčovací prvky", "Úhel od orientace a délka ze stanoviska pro vytyčení bodů.",
      [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("body", "Vytyčované body (čísla)", "radky")],
      u_vytyceni),

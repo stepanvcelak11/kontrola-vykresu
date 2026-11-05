@@ -485,3 +485,31 @@ def test_kruznice_uhel_a_bod_na_primce():
     assert (r.nove[0].y, r.nove[0].x) == (0.0, 25.0)
     r = u_bod_na_primce(s, {"a": "1", "b": "3", "dily": "5", "nove": "P08"})
     assert [b.cislo for b in r.nove] == ["P08", "P09", "P10", "P11"] and r.nove[-1].y == 8.0
+
+
+def test_polygon_vetknuty_a_centrace():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_centrace, u_polygon_vetknuty
+    rnd = random.Random(11)
+    pts = [(700000.0, 1050000.0)]
+    for _ in range(4):
+        y, x = pts[-1]
+        pts.append((y + rnd.uniform(60, 150), x + rnd.uniform(-80, 80)))
+    s = SeznamBodu()
+    s.body[:] = [Bod("A", *pts[0]), Bod("B", *pts[-1])]
+    P = [Bod(str(i), *p) for i, p in enumerate(pts)]
+    uhly = "\n".join(f"{i} {_uhel(P[i], P[i - 1], P[i + 1]):.6f}" for i in range(1, 4))
+    delky = "\n".join(f"{i} {V.delka(P[i], P[i + 1]):.4f}" for i in range(4))
+    r = u_polygon_vetknuty(s, {"a": "A", "b": "B", "uhly": uhly, "delky": delky})
+    for b, p in zip(r.nove, pts[1:-1]):
+        assert math.hypot(b.y - p[0], b.x - p[1]) < 2e-4
+    # centrace: centr S, excentrické stanovisko S' 0,3 m od něj; centrovaný směr = směr ze S
+    S, Sp = Bod("S", 1000.0, 2000.0), Bod("Sx", 1000.3, 2000.1)
+    T = Bod("T", 1200.0, 2150.0)
+    o = V.smernik(Sp, Bod("o", 1000.0, 3000.0))  # libovolná orientace kruhu
+    phi = V.norm_gon(V.smernik(Sp, T) - o)
+    fs = V.norm_gon(V.smernik(Sp, S) - o)
+    v = u_centrace(SeznamBodu(), {"e": f"{V.delka(S, Sp):.6f}", "fs": f"{fs:.6f}",
+                                  "smery": f"T {phi:.6f} {V.delka(Sp, T):.4f}"})
+    cen = float(v.protokol[-1].split()[-1])
+    assert abs(V.norm_gon(cen + o) - V.smernik(S, T)) < 2e-4
