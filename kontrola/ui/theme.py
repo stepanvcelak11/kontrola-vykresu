@@ -8,14 +8,17 @@ from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPalette, QPixmap
 ACCENT = "#2563EB"
 ACCENT_HOVER = "#1D4ED8"
 ACCENT_SOFT = "#E8F0FE"
-BG = "#F4F6FA"
+# vrstvy povrchů (od nejspodnější): pozadí aplikace → karta/panel → záhlaví (tabulky, pásy, lišty)
+BG = "#E9EDF2"
 PANEL = "#FFFFFF"
-BORDER = "#E3E7EE"
-BORDER_STRONG = "#CBD2DC"
+HEADER = "#EEF2F6"
+BORDER = "#DCE2EA"
+BORDER_STRONG = "#C3CCD7"
 HOVER = "#F1F4F9"
 SUBTLE = "#F8FAFC"
 TEXT = "#111827"
 MUTED = "#6B7280"
+ALT_ROW = "#F6F8FB"
 
 # čárové ikony 24×24 (styl „outline“), barva se doplní při vykreslení
 _ICONS = {
@@ -65,14 +68,15 @@ _ICONS = {
 
 # tmavý režim: každá barva světlého vzhledu má svůj tmavý protějšek (nahrazuje se najednou, bez řetězení)
 DARK_MAP = {  # vzhled „Studio“: břidlicově modrá tma, panely o odstín světlejší (návrh vzhledu A)
-    "#F3F4F6": "#0E141B", "#FFFFFF": "#111821", "#D1D5DB": "#2A3644", "#1F2937": "#E6EDF3",
+    "#F3F4F6": "#0E141B", "#FFFFFF": "#141B23", "#D1D5DB": "#2A3644", "#1F2937": "#E6EDF3",
     "#6B7280": "#8B98A5", "#9CA3AF": "#6B7785", "#2563EB": "#3B82F6", "#1D4ED8": "#2563EB",
     "#DBEAFE": "#12304A", "#EEF2F7": "#1A232E", "#93C5FD": "#3B82F6", "#F9FAFB": "#0F151C",
     "#E5E7EB": "#1E2833", "#EEF0F3": "#1A232E", "#374151": "#C9D1D9", "#EFF6FF": "#102233",
     "#BFDBFE": "#264866", "#1E3A8A": "#BFDBFE", "#FEF3C7": "#3A2A0C", "#FCD34D": "#806521",
     "#78350F": "#FDE68A", "#DC2626": "#F87171", "#B45309": "#FBBF24", "#4B5563": "#A9B4BF", "#C0C4CC": "#4A5664",
-    "#F4F6FA": "#0B1016", "#E3E7EE": "#1E2833", "#CBD2DC": "#2A3644", "#F1F4F9": "#16202A",
-    "#F8FAFC": "#0F151C", "#111827": "#E6EDF3", "#E8F0FE": "#123040", "#EEF2FF": "#16233A",
+    "#F4F6FA": "#0B1016", "#E3E7EE": "#1E2833", "#CBD2DC": "#2A3644", "#F1F4F9": "#1E2731",
+    "#F8FAFC": "#19212B", "#E9EDF2": "#0A0E13", "#EEF2F6": "#1C242E", "#DCE2EA": "#29333F",
+    "#C3CCD7": "#3A4553", "#F6F8FB": "#18202A", "#111827": "#E6EDF3", "#E8F0FE": "#123040", "#EEF2FF": "#16233A",
     "#C7D2FE": "#2E4A6A", "#0F172A": "#05080C", "#1E40AE": "#BFDBFE",
 }
 _dark = False
@@ -248,23 +252,27 @@ QTabBar::tab:hover:!selected {{ color: {TEXT}; background: {HOVER}; }}
 QTabWidget#hlavni_zalozky > QTabBar {{ background: {PANEL}; }}
 QTabWidget#hlavni_zalozky > QTabBar::tab {{ padding: 8px 18px; margin: 6px 4px 6px 0; font-size: 10.5pt; }}
 
-QGroupBox {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 12px; margin-top: 26px;
-    padding: 14px 12px 12px 12px; font-weight: 700; }}
-QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 8px; top: 4px;
-    padding: 0 4px; color: #374151; }}
+QGroupBox {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; margin-top: 22px;
+    padding: 12px 10px 10px 10px; font-weight: 700; }}
+QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 10px; top: 3px;
+    padding: 0 4px; color: {ACCENT_HOVER}; }}
+QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton {{ font-weight: normal; }}
 
 QTableView, QTreeView, QListWidget, QListView {{ background: {PANEL}; border: 1px solid {BORDER};
-    border-radius: 10px; alternate-background-color: {SUBTLE}; gridline-color: {BORDER};
+    border-radius: 8px; alternate-background-color: {ALT_ROW}; gridline-color: {BORDER};
     selection-background-color: {ACCENT_SOFT}; selection-color: {TEXT}; outline: 0; }}
-QTableView::item {{ padding: 3px 6px; border: none; }}
+QTableView::item {{ padding: 3px 8px; border: none; }}
 QTableView::item:hover, QListWidget::item:hover, QTreeView::item:hover {{ background: {HOVER}; }}
 QTableView::item:selected, QListWidget::item:selected, QTreeView::item:selected {{
     background: {ACCENT_SOFT}; color: {TEXT}; }}
 QListWidget::item {{ padding: 5px 6px; border-radius: 6px; }}
-QHeaderView {{ background: transparent; }}
-QHeaderView::section {{ background: {SUBTLE}; border: none; border-bottom: 1px solid {BORDER};
-    padding: 7px 8px; font-weight: 700; color: #4B5563; }}
-QTableCornerButton::section {{ background: {SUBTLE}; border: none; }}
+QHeaderView {{ background: {HEADER}; border: none; }}
+QHeaderView::section {{ background: {HEADER}; border: none; border-right: 1px solid {BORDER};
+    border-bottom: 2px solid {BORDER_STRONG}; padding: 6px 8px; font-weight: 700; color: #374151; }}
+QHeaderView::section:last {{ border-right: none; }}
+QHeaderView::section:vertical {{ border-bottom: 1px solid {BORDER}; border-right: 2px solid {BORDER_STRONG};
+    padding: 2px 6px; font-weight: 600; color: {MUTED}; }}
+QTableCornerButton::section {{ background: {HEADER}; border: none; border-bottom: 2px solid {BORDER_STRONG}; }}
 
 QScrollBar:vertical {{ background: transparent; width: 11px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: #CBD2DC; border-radius: 4px; min-height: 30px; }}
@@ -345,6 +353,60 @@ QFrame#plovouci_panel {{ background: {PANEL}; border: 1px solid {BORDER}; border
 QPushButton#plovouci_tlacitko {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 12px;
     font-weight: 700; color: #374151; padding: 0 6px; }}
 QPushButton#plovouci_tlacitko:hover {{ background: {ACCENT_SOFT}; color: {ACCENT_HOVER}; border-color: #C7D2FE; }}
+
+/* ---- pásy karet (CAD jako MicroStation, Výpočty jako Groma) ---- */
+QWidget#cad_ribbon, QWidget#pas_karet {{ background: {PANEL}; border-bottom: 1px solid {BORDER_STRONG}; }}
+QWidget#cad_ribbon QScrollArea, QWidget#pas_karet QScrollArea,
+QWidget#cad_ribbon QScrollArea > QWidget > QWidget, QWidget#pas_karet QScrollArea > QWidget > QWidget {{
+    background: {PANEL}; }}
+QWidget#cad_ribbon QTabBar::tab, QWidget#pas_karet QTabBar::tab {{ background: transparent; border: none;
+    border-bottom: 3px solid transparent; border-radius: 0; padding: 7px 14px 5px 14px; margin: 0 2px;
+    color: {MUTED}; font-weight: 600; }}
+QWidget#cad_ribbon QTabBar::tab:selected, QWidget#pas_karet QTabBar::tab:selected {{ color: {TEXT};
+    border-bottom: 3px solid {ACCENT}; background: transparent; }}
+QWidget#cad_ribbon QTabBar::tab:hover:!selected, QWidget#pas_karet QTabBar::tab:hover:!selected {{
+    color: {TEXT}; background: {HOVER}; }}
+QWidget#pas_obsah {{ background: {PANEL}; border-top: 1px solid {BORDER}; }}
+QLabel#pas_skupina {{ color: {MUTED}; font-size: 8pt; font-weight: 600; padding: 1px 0 3px 0;
+    border-top: 1px solid {BORDER}; }}
+QFrame#pas_oddelovac {{ background: {BORDER}; max-width: 1px; min-width: 1px; border: none; margin: 4px 3px; }}
+QWidget#cad_ribbon QToolButton, QWidget#pas_karet QToolButton {{ padding: 3px 8px; border-radius: 6px;
+    text-align: left; }}
+QWidget#cad_ribbon QToolButton:hover, QWidget#pas_karet QToolButton:hover {{ background: {ACCENT_SOFT};
+    border-color: #C7D2FE; }}
+
+/* ---- lišty pod pásem a stavové řádky stránek ---- */
+QWidget#lista_nastaveni {{ background: {HEADER}; border-bottom: 1px solid {BORDER}; }}
+QWidget#stavovy_radek {{ background: {HEADER}; border-top: 1px solid {BORDER}; }}
+QWidget#stavovy_radek QLabel {{ color: #374151; padding: 2px 10px; border-right: 1px solid {BORDER}; }}
+QLabel#stranka_info {{ background: {HEADER}; border: 1px solid {BORDER}; border-left: 3px solid {ACCENT};
+    border-radius: 6px; padding: 7px 10px; color: #374151; }}
+QLabel#nadpis_sekce {{ font-weight: 700; color: {ACCENT_HOVER}; padding: 6px 0 2px 0; }}
+QLabel#poznamka {{ color: {MUTED}; }}
+QFrame#karta_obsah {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; }}
+
+/* ---- textové výpisy (protokol, příkazový řádek CAD) ---- */
+QPlainTextEdit#vypis, QTextEdit#vypis, QTextBrowser#vypis {{ background: {SUBTLE}; border: 1px solid {BORDER};
+    border-radius: 6px; font-family: Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace; }}
+
+QPlainTextEdit#cad_historie {{ background: {SUBTLE}; border: none; border-top: 1px solid {BORDER};
+    border-radius: 0; font-family: Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace; color: {MUTED}; }}
+QToolButton#cad_skupina_uloh {{ text-align: left; font-weight: 700; padding: 4px 6px; border: none;
+    border-bottom: 1px solid {BORDER}; border-radius: 0; background: {HEADER}; color: {TEXT}; margin-top: 4px; }}
+QToolButton#cad_skupina_uloh:hover {{ background: {HOVER}; }}
+
+/* ---- datová okna Výpočtů ---- */
+QMdiArea {{ background: {BG}; }}
+QWidget#datove_okno_obal {{ background: {PANEL}; border: 1px solid {BORDER_STRONG}; }}
+QWidget#datove_okno_obal[aktivni="true"] {{ border: 1px solid {ACCENT}; }}
+QWidget#okno_zahlavi {{ background: {HEADER}; border-bottom: 1px solid {BORDER}; }}
+QWidget#okno_zahlavi[aktivni="true"] {{ background: {ACCENT_SOFT}; border-bottom: 1px solid #C7D2FE; }}
+QLabel#okno_titul {{ font-weight: 600; color: {MUTED}; }}
+QLabel#okno_titul[aktivni="true"] {{ color: {TEXT}; font-weight: 700; }}
+QToolButton#okno_tlacitko, QToolButton#okno_zavrit {{ border: none; border-radius: 4px; padding: 1px 6px;
+    color: {MUTED}; background: transparent; }}
+QToolButton#okno_tlacitko:hover {{ background: {HOVER}; color: {TEXT}; }}
+QToolButton#okno_zavrit:hover {{ background: #DC2626; color: white; }}
 """
 
 
@@ -412,6 +474,36 @@ def fit_headers(table, extra: int = 30) -> None:
             table.setColumnWidth(c, need)
 
 
+class _Uprava:
+    """Úpravy widgetů, které stylesheet neumí: střídání barev řádků ve všech tabulkách a klidné záhlaví
+    datových oken (aktivní okno = zvýrazněný okraj, ne křiklavý pruh)."""
+    filtr = None
+
+    @classmethod
+    def instaluj(cls, app) -> None:
+        from PySide6.QtCore import QEvent, QObject
+
+        class Filtr(QObject):
+            def eventFilter(self, obj, ev):  # noqa: N802
+                if ev.type() == QEvent.Polish:
+                    try:
+                        cls.uprav(obj)
+                    except RuntimeError:
+                        pass
+                return False
+        if cls.filtr is None:
+            cls.filtr = Filtr(app)
+            app.installEventFilter(cls.filtr)
+
+    @staticmethod
+    def uprav(w) -> None:
+        from PySide6.QtWidgets import QTableView, QTreeView
+        if isinstance(w, (QTableView, QTreeView)) and not w.property("_uprava"):
+            w.setProperty("_uprava", True)
+            if w.objectName() not in ("karty_chyb",) and not w.property("bez_strideni"):
+                w.setAlternatingRowColors(True)
+
+
 BEZPECNE_PISMO = False  # bezpečný start: výchozí písmo systému (bez Segoe UI Variable)
 
 
@@ -459,3 +551,4 @@ def apply_theme(app, dark: bool = False) -> None:
     except OSError:  # bez zápisu do dočasné složky zůstanou výchozí šipky
         css = STYLESHEET.replace('image: url("{SIPKA_BILA}");', "")
     app.setStyleSheet(_scale_pt(_to_accent(_to_dark(css) if dark else css)))
+    _Uprava.instaluj(app)

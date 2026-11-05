@@ -194,6 +194,7 @@ class PasKaret(QWidget):
     def __init__(self, popisy, stranka, barva="#374151", zvyr="#2563EB", parent=None):
         super().__init__(parent)
         self.setObjectName("cad_ribbon")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.tlacitka: dict[str, list[QToolButton]] = {}
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -206,9 +207,10 @@ class PasKaret(QWidget):
         self.b_soubor.setObjectName("cad_soubor")
         self.b_soubor.setPopupMode(QToolButton.InstantPopup)
         self.b_soubor.setToolTip("Nový, otevřít, uložit, tisk (MicroStation: File)")
-        self.b_soubor.setStyleSheet("QToolButton#cad_soubor{background:#1D5FAF;color:white;padding:3px 14px;"
-                                    "border-radius:2px;font-weight:600} QToolButton#cad_soubor::menu-indicator"
-                                    "{image:none}")
+        from .theme import accent
+        self.b_soubor.setStyleSheet(f"QToolButton#cad_soubor{{background:{accent()};color:white;padding:4px 16px;"
+                                    "border-radius:6px;font-weight:700;margin:3px 0} QToolButton#cad_soubor"
+                                    "::menu-indicator{image:none}")
         horni.addWidget(self.b_soubor)
         self.pracovni_postup = QComboBox()
         self.pracovni_postup.setToolTip("Pracovní postup (Workflow): které karty jsou vidět")
@@ -224,10 +226,6 @@ class PasKaret(QWidget):
         self.stack = QStackedWidget()
         self.stack.setObjectName("cad_ribbon_stack")
         lay.addWidget(self.stack)
-        cara = QFrame()
-        cara.setFrameShape(QFrame.HLine)
-        cara.setFrameShadow(QFrame.Sunken)
-        lay.addWidget(cara)
         self._stranky: dict[str, QWidget] = {}
         for titul, skupiny in KARTY:
             sc = QScrollArea()
@@ -235,14 +233,14 @@ class PasKaret(QWidget):
             sc.setWidgetResizable(True)
             sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             w = QWidget()
+            w.setObjectName("pas_obsah")
             h = QHBoxLayout(w)
             h.setContentsMargins(4, 2, 4, 0)
             h.setSpacing(4)
             for gtit, polozky in skupiny:
                 h.addWidget(self._skupina(gtit, polozky, popisy, stranka, barva, zvyr))
                 sep = QFrame()
-                sep.setFrameShape(QFrame.VLine)
-                sep.setFrameShadow(QFrame.Sunken)
+                sep.setObjectName("pas_oddelovac")
                 h.addWidget(sep)
             h.addStretch(1)
             sc.setWidget(w)
@@ -315,7 +313,7 @@ class PasKaret(QWidget):
         v.addStretch(1)
         lbl = QLabel(titul)
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setStyleSheet("color:#6B7280;font-size:11px")
+        lbl.setObjectName("pas_skupina")
         v.addWidget(lbl)
         return box
 
@@ -341,7 +339,7 @@ class PanelUloh(QScrollArea):
         lay.setContentsMargins(2, 2, 2, 2)
         lay.setSpacing(1)
         hl = QLabel("Úlohy – Kreslení")
-        hl.setStyleSheet("font-weight:600;padding:3px")
+        hl.setObjectName("nadpis_sekce")
         hl.setToolTip("MicroStation: Tasks → Drawing")
         lay.addWidget(hl)
         self.tlacitka: dict[str, QToolButton] = {}
@@ -364,8 +362,7 @@ class PanelUloh(QScrollArea):
             hlav.setCheckable(True)
             hlav.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             hlav.setSizePolicy(hlav.sizePolicy().horizontalPolicy().Expanding, hlav.sizePolicy().verticalPolicy())
-            hlav.setStyleSheet("QToolButton{text-align:left;font-weight:600;padding:3px;border:none;"
-                               "background:rgba(127,127,127,0.15)}")
+            hlav.setObjectName("cad_skupina_uloh")
             obsah = QWidget()
             ov = QVBoxLayout(obsah)
             ov.setContentsMargins(6, 0, 0, 2)

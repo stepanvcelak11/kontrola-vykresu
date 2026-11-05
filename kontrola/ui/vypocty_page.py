@@ -332,7 +332,7 @@ class VypoctyPage(QWidget):
         seznam_w = QWidget()
         outer = lay
         lay = QVBoxLayout(seznam_w)
-        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setContentsMargins(8, 6, 8, 6)
         from .flow import RadekTlacitek
         bar = RadekTlacitek()  # v úzkém okně (notebook, zvětšení 150 %) se zalomí
         self.b_import = QPushButton("Import…")
@@ -394,6 +394,7 @@ class VypoctyPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setDefaultSectionSize(26)
+        self.table.verticalHeader().setVisible(False)
         for c, w in enumerate((150, 130, 130, 90, 120, 70)):
             self.table.setColumnWidth(c, w)
         lay.addWidget(self.table, 1)
@@ -415,19 +416,23 @@ class VypoctyPage(QWidget):
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)
         self.tabs.addTab(self.ulohy, "Výpočetní okno", viditelne=False)
+        self.tabs.vychozi = (seznam_w, self.zapisnik, self.protokol)
         self.menu = postav_menu(self)
         outer.insertWidget(0, self.menu)
         # stavový řádek: aktivní seznam, počet položek, počet označených
-        stav = QHBoxLayout()
-        stav.setContentsMargins(6, 2, 6, 2)
+        stav_w = QWidget()
+        stav_w.setObjectName("stavovy_radek")
+        stav_w.setAttribute(Qt.WA_StyledBackground, True)
+        stav = QHBoxLayout(stav_w)
+        stav.setContentsMargins(4, 2, 4, 2)
+        stav.setSpacing(0)
         self.stav_seznam = QLabel("Aktivní seznam: seznam_bodu")
         self.stav_pocet = QLabel()
         self.stav_oznaceno = QLabel()
         for w in (self.stav_seznam, self.stav_pocet, self.stav_oznaceno):
-            w.setStyleSheet("color: gray; padding: 0 8px;")
             stav.addWidget(w)
         stav.addStretch(1)
-        outer.addLayout(stav)
+        outer.addWidget(stav_w)
         self.lista.hledej.connect(self._najdi_bod)
         self.lista.uloha.connect(self.prepni_ulohu)
         self.tabs.currentChanged.connect(lambda i: self.ulohy._completer_model.setStringList(

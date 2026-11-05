@@ -28,6 +28,7 @@ class KokesPage(QWidget):
         nadpis = QLabel("<b>KOKEŠ</b> – seznam souřadnic s čísly bodů KN, kreslící klíče, tabulky ze Směrnice, "
                         "výkres a katastr. Body jsou společné se stránkou Výpočty, výkres se kreslí v CAD.")
         nadpis.setWordWrap(True)
+        nadpis.setObjectName("stranka_info")
         lay.addWidget(nadpis)
         self.tabs = QTabWidget()
         lay.addWidget(self.tabs, 1)
@@ -182,6 +183,7 @@ class KokesPage(QWidget):
         info = QLabel("Kreslící klíče ze sloupce KK Směrnice. Dvojklik na klíč = kreslit tímto prvkem v CAD "
                       "(hladina, barva, styl a tloušťka se nastaví samy, jako aktivní klíč v Kokeši).")
         info.setWordWrap(True)
+        info.setObjectName("stranka_info")
         v.addWidget(info)
         r = RadekTlacitek()
         self.b_rezim = QPushButton("Kontrolovat jako výkres z Kokeše")
@@ -293,6 +295,7 @@ class KokesPage(QWidget):
         info = QLabel("Katastr a geometrický plán: data KN (VFK) jako podklad, výměry a výkaz výměr GP, kontrola "
                       "dvou určení bodu (kód kvality), převod souřadnic.")
         info.setWordWrap(True)
+        info.setObjectName("stranka_info")
         v.addWidget(info)
         r = RadekTlacitek()
         self.b_vfk = QPushButton("Otevřít data KN (VFK)…")

@@ -52,15 +52,29 @@ TOLERANCE = {  # uživatelské tolerance Gromy (min. úhel, orientace, polygon, 
     "Netestovat": ("", "", "", "", "", "", "", "", ""),
 }
 
-STYL = """
-QListWidget#zalozky { background: transparent; border: none; outline: 0; }
-QListWidget#zalozky::item { background: #E1E1E1; border: 1px solid #ADADAD; margin: 0 0 1px 0;
-    padding: 1px 4px; font-weight: bold; color: #222; }
-QListWidget#zalozky::item:selected { background: white; border-right: none; color: black; }
-QGroupBox { font-weight: bold; border: 1px solid #DCDCDC; border-radius: 3px; margin-top: 8px; padding-top: 4px; }
-QGroupBox::title { subcontrol-origin: margin; left: 6px; padding: 0 2px; }
-QGroupBox QCheckBox, QGroupBox QRadioButton, QGroupBox QLabel { font-weight: normal; }
+def _styl() -> str:
+    """Záložky vlevo a kompaktní skupiny – barvy z tématu aplikace (světlý i tmavý vzhled)."""
+    from .theme import BORDER, BORDER_STRONG, HEADER, HOVER, MUTED, PANEL, TEXT, accent, themed
+    t = themed
+    return f"""
+QListWidget#zalozky {{ background: transparent; border: none; outline: 0; }}
+QListWidget#zalozky::item {{ background: {t(HEADER)}; border: 1px solid {t(BORDER)}; border-right: none;
+    margin: 0 0 2px 0; padding: 5px 8px; color: {t(MUTED)}; border-radius: 0; }}
+QListWidget#zalozky::item:hover {{ background: {t(HOVER)}; color: {t(TEXT)}; }}
+QListWidget#zalozky::item:selected {{ background: {t(PANEL)}; color: {t(TEXT)}; border-left: 3px solid {accent()}; }}
+QStackedWidget#stranky {{ background: {t(PANEL)}; border: 1px solid {t(BORDER_STRONG)}; }}
+QStackedWidget#stranky QGroupBox {{ margin-top: 16px; padding: 8px 8px 6px 8px; border-radius: 6px; }}
+QStackedWidget#stranky QGroupBox::title {{ top: 1px; }}
 """
+
+
+def _tint(nazev: str) -> str:
+    """Barevné podbarvení polí jako v Gromě (žlutá, zelená, modrá, fialová) – v tmavém vzhledu tlumené."""
+    from .theme import is_dark
+    sv = {"zluta": "#FFF6CC", "zelena": "#D7F5D0", "modra": "#E6F0FB", "fialova": "#EFE3FB"}
+    tm = {"zluta": "#3A3214", "zelena": "#18351E", "modra": "#16283D", "fialova": "#2C2140"}
+    return f"background: {(tm if is_dark() else sv)[nazev]};"
+
 
 
 def nacti() -> N.NastaveniVypoctu:
@@ -122,7 +136,7 @@ class NastaveniVypoctuDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Nastavení parametrů")
-        self.setStyleSheet(STYL)
+        self.setStyleSheet(_styl())
         self.resize(800, 660)
         self._n = N.aktualni()
         self._ulozene = groma_parametry()
@@ -133,15 +147,15 @@ class NastaveniVypoctuDialog(QDialog):
         self.zalozky = QListWidget()
         self.zalozky.setObjectName("zalozky")
         self.zalozky.addItems(STRANKY)
-        self.zalozky.setFixedWidth(170)
-        f = self.zalozky.font()
-        f.setBold(True)
-        self.zalozky.setFont(f)
+        self.zalozky.setFixedWidth(205)
+        self.zalozky.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        from PySide6.QtCore import QSize
+        for i in range(self.zalozky.count()):
+            self.zalozky.item(i).setSizeHint(QSize(195, 31))
         self.zalozky.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         h.addWidget(self.zalozky)
         self.stranky = QStackedWidget()
         self.stranky.setObjectName("stranky")
-        self.stranky.setStyleSheet("QStackedWidget#stranky { background: white; border: 1px solid #ADADAD; }")
         h.addWidget(self.stranky, 1)
         lay.addLayout(h, 1)
         for tvor in (self._prostredi, self._vstup_vystup, self._vypocty, self._tolerance, self._redukce,
@@ -397,10 +411,10 @@ class NastaveniVypoctuDialog(QDialog):
     def _redukce(self, v):
         g = QGridLayout()
         pc = self._ed("red_predcisli")
-        pc.setStyleSheet("background: #FFF6CC;")
+        pc.setStyleSheet(_tint("zluta"))
         ry, rx, rz = self._ed("red_y"), self._ed("red_x"), self._ed("red_z")
         for e in (ry, rx, rz):
-            e.setStyleSheet("background: #D7F5D0;")
+            e.setStyleSheet(_tint("zelena"))
         g.addWidget(_skupina("Redukce:", _formular(("Předčíslí:", pc)),
                              self._ch("red_doplnovat", "Doplňovat části předčíslí"),
                              _formular(("Redukce Y:", ry), ("Redukce X:", rx), ("Redukce Z:", rz))), 0, 0)
@@ -431,7 +445,7 @@ class NastaveniVypoctuDialog(QDialog):
             ("Koeficient Y:", self._ed("koef_y", "1.000000000000")),
             ("Koeficient Z:", self._ed("koef_z", "1.000000000000"))), self._ch("zamenit_xy", "Zaměnit X a Y")), 1, 0)
         vc = self._ed("vyska_cile")
-        vc.setStyleSheet("background: #EBDDFB;")
+        vc.setStyleSheet(_tint("fialova"))
         g.addWidget(_skupina("Volby výšek:", self._ch("nulove_vc", "Nulové výšky cíle", True),
                              _formular(("Standardní výška cíle:", vc))), 2, 0)
         g.addWidget(_skupina("Typ délek:", *self._radia("typ_delek", ["Vodorovné", "Šikmé"], 1),
@@ -456,7 +470,7 @@ class NastaveniVypoctuDialog(QDialog):
         b.addWidget(QPushButton("Uložit"))
         b.addWidget(QPushButton("Odebrat"))
         g.addWidget(_skupina("Teodolit:", QLabel("Název:"), self.pristroj, sez, b), 0, 0, 2, 1, Qt.AlignTop)
-        modra, fial = "background: #E6F0FB;", "background: #EFE3FB;"
+        modra, fial = _tint("modra"), _tint("fialova")
 
         def pole(k, d, styl):
             e = self._ed(k, d, 70)
@@ -499,7 +513,7 @@ class NastaveniVypoctuDialog(QDialog):
                                        ("Oddělovače kódů:", self._ed("kod_oddel", ",")),
                                        ("Kód orientace:", self._ed("kod_orient")))), 1, 0)
         styp = QLabel("Standard")
-        styp.setStyleSheet("background: #F0F0F0; border: 1px solid #CCC; padding: 3px;")
+        styp.setObjectName("stranka_info")
         g.addWidget(_skupina("Kódování kresby:", QLabel("Typ kódování:"), styp, QPushButton("Nastavení ...")),
                     1, 1, Qt.AlignTop)
         v.addLayout(g)
@@ -534,7 +548,7 @@ class NastaveniVypoctuDialog(QDialog):
         lv.addWidget(akt)
         g.addWidget(_skupina("Formát:", lv), 0, 0)
         pred = self._reg(klic + "_predpis", QPlainTextEdit(), formaty.get(vychozi, ""))
-        pred.setStyleSheet("font-family: Consolas, 'Courier New', monospace; color: #1F3FBF;")
+        pred.setObjectName("vypis")
         b = QHBoxLayout()
         for x in ("Uložit", "Odebrat", "Vytvořit kopii"):
             b.addWidget(QPushButton(x))
@@ -592,7 +606,7 @@ class NastaveniVypoctuDialog(QDialog):
     def _ciselniky(self, v):
         h = QHBoxLayout()
         h.addWidget(QLabel("Poslední aktualizace:"))
-        self.datum_ciselniku = QLabel("<b style='color:#1F3FEF'>" + str(self._ulozene.get("ciselniky", "–")) + "</b>")
+        self.datum_ciselniku = QLabel("<b>" + str(self._ulozene.get("ciselniky", "–")) + "</b>")
         h.addWidget(self.datum_ciselniku)
         h.addStretch(1)
         b = QPushButton("Aktualizovat")
@@ -602,7 +616,7 @@ class NastaveniVypoctuDialog(QDialog):
             from datetime import datetime
             t = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
             self._ulozene["ciselniky"] = t
-            self.datum_ciselniku.setText(f"<b style='color:#1F3FEF'>{t}</b>")
+            self.datum_ciselniku.setText(f"<b>{t}</b>")
         b.clicked.connect(akt)
         v.addWidget(_skupina("Číselníky katastrálních území:", h, b))
 

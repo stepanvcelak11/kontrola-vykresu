@@ -92,6 +92,7 @@ class TablePage(QWidget):
                        "přiřadí sloupce (kód, název, vrstva, barva, styl čáry, typ geometrie, povinné atributy, "
                        "povolené hodnoty) a z tabulky se vygenerují pravidla kontrol.")
         intro.setWordWrap(True)
+        intro.setObjectName("stranka_info")
         lay.addWidget(intro)
         drop = DropArea("Přetáhněte sem tabulku (.xlsx, .xls, .csv, .pdf)")
         drop.filesDropped.connect(lambda fs: [self.import_file(f) for f in fs])
@@ -110,13 +111,17 @@ class TablePage(QWidget):
         row.addWidget(b3)
         row.addStretch(1)
         lay.addLayout(row)
-        lay.addWidget(QLabel("Tabulky v projektu:"))
+        nad = QLabel("Tabulky v projektu")
+        nad.setObjectName("nadpis_sekce")
+        lay.addWidget(nad)
         self.list = QListWidget()
         self.list.itemDoubleClicked.connect(lambda it: self._reimport())
         lay.addWidget(self.list, 1)
         self.last = QTextBrowser()
         self.last.setMaximumHeight(170)
-        lay.addWidget(QLabel("Poslední import:"))
+        nad = QLabel("Poslední import")
+        nad.setObjectName("nadpis_sekce")
+        lay.addWidget(nad)
         lay.addWidget(self.last)
 
     def refresh(self):
@@ -282,7 +287,7 @@ class ImagesPage(QWidget):
         fl.addRow(b_fit)
         note = QLabel("Podklad slouží jen k vizuálnímu porovnání, do kontrol nevstupuje.")
         note.setWordWrap(True)
-        note.setStyleSheet("color: palette(mid);")
+        note.setObjectName("poznamka")
         fl.addRow(note)
         for w in (self.bg_x, self.bg_y, self.bg_scale, self.bg_rot):
             w.valueChanged.connect(self._bg_changed)
@@ -432,6 +437,7 @@ class TemplatePage(QWidget):
                        "pod výkres. <b>JPG/PNG</b> (náčrt, sken) – slouží jako podklad "
                        "pod výkresem k vizuálnímu porovnání.")
         intro.setWordWrap(True)
+        intro.setObjectName("stranka_info")
         lay.addWidget(intro)
         drop = DropArea("Přetáhněte sem vzor (.dxf / .dgn / .pdf / .jpg / .png)")
         drop.setMinimumHeight(50)
@@ -744,7 +750,7 @@ class AttachmentsPage(QWidget):
                       "neodesílá. Celý projekt uložíte do jednoho souboru přes Soubor → Uložit projekt jako "
                       "(.kontrola).")
         note.setWordWrap(True)
-        note.setStyleSheet("color: palette(mid);")
+        note.setObjectName("poznamka")
         lay.addWidget(note)
 
     def refresh(self):

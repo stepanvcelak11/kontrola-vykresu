@@ -25,7 +25,7 @@ class ZapisnikPanel(QWidget):
         self.vysledek = None
         self._plneni = False
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setContentsMargins(8, 6, 8, 6)
         from .flow import RadekTlacitek
         bar = RadekTlacitek()  # v úzkém okně se zalomí
         self.b_nacist = QPushButton("Načíst…")
@@ -40,15 +40,22 @@ class ZapisnikPanel(QWidget):
         self.b_vyr.setToolTip("Vyrovnání sítě ze všech směrů a délek zápisníku; pevné body ze seznamu souřadnic")
         self.b_do = QPushButton("Do seznamu bodů")
         self.b_do.setEnabled(False)
-        for b in (self.b_nacist, self.b_ulozit, self.b_st, self.b_zam, self.b_smaz, self.b_vyp, self.b_vyr, self.b_do):
-            bar.addWidget(b)
+        # skupiny: soubor | úpravy | výpočet (mezera mezi skupinami)
+        for i, sk in enumerate(((self.b_nacist, self.b_ulozit), (self.b_st, self.b_zam, self.b_smaz),
+                                (self.b_vyp, self.b_vyr, self.b_do))):
+            if i:
+                bar.addSpacing(14)
+            for b in sk:
+                bar.addWidget(b)
         bar.addStretch(1)
         lay.addLayout(bar)
         sp = QSplitter()
         levy = QWidget()
         ll = QVBoxLayout(levy)
-        ll.setContentsMargins(0, 0, 0, 0)
-        ll.addWidget(QLabel("Stanoviska:"))
+        ll.setContentsMargins(0, 0, 4, 0)
+        nad = QLabel("Stanoviska")
+        nad.setObjectName("nadpis_sekce")
+        ll.addWidget(nad)
         self.seznam_st = QListWidget()
         ll.addWidget(self.seznam_st, 1)
         row = QHBoxLayout()
@@ -64,12 +71,22 @@ class ZapisnikPanel(QWidget):
         ll.addLayout(row)
         sp.addWidget(levy)
         pravy = QSplitter(Qt.Vertical)
+        zam = QWidget()
+        zl = QVBoxLayout(zam)
+        zl.setContentsMargins(4, 0, 0, 0)
+        nad = QLabel("Záměry vybraného stanoviska")
+        nad.setObjectName("nadpis_sekce")
+        zl.addWidget(nad)
         self.tab = QTableWidget(0, len(SL))
         self.tab.setHorizontalHeaderLabels(SL)
         self.tab.verticalHeader().setVisible(False)
-        pravy.addWidget(self.tab)
+        self.tab.horizontalHeader().setStretchLastSection(True)
+        from .theme import fit_headers
+        fit_headers(self.tab, 28)
+        zl.addWidget(self.tab, 1)
+        pravy.addWidget(zam)
         self.vystup = QTextBrowser()
-        self.vystup.setStyleSheet("font-family: Consolas, 'DejaVu Sans Mono', monospace;")
+        self.vystup.setObjectName("vypis")
         pravy.addWidget(self.vystup)
         sp.addWidget(pravy)
         sp.setStretchFactor(1, 1)
@@ -77,6 +94,7 @@ class ZapisnikPanel(QWidget):
         self.info = QLabel("Načtěte zápisník nebo založte stanovisko. Dané body (orientace) se berou ze seznamu "
                            "souřadnic projektu.")
         self.info.setWordWrap(True)
+        self.info.setObjectName("poznamka")
         lay.addWidget(self.info)
         self.b_nacist.clicked.connect(lambda: self.nacist())
         self.b_ulozit.clicked.connect(lambda: self.ulozit())

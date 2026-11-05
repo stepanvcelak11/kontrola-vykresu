@@ -14,8 +14,104 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit, QMdiArea,
                                QMdiSubWindow, QMenu, QPlainTextEdit, QWidget)
 
+class _Zahlavi(QWidget):
+    """Vlastní záhlaví datového okna: název, maximalizace a zavření; tažením se okno přesouvá,
+    dvojklikem maximalizuje (stejně jako v Gromě, ale ve vzhledu aplikace)."""
+
+    def __init__(self, sub: "_DatoveOkno"):
+        super().__init__()
+        from PySide6.QtWidgets import QToolButton
+        self.sub = sub
+        self._start = None
+        self.setObjectName("okno_zahlavi")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(10, 3, 4, 3)
+        lay.setSpacing(2)
+        self.titul = QLabel()
+        self.titul.setObjectName("okno_titul")
+        lay.addWidget(self.titul, 1)
+        self.b_max = QToolButton()
+        self.b_max.setObjectName("okno_tlacitko")
+        self.b_max.setText("□")
+        self.b_max.setToolTip("Maximalizovat / obnovit (dvojklik na záhlaví)")
+        self.b_max.clicked.connect(self.prepni_max)
+        self.b_zav = QToolButton()
+        self.b_zav.setObjectName("okno_zavrit")
+        self.b_zav.setText("✕")
+        self.b_zav.setToolTip("Skrýt okno (znovu ho otevřete z karty Soubor → Pohledy → Okna)")
+        self.b_zav.clicked.connect(sub.hide)
+        lay.addWidget(self.b_max)
+        lay.addWidget(self.b_zav)
+
+    def prepni_max(self):
+        if self.sub.isMaximized():
+            self.sub.showNormal()
+        else:
+            self.sub.showMaximized()
+
+    def mousePressEvent(self, e):  # noqa: N802
+        if e.button() == Qt.LeftButton:
+            self._start = (e.globalPosition().toPoint(), self.sub.pos())
+            area = self.sub.mdiArea()
+            if area is not None:
+                area.setActiveSubWindow(self.sub)
+        super().mousePressEvent(e)
+
+    def mouseMoveEvent(self, e):  # noqa: N802
+        if self._start is not None and not self.sub.isMaximized():
+            g0, p0 = self._start
+            self.sub.move(p0 + e.globalPosition().toPoint() - g0)
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):  # noqa: N802
+        self._start = None
+        super().mouseReleaseEvent(e)
+
+    def mouseDoubleClickEvent(self, e):  # noqa: N802
+        self.prepni_max()
+
+
 class _DatoveOkno(QMdiSubWindow):
-    """Datové okno: křížek okno jen schová (obsah i stav zůstanou), znovu se otevře z menu Okno."""
+    """Datové okno: křížek okno jen schová (obsah i stav zůstanou), znovu se otevře z menu Okno.
+    Bez systémového rámu – vlastní záhlaví a úchyt pro změnu velikosti ve vzhledu aplikace."""
+
+    def __init__(self):
+        super().__init__()
+        from PySide6.QtWidgets import QSizeGrip, QVBoxLayout
+        self.setWindowFlags(Qt.SubWindow | Qt.FramelessWindowHint)
+        self.setObjectName("datove_okno")
+        self.obal = QWidget()
+        self.obal.setObjectName("datove_okno_obal")
+        self.obal.setAttribute(Qt.WA_StyledBackground, True)
+        v = QVBoxLayout(self.obal)
+        v.setContentsMargins(1, 1, 1, 1)
+        v.setSpacing(0)
+        self.zahlavi = _Zahlavi(self)
+        v.addWidget(self.zahlavi)
+        self._v = v
+        self.grip = QSizeGrip(self.obal)
+        self.grip.setFixedSize(14, 14)
+        super().setWidget(self.obal)
+
+    def nastav_obsah(self, w: QWidget) -> None:
+        self._v.addWidget(w, 1)
+        self.grip.raise_()
+
+    def setWindowTitle(self, t: str) -> None:  # noqa: N802
+        super().setWindowTitle(t)
+        self.zahlavi.titul.setText(t)
+
+    def resizeEvent(self, e):  # noqa: N802
+        super().resizeEvent(e)
+        self.grip.move(self.obal.width() - self.grip.width(), self.obal.height() - self.grip.height())
+        self.grip.raise_()
+
+    def nastav_aktivni(self, on: bool) -> None:
+        for w in (self.obal, self.zahlavi, self.zahlavi.titul):
+            w.setProperty("aktivni", on)
+            w.style().unpolish(w)
+            w.style().polish(w)
 
     def closeEvent(self, e):  # noqa: N802
         e.ignore()
@@ -32,6 +128,7 @@ class DatovaOkna(QMdiArea):
         super().__init__(parent)
         self._okna: list[tuple[QWidget, _DatoveOkno, str]] = []
         self._rozvrzeno = False
+        self.vychozi: tuple = ()  # (hlavní okno, okno pod ním, okno vpravo) pro výchozí rozvržení
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.subWindowActivated.connect(self._aktivovano)
@@ -39,7 +136,7 @@ class DatovaOkna(QMdiArea):
     # --- rozhraní jako QTabWidget
     def addTab(self, w: QWidget, titul: str, viditelne: bool = True) -> int:  # noqa: N802
         sub = _DatoveOkno()
-        sub.setWidget(w)
+        sub.nastav_obsah(w)
         sub.setWindowTitle(titul)
         sub.setAttribute(Qt.WA_DeleteOnClose, False)
         self.addSubWindow(sub)
@@ -130,6 +227,8 @@ class DatovaOkna(QMdiArea):
             sub.hide()
 
     def _aktivovano(self, sub) -> None:
+        for _x, s, _t in self._okna:
+            s.nastav_aktivni(s is sub)
         i = next((i for i, (_x, s, _t) in enumerate(self._okna) if s is sub), -1)
         if i >= 0:
             self.currentChanged.emit(i)
@@ -138,7 +237,30 @@ class DatovaOkna(QMdiArea):
         super().showEvent(e)
         if not self._rozvrzeno:  # první zobrazení: okna pod sebou jako v Gromě (rozměr plochy už je známý)
             self._rozvrzeno = True
+            self.vychozi_rozvrzeni()
+
+    def vychozi_rozvrzeni(self) -> None:
+        """Přehledné rozvržení: seznam souřadnic velký vlevo nahoře, zápisník pod ním, protokol vpravo."""
+        if len(self.vychozi) != 3:
             self.mozaika_vodorovne()
+            return
+        hlavni, dole, vpravo = (self.okno(w) for w in self.vychozi)
+        for s in (hlavni, dole, vpravo):
+            if s is not None:
+                s.show()
+                s.showNormal()
+        r = self.viewport().rect()
+        g = 4
+        sl = int(r.width() * 0.64)
+        rh = int(r.height() * 0.58)
+        if hlavni is not None:
+            hlavni.setGeometry(g, g, sl - 2 * g, rh - g)
+        if dole is not None:
+            dole.setGeometry(g, rh + g, sl - 2 * g, r.height() - rh - 2 * g)
+        if vpravo is not None:
+            vpravo.setGeometry(sl, g, r.width() - sl - g, r.height() - 2 * g)
+        if hlavni is not None:
+            self.setActiveSubWindow(hlavni)
 
 
 class OknoProtokolu(QPlainTextEdit):
@@ -148,7 +270,7 @@ class OknoProtokolu(QPlainTextEdit):
         super().__init__(parent)
         self.setReadOnly(True)
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
-        self.setStyleSheet("font-family: Consolas, 'Courier New', 'DejaVu Sans Mono', monospace;")
+        self.setObjectName("vypis")
         self.setPlaceholderText("Protokol o výpočtech – sem se zapisuje každý výpočet z menu Výpočty.")
         self._soubor: Path | None = None
 
@@ -170,8 +292,10 @@ class ListaNastaveni(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("lista_nastaveni")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(4, 2, 4, 2)
+        lay.setContentsMargins(10, 5, 10, 5)
         lay.setSpacing(6)
         self.ulohy = QComboBox()
         self.ulohy.setToolTip("Rozpracovaná úloha – každá má svůj seznam souřadnic, zápisník a protokol "
@@ -198,6 +322,7 @@ class ListaNastaveni(QWidget):
         self.najit.setClearButtonEnabled(True)
         self.najit.setToolTip("Najít bod v seznamu souřadnic podle čísla (vyhledává průběžně při psaní)")
         for t, w in (("Kód kvality:", self.kod_kvality), ("Měřítko:", self.meritko), ("Najít bod:", self.najit)):
+            lay.addSpacing(10)
             lay.addWidget(QLabel(t))
             lay.addWidget(w)
         lay.addStretch(1)
@@ -264,7 +389,7 @@ KARTY_GROMA = [
                     ("Porovnání souřadnic…", "@porovnat_seznam"), ("Identické body…", "@duplicates_dialog")]),
         ("Kódování", [("Kresba z kódů…", "@kresba_z_kodu"), ("Kódovací tabulka…", "@otevri_kodovnik")]),
         ("Nastavení", [("Nastavení…", "@_nastaveni")]),
-        ("Pohledy", [("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
+        ("Pohledy", [("Výchozí rozvržení", "@_vychozi"), ("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
                      ("Kaskáda", "@_kaskada"), ("Okna", "@okna")]),
     ]),
     ("Protokol", [
@@ -309,6 +434,8 @@ class PasGromy(QWidget):
         from PySide6.QtWidgets import (QFrame, QGridLayout, QScrollArea, QStackedWidget, QTabBar, QToolButton,
                                        QVBoxLayout)
         self.page = page
+        self.setObjectName("pas_karet")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.akce: dict[str, QAction] = {}  # „Karta/Skupina/Text“ → akce (i položky rozbalovacích nabídek)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -329,6 +456,7 @@ class PasGromy(QWidget):
         for karta, skupiny in karty:
             self.karty.addTab(karta)
             obsah = QWidget()
+            obsah.setObjectName("pas_obsah")
             h = QHBoxLayout(obsah)
             h.setContentsMargins(4, 2, 4, 0)
             h.setSpacing(2)
@@ -367,12 +495,11 @@ class PasGromy(QWidget):
                 v.addStretch(1)
                 lbl = QLabel(skupina)
                 lbl.setAlignment(Qt.AlignCenter)
-                lbl.setStyleSheet("color: gray; font-size: 8pt;")
+                lbl.setObjectName("pas_skupina")
                 v.addWidget(lbl)
                 h.addWidget(box)
                 sep = QFrame()
-                sep.setFrameShape(QFrame.VLine)
-                sep.setStyleSheet("color: #d0d0d0;")
+                sep.setObjectName("pas_oddelovac")
                 h.addWidget(sep)
             h.addStretch(1)
             sc = QScrollArea()
@@ -393,7 +520,7 @@ class PasGromy(QWidget):
             return (lambda i=jmena[cil]: otevri_ulohu(p, i)) if cil in jmena else None
         vlastni = {
             "@_nastaveni": lambda: (p.ulohy.nastaveni_vypoctu(), p.lista.nacti()),
-            "@_mozaika_h": o.mozaika_vodorovne, "@_mozaika_v": o.mozaika_svisle, "@_kaskada": o.cascadeSubWindows,
+            "@_vychozi": o.vychozi_rozvrzeni, "@_mozaika_h": o.mozaika_vodorovne, "@_mozaika_v": o.mozaika_svisle, "@_kaskada": o.cascadeSubWindows,
             "@okna": lambda: self._menu_oken(), "@_protokol": lambda: o.otevri(p.protokol),
             "@_protokol_pdf": p.ulohy.protokol_pdf, "@_zapisnik": lambda: o.otevri(p.zapisnik),
             "@_zpracovani": lambda: getattr(p.win, "show_vypocet", lambda: None)(),
