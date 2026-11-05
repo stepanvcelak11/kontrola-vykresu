@@ -67,6 +67,9 @@ class StylCary:
         return m.group(1) if m else self.nazev.strip()
 
 
+_ZNACKY = (b"lsLC", b"lsLS", b"lsLP", b"lsPS", b"\0\0\0\0")  # typy složek stylu v tabulce jmen
+
+
 def _u32(d, o):
     return struct.unpack_from("<I", d, o)[0]
 
@@ -131,7 +134,9 @@ def _prvky_symbolu(d: bytes, o: int, n: int, k: float) -> list[list[tuple[float,
 def nacti_rsc(cesta: str | Path) -> dict[str, StylCary]:
     """Styly čar z knihovny .rsc: {jméno: StylCary}."""
     d = Path(cesta).read_bytes()
-    if not d.startswith(b"Line Style Library") or len(d) < 0x60:
+    # hlavička podle jazyka MicroStationu: anglicky „Line Style Library“, česky „Knihovna druhů čar“
+    hlavicka = d[:0x40].split(b"\x1a")[0].decode("cp1250", "replace").strip()
+    if hlavicka not in ("Line Style Library", "Knihovna druhů čar") or len(d) < 0x60:
         raise RscError(f"{Path(cesta).name} není knihovna stylů čar MicroStationu (.rsc).")
     try:
         tr = _u32(d, 0x4C)
@@ -210,7 +215,10 @@ def nacti_rsc(cesta: str | Path) -> dict[str, StylCary]:
             rid = _u32(d, o + 8)
             ln = _u32(d, o + 32)
             jm = _txt(d[o + 36:o + 36 + ln])
+            # starší knihovny mají jména těsně za sebou, novější (CONNECT) je zarovnávají na 4 bajty
             o += 36 + ln
+            if d[o + 4:o + 8][::-1] not in _ZNACKY and d[o + 4 + (-ln % 4):o + 8 + (-ln % 4)][::-1] in _ZNACKY:
+                o += -ln % 4
             if not jm:
                 continue
             popis = _txt(d[typy[t][rid][0]:typy[t][rid][0] + 128]) if rid in typy.get(t, {}) else ""

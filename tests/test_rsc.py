@@ -95,3 +95,14 @@ def test_zobrazeni_v_kontrole_podle_rsc():
         nastav_aktivni({})
     znacky = lambda p: sum(1 for g in p.groups.values() for k in g if "#znacky" in k)  # noqa: E731
     assert znacky(bez) > 0 and znacky(s) < znacky(bez)  # ploty ze stylu, ne přibližné značky
+
+
+SKOLA = Path(__file__).resolve().parents[1] / "podklady" / "skola-ms"
+
+
+def test_ceske_knihovny_stylu_zarovnana_jmena():
+    """Knihovny z českého MicroStationu (hlavička „Knihovna druhů čar“, jména zarovnaná na 4 bajty)."""
+    t = nacti_rsc(SKOLA / "TM25dodatek.rsc")
+    assert set(t) == {"1", "hranice vojenských újezdů"}
+    m = nacti_rsc(SKOLA / "linkyMJ.rsc")
+    assert len(m) == 28 and "2.09_" in m
