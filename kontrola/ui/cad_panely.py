@@ -17,7 +17,7 @@ SKUPINY = [
                   "bod", "text", "text po prvku", "popisek", "šrafa", "vzorek", "buňky po prvku", "kóta", "kóta úhlu", "kóta poloměru", "vlož", "kolmice",
                   "osa úhlu"]),
     ("Úpravy", ["posun", "kopie", "otoč", "měřítko", "zrcadli", "pole", "rovnoběžka", "ořež", "prodluž", "zaobli",
-                "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "uprav text", "zvyš text", "nahraď buňku",
+                "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "uprav text", "zvyš text", "nahraď buňku", "zarovnej",
                 "smaž"]),
     ("Výběr", ["vše", "ohrada", "podobné", "vyber", "skupina"]),
     ("Měření", ["vzdálenost", "délka", "výměra", "info"]),
@@ -29,7 +29,7 @@ NAZVY = {"vlož": "Vložit buňku", "body": "Body ze seznamu", "vrstvy": "Správ
          "podobné": "Vybrat podobné", "ohrada": "Výběr ohradou", "skupina": "Skupina prvků",
          "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť", "vrstevnice": "Vrstevnice a TIN", "profil": "Podélný profil", "kódy": "Kresba z kódů", "kódovník": "Kódovník", "georeference": "Georeference rastru", "mračno": "Mračno bodů", "zvyš text": "Kopie textu se zvýšením čísla",
          "nahraď buňku": "Nahradit buňku",
-         "kolmice": "Kolmice z bodu na prvek", "osa úhlu": "Osa úhlu", "arch": "Arch (papír) pod výkresem", "vzorek": "Vzorek plochy (značky kultur)", "buňky po prvku": "Buňky po prvku (stromořadí)", "text po prvku": "Text podél prvku"}
+         "kolmice": "Kolmice z bodu na prvek", "osa úhlu": "Osa úhlu", "arch": "Arch (papír) pod výkresem", "vzorek": "Vzorek plochy (značky kultur)", "buňky po prvku": "Buňky po prvku (stromořadí)", "text po prvku": "Text podél prvku", "zarovnej": "Zarovnat prvky podle hrany"}
 
 
 class PaletaNastroju(QScrollArea):

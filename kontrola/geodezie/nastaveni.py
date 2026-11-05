@@ -15,8 +15,11 @@ from dataclasses import asdict, dataclass, fields
 
 R_ZEME = 6_380_000.0
 
-# střední souřadnicová chyba m_xy podle třídy přesnosti ČSN 01 3410 (polohopis, účelové mapy)
-MXY_TRIDA = {1: 0.014, 2: 0.04, 3: 0.14, 4: 0.26, 5: 0.50}
+# střední souřadnicová chyba m_xy podle třídy přesnosti ČSN 01 3410 (polohopis, účelové mapy) – stejná tabulka
+# jako testování přesnosti (vypocty.TRIDY_PRESNOSTI)
+from .vypocty import TRIDY_PRESNOSTI as _TP  # noqa: E402
+
+MXY_TRIDA = {k: v[0] for k, v in _TP.items()}
 
 UCELY = ("katastr", "polohopis")
 REZIMY_MERITKA = ("bez korekce", "Křovák ze souřadnic", "ručně")

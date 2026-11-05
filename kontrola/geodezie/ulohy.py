@@ -1440,6 +1440,43 @@ def u_vymera_z_mer(s, h):
     prot.append(f"  celkem {celkem:.2f} m² = {round(celkem)} m² (zaokrouhleno na celé m²)")
     return Vysledek(prot)
 
+
+def u_polygon_jednostranne_orientovany(s, h):
+    """Pořad oboustranně připojený, orientovaný jen na začátku: úhlová kontrola není, souřadnicová odchylka
+    se rozdělí úměrně délkám stran."""
+    ao, a = _bod(s, h, "ao", "orientaci na začátku"), _bod(s, h, "a", "počáteční bod")
+    b = _bod(s, h, "b", "koncový bod")
+    _ruzne(a, ao)
+    uhly = _radky_cisel(h.get("uhly") or "", 2, "bod úhel[gon]")
+    strany = _radky_cisel(h.get("delky") or "", 2, "bod délka[m] (délka strany k dalšímu bodu)")
+    n = len(uhly) - 1  # úhly na A a na nových bodech
+    if n < 1 or len(strany) != n + 1:
+        raise ChybaVstupu("Zadejte úhly na A a na všech nových bodech a o jednu délku víc než nových bodů.")
+    k, kor = _korekce([a, b])
+    delky = [d[1] * k for d in strany]
+    try:
+        volne = V.polygonovy_porad_volny(a, ao, [u[1] for u in uhly], delky, [u[0] for u in uhly[1:]] + [b.cislo])
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    ody, odx = volne[-1][1].y - b.y, volne[-1][1].x - b.x
+    L = sum(delky)
+    from .nastaveni import aktualni
+    _mu, mez_p = aktualni().mez_polygonu(n, L)
+    pol = math.hypot(ody, odx)
+    prot = _hlavicka("Polygonový pořad jednostranně orientovaný") + kor
+    prot += [f"{ao.cislo} → {a.cislo} … {b.cislo}, nových bodů {n}, délka {_f(L)} m",
+             "úhlová kontrola není (chybí orientace na konci)",
+             f"souřadnicové odchylky dY = {_f(ody)} m, dX = {_f(odx)} m, polohová {_f(pol)} m, mezní {_f(mez_p)} m"
+             + ("" if pol <= mez_p else "  ← PŘEKROČENA"),
+             "  bod                 Y            X"]
+    nove, kum = [], 0.0
+    for i, (c, p) in enumerate(volne[:-1]):
+        kum += delky[i]
+        y, x = p.y - ody * kum / L, p.x - odx * kum / L
+        prot.append(f"  {c:<14} {y:>12.3f} {x:>12.3f}")
+        nove.append(Bod(c, y, x, poznamka="polygonový pořad jednostranně orientovaný"))
+    return Vysledek(prot, nove)
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -1550,6 +1587,11 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – na A a na nových bodech kromě posledního", "radky"),
       Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky"),
       Pole("posledni", "Číslo posledního (koncového) bodu", "text")], u_polygon_volny),
+    ("Polygonový pořad jednostranně orientovaný", "Připojený na začátku i na konci, orientovaný jen na začátku – "
+     "rozdělí se souřadnicová odchylka.",
+     [Pole("ao", "Orientace na začátku (bod)"), Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
+      Pole("uhly", "Vrcholové úhly (řádek: bod úhel) – na A a na nových bodech", "radky"),
+      Pole("delky", "Délky stran (řádek: bod délka k dalšímu bodu)", "radky")], u_polygon_jednostranne_orientovany),
     ("Polygonový pořad vetknutý", "Pořad připojený na dva body bez orientací – poloha a natočení z koncových bodů, "
      "kontrolou je jen délka.",
      [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),

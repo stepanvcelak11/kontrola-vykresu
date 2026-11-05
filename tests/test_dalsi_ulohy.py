@@ -591,3 +591,22 @@ def test_volne_stanovisko_mnc_i_jen_ze_smeru():
                     "nove": "S", "metoda": "MNČ – směry a délky s váhami"})
     assert math.hypot(r.nove[0].y - st.y, r.nove[0].x - st.x) < 1e-4
     assert any("orientační posun" in t and f"{V.norm_gon(o):.4f}" in t for t in r.protokol)
+
+
+def test_polygon_jednostranne_orientovany():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_polygon_jednostranne_orientovany
+    pts = [(699900.0, 1049950.0), (700000.0, 1050000.0), (700120.0, 1050040.0), (700230.0, 1049990.0),
+           (700330.0, 1050060.0)]
+    P = [Bod(str(i), *p) for i, p in enumerate(pts)]
+    s = SeznamBodu()
+    s.body[:] = [Bod("AO", *pts[0]), Bod("A", *pts[1]), Bod("B", *pts[-1])]
+    uhly = "\n".join(f"{c} {_uhel(P[i], P[i - 1], P[i + 1]):.6f}" for i, c in ((1, "A"), (2, "2"), (3, "3")))
+    delky = "\n".join(f"{i} {V.delka(P[i], P[i + 1]) + 0.01:.4f}" for i in range(1, 4))  # délky o 1 cm delší
+    r = u_polygon_jednostranne_orientovany(s, {"ao": "AO", "a": "A", "b": "B", "uhly": uhly, "delky": delky})
+    for b, p in zip(r.nove, pts[2:4]):
+        assert math.hypot(b.y - p[0], b.x - p[1]) < 0.02
+    # odchylka = součet prodloužení o 1 cm ve směrech stran
+    ey = sum(0.01 * (P[i + 1].y - P[i].y) / V.delka(P[i], P[i + 1]) for i in range(1, 4))
+    ex = sum(0.01 * (P[i + 1].x - P[i].x) / V.delka(P[i], P[i + 1]) for i in range(1, 4))
+    assert f"polohová {math.hypot(ey, ex):.3f}" in "\n".join(r.protokol)

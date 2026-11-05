@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "zarovnej": "zarovnat vybrané prvky podle hrany vzorového prvku (Align Elements) – vlevo, vpravo, nahoru…",
         "popis souřadnic": "popis souřadnic Y, X bodu s odkazovou čarou (vytyčovací výkresy)",
         "text po prvku": "text podél čáry (název ulice, vodního toku) natočený po směru čáry, čitelně",
         "buňky po prvku": "buňky po čáře v dané vzdálenosti, natočené po směru (stromořadí, značky hranice)",
@@ -487,6 +488,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "align": "zarovnej", "align elements": "zarovnej", "zarovnat": "zarovnej", "zarovnání prvků": "zarovnej",
         "popis souradnic": "popis souřadnic", "souřadnice bodu": "popis souřadnic", "id coordinates": "popis souřadnic",
         "text along": "text po prvku", "place text along": "text po prvku", "popis čáry": "text po prvku",
         "bunky po prvku": "buňky po prvku", "stromořadí": "buňky po prvku", "stromoradi": "buňky po prvku",
@@ -555,7 +557,7 @@ class CadPage(QWidget):
         "vyrez": "výřez", "xr": "reference", "xref": "reference", "ref": "reference", "layout": "list", "b": "blok", "block": "blok",
         "cell": "blok", "i": "vlož", "insert": "vlož", "vloz": "vlož", "bunka": "blok", "buňka": "blok", "plocha": "výměra", "area": "výměra", "vymera": "výměra",
     }
-    VYBEROVE = {"kopíruj do schránky", "pole", "smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok"}
+    VYBEROVE = {"kopíruj do schránky", "pole", "smaž", "posun", "kopie", "otoč", "měřítko", "zrcadli", "rozpoj", "spoj", "blok", "zarovnej"}
 
     def __init__(self, win=None, parent=None):
         super().__init__(parent)
@@ -3122,6 +3124,16 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_zarovnej(self):
+        """Align Elements by Edge: vybrané prvky zarovná podle hrany vzorového prvku."""
+        ents = yield from self._vyber_req("Zarovnat")
+        vzor, _k = yield Pozadavek("prvek", "Vzorový prvek (podle jeho hrany se zarovná):")
+        t = yield Pozadavek("text", "Hrana: l = vlevo, p = vpravo, n = nahoru, d = dolů, sv = středy svisle, "
+                                    "sh = středy vodorovně [l]:", vychozi="l")
+        nove = U.zarovnej(self.prostor, self.historie_zmen, ents, vzor, (t or "l").strip().lower())
+        self._hotovo_vyber(nove)
+        self.vypis(f"Zarovnáno {len(nove)} prvků ({U.ZAROVNANI_HRANY[(t or 'l').strip().lower()]}).")
 
     def n_text_po_prvku(self):
         """Text podél prvku (Place Text Along Element): natočený po směru čáry, čitelně, nad čarou."""

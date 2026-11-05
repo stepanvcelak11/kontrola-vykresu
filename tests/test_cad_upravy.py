@@ -544,3 +544,22 @@ def test_bunky_po_prvku():
     assert abs(n[0].dxf.rotation) < 1e-6 and abs(n[-1].dxf.rotation - 90) < 1e-3
     k = U.bunky_po_prvku(doc, msp, h, car, "STROM", 10, vcetne_koncu=True, natocit=False)
     assert len(k) == 6 and (k[-1].dxf.insert.x, k[-1].dxf.insert.y) == (30, 20)
+
+
+def test_zarovnani_prvku():
+    import ezdxf
+
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new("R2013")
+    msp = doc.modelspace()
+    h = U.Historie(msp)
+    vzor = msp.add_line((0, 0), (0, 10))
+    a = msp.add_line((3, 1), (5, 1))
+    b = msp.add_circle((7, 4), 1)
+    n = U.zarovnej(msp, h, [vzor, a, b], vzor, "l")
+    xs = sorted(round(min(e.dxf.start.x, e.dxf.end.x) if e.dxftype() == "LINE" else e.dxf.center.x - 1, 9)
+                for e in n)
+    assert xs == [0, 0] and len(h.zpet) == 1
+    h.krok_zpet()
+    n = U.zarovnej(msp, h, [a, b], vzor, "sh")
+    assert all(abs((e.dxf.start.y if e.dxftype() == "LINE" else e.dxf.center.y) - 5) < 1e-9 for e in n)

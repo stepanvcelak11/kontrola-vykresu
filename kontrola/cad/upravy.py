@@ -2144,3 +2144,49 @@ def poloha_textu_na_prvku(e, klik, vyska: float, odsazeni: float | None = None):
     o = vyska * 0.5 if odsazeni is None else odsazeni
     r = _m.radians(u)
     return (p.x - _m.sin(r) * o, p.y + _m.cos(r) * o), u
+
+
+# ------------------------------------------------------------------ zarovnání prvků (Align Elements by Edge)
+ZAROVNANI_HRANY = {"l": "vlevo", "p": "vpravo", "n": "nahoru", "d": "dolů", "sv": "střed svisle",
+                   "sh": "střed vodorovně"}
+
+
+def zarovnej(msp, h: Historie, ents, vzor, hrana: str) -> list:
+    """Posune prvky tak, aby jejich hrana (obálka) lícovala s hranou vzorového prvku – jedna operace Zpět.
+    ``hrana``: l, p, n, d (vlevo, vpravo, nahoru, dolů), sv = středy na svislici, sh = středy na vodorovné."""
+    from ezdxf import bbox
+    if hrana not in ZAROVNANI_HRANY:
+        raise ValueError("Zarovnání: l, p, n, d, sv nebo sh.")
+    vb = bbox.extents([vzor], fast=True)
+    if not vb.has_data:
+        raise ValueError("Vzorový prvek nemá rozměr.")
+    nove, stare = [], []
+    for e in ents:
+        if e is vzor:
+            continue
+        b = bbox.extents([e], fast=True)
+        if not b.has_data:
+            continue
+        dx = dy = 0.0
+        if hrana == "l":
+            dx = vb.extmin.x - b.extmin.x
+        elif hrana == "p":
+            dx = vb.extmax.x - b.extmax.x
+        elif hrana == "d":
+            dy = vb.extmin.y - b.extmin.y
+        elif hrana == "n":
+            dy = vb.extmax.y - b.extmax.y
+        elif hrana == "sv":
+            dx = (vb.extmin.x + vb.extmax.x - b.extmin.x - b.extmax.x) / 2
+        else:
+            dy = (vb.extmin.y + vb.extmax.y - b.extmin.y - b.extmax.y) / 2
+        if abs(dx) < 1e-12 and abs(dy) < 1e-12:
+            continue
+        c = _kopie(e)
+        c.transform(Matrix44.translate(dx, dy, 0))
+        msp.add_entity(c)
+        nove.append(c)
+        stare.append(e)
+    if nove:
+        h.proved("Zarovnání", nove, stare)
+    return nove

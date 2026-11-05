@@ -25,6 +25,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "<b>CAD</b>: lomená čára s obloukovými úseky (SmartLine – „o“ = další úsek obloukem) Buňky po prvku "
         "(stromořadí, značky na hranici natočené po směru čáry) a Text podél prvku (názvy ulic a toků, vždy čitelně). Opraveno: Ctrl+V (vložit ze schránky) "
         "a další víceslovné příkazy se spouštěly jako jiný příkaz.",
+        "<b>Polygonový pořad jednostranně orientovaný</b> (připojený na obou koncích, orientace jen na začátku). "
+        "CAD: <b>Zarovnat prvky</b> podle hrany vzorového prvku (legendy, tabulky textů).",
         "<b>Volné stanovisko MNČ</b>: vyrovnání směrů a délek s váhami podle přístroje (střední chyby, opravy "
         "v cc a mm, σ0); jde i jen ze směrů na 3 a více bodů. Nastavení výpočtů: zaokrouhlení souřadnic nových bodů.",
         "<b>Prostorová polární metoda</b>: rajón i volné stanovisko berou šikmou délku se zenitem a výškou "
