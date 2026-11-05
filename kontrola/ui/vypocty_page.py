@@ -682,10 +682,20 @@ class VypoctyPage(QWidget):
                                                   "Text – sloupce (*.txt);;CSV pro Excel (*.csv);;"
                                                   "DXF – body, čísla, výšky a spojnice (*.dxf);;"
                                                   "KML – mapy, Google Earth (*.kml);;GeoJSON – QGIS (*.geojson);;"
-                                                  "PDF – seznam k tisku a odevzdání (*.pdf)")
+                                                  "PDF – seznam k tisku a odevzdání (*.pdf);;"
+                                                  "Leica GSI – body pro vytyčení v přístroji (*.gsi)")
         if not path:
             return None
         pripona = Path(path).suffix.lower()
+        if pripona == ".gsi":
+            from ..geodezie.gsi import zapis_gsi_body
+            try:
+                Path(path).write_text(zapis_gsi_body(body), encoding="ascii", errors="replace")
+            except (OSError, ValueError) as e:
+                QMessageBox.warning(self, "Export", str(e))
+                return None
+            self.message(f"Uloženo {len(body)} bodů do GSI {path} (81 = Y, 82 = X, 83 = výška).")
+            return path
         if pripona == ".pdf":
             from ..geodezie.formaty import zapis_text
             from ..geodezie.protokol import protokol_pdf

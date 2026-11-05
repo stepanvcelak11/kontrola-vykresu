@@ -155,6 +155,12 @@ def rozpoznej(text: str) -> Format:
 
 def nacti_text(text: str, fmt: Format | None = None) -> tuple[list[Bod], list[str], Format]:
     """Načte body z textu. Vrací (body, varování s čísly řádků, použitý formát)."""
+    if fmt is None:
+        from . import gsi as G
+        if G.je_gsi(text):
+            gb = G.nacti_body(text)
+            if gb:
+                return gb, [], rozpoznej("1 0 0")
     fmt = fmt or rozpoznej(text)
     body: list[Bod] = []
     varovani: list[str] = []

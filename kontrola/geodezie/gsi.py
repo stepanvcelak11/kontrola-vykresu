@@ -148,3 +148,35 @@ def zapis_gsi(stations: list[Station], gsi16: bool = True) -> str:
                                    slovo("31", "..06", o.sd, 4), slovo("87", "..16", o.vc, 4)]))
     pre = "*" if gsi16 else ""
     return "\n".join(pre + r + " " for r in radky) + "\n"
+
+
+# ------------------------------------------------------------------ souřadnice (WI 81/82/83) – body pro vytyčení
+def zapis_gsi_body(body, gsi16: bool = True) -> str:
+    """Seznam souřadnic do Leica GSI: 11 číslo bodu, 81 = Y, 82 = X, 83 = výška (0,1 mm) – nahrání do přístroje."""
+    n = 16 if gsi16 else 8
+    radky = []
+    for i, b in enumerate(body, 1):
+        c = str(b.cislo)
+        if len(c) > n:
+            raise ValueError(f"Číslo bodu {c} je pro GSI{n} moc dlouhé (nejvýš {n} znaků).")
+        slova = [f"11{i % 10000:04d}+{c.rjust(n, '0')}"]  # 11 + pořadové číslo bloku (jako Leica)
+        for wi, v in (("81", b.y), ("82", b.x), ("83", b.z)):
+            if v is None:
+                continue
+            val = round(v * 10000)
+            if len(str(abs(val))) > n:
+                raise ValueError(f"Souřadnice bodu {c} se do GSI{n} nevejde – použijte GSI16.")
+            slova.append(f"{wi}..16{'-' if val < 0 else '+'}{abs(val):0{n}d}")
+        radky.append(("*" if gsi16 else "") + " ".join(slova) + " ")
+    return "\n".join(radky) + "\n"
+
+
+def nacti_body(text: str):
+    """Body s souřadnicemi z GSI (řádky s WI 81 a 82); čísla bodů bez úvodních nul."""
+    from .body import Bod
+    out = []
+    for line in text.splitlines():
+        r = precti_radek(line)
+        if "81" in r and "82" in r and "bod" in r:
+            out.append(Bod(str(r["bod"]), float(r["81"]), float(r["82"]), r.get("83")))
+    return out

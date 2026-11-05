@@ -25,6 +25,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "<b>CAD</b>: lomená čára s obloukovými úseky (SmartLine – „o“ = další úsek obloukem) Buňky po prvku "
         "(stromořadí, značky na hranici natočené po směru čáry) a Text podél prvku (názvy ulic a toků, vždy čitelně). Opraveno: Ctrl+V (vložit ze schránky) "
         "a další víceslovné příkazy se spouštěly jako jiný příkaz.",
+        "<b>Export seznamu do Leica GSI</b> (81 = Y, 82 = X, 83 = výška) – body pro vytyčení rovnou do přístroje; "
+        "takový GSI jde i načíst zpět jako seznam souřadnic.",
         "<b>Trigonometrická výška oboustranně</b> (průměr tam a zpět bez vlivu zakřivení a refrakce). CAD: "
         "<b>Čára pod úhlem</b> k prvku (úhel ve stupních nebo „50g“ v gonech).",
         "<b>Polygonový pořad jednostranně orientovaný</b> (připojený na obou koncích, orientace jen na začátku). "
