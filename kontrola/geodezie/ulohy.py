@@ -131,20 +131,32 @@ def u_rajon(s, h):
     if d <= 0:
         raise ChybaVstupu("Délka musí být kladná.")
     n = _nove_cislo(s, h)
+    zen = (h.get("zenit") or "").strip()
+    dh_trig = None
+    if zen:  # prostorová polární metoda: d je šikmá délka
+        zg = _cislo(h, "zenit", "zenitový úhel")
+        vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
+        vc = _cislo(h, "vc", "výšku cíle") if (h.get("vc") or "").strip() else 0.0
+        _hh, dh_trig = V.trigonometricka_vyska(0.0, d, zg, vp, vc)
+        d = d * math.sin(V.gon2rad(zg))
     k, kor = _korekce([st])
     d_m, d = d, d * k
     posun = V.norm_gon(V.smernik(st, o) - so)
     sig = V.norm_gon(sm + posun)
     p = V.rajon(st, sig, d)
     z = None
-    if st.z is not None and (h.get("dh") or "").strip():
+    if st.z is not None and dh_trig is not None:
+        z = st.z + dh_trig
+    elif st.z is not None and (h.get("dh") or "").strip():
         z = st.z + _cislo(h, "dh", "převýšení")
     prot = _hlavicka("Rajón (polární bod)")
     prot += [f"stanovisko {st.cislo}, orientace na {o.cislo}: směrník {_f(V.smernik(st, o), 4)} gon, "
              f"směr {_f(so, 4)} gon → posun {_f(posun, 4)} gon",
              *kor,
              f"bod {n}: směr {_f(sm, 4)} gon → směrník {_f(sig, 4)} gon, délka {_f(d_m)} m"
-             + (f" → {_f(d)} m" if kor else ""),
+             + (f" → {_f(d)} m" if kor else "") + (" (vodorovná ze šikmé a zenitu)" if zen else ""),
+             *([f"  převýšení terén–terén {_f(dh_trig)} m (zakřivení a refrakce k = 0,13)"] if dh_trig is not None
+               else []),
              f"  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None else "")]
     return Vysledek(prot, [Bod(n, p.y, p.x, z, poznamka="rajón")])
 
@@ -257,23 +269,31 @@ def u_zpet(s, h):
 
 
 def u_volne(s, h):
-    mer = []
+    """Volné stanovisko: řádek „bod směr délka“ (vodorovná), nebo „bod směr šikmá zenit [výška cíle]“ –
+    pak se z trigonometrických převýšení určí i výška stanoviska (průměr, se zakřivením a refrakcí)."""
+    mer, trig = [], []
     for i, line in enumerate((h.get("mereni") or "").splitlines(), 1):
         parts = line.replace(",", ".").split()
         if not parts:
             continue
         if len(parts) < 3:
-            raise ChybaVstupu(f"Řádek {i}: zadejte „číslo_bodu směr délka“.")
+            raise ChybaVstupu(f"Řádek {i}: zadejte „číslo_bodu směr délka [zenit výška_cíle]“.")
         b = s.najdi(parts[0])
         if b is None:
             raise ChybaVstupu(f"Řádek {i}: bod {parts[0]} v seznamu není.")
         try:
-            sm_, d_ = float(parts[1]), float(parts[2])
-            if not (math.isfinite(sm_) and math.isfinite(d_)) or d_ <= 0:
+            vals = [float(t) for t in parts[1:6]]
+            if not all(math.isfinite(v) for v in vals) or vals[1] <= 0:
                 raise ValueError
-            mer.append((b.cislo, b, sm_, d_))
         except ValueError:
-            raise ChybaVstupu(f"Řádek {i}: směr a délka musí být čísla (délka kladná).") from None
+            raise ChybaVstupu(f"Řádek {i}: směr, délka, zenit a výška cíle musí být čísla (délka kladná).") from None
+        sm_, d_ = vals[0], vals[1]
+        if len(vals) >= 3:  # šikmá délka + zenitový úhel
+            z = vals[2]
+            vc = vals[3] if len(vals) >= 4 else 0.0
+            trig.append((b, d_, z, vc))
+            d_ = d_ * math.sin(V.gon2rad(z))
+        mer.append((b.cislo, b, sm_, d_))
     n = _nove_cislo(s, h)
     k, kor = _korekce([m[1] for m in mer])
     mer = [(c, b, sm_, d_ * k) for c, b, sm_, d_ in mer]
@@ -288,7 +308,21 @@ def u_volne(s, h):
              "  bod                  vY [m]    vX [m]    vp [m]"]
     for c, vy, vx in vs.opravy:
         prot.append(f"  {c:<18} {vy:>9.3f} {vx:>9.3f} {math.hypot(vy, vx):>9.3f}")
-    return Vysledek(prot, [Bod(n, vs.stanovisko.y, vs.stanovisko.x, poznamka="volné stanovisko")])
+    z_st = None
+    vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
+    s_vyskou = [(b, d_, z, vc) for b, d_, z, vc in trig if b.z is not None]
+    if s_vyskou:
+        prot += ["", f"výška stanoviska z trigonometrických převýšení (výška přístroje {_f(vp)} m):",
+                 "  bod                  H cíle      Δh       H stanoviska"]
+        hs = []
+        for b, d_, z, vc in s_vyskou:
+            _h, dh = V.trigonometricka_vyska(0.0, d_, z, vp, vc)
+            hs.append(b.z - dh)
+            prot.append(f"  {b.cislo:<18} {b.z:>9.3f} {dh:>9.3f} {b.z - dh:>12.3f}")
+        z_st = sum(hs) / len(hs)
+        rozp = max(hs) - min(hs)
+        prot.append(f"  průměr H = {_f(z_st)} m, rozpětí {rozp * 1000:.0f} mm")
+    return Vysledek(prot, [Bod(n, vs.stanovisko.y, vs.stanovisko.x, z_st, poznamka="volné stanovisko")])
 
 
 def u_transformace(s, h):
@@ -1323,13 +1357,34 @@ def u_nivelacni_zapisnik(s, h):
         prot.append(f"výšky {len(vysky)} bodů ze seznamu souřadnic se tlačítkem Přidat do seznamu zapíšou jako Z")
     return Vysledek(prot, [], vysky)
 
+
+def u_vymera_z_mer(s, h):
+    """Výměra z měr: plocha rozdělená na trojúhelníky se změřenými stranami (Heronův vzorec)."""
+    rad = _radky_cisel(h.get("trojuhelniky") or "", 4, "název a b c")
+    if not rad:
+        raise ChybaVstupu("Zadejte trojúhelníky: název a b c (strany v metrech).")
+    prot = _hlavicka("Výměra z měr (trojúhelníky)")
+    prot.append("  trojúhelník          a         b         c        výměra [m²]")
+    celkem = 0.0
+    for nazev, a, b, c in rad:
+        if min(a, b, c) <= 0 or a + b <= c or a + c <= b or b + c <= a:
+            raise ChybaVstupu(f"Trojúhelník {nazev}: ze stran {a}, {b}, {c} trojúhelník nesestrojíte.")
+        p = (a + b + c) / 2
+        P = math.sqrt(p * (p - a) * (p - b) * (p - c))
+        celkem += P
+        prot.append(f"  {nazev:<14} {a:>9.2f} {b:>9.2f} {c:>9.2f} {P:>14.2f}")
+    prot.append(f"  celkem {celkem:.2f} m² = {round(celkem)} m² (zaokrouhleno na celé m²)")
+    return Vysledek(prot)
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
     ("Rajón (polární bod)", "Nový bod ze stanoviska: orientace na známý bod, měřený směr a délka.",
      [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("so", "Směr na orientaci [gon]", "gon"),
-      Pole("sm", "Měřený směr [gon]", "gon"), Pole("d", "Vodorovná délka [m]", "m"),
-      Pole("dh", "Převýšení [m] (nepovinné)", "m"), Pole("nove", "Číslo nového bodu", "text")], u_rajon),
+      Pole("sm", "Měřený směr [gon]", "gon"), Pole("d", "Délka [m] (vodorovná; se zenitem šikmá)", "m"),
+      Pole("zenit", "Zenitový úhel [gon] (nepovinné – prostorová polární metoda)", "gon"),
+      Pole("vp", "Výška přístroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
+      Pole("dh", "Převýšení [m] (nepovinné, bez zenitu)", "m"), Pole("nove", "Číslo nového bodu", "text")], u_rajon),
     ("Protínání vpřed z úhlů", "Bod z úhlů α (v A) a β (v B) měřených od základny A–B.",
      [Pole("a", "Bod A"), Pole("b", "Bod B"), Pole("alfa", "Úhel α [gon]", "gon"), Pole("beta", "Úhel β [gon]", "gon"),
       Pole("nove", "Číslo nového bodu", "text")], u_vpred_uhly),
@@ -1348,8 +1403,10 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("sb", "Směr na B [gon]", "gon"), Pole("sc", "Směr na C [gon]", "gon"),
       Pole("nove", "Číslo stanoviska", "text")], u_zpet),
     ("Volné stanovisko", "Stanovisko a orientace z ≥ 2 známých bodů (směr + délka), vyrovnání MNČ s opravami.",
-     [Pole("mereni", "Měření (řádek: bod směr[gon] délka[m])", "radky"),
+     [Pole("mereni", "Měření (řádek: bod směr[gon] délka[m], nebo bod směr šikmá zenit [výška cíle])",
+           "radky"),
       Pole("meritko", "Měřítko", "volba", "pevné (1)", ("pevné (1)", "volné")),
+      Pole("vp", "Výška přístroje [m] (jen se zenity)", "m"),
       Pole("nove", "Číslo stanoviska", "text")], u_volne),
     ("Transformace", "Transformační klíč z identických bodů (shodnostní / podobnostní / afinní) s opravami; "
      "transformace dalších bodů.",
@@ -1390,6 +1447,8 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      "(Pokyn pro tvorbu ÚM 5.1 a; ČSN 01 3410).",
      [Pole("trida", "Třída přesnosti", "volba", "3", ("1", "2", "3", "4", "5")),
       Pole("delky", "Kontrolní délky (řádek: bod bod délka[m])", "radky")], u_test_delek),
+    ("Výměra z měr", "Výměra plochy rozdělené na trojúhelníky z měřených stran (Heronův vzorec).",
+     [Pole("trojuhelniky", "Trojúhelníky (řádek: název a b c)", "radky")], u_vymera_z_mer),
     ("Kružnice ze tří bodů", "Střed a poloměr kružnice procházející třemi body.",
      [Pole("a", "Bod 1"), Pole("b", "Bod 2"), Pole("c", "Bod 3"),
       Pole("nove", "Číslo středu (nepovinné)", "text")], u_kruznice_3b),

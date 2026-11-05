@@ -532,3 +532,40 @@ def test_nivelacni_zapisnik():
     assert abs(r.vysky["5"] - (250 + 1.5 + v1 / 2 - 1.2)) < 1e-9
     with __import__("pytest").raises(ChybaVstupu):
         u_nivelacni_zapisnik(s, {"a": "A", "b": "B", "zapisnik": "Z A 1500\nP T1 1000\nZ T2 1800\nP B 1296"})
+
+
+def test_volne_stanovisko_s_vyskou_ze_zenitu():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_volne
+    st = Bod("S", 1000.0, 2000.0, 300.0)
+    cile = [Bod("1", 1100.0, 2050.0, 305.0), Bod("2", 950.0, 2120.0, 296.0), Bod("3", 1020.0, 1900.0, 301.5)]
+    s = SeznamBodu()
+    s.body[:] = cile
+    vp, vc, o = 1.6, 1.3, 37.0
+    radky = []
+    for b in cile:
+        d = V.delka(st, b)
+        # převýšení terén–terén včetně zakřivení a refrakce → zenit a šikmá délka
+        dh = b.z - st.z
+        oprava = d * d * (1 - 0.13) / (2 * 6380000.0)
+        dv = dh - vp + vc - oprava
+        z = V.rad2gon(math.atan2(d, dv))
+        radky.append(f"{b.cislo} {V.norm_gon(V.smernik(st, b) - o):.6f} {math.hypot(d, dv):.5f} {z:.6f} {vc}")
+    r = u_volne(s, {"mereni": "\n".join(radky), "vp": str(vp), "nove": "S"})
+    b = r.nove[0]
+    assert math.hypot(b.y - st.y, b.x - st.x) < 1e-3 and abs(b.z - 300.0) < 1e-3
+
+
+def test_rajon_prostorovy_a_vymera_z_mer():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import ChybaVstupu, u_rajon, u_vymera_z_mer
+    s = SeznamBodu()
+    s.body[:] = [Bod("1", 0.0, 0.0, 100.0), Bod("2", 0.0, 100.0)]
+    r = u_rajon(s, {"st": "1", "o": "2", "so": "0", "sm": "0", "d": "50", "zenit": "100", "vp": "1.5",
+                    "vc": "1.5", "nove": "9"})
+    b = r.nove[0]
+    assert abs(b.x - 50.0) < 1e-9 and abs(b.z - (100 + 50 * 50 * 0.87 / (2 * 6380000))) < 1e-9
+    v = u_vymera_z_mer(SeznamBodu(), {"trojuhelniky": "T1 3 4 5\nT2 3 4 5"})
+    assert "celkem 12.00 m²" in "\n".join(v.protokol)
+    with pytest.raises(ChybaVstupu):
+        u_vymera_z_mer(SeznamBodu(), {"trojuhelniky": "T 1 1 5"})

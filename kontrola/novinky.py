@@ -20,6 +20,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "Polární metoda dávkou (Zápisník) bere korekce délek z Nastavení výpočtů.",
         "<b>Výpočty</b>: Polygonový pořad vetknutý (bez orientací, kontrola délkou) a Centrace směrů "
         "z excentrického stanoviska.",
+        "<b>Prostorová polární metoda</b>: rajón i volné stanovisko berou šikmou délku se zenitem a výškou "
+        "přístroje / cíle – výška bodu i stanoviska (zakřivení a refrakce). Nová úloha Výměra z měr (Heron).",
         "<b>Nivelační zápisník</b>: technická nivelace ze středu – čtení vzad, vpřed a boční záměry po sestavách, "
         "kontrola zápisníku, uzávěr s mezní odchylkou a výšky přestavových i bočních bodů rovnou do seznamu (Z).",
         "<b>Vzorek plochy v CAD</b> (Pattern Area): uzavřenou plochu vyplní buňkami v mřížce, do sponu, "
