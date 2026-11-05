@@ -609,8 +609,20 @@ class MainWindow(QMainWindow):
                         (getattr(self, "a_poradce", None), "poradce")):
             if a is not None:
                 a.setIcon(icon(name))
+        # každá stránka má svou barvu (rychlá orientace v levé liště); aktivní stránka plnou barvou
+        from PySide6.QtGui import QColor
+
+        from .theme import is_dark
+        barvy = {"uvod": "#2563EB", "vykres": "#0D9488", "zadani": "#D97706", "vypocty": "#7C3AED",
+                 "cad": "#EA580C", "kokes": "#059669"}
+
+        def barva(k, akt):
+            c = QColor(barvy.get(k, "#6B7280"))
+            if is_dark():
+                c = c.lighter(150 if akt else 120)
+            return c.name()
         for key, act in getattr(self, "a_page", {}).items():
-            act.setIcon(icon(key, accent() if act.isChecked() else themed("#6B7280")))
+            act.setIcon(icon(key, barva(key, act.isChecked())))
         if getattr(self, "a_menu", None) is not None:
             self.a_menu.setIcon(icon("menu"))
         if getattr(self, "a_mini", None) is not None:

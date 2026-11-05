@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QStringListModel, Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QCompleter, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-                               QListWidget, QPlainTextEdit, QPushButton, QSplitter, QTextBrowser, QVBoxLayout,
+                               QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QSplitter, QTextBrowser, QVBoxLayout,
                                QWidget)
 
 from ..geodezie import ulohy as _U
@@ -27,11 +27,23 @@ class UlohyPanel(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         sp = QSplitter()
         self.lst = QListWidget()
+        from PySide6.QtCore import QSize
+
+        from .groma_ikony import ikona as g_ikona
+        from .groma_okna import KARTY_GROMA
+        kde = {}  # úloha → (skupina, tlačítko) v pásu Výpočtů: ikona a barva skupiny
+        for _k, skupiny in KARTY_GROMA:
+            for sk, tl in skupiny:
+                for text, cil in tl:
+                    for n in (cil if isinstance(cil, list) else [cil]):
+                        kde.setdefault(n, (sk, text))
+        self._kde = kde
+        self.lst.setIconSize(QSize(18, 18))
         for nazev, _p, _f, _fn in ULOHY:
-            self.lst.addItem(nazev)
+            sk, text = kde.get(nazev, ("Další", "Další výpočty"))
+            self.lst.addItem(QListWidgetItem(g_ikona(sk, text), nazev))
         self.lst.setMaximumWidth(260)
         self.lst.setObjectName("seznam_uloh")
-        self.lst.setStyleSheet("QListWidget#seznam_uloh::item { padding: 7px 8px; }")
         levy = QWidget()
         levy.setMaximumWidth(260)
         ll = QVBoxLayout(levy)
@@ -49,6 +61,7 @@ class UlohyPanel(QWidget):
         rl = QVBoxLayout(right)
         self.popis = QLabel()
         self.popis.setWordWrap(True)
+        self.popis.setObjectName("stranka_info")
         rl.addWidget(self.popis)
         self.formbox = QGroupBox("Zadání")
         self.form = QFormLayout(self.formbox)
@@ -150,7 +163,10 @@ class UlohyPanel(QWidget):
             self.form.removeRow(0)
         self.inputs = {}
         nazev, popis, pole, _fn = ULOHY[i]
-        self.popis.setText(f"<b style='font-size:12pt'>{escape(nazev)}</b><br>{escape(popis)}")
+        from .groma_ikony import barva_skupiny
+        bs = barva_skupiny(self._kde.get(nazev, ("Další", ""))[0])
+        self.popis.setText(f"<b style='font-size:12pt;color:{bs}'>{escape(nazev)}</b><br>{escape(popis)}")
+        self.popis.setStyleSheet(f"QLabel#stranka_info {{ border-left: 4px solid {bs}; }}")
         self._completer_model.setStringList([b.cislo for b in self.page.seznam.body])
         for p in pole:
             if p.typ == "volba":

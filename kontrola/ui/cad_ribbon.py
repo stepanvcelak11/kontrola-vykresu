@@ -165,6 +165,17 @@ KARTY = [
 ]
 
 
+_PALETA_SKUPIN = ("#2563EB", "#0D9488", "#EA580C", "#7C3AED", "#DB2777", "#059669", "#CA8A04", "#0891B2",
+                  "#DC2626", "#4F46E5")
+
+
+def barva_skupiny(titul: str) -> str:
+    """Stálá barva skupiny nástrojů (podle názvu) – proužek s názvem a barevné části ikon."""
+    from .theme import is_dark
+    c = QColor(_PALETA_SKUPIN[sum(ord(z) for z in titul) % len(_PALETA_SKUPIN)])
+    return c.lighter(150).name() if is_dark() else c.name()
+
+
 def _tlacitko(cmd: str, popisy, barva, zvyr, velke: bool) -> QToolButton:
     b = QToolButton()
     b.setText(nazev(cmd))
@@ -274,6 +285,7 @@ class PasKaret(QWidget):
                 self.karty.setCurrentIndex(i)
 
     def _skupina(self, titul, polozky, popisy, stranka, barva, zvyr) -> QWidget:
+        zvyr = barva_skupiny(titul)  # barevné části ikon podle skupiny (jako barevné ikony MicroStationu)
         box = QWidget()
         v = QVBoxLayout(box)
         v.setContentsMargins(2, 0, 2, 0)
@@ -314,6 +326,9 @@ class PasKaret(QWidget):
         lbl = QLabel(titul)
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setObjectName("pas_skupina")
+        # každá skupina má barevný proužek s názvem (rychlá orientace v pásu)
+        bs = barva_skupiny(titul)
+        lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {bs}; border-top: 2px solid {bs}; }}")
         v.addWidget(lbl)
         return box
 
@@ -357,12 +372,14 @@ class PanelUloh(QScrollArea):
         st = QSettings("KontrolaVykresu", "KontrolaVykresu")
         self._obsahy: dict[str, QWidget] = {}
         for titul, prikazy in ULOHY:
+            zvyr = barva_skupiny(titul)
             hlav = QToolButton()
             hlav.setText(titul)
             hlav.setCheckable(True)
             hlav.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             hlav.setSizePolicy(hlav.sizePolicy().horizontalPolicy().Expanding, hlav.sizePolicy().verticalPolicy())
             hlav.setObjectName("cad_skupina_uloh")
+            hlav.setStyleSheet(f"QToolButton#cad_skupina_uloh {{ border-left: 3px solid {zvyr}; }}")
             obsah = QWidget()
             ov = QVBoxLayout(obsah)
             ov.setContentsMargins(6, 0, 0, 2)

@@ -467,10 +467,16 @@ class PasGromy(QWidget):
                 v.setSpacing(0)
                 g = QGridLayout()
                 g.setSpacing(0)
+                from PySide6.QtCore import QSize
+
+                from .groma_ikony import barva_skupiny
+                from .groma_ikony import ikona as g_ikona
                 for k, (text, cil) in enumerate(tlacitka):
                     b = QToolButton()
                     b.setAutoRaise(True)
-                    b.setToolButtonStyle(Qt.ToolButtonTextOnly)
+                    b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+                    b.setIconSize(QSize(18, 18))
+                    b.setIcon(g_ikona(skupina, text))
                     klic = f"{karta}/{skupina}/{text}"
                     if isinstance(cil, list):
                         b.setText(text + " ▾")
@@ -484,6 +490,7 @@ class PasGromy(QWidget):
                         b.setMenu(m)
                     else:
                         a = QAction(text, b)
+                        a.setIcon(b.icon())
                         fn = self._funkce(cil, jmena)
                         if fn is None:
                             continue
@@ -496,6 +503,8 @@ class PasGromy(QWidget):
                 lbl = QLabel(skupina)
                 lbl.setAlignment(Qt.AlignCenter)
                 lbl.setObjectName("pas_skupina")
+                bs = barva_skupiny(skupina)
+                lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {bs}; border-top: 2px solid {bs}; }}")
                 v.addWidget(lbl)
                 h.addWidget(box)
                 sep = QFrame()

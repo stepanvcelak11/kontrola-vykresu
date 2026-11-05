@@ -190,6 +190,28 @@ def icon(name: str, color: str | None = None, size: int = 40) -> QIcon:
     return ic
 
 
+def svg_ikona(telo: str, barva: str, size: int = 36) -> QIcon:
+    """Ikona z čárové kresby SVG 24×24 (currentColor = barva), pro pásy karet a nástroje."""
+    try:
+        from PySide6.QtSvg import QSvgRenderer
+    except ImportError:
+        return QIcon()
+    ic = QIcon()
+    for mode, col in ((QIcon.Normal, barva), (QIcon.Disabled, themed("#9CA3AF"))):
+        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{col}" '
+               f'color="{col}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+               f'{telo.replace("currentColor", col)}</svg>')
+        r = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        r.render(p, QRectF(0, 0, size, size))
+        p.end()
+        ic.addPixmap(pm, mode)
+    return ic
+
+
 STYLESHEET = f"""
 QMainWindow, QDialog {{ background: {BG}; }}
 QWidget {{ color: {TEXT}; }}
@@ -273,7 +295,8 @@ QTableView::item {{ padding: 3px 8px; border: none; }}
 QTableView::item:hover, QListWidget::item:hover, QTreeView::item:hover {{ background: {HOVER}; }}
 QTableView::item:selected, QListWidget::item:selected, QTreeView::item:selected {{
     background: {ACCENT_SOFT}; color: {TEXT}; }}
-QListWidget::item {{ padding: 5px 6px; border-radius: 6px; }}
+QListWidget::item {{ padding: 6px 8px; border-radius: 0; border-bottom: 1px solid {BORDER}; }}
+QListWidget::item:selected {{ border-left: 3px solid {ACCENT}; }}
 QHeaderView {{ background: {HEADER}; border: none; }}
 QHeaderView::section {{ background: {HEADER}; border: none; border-right: 1px solid {BORDER};
     border-bottom: 2px solid {BORDER_STRONG}; padding: 6px 8px; font-weight: 700; color: #374151; }}

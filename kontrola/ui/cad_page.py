@@ -648,6 +648,9 @@ class CadPage(QWidget):
         self.b_ref.setToolTip("Připojit jiný výkres DXF jako podklad (jen pro čtení, přichytávání, kopírování)")
         bar.addWidget(self.b_ref)
         self.b_vrstvy = QPushButton("Hladiny…")
+        from .theme import icon as _ic
+        self.b_vrstvy.setIcon(_ic("vrstvy", "#EA580C"))
+        self.b_ref.setIcon(_ic("vykres", "#0891B2"))
         self.b_vrstvy.setToolTip("Správce hladin: zapnutí, zámek, barva, typ čáry, nová, přejmenovat, smazat")
         bar.addWidget(self.b_vrstvy)
         self.b_zkratky = QPushButton("Zkratky…")
@@ -2417,9 +2420,7 @@ class CadPage(QWidget):
         g_ = U.skupina(e)
         if g_ is not None:
             r.append(("Skupina", g_))
-        radky = "".join(f"<tr><td style='color:#9CA3AF;padding-right:10px'>{escape(str(a))}</td>"
-                        f"<td>{escape(str(v))}</td></tr>" for a, v in r)
-        return f"<table>{radky}</table>"
+        return oddily_html(r)
 
     def _tol(self) -> float:
         return 8.0 / max(1e-12, abs(self.view.transform().m11()))
@@ -4589,6 +4590,45 @@ class CadPage(QWidget):
 def _linie(body):
     from shapely.geometry import LineString
     return LineString(body)
+
+
+_ODDILY = (("Prvek", ("Typ", "Skupina", "Název")),
+           ("Vzhled", ("Hladina", "Barva", "Styl", "Tloušťka", "Styl textu")),
+           ("Geometrie", ("Délka", "Poloměr", "Výměra", "Obvod", "Poloha", "Začátek", "Měřítko", "Natočení",
+                          "Výška")),
+           ("Obsah", ("Text",)))
+
+
+def oddily_html(radky: list[tuple[str, object]]) -> str:
+    """Vlastnosti po oddílech (Prvek, Vzhled, Geometrie, Obsah) – každý s barevným záhlavím a oddělenými řádky."""
+    from html import escape
+
+    from PySide6.QtGui import QColor
+
+    from .theme import BORDER, HEADER, MUTED, is_dark, themed
+    barvy = {"Prvek": "#2563EB", "Vzhled": "#EA580C", "Geometrie": "#059669", "Obsah": "#7C3AED"}
+    zbyle = list(radky)
+    out = []
+    for nazev, klice in _ODDILY:
+        cast = [(a, v) for a, v in zbyle if a in klice]
+        if not cast:
+            continue
+        zbyle = [x for x in zbyle if x not in cast]
+        c = QColor(barvy[nazev])
+        bc = c.lighter(150).name() if is_dark() else c.name()
+        t = [f"<tr><td colspan='2' style='background:{themed(HEADER)};color:{bc};font-weight:700;"
+             f"padding:4px 8px;border-left:3px solid {bc}'>{nazev}</td></tr>"]
+        for a, v in cast:
+            t.append(f"<tr><td style='color:{themed(MUTED)};padding:4px 12px 4px 8px;border-bottom:1px solid "
+                     f"{themed(BORDER)}'>{escape(str(a))}</td><td style='padding:4px 8px;border-bottom:1px solid "
+                     f"{themed(BORDER)}'>{escape(str(v))}</td></tr>")
+        out.append("<table width='100%' cellspacing='0' cellpadding='0' style='margin-bottom:10px'>"
+                   + "".join(t) + "</table>")
+    if zbyle:  # vlastnosti mimo oddíly
+        out.append("<table width='100%'>" + "".join(
+            f"<tr><td style='color:{themed(MUTED)};padding:4px 12px 4px 8px'>{escape(str(a))}</td>"
+            f"<td style='padding:4px 8px'>{escape(str(v))}</td></tr>" for a, v in zbyle) + "</table>")
+    return "".join(out)
 
 
 def _ikona_stylu(st, barva):
