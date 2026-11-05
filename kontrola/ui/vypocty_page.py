@@ -764,6 +764,14 @@ class VypoctyPage(QWidget):
         self.message(f"Porovnáno {len(rozdily)} společných bodů, nevyhovuje {spatne}.", bool(spatne))
         return rozdily
 
+    def trimble_dialog(self, modal: bool = True):
+        """Měření z Trimble (JobXML) podle šablony .xsl – jako Trimble File and Report."""
+        from .trimble_dialog import TrimbleDialog
+        d = TrimbleDialog(self, self)
+        if modal:
+            d.exec()
+        return d
+
     def qtrig_dialog(self, klient=None):
         """Okno QTrig (nemodální – může hlídat zakázku, zatímco se pracuje dál)."""
         from .qtrig_dialog import QTrigDialog

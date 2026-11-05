@@ -258,6 +258,7 @@ KARTY_GROMA = [
     ("Soubor", [
         ("Soubor", [("Import souřadnic…", "@import_dialog"), ("Export souřadnic…", "@export_dialog"),
                     ("Načíst z QTrig…", "@qtrig_dialog")]),
+        ("Import", [("Trimble (File and Report)…", "@trimble_dialog")]),
         ("Editace", [("Krok zpět", "@undo"), ("Krok vpřed", "@redo"), ("Odstranit", "@delete_selected")]),
         ("Seznam", [("Přidej bod…", "@add_point"), ("Hromadné změny…", "@bulk_dialog"),
                     ("Porovnání souřadnic…", "@porovnat_seznam"), ("Identické body…", "@duplicates_dialog")]),

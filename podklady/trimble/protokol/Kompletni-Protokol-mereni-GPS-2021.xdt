@@ -1,0 +1,3352 @@
+<?xml version='1.0' encoding="UTF-8"?>
+<xsl:stylesheet version="1.0"
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+    xmlns:msxsl="urn:schemas-microsoft-com:xslt">
+    
+	<!--
+
+	- ver.: 1.00 (08.02.2021), LH, Vytvoreni protokolu od zacatku
+	- ver.: 1.10 (08.03.2021), LH, Oprava exportu a vytycovani jen pro GPS
+	- ver.: 1.20 (08.03.2021), LH, Pridani horizontalni odsazeni
+	- ver.: 1.30 (22.08.2024), LM, Oprava odchylek vytyčení pro SV souřadnice
+	- ver.: 1.31 (30.08.2024), LM, Oprava odchylek vytyčení pro SV souřadnice
+	- ver.: 1.40 (11.09.2024), LM, Oprava vypisu prumerovani
+	- ver.: 1.50 (17.02.2025), LM, Pridani do Cogo vertikalni odsazeni
+	- ver.: 1.51 (03.08.2026), LM, Uprava exportu správný export souřadnicového systému Křovák 2018 SV
+	-->
+	
+	<!-- (c) 2005, Trimble Navigation Limited. All rights reserved.                                -->
+	<!-- (c) 2005-2006, GEOTRONICS Praha, s.r.o. Vsechna prava vyhrazena.                          -->
+	<!-- Trimble Navigation Limited a jeho Autorizovany distributor GEOTRONICS Praha, s.r.o.,      -->
+	<!-- poskytuje tento vstupni/vystupni predpis (XSL Style Sheet) "TAK JAK JE" se vsemi moznymi  -->
+	<!-- chybami a zrika se jakykoliv, i samozrejmych zaruk. Dale se pak zrika zaruky, ze tento    -->
+	<!-- produkt bude neomezene funkcni a bez chyb.                                                -->
+	
+	<xsl:variable name="VersionProt" select="'1.51'"/> <!--verze protokolu-->
+	
+	<xsl:output method="text" encoding="ISO-8859-2"/>
+	
+	<!-- Import hlavicky protokolu -->
+	<xsl:include href="Protokol-Head.xdt"/>
+	
+	<!-- Set the numeric display details i.e. decimal point, thousands separator etc -->
+	<xsl:variable name="DecPt" select="string('.')"/>    <!-- Change as appropriate for US/European -->
+	<xsl:variable name="GroupSep" select="string(',')"/> <!-- Change as appropriate for US/European -->
+	<!-- Also change decimal-separator & grouping-separator in decimal-format below
+	     as appropriate for US/European output -->
+	<xsl:decimal-format name="Standard"
+	                    decimal-separator="."
+	                    grouping-separator=","
+	                    infinity="Infinity"
+	                    minus-sign="-"
+	                    NaN=" "
+	                    percent="%"
+	                    per-mille="&#2030;"
+	                    zero-digit="0"
+	                    digit="#"
+	                    pattern-separator=";" />
+	
+	<xsl:variable name="DecPl0" select="string('#0')"/>
+	<xsl:variable name="DecPl1" select="string(concat('#0', $DecPt, '0'))"/>
+	<xsl:variable name="DecPl2" select="string(concat('#0', $DecPt, '00'))"/>
+	<xsl:variable name="DecPl3" select="string(concat('#0', $DecPt, '000'))"/>
+	<xsl:variable name="DecPl4" select="string(concat('#0', $DecPt, '0000'))"/>
+	<xsl:variable name="DecPl5" select="string(concat('#0', $DecPt, '00000'))"/>
+	<xsl:variable name="DecPl6" select="string(concat('#0', $DecPt, '000000'))"/>
+	<xsl:variable name="DecPl8" select="string(concat('#0', $DecPt, '00000000'))"/>
+	
+	  <xsl:variable name="DistRound">
+	    <xsl:if test="$UnitsOut = 'cm'"><xsl:value-of select="$DecPl2"/></xsl:if>
+	    <xsl:if test="$UnitsOut = 'mm'"><xsl:value-of select="$DecPl3"/></xsl:if>
+	  </xsl:variable>
+	
+	<xsl:variable name="DegreesSymbol" select="'&#0176;'"/>
+	<xsl:variable name="MinutesSymbol"><xsl:text>'</xsl:text></xsl:variable>
+	<xsl:variable name="SecondsSymbol" select="'&quot;'"/>
+	
+	<!-- **************************************************************** -->
+	<!-- Set global variables from the Environment section of JobXML file -->
+	<!-- **************************************************************** -->
+	<xsl:variable name="DistUnit"   select="/JOBFile/Environment/DisplaySettings/DistanceUnits" />
+	<xsl:variable name="AngleUnit"  select="/JOBFile/Environment/DisplaySettings/AngleUnits" />
+	<xsl:variable name="CoordOrder" select="/JOBFile/Environment/DisplaySettings/CoordinateOrder" />
+	
+	<!-- **************************************************************** -->
+	<!-- *** Set global variables for FieldBook data searching ********** -->
+	<!-- **************************************************************** -->
+	<xsl:key name="obsID-search" match="/JOBFile/FieldBook/PointRecord" use="@ID"/>
+	<xsl:key name="GridPT-search" match="/JOBFile/FieldBook/PointRecord" use="Name"/>
+	<xsl:key name="AntHI-search" match="/JOBFile/FieldBook/AntennaRecord" use="@ID"/>
+	<xsl:key name="AntHF-search" match="/JOBFile/FieldBook/GPSEquipmentRecord" use="@ID"/>
+	<xsl:key name="PrumerID-search" match="/JOBFile/FieldBook/PointRecord" use="AverageResiduals/AverageResidual/ObservationID"/>
+	<xsl:key name="HTO-name" match="/JOBFile/FieldBook/PointRecord" use="Name"/>
+	
+	<!-- Setup boolean variable for coordinate order -->
+	<xsl:variable name="NECoords">
+	  <xsl:choose>
+	    <xsl:when test="$CoordOrder='X-Y-Z'">
+	      <xsl:value-of select="'True'"/>
+	    </xsl:when>
+	    <xsl:otherwise>
+	      <xsl:value-of select="'False'"/>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:variable>
+	
+	<!-- Kontrola zda se nejedna o SV -->
+	<xsl:variable name="Typ_SS">
+	  <xsl:choose>
+	    <xsl:when test="/JOBFile/FieldBook/CorrectionsRecord/GridOrientation='IncreasingNorthEast'">
+	      <xsl:value-of select="'-1'"/>
+     	</xsl:when>
+	    <xsl:otherwise>
+	      <xsl:value-of select="'1'"/>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:variable>
+	
+	<!-- Setup conversion factor for coordinate and distance values -->
+	<xsl:variable name="DistConvFactor">
+	  <xsl:choose>
+	    <xsl:when test="$DistUnit='Metres'">
+	      1.0
+	    </xsl:when>
+	    <xsl:when test="$DistUnit='InternationalFeet'">
+	      3.280839895
+	    </xsl:when>
+	    <xsl:when test="$DistUnit='USSurveyFeet'">
+	      3.2808333333357
+	    </xsl:when>
+	    <xsl:otherwise>
+	      1.0
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:variable>
+	
+	<!-- Setup conversion factor for angular values-->
+	<xsl:variable name="AngleConvFactor">
+	  <xsl:choose>
+	    <xsl:when test="$AngleUnit='DMSDegrees'">
+	      1.0
+	    </xsl:when>
+	    <xsl:when test="$AngleUnit='Gons'">
+	      1.111111111111
+	    </xsl:when>
+	    <xsl:when test="$AngleUnit='Mils'">
+	      17.77777777777
+	    </xsl:when>
+	    <xsl:otherwise>
+	      1.0
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:variable>
+	
+	<!-- Setup text values for distance units -->
+	<xsl:variable name="distUnitAbbrev">
+	  <xsl:choose>
+	    <xsl:when test="$DistUnit ='Metres'"><xsl:value-of select="' m'"/></xsl:when>
+	    <xsl:when test="$DistUnit ='InternationalFeet'"><xsl:value-of select="' ft'"/></xsl:when>
+	    <xsl:when test="$DistUnit ='USSurveyFeet'"><xsl:value-of select="' sft'"/></xsl:when>
+	  </xsl:choose>
+	</xsl:variable>
+	
+	<xsl:variable name="RMStest" select="'ANO'"/>
+	<xsl:variable name="RMSset" select="'40.0'"/>
+	
+	<!-- **************************************************************** -->
+	<!-- ************************** Main Loop *************************** -->
+	<!-- **************************************************************** -->
+	<!-- *** Zpracovani dat hlavicky *** -->
+	<xsl:template match="/" >
+		<!--Hlavicka s nazvem protokolu,zakaznikem a informacema ohledne pristroje a nastaveni zakazky -->
+		<xsl:call-template name="ProtocolHead"/>
+		
+		<!--Hlavicka Merenych bodu-->
+		<xsl:call-template name="GridPointHead"/>
+		
+		<!--Ospojeni Merenych bodu pro zpracovani a export-->
+		<xsl:call-template name="Merene_body_PDOP"/>
+		
+		<!--vysvětlivky k tabulce s merenymi body-->
+		<xsl:call-template name="GridPointBottom"/>
+		
+		<!--Prumerovane body-->
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Classification = 'Averaged'">
+			<xsl:call-template name="MeanPointHead"/>
+			<xsl:call-template name="Prumerovani_bodu"/>
+			<xsl:call-template name="MeanPointHead2"/>
+			<xsl:call-template name="Kratka_SS"/>
+			<xsl:call-template name="MeanOutput"/>
+		</xsl:if>
+		
+		<!--Vytycovane body-->
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Classification = 'Stakeout'">
+			<xsl:call-template name="StakeoutHead"/>
+			<xsl:call-template name="StakeoutDeltas"/>
+			<xsl:call-template name="StakeoutListHead"/>
+			<xsl:call-template name="Kratka_SS"/>
+			<xsl:call-template name="StakeoutList"/>
+		</xsl:if>
+		
+		<!--Cogo body-->
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Method = 'DistanceDistanceIntersection' or /JOBFile/FieldBook/PointRecord/Method = 'FromABaseline' or /JOBFile/FieldBook/PointRecord/Method = 'BearingDistancePointIntersection'">
+			<xsl:call-template name="COGO_body"/>
+		</xsl:if>
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Method = 'FromABaseline'">
+			<xsl:call-template name="Cogo_od_zakladny"/>
+		</xsl:if>
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Method = 'DistanceDistanceIntersection'">
+			<xsl:call-template name="Cogo_protinani"/>
+		</xsl:if>
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Method = 'BearingDistancePointIntersection'">
+			<xsl:call-template name="Cogo_HzOdsazeni"/>
+		</xsl:if>
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/GNSSVerticalOffset/VerticalOffset != ''">
+			<xsl:call-template name="Cogo_VtOdsazeni"/>
+		</xsl:if>
+		
+		<!--SS-->
+		<xsl:call-template name="MeasPointHead"/>
+		<xsl:call-template name="Kratka_SS"/>
+		<xsl:call-template name="Merene_body_SS"/>
+		<xsl:if test="$UsedPt = 'Ne'">
+			<xsl:call-template name="Vsechny_body"/>
+			<xsl:call-template name="Kratka_SS"/>
+			<xsl:call-template name="SS_vsech_bodu"/>
+		</xsl:if>
+		
+		
+	</xsl:template>
+	
+	<!-- ******************************************************************************************************************************** -->
+	<!-- ***************************************************** Zpracovani ****************************************************** -->
+	<!-- ******************************************************************************************************************************** -->
+	
+	<!-- xxxxxxxxxxxxxxxxx Nazev protokolu podle toho, zda je vytycovani v mereni xxxxxxxxxxxxxxxxx-->
+	
+	<xsl:template name="ProtocolHead">
+	
+		<xsl:variable name="SOYesOrNot">
+			<xsl:if test="/JOBFile/FieldBook/PointRecord/Stakeout">
+				<xsl:value-of select="'SOYes'"/>
+			</xsl:if>
+		</xsl:variable>
+	
+		<xsl:call-template name="DashLineM"/>
+	
+		<xsl:choose>
+			<xsl:when test="$SOYesOrNot = 'SOYes'">
+				<xsl:value-of select="'PROTOKOL GNSS (RTK) MERENI A VYTYCOVANI'"/>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:value-of select="'PROTOKOL GNSS (RTK) MERENI'"/>
+			</xsl:otherwise>
+		</xsl:choose>
+	
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineM"/>
+		<xsl:call-template name="MainHead"/>
+	
+	</xsl:template>
+	
+	<!--xxxxxxxxxxxxxxxxx Hlavicka s pristrojem, zobrazenim a podobne xxxxxxxxxxxxxxxxx   -->
+	
+	<xsl:template name="MainHead">
+	
+		<!--xxxxx Informace o pristroji xxxxx-->
+		<!-- Typ pristroje -->
+		<xsl:variable name="InstModel">
+			<xsl:for-each select="JOBFile/FieldBook/GPSEquipmentRecord[last()]">
+				<xsl:value-of select="ReceiverType"/>
+			</xsl:for-each>
+		</xsl:variable>
+	
+		<!-- FW pristroje -->
+		<xsl:variable name="InstFW">
+			<xsl:for-each select="JOBFile/FieldBook/GPSEquipmentRecord[last()]">
+				<xsl:value-of select="ReceiverFirmwareVersion"/>
+			</xsl:for-each>
+		</xsl:variable>
+	
+		<!-- SN pristroje -->
+		<xsl:variable name="InstSN">
+			<xsl:for-each select="JOBFile/FieldBook/GPSEquipmentRecord[last()]">
+				<xsl:value-of select="ReceiverSerialNumber"/>
+			</xsl:for-each>
+		</xsl:variable>
+	
+		<!--xxxxx Informace o softwaru xxxxx-->
+		<!-- Data: verze SW -->
+		<xsl:variable name="SoftwareName">
+			<xsl:value-of select="JOBFile/@product"/>
+		</xsl:variable>
+	
+		<xsl:variable name="InstSWVersion">
+			<xsl:value-of select="/JOBFile/@productVersion"/>
+		</xsl:variable>
+	
+		<!-- Data: souradnicovy system -->
+		<xsl:variable name="jobCoordSys_ZN">
+			<xsl:for-each select="JOBFile/FieldBook/CoordinateSystemRecord[last()]">
+				<xsl:choose>
+					<xsl:when test="ZoneName[.='Krovak_2018']">Pouzit Transformacni modul zpresnene globalni transformace Trimble 2018 verze 1.0 schvaleny CUZK pro mereni od 1.1.2018</xsl:when>
+					<xsl:when test="ZoneName[.='Krovak2018']">Pouzit Transformacni modul zpresnene globalni transformace Trimble 2018 verze 1.0 schvaleny CUZK pro mereni od 1.7.2018</xsl:when>
+					<xsl:when test="ZoneName[.='Krovak_2018_SV']">Pouzit Transformacni modul zpresnene globalni transformace Trimble 2018 verze 1.0 schvaleny CUZK pro mereni od 1.1.2018</xsl:when>
+					<xsl:when test="ZoneName[.='Krovak2018_SV']">Pouzit Transformacni modul zpresnene globalni transformace Trimble 2018 verze 1.0 schvaleny CUZK pro mereni od 1.7.2018</xsl:when>
+					
+					<xsl:otherwise>
+						<xsl:value-of select="ZoneName"/>
+					</xsl:otherwise>
+				</xsl:choose>
+			</xsl:for-each>
+		</xsl:variable>
+	
+		<!-- Nastavena zona ve vlastnostech jobu -->
+		<xsl:variable name="jobZona">
+			<xsl:for-each select="JOBFile/FieldBook/CoordinateSystemRecord[last()]">
+				<xsl:value-of select="ZoneName"/>
+			</xsl:for-each>
+		</xsl:variable>
+	
+		<!-- Nastavá dotransformace ve vlastnostech jobu -->
+		<xsl:variable name="jobShiftGrid">
+			<xsl:for-each select="JOBFile/FieldBook/ProjectionRecord[last()]">
+				<xsl:value-of select="Projection/ShiftGridFileName"/>
+			</xsl:for-each>
+		</xsl:variable>
+	
+		<!--xxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxx Vypis dat xxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxx-->
+		
+		<!-- Hlavicka s adresou zakaznika -->
+		<xsl:value-of select="' Firma:   '"/>
+		<xsl:value-of select="$MyCompany"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat('          ', $MyAddress)"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat('          ', $MyCity)"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="NewLine"/>
+	
+		<!-- Informace o merici a podobne -->
+		<xsl:value-of select="' Zakazka: '"/>
+		<xsl:value-of select="/JOBFile/@jobName"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="' Meril:   '"/>
+		<xsl:value-of select="/JOBFile/FieldBook/JobPropertiesRecord[last()]/Operator"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="' Datum:   '"/>
+		<xsl:value-of select="concat(substring(/JOBFile/@TimeStamp, 9, 2), '.',
+	                               substring(/JOBFile/@TimeStamp, 6, 2), '.',
+	                               substring(/JOBFile/@TimeStamp, 1, 4))"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="NewLine"/>
+	
+		<!-- Informace o pristroji a softwaru-->
+		<xsl:value-of select="concat(' Pristroj: Trimble ', $InstModel, ', fw: ', $InstFW, ',  vyr. c.: ', $InstSN )"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat(' ',$SoftwareName,' SW: ', $InstSWVersion)"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat(' Verze protokolu: ', $VersionProt)"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat(' Souradnicovy system:  ', $jobCoordSys_ZN)"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat(' Zona:  ', $jobZona)"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="concat(' Soubor rovinne dotransformace:  ', $jobShiftGrid)"/>
+		<xsl:call-template name="NewLine"/>
+	
+	
+		<xsl:if test="/JOBFile/FieldBook/PointRecord/Stakeout">
+			<xsl:call-template name="NewLine"/>
+			<xsl:value-of select="' Horizontalni tolerance: '"/>
+			<xsl:value-of select="concat(format-number(number($HzSOTol), $DecPl3, 'Standard'), ' m')"/>
+			<xsl:call-template name="NewLine"/>
+			<xsl:value-of select="' Vertikalni tolerance:   '"/>
+			<xsl:value-of select="concat(format-number(number($VtSOTol), $DecPl3, 'Standard'), ' m')"/>
+			<xsl:call-template name="NewLine"/>
+			<xsl:value-of select="concat(' Kontrolovane tolerance: ', $TolCheckType)"/>
+			<xsl:call-template name="NewLine"/>
+		</xsl:if>
+		
+	<xsl:if test="/JOBFile/FieldBook/VerticalAdjustmentRecord/Type = 'GeoidModel'">
+       <xsl:call-template name="NewLine"/>
+       <xsl:value-of select="'Model kvazigeoidu: '"/>
+         <xsl:choose>
+           <xsl:when test="/JOBFile/FieldBook/VerticalAdjustmentRecord/GeoidName='Czech10' or /JOBFile/FieldBook/VerticalAdjustmentRecord/GeoidName='Czech11'">
+             <xsl:value-of select="'CR-2005'"/>
+           </xsl:when>
+           <xsl:otherwise>
+            <xsl:value-of select="/JOBFile/FieldBook/VerticalAdjustmentRecord/GeoidName"/>
+           </xsl:otherwise>
+         </xsl:choose>
+        <xsl:call-template name="NewLine"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="NewLine"/>
+   </xsl:if>	
+	
+		<xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxx Mereni xxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+	<xsl:template name="Merene_body_PDOP">
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="QualityControl1/PDOP!='' or Method='BearingDistancePointIntersection'">
+					<xsl:if test="not(contains(Name,'HTO'))">
+						<xsl:call-template name="Mereni"/>
+					</xsl:if>
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+	<xsl:template name="Mereni">	
+		<!-- Vypis dat (tabulka) -->
+						
+		<!--Nazev bodu-->
+		<xsl:variable name="PTName">
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+		</xsl:variable>
+		
+		<!-- Jedna souradnice-->
+		<xsl:variable name="PTGridCoord1">
+			<xsl:choose>
+				<xsl:when test="$NECoords = 'True'">
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="13"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="12"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--Druha souradnice-->
+		<xsl:variable name="PTGridCoord2">
+			<xsl:choose>
+				<xsl:when test="$NECoords = 'True'">
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="12"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="13"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--Vyska bodu-->
+		<xsl:variable name="PTHeight">
+			<xsl:call-template name="PadLeft">
+				<xsl:with-param name="StringWidth" select="9"/>
+				<xsl:with-param name="TheString">
+					<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+				</xsl:with-param>
+			</xsl:call-template>
+		</xsl:variable>
+	
+		
+		<!--Horizontalni presnost-->
+		<xsl:variable name="PThzPrec">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+							<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="7"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="format-number(Precision/Horizontal * $DistConvFactor, $DecPl3, 'Standard')"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="7"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(Precision/Horizontal * $DistConvFactor, $DecPl3, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>				
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+		
+		<!--Vertikalni presnost-->
+		<xsl:variable name="PTvtPrec">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="6"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="format-number(Precision/Vertical * $DistConvFactor, $DecPl3, 'Standard')"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="6"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(Precision/Vertical * $DistConvFactor, $DecPl3, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--PDOP-->
+		<xsl:variable name="PtPDOP">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="6"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="format-number(QualityControl1/PDOP * $DistConvFactor, $DecPl2, 'Standard')"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="6"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(QualityControl1/PDOP * $DistConvFactor, $DecPl2, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--PDOP Tolerance-->				
+		<xsl:variable name="PtPDOPTol">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="1"/>
+							<xsl:with-param name="TheString">
+								<xsl:choose>
+									<xsl:when test="(QualityControl1/PDOP &gt;= $PDOPTol)">
+										<xsl:value-of select="'*'"/>
+									</xsl:when>
+									<xsl:otherwise>
+										<xsl:value-of select="' '"/>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="1"/>
+						<xsl:with-param name="TheString">
+							<xsl:choose>
+								<xsl:when test="(QualityControl1/PDOP &gt;= $PDOPTol)">
+									<xsl:value-of select="'*'"/>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:value-of select="' '"/>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--RMSTolerance-->
+		<xsl:variable name="PtRMSTol">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="1"/>
+							<xsl:with-param name="TheString">
+								<xsl:choose>
+									<xsl:when test="(QualityControl1/RMS &gt;= $RMSset and $RMStest = 'ANO')">
+										<xsl:value-of select="'#'"/>
+									</xsl:when>
+									<xsl:otherwise>
+										<xsl:value-of select="' '"/>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="1"/>
+						<xsl:with-param name="TheString">
+							<xsl:choose>
+								<xsl:when test="(QualityControl1/RMS &gt;= $RMSset and $RMStest = 'ANO')">
+									<xsl:value-of select="'#'"/>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:value-of select="' '"/>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>	
+		</xsl:variable>
+
+		<!-- Pocet satelitu-->
+		<xsl:variable name="PtNbrSat">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="4"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="format-number(QualityControl1/NumberOfSatellites * $DistConvFactor, $DecPl0, 'Standard')"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="4"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(QualityControl1/NumberOfSatellites * $DistConvFactor, $DecPl0, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>	
+		</xsl:variable>
+
+		<!--ID anteny-->
+		<!--<xsl:variable name="tempAntHIID">
+			<xsl:value-of select="AntennaID"/>
+		</xsl:variable>-->
+		
+		<!--Vyska anteny-->
+		<xsl:variable name="PtAntHI">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="9"/>
+							<xsl:with-param name="TheString">
+								<xsl:for-each select="key('AntHI-search', AntennaID)[1]">
+									<xsl:value-of select="format-number(MeasuredHeight, $DecPl2, 'Standard')"/>
+								</xsl:for-each>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:for-each select="key('AntHI-search', AntennaID)[1]">
+								<xsl:value-of select="format-number(MeasuredHeight, $DecPl2, 'Standard')"/>
+							</xsl:for-each>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>	
+		</xsl:variable>
+
+		<!--Vyska anteny od-->
+		<!--Nalezeni ID přístroje pomocí ID anteny -->
+		<xsl:variable name="tempAntEquID">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:for-each select="key('AntHI-search', AntennaID)">
+							<xsl:value-of select="GPSEquipmentID"/>
+						</xsl:for-each>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:for-each select="key('AntHI-search', AntennaID)">
+						<xsl:value-of select="GPSEquipmentID"/>
+					</xsl:for-each>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--Vypsani hodnoty vysky od-->
+		<xsl:variable name="PtAntHIFrom">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="4"/>
+							<xsl:with-param name="TheString">
+								<xsl:for-each select="key('AntHF-search', $tempAntEquID)">
+									<xsl:choose>
+										<xsl:when test="AntennaMeasurementMethod[.='Fázové centrum']">FC</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Antenna Phase Center']">FC</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Bottom of antenna mount']">SZ</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Spodek zavitu anteny']">SZ</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Stred nárazníku']">SN</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Stred narazniku']">SN</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Center of bumper']">SN</xsl:when>
+										<xsl:when test="AntennaMeasurementMethod[.='Spodek rychloupinaku']">SR</xsl:when>
+										<xsl:otherwise>
+											<xsl:value-of select="'  '"/>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:for-each>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="4"/>
+						<xsl:with-param name="TheString">
+							<xsl:for-each select="key('AntHF-search', $tempAntEquID)">
+								<xsl:choose>
+									<xsl:when test="AntennaMeasurementMethod[.='Fázové centrum']">FC</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Antenna Phase Center']">FC</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Bottom of antenna mount']">SZ</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Spodek zavitu anteny']">SZ</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Stred nárazníku']">SN</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Stred narazniku']">SN</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Center of bumper']">SN</xsl:when>
+									<xsl:when test="AntennaMeasurementMethod[.='Spodek rychloupinaku']">SR</xsl:when>
+									<xsl:otherwise>
+										<xsl:value-of select="'  '"/>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:for-each>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--cas mereni-->
+		<xsl:variable name="GridPtTime">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="8"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="substring(@TimeStamp, 12, 5)"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="8"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="substring(@TimeStamp, 12, 5)"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--doba mereni-->
+		<xsl:variable name="GridPtDuration">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="11"/>
+							<xsl:with-param name="TheString">
+								<xsl:if test="QualityControl1/EndTime/Seconds = QualityControl1/StartTime/Seconds">
+									<xsl:value-of select="format-number(QualityControl1/EndTime/Seconds - QualityControl1/StartTime/Seconds + 1,DecPl0)" />
+								</xsl:if>
+								<xsl:if test="QualityControl1/EndTime/Seconds != QualityControl1/StartTime/Seconds">
+									<xsl:value-of select="format-number(QualityControl1/EndTime/Seconds - QualityControl1/StartTime/Seconds,DecPl0)" />
+								</xsl:if>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="11"/>
+						<xsl:with-param name="TheString">
+							<xsl:if test="QualityControl1/EndTime/Seconds = QualityControl1/StartTime/Seconds">
+								<xsl:value-of select="format-number(QualityControl1/EndTime/Seconds - QualityControl1/StartTime/Seconds + 1,DecPl0)" />
+							</xsl:if>
+							<xsl:if test="QualityControl1/EndTime/Seconds != QualityControl1/StartTime/Seconds">
+								<xsl:value-of select="format-number(QualityControl1/EndTime/Seconds - QualityControl1/StartTime/Seconds,DecPl0)" />
+							</xsl:if>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--Datum mereni-->
+		<xsl:variable name="GridPtDate">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="7"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="concat(substring(@TimeStamp, 9, 2), '.',
+																	substring(@TimeStamp, 6, 2))"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="7"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="concat(substring(@TimeStamp, 9, 2), '.',
+																substring(@TimeStamp, 6, 2))"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!--Kod mereni-->
+		<xsl:variable name="GridPtCode">
+			<xsl:call-template name="PadRight">
+				<xsl:with-param name="StringWidth" select="20"/>
+				<xsl:with-param name="TheString" select="concat('  ',Code)"/>
+			</xsl:call-template>
+		</xsl:variable>
+
+		<!-- Data: Notes -->
+		<xsl:variable name="PtNote1">
+			<xsl:for-each select="key('obsID-search', ID)">
+				<xsl:value-of select="Notes/Note[1]"/>
+			</xsl:for-each>
+		</xsl:variable>
+
+		<xsl:variable name="PtNote2">
+			<xsl:for-each select="key('obsID-search', ID)">
+				<xsl:value-of select="Notes/Note[2]"/>
+			</xsl:for-each>
+		</xsl:variable>
+
+		<xsl:variable name="GridPtNotes">
+			<xsl:call-template name="PadRight">
+				<xsl:with-param name="StringWidth" select="100"/>
+				<xsl:with-param name="TheString" select="concat('  ',$PtNote1, '  ' ,$PtNote2)"/>
+			</xsl:call-template>
+		</xsl:variable>
+		
+		<!-- Data: Fix/NoFix -->
+		<xsl:variable name="GridPtFix">
+			<xsl:choose>
+				<xsl:when test=" Method = 'BearingDistancePointIntersection'">
+					<xsl:for-each select="key('HTO-name', SourcePoint)">
+						<xsl:if test="(SurveyMethod = 'Float') or (SurveyMethod = 'NetworkFloat') or (SurveyMethod = 'WAAS') or (SurveyMethod = 'Autonomous')">
+							<xsl:value-of select="$NoFixMark"/>
+						</xsl:if>
+					</xsl:for-each>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:if test="(SurveyMethod = 'Float') or (SurveyMethod = 'NetworkFloat') or (SurveyMethod = 'WAAS') or (SurveyMethod = 'Autonomous')">
+						<xsl:value-of select="$NoFixMark"/>
+					</xsl:if>
+				</xsl:otherwise>
+			</xsl:choose>
+		</xsl:variable>
+
+		<!-- Vypis NoFix -->
+		<xsl:if test="$PtFix = 'Ano'"><xsl:value-of select="$GridPtFix"/></xsl:if>
+
+		<!-- Typ site -->
+		<xsl:variable name="TypSite">
+			<xsl:call-template name="PadLeft">
+				<xsl:with-param name="StringWidth" select="3"/>
+				<xsl:with-param name="TheString">
+					<xsl:for-each select="preceding-sibling::NTRIPDataSourceRecord[1]">
+						<xsl:choose>
+							<xsl:when test="substring(MountPoint, 1, 3) ='TVN'"><xsl:value-of select="' 1 '"/></xsl:when>
+							<xsl:when test="IPAdress ='data.geoorbit.cz'"><xsl:value-of select="' 4 '"/></xsl:when>
+							<xsl:when test="IPPort ='8006'"><xsl:value-of select="' 2 '"/></xsl:when>
+							<xsl:when test="IPPort ='2100' or IPPort ='2111' or IPAddress ='czeposr.cuzk.cz'"><xsl:value-of select="' 3 '"/></xsl:when>
+							<xsl:otherwise><xsl:value-of select="' 5 '"/></xsl:otherwise>
+						</xsl:choose>
+					</xsl:for-each>
+				</xsl:with-param>
+			</xsl:call-template>
+		</xsl:variable>
+
+
+		<!--Typ reseni-->
+		<xsl:variable name="Reseni">
+			<xsl:call-template name="PadRight">
+				<xsl:with-param name="StringWidth" select="10"/>
+				<xsl:with-param name="TheString">
+					<xsl:for-each select="preceding-sibling::NTRIPDataSourceRecord[1]">
+						<xsl:choose>
+							<!-- VRS Now -->
+							<xsl:when test="substring(MountPoint, 1, 3) ='TVN'"><xsl:value-of select="' VRS '"/></xsl:when>
+							<!-- CZEPOS -->
+							<xsl:when test="substring(MountPoint, 5, 1) ='0'"><xsl:value-of select="concat('RTK ', substring(MountPoint, 1, 4))"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 8) ='RTK3-MSM'"><xsl:value-of select="'RTK3-MSM'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 5, 1) ='3' and substring(MountPoint, 1, 4) !='iMAX'"><xsl:value-of select="concat('RTK ', substring(MountPoint, 1, 4))"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 4) ='RTK3'"><xsl:value-of select="concat('RTK ', ../PointRecord/RTK_Base)"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 5) ='PRS0C'"><xsl:value-of select="'PRS'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 5) ='FKP0C'"><xsl:value-of select="'FKP'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 5) ='MAX3C' and substring(MountPoint, 1, 8) !='MAX3C-GG'"><xsl:value-of select="'MAX'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 6) ='iMAX3C' and substring(MountPoint, 1, 9) !='iMAX3C-GG'"><xsl:value-of select="'iMAX'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 8) ='MAX3C-GG'"><xsl:value-of select="'MAXG'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 9) ='iMAX3C-GG'"><xsl:value-of select="'iMAXG'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 1, 15) ='VirtualRS3C-MSM'"><xsl:value-of select="'VirtualRS3C'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 10, 3) ='CMR' and substring(MountPoint, 13, 1) !='+'"><xsl:value-of select="'CMR'"/></xsl:when>
+							<xsl:when test="substring(MountPoint, 10, 4) ='CMR+'"><xsl:value-of select="'CMR+'"/></xsl:when>
+							<!-- GEOORBIT-->
+							<xsl:when test="IPAdress ='data.geoorbit.cz'"><xsl:value-of select="'GEOORBIT'"/></xsl:when>
+							<!-- TOPNET -->
+							<xsl:when test="IPPort ='8006'"><xsl:value-of select="'Topnet'"/></xsl:when>
+						</xsl:choose>
+					</xsl:for-each>
+				</xsl:with-param>
+			</xsl:call-template>
+		</xsl:variable>
+		
+		<!-- Typ Mereni -->					
+		<xsl:variable name="TypMereni">
+			<xsl:call-template name="PadRight">
+				<xsl:with-param name="StringWidth" select="20"/>
+				<xsl:with-param name="TheString">
+					<xsl:choose>
+							<xsl:when test="Classification ='Check'"><xsl:value-of select="' Kontrolni '"/></xsl:when>
+							<xsl:when test="key('PrumerID-search', @ID)"><xsl:value-of select="' Pouzit pro prumer '"/></xsl:when>
+							<xsl:when test="Classification ='Stakeout'"><xsl:value-of select="' Vytyceny '"/></xsl:when>
+							<xsl:when test="Method = 'BearingDistancePointIntersection'"><xsl:value-of select="' Horizontalni odsazeni '"/></xsl:when>
+							<xsl:otherwise><xsl:value-of select="'  '"/></xsl:otherwise>
+					</xsl:choose>
+				</xsl:with-param>
+			</xsl:call-template>
+		</xsl:variable>
+		
+
+		<!--Tabulka vypisovani hodnot-->
+		<xsl:choose>
+			<xsl:when test="$FS = 'Zkraceny'">
+				<xsl:value-of select="concat($PTName, $PtRMSTol, $PTGridCoord1, $PTGridCoord2, $PTHeight, $PThzPrec, $PTvtPrec, $PtPDOP, $PtPDOPTol, $TypMereni, $GridPtCode)"/>
+				<xsl:call-template name="NewLine"/>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:value-of select="concat($PTName, $PtRMSTol, $PTGridCoord1, $PTGridCoord2, $PTHeight, $PThzPrec,$PTvtPrec, $PtPDOP, $PtPDOPTol, $TypSite, $Reseni, $PtNbrSat, $PtAntHI, $PtAntHIFrom,$GridPtDate, $GridPtTime, $GridPtDuration, $TypMereni, $GridPtCode)"/>
+				<!--<xsl:if test="$PtNts = 'Ano'"><xsl:value-of select="$GridPtNotes"/></xsl:if>-->
+				<xsl:call-template name="NewLine"/>
+			</xsl:otherwise>
+		</xsl:choose>
+	</xsl:template>
+	
+	
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxx Prumerovani xxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		
+	<xsl:template name="Prumerovani_bodu">	
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Classification = 'Averaged'">
+				
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:value-of select="'         Cislo bodu       X           Y          Z        dX      dY     dZ'"/>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:value-of select="'         Cislo bodu       Y           X          Z        dY      dX     dZ'"/>
+						</xsl:otherwise>
+					</xsl:choose>
+					<xsl:call-template name="NewLine"/>
+					<xsl:call-template name="DashLineM2"/>
+					
+					
+					<!--xxxxxxxxxx Prumerovane souradnice xxxxxxxxxx-->
+					<!--Jmeno bodu-->
+					<xsl:variable name="PTName">
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="20"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="Name"/>
+							</xsl:with-param>
+						</xsl:call-template>
+					</xsl:variable>
+					
+					<!-- Jedna souradnice-->
+					<xsl:variable name="PTGridCoord1">
+						<xsl:choose>
+							<xsl:when test="ComputedGrid/North != ''">
+								<xsl:choose>
+									<xsl:when test="$NECoords = 'True'">
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="13"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:when>
+									<xsl:otherwise>
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="12"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:choose>
+									<xsl:when test="$NECoords = 'True'">
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="13"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:when>
+									<xsl:otherwise>
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="12"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:otherwise>	
+						</xsl:choose>
+					</xsl:variable>
+	
+					<!--Druha souradnice-->
+					<xsl:variable name="PTGridCoord2">
+						<xsl:choose>
+							<xsl:when test="ComputedGrid/East != ''">
+								<xsl:choose>
+									<xsl:when test="$NECoords = 'True'">
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="12"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:when>
+									<xsl:otherwise>
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="13"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:choose>
+									<xsl:when test="$NECoords = 'True'">
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="12"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:when>
+									<xsl:otherwise>
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="13"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:otherwise>
+								</xsl:choose>
+							</xsl:otherwise>	
+						</xsl:choose>
+					</xsl:variable>
+	
+					<!--Vyska bodu-->
+					<xsl:variable name="PTHeight">
+						<xsl:choose>
+							<xsl:when test="ComputedGrid/Elevation != ''">
+								<xsl:call-template name="PadLeft">
+									<xsl:with-param name="StringWidth" select="9"/>
+									<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+									</xsl:with-param>
+								</xsl:call-template>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:call-template name="PadLeft">
+									<xsl:with-param name="StringWidth" select="9"/>
+									<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+									</xsl:with-param>
+								</xsl:call-template>
+							</xsl:otherwise>	
+						</xsl:choose>
+					</xsl:variable>
+					
+					
+					<xsl:for-each select="AverageResiduals/AverageResidual">
+					<xsl:if test="IncludedInAverageComputation = 'true'">
+						<!-- Puvodni souradnice Nazev-->
+						<xsl:for-each select="key('obsID-search', ObservationID)">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="20"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="Name"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:for-each>
+					
+						<!-- Puvodni souradnice Jedna-->
+						<xsl:for-each select="key('obsID-search', ObservationID)">
+							<xsl:choose>
+								<xsl:when test="ComputedGrid/North != ''">
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="12"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="12"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:otherwise>	
+							</xsl:choose>
+						</xsl:for-each>
+					
+						<!-- Puvodni souradnice druha souradnice-->
+						<xsl:for-each select="key('obsID-search', ObservationID)">
+							<xsl:choose>
+								<xsl:when test="ComputedGrid/East != ''">
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="12"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="12"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:otherwise>	
+							</xsl:choose>
+						</xsl:for-each>
+					
+						<!-- Puvodni souradnice Vyska-->
+						<xsl:for-each select="key('obsID-search', ObservationID)">
+							<xsl:choose>
+								<xsl:when test="ComputedGrid/Elevation != ''">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="9"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="9"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>	
+							</xsl:choose>
+						</xsl:for-each>
+					
+						<!-- Odchylky od prumeru jedna souradnice-->
+						<xsl:choose>
+							<xsl:when test="$NECoords = 'True'">
+								<xsl:call-template name="PadLeft">
+									<xsl:with-param name="StringWidth" select="7"/>
+									<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number(GridResidual/DeltaNorth * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+									</xsl:with-param>
+								</xsl:call-template>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:call-template name="PadLeft">
+									<xsl:with-param name="StringWidth" select="7"/>
+									<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number(GridResidual/DeltaEast * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+									</xsl:with-param>
+								</xsl:call-template>
+							</xsl:otherwise>
+						</xsl:choose>
+					
+						<!-- Odchylky od prumeru Druha souradnice-->
+						<xsl:choose>
+							<xsl:when test="$NECoords = 'True'">
+								<xsl:call-template name="PadLeft">
+									<xsl:with-param name="StringWidth" select="7"/>
+									<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number(GridResidual/DeltaEast * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+									</xsl:with-param>
+								</xsl:call-template>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:call-template name="PadLeft">
+									<xsl:with-param name="StringWidth" select="7"/>
+									<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number(GridResidual/DeltaNorth * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+									</xsl:with-param>
+								</xsl:call-template>
+							</xsl:otherwise>
+						</xsl:choose>
+					
+						<!-- Odchylky od prumeru Vyska-->
+						
+						<xsl:call-template name="PadLeft">
+							<xsl:with-param name="StringWidth" select="7"/>
+							<xsl:with-param name="TheString">
+								<xsl:value-of select="format-number(GridResidual/DeltaElevation * $DistConvFactor, $DistRound, 'Standard')"/>
+							</xsl:with-param>
+						</xsl:call-template>
+						<xsl:call-template name="NewLine"/>
+					</xsl:if>
+					</xsl:for-each>
+					
+					<xsl:value-of select="'----------------------------------------------------------------------'"/>
+					<xsl:call-template name="NewLine"/>
+					
+					
+					<!-- odstup mereni -->
+					<xsl:variable name="Cas_1_bod_tyden">
+						<xsl:for-each select="key('obsID-search', AverageResiduals/AverageResidual[position() = 1]/ObservationID)">
+							<xsl:value-of select="QualityControl1/StartTime/GPSWeek"/>
+						</xsl:for-each>
+					</xsl:variable>
+					
+					<xsl:variable name="Cas_2_bod_tyden">
+						<xsl:for-each select="key('obsID-search', AverageResiduals/AverageResidual[last()]/ObservationID)">
+							<xsl:value-of select="QualityControl1/StartTime/GPSWeek"/>
+						</xsl:for-each>
+					</xsl:variable>
+					
+					<xsl:variable name="Cas_1_bod_Second">
+						<xsl:for-each select="key('obsID-search', AverageResiduals/AverageResidual[position() = 1]/ObservationID)">
+							<xsl:value-of select="QualityControl1/StartTime/Seconds"/>
+						</xsl:for-each>
+					</xsl:variable>
+					
+					<xsl:variable name="Cas_2_bod_Second">
+						<xsl:for-each select="key('obsID-search', AverageResiduals/AverageResidual[last()]/ObservationID)">
+							<xsl:value-of select="QualityControl1/StartTime/Seconds"/>
+						</xsl:for-each>
+					</xsl:variable>
+					
+					
+					<xsl:variable name="WeekDiff">
+						<xsl:value-of select="format-number($Cas_2_bod_tyden - $Cas_1_bod_tyden, $DecPl0, 'Standard')"/>
+					</xsl:variable>
+	
+					<xsl:variable name="SecDiff">
+						<xsl:choose>
+	           				<xsl:when test="$WeekDiff = 0">
+									<xsl:value-of select="format-number($Cas_2_bod_Second - $Cas_1_bod_Second, $DecPl0, 'Standard')"/>
+							</xsl:when>
+							<xsl:otherwise>
+								<xsl:value-of select="format-number( ($Cas_2_bod_tyden*604799+$Cas_2_bod_Second) - ($Cas_1_bod_tyden*604799+$Cas_1_bod_Second), $DecPl0, 'Standard')"/>
+							</xsl:otherwise>
+						</xsl:choose>
+					</xsl:variable>
+	
+	
+					<xsl:variable name="Diff">
+						<xsl:choose>
+							<xsl:when test="$SecDiff &lt;= 59">   <!--sekundy-->
+								<xsl:value-of select="'0dnu,0:0:'"/>
+								<xsl:value-of select="$SecDiff"/>
+								<xsl:value-of select="'  '"/>
+							</xsl:when>
+							<xsl:when test="$SecDiff &gt; 59 and $SecDiff &lt;= 3599">  <!-- minuty-->
+								<xsl:value-of select="'0dnu,0:'"/>
+								<xsl:value-of select="format-number(floor($SecDiff div 60), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="':'"/>
+								<xsl:value-of select="format-number(($SecDiff mod 60), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="'  '"/>
+							</xsl:when>
+							<xsl:when test="$SecDiff &gt; 3599 and $SecDiff &lt;= 86399"> <!-- hodiny-->
+								<xsl:value-of select="'0dnu,'"/>
+								<xsl:value-of select="format-number(floor($SecDiff div 3600), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="':'"/>
+								<xsl:value-of select="format-number(floor(($SecDiff mod 3600) div 60), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="':'"/>
+								<xsl:value-of select="format-number((($SecDiff mod 3600) mod 60), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="'  '"/>
+							</xsl:when>
+							<xsl:when test="$SecDiff &gt; 86399">  <!--dny-->
+								<xsl:value-of select="format-number(floor($SecDiff div 86400), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="' dnu,'"/>
+								<xsl:value-of select="format-number(floor(($SecDiff mod 86400) div 3600), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="':'"/>
+								<xsl:value-of select="format-number(floor(($SecDiff mod 3600) div 60), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="':'"/>
+								<xsl:value-of select="format-number((($SecDiff mod 3600) mod 60), $DecPl0, 'Standard')"/>
+								<xsl:value-of select="'  '"/>
+							</xsl:when>
+						</xsl:choose>
+					</xsl:variable>
+					
+					
+					<xsl:value-of select="concat($PTName, $PTGridCoord1, $PTGridCoord2, $PTHeight, '  ','Cas.odstup:', $Diff)"/>
+					<xsl:call-template name="NewLine"/>
+					<xsl:call-template name="NewLine"/>
+									
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+	<!-- Vypisovani prumernych souradnic-->
+	<xsl:template name="MeanOutput">
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Classification = 'Averaged'">
+				
+					<!--xxxxxxxxxx Prumerovane souradnice xxxxxxxxxx-->
+					<!--Jmeno bodu-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+	
+					<!-- Jedna souradnice-->
+					<xsl:choose>
+						<xsl:when test="ComputedGrid/East != ''">
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="12"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="12"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:otherwise>	
+					</xsl:choose>
+	
+					<!--Druha souradnice-->
+					<xsl:choose>
+						<xsl:when test="ComputedGrid/North != ''">
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="12"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="12"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:otherwise>	
+					</xsl:choose>
+	
+					<!--Vyska bodu-->
+					<xsl:choose>
+						<xsl:when test="ComputedGrid/North != ''">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="9"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="9"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>	
+					</xsl:choose>
+					
+					<!--Kod bodu-->
+					<xsl:value-of select="'  '"/>
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="40"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Code"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<xsl:call-template name="NewLine"/>
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxx Vytycovani xxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+	
+	<xsl:template name="StakeoutDeltas">
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Classification = 'Stakeout'">
+					<xsl:if test="Method = 'GpsStaticObservation'">
+						
+						
+						<!--xxxxxxxxxxx Vytyceny bod xxxxxxxxxx-->
+						
+						<!--Nazev bodu-->
+						<xsl:variable name="STName">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="20"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="Name"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:variable>
+						
+						<!--Jedna souradnice -->
+						<xsl:variable name="STSouradnice1">
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+						
+						<!-- Druha souradnice-->
+						<xsl:variable name="STSouradnice2">
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+		
+						<!-- Puvodni souradnice Vyska-->
+						<xsl:variable name="STVyska">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="9"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:variable>
+		
+		
+						<!--xxxxxxxxxx Puvodni bod xxxxxxxxxx-->
+						
+						
+							
+							<!--Nazev bodu-->
+							<xsl:variable name="PName">
+								<xsl:for-each select="key('GridPT-search', Stakeout/PointDesign/Name)">
+									<xsl:if test="Classification != 'Stakeout'">
+										<xsl:call-template name="PadLeft">
+											<xsl:with-param name="StringWidth" select="20"/>
+											<xsl:with-param name="TheString">
+												<xsl:value-of select="Name"/>
+											</xsl:with-param>
+										</xsl:call-template>
+									</xsl:if>
+								</xsl:for-each>
+							</xsl:variable>
+						
+							<!--Jedna souradnice-->
+							<xsl:variable name="PGridCoord1">
+								<xsl:for-each select="key('GridPT-search', Stakeout/PointDesign/Name)">
+									<xsl:if test="Classification != 'Stakeout'">
+										<xsl:choose>
+											<xsl:when test="SurveyMethod = 'KeyedIn'">
+												<xsl:choose>
+													<xsl:when test="$NECoords = 'True'">
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:when>
+													<xsl:otherwise>
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:otherwise>
+												</xsl:choose>
+											</xsl:when>
+											<xsl:otherwise>
+												<xsl:choose>
+													<xsl:when test="$NECoords = 'True'">
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:when>
+													<xsl:otherwise>
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:otherwise>
+												</xsl:choose>
+											</xsl:otherwise>
+										</xsl:choose>
+									</xsl:if>
+								</xsl:for-each>
+							</xsl:variable>
+		
+							<!--Druha souradnice-->
+							<xsl:variable name="PGridCoord2">
+								<xsl:for-each select="key('GridPT-search', Stakeout/PointDesign/Name)">
+									<xsl:if test="Classification != 'Stakeout'">
+										<xsl:choose>
+											<xsl:when test="SurveyMethod = 'KeyedIn'">
+												<xsl:choose>
+													<xsl:when test="$NECoords = 'True'">
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:when>
+													<xsl:otherwise>
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:otherwise>
+												</xsl:choose>
+											</xsl:when>
+											<xsl:otherwise>
+												<xsl:choose>
+													<xsl:when test="$NECoords = 'True'">
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:when>
+													<xsl:otherwise>
+														<xsl:call-template name="PadLeft">
+															<xsl:with-param name="StringWidth" select="13"/>
+															<xsl:with-param name="TheString">
+																<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+															</xsl:with-param>
+														</xsl:call-template>
+													</xsl:otherwise>
+												</xsl:choose>
+											</xsl:otherwise>
+										</xsl:choose>
+									</xsl:if>
+								</xsl:for-each>
+							</xsl:variable>
+		
+							<!--Vyska bodu-->
+							<xsl:variable name="PHeight">
+								<xsl:for-each select="key('GridPT-search', Stakeout/PointDesign/Name)">
+									<xsl:if test="Classification != 'Stakeout'">
+										<xsl:choose>
+											<xsl:when test="SurveyMethod = 'KeyedIn'">
+												<xsl:call-template name="PadLeft">
+													<xsl:with-param name="StringWidth" select="9"/>
+													<xsl:with-param name="TheString">
+														<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+													</xsl:with-param>
+												</xsl:call-template>
+											</xsl:when>
+											<xsl:otherwise>
+												<xsl:call-template name="PadLeft">
+													<xsl:with-param name="StringWidth" select="9"/>
+													<xsl:with-param name="TheString">
+														<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+													</xsl:with-param>
+												</xsl:call-template>
+											</xsl:otherwise>
+										</xsl:choose>
+									</xsl:if>
+								</xsl:for-each>
+							</xsl:variable>
+							
+						
+						<!--xxxxxxxxxx Odchylky xxxxxxxxxx-->
+						
+						<!--absolutni hodnota dat-->
+						
+						<xsl:variable name="AbsN">
+							<xsl:call-template name="Abs">
+	      						<xsl:with-param name="TheValue" select="Stakeout/GridDeltas/DeltaNorth"/>
+	    					</xsl:call-template>
+						</xsl:variable>
+						
+						<xsl:variable name="AbsE">
+							<xsl:call-template name="Abs">
+	      						<xsl:with-param name="TheValue" select="Stakeout/GridDeltas/DeltaEast"/>
+	    					</xsl:call-template>
+						</xsl:variable>
+						
+						<xsl:variable name="AbsZ">
+							<xsl:call-template name="Abs">
+	      						<xsl:with-param name="TheValue" select="Stakeout/GridDeltas/DeltaElevation"/>
+	    					</xsl:call-template>
+						</xsl:variable>
+						
+						<!--uprava znamenka -->
+						<xsl:variable name="Kvadrant_znamenko_Coord1">
+							<xsl:choose>
+								<xsl:when test="$PGridCoord1 &lt; $STSouradnice1">
+									<xsl:value-of select="'-1'"/>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:value-of select="'1'"/>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+						
+						<!--uprava znamenka -->
+						<xsl:variable name="Kvadrant_znamenko_Coord2">
+							<xsl:choose>
+								<xsl:when test="$PGridCoord2 &lt; $STSouradnice2">
+									<xsl:value-of select="'-1'"/>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:value-of select="'1'"/>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+						
+						<!--uprava znamenka -->
+						<xsl:variable name="Kvadrant_znamenko_Vyska">
+							<xsl:choose>
+								<xsl:when test="$PHeight &lt; $STVyska">
+									<xsl:value-of select="'-1'"/>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:value-of select="'1'"/>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+															
+						<!-- Odchylka Jedna souradnice -->
+						<xsl:variable name="STDeltaSouradnice1">
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number($AbsN * $DistConvFactor * $Kvadrant_znamenko_Coord2, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="12"/>
+										<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number($AbsE * $DistConvFactor * $Kvadrant_znamenko_Coord1, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+						
+						
+						<!-- Odchylka Druha souradnice-->
+						<xsl:variable name="STDeltaSouradnice2">
+							<xsl:choose>
+								<xsl:when test="$NECoords = 'True'">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="12"/>
+										<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number($AbsE * $DistConvFactor * $Kvadrant_znamenko_Coord1, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="13"/>
+										<xsl:with-param name="TheString">
+												<xsl:value-of select="format-number($AbsN * $DistConvFactor * $Kvadrant_znamenko_Coord2, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+		
+						<!-- Odchylka Puvodni souradnice Vyska-->
+						<xsl:variable name="STDeltaVyska">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="9"/>
+								<xsl:with-param name="TheString">
+										<xsl:value-of select="format-number($AbsZ * $DistConvFactor * $Kvadrant_znamenko_Vyska, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:variable>
+						
+						<!-- Data: vypocet Up -->
+						<xsl:variable name="noroundUp">
+							<xsl:call-template name="Sqrt">
+								<xsl:with-param name="num" select="($STDeltaSouradnice1 * $STDeltaSouradnice1 + $STDeltaSouradnice2 * $STDeltaSouradnice2) div 2"/>
+							</xsl:call-template>
+						</xsl:variable>
+						
+						<xsl:variable name="Up">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="6"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number($noroundUp * $DistConvFactor, $DecPl2, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:variable>
+						
+						
+						<xsl:value-of select="'                       Cislo bodu       Y            X          Z '"/>
+						<xsl:call-template name="NewLine"/>
+						<xsl:value-of select="'--------------------------------------------------------------------------'"/>
+						<xsl:call-template name="NewLine"/>
+						<xsl:value-of select="concat('    Dany bod ',$PName,$PGridCoord1,$PGridCoord2,$PHeight)"/>
+						<xsl:call-template name="NewLine"/>
+						<xsl:value-of select="concat('Vytyceny bod ',$STName,$STSouradnice1,$STSouradnice2,$STVyska)"/>
+						<xsl:call-template name="NewLine"/>
+						<xsl:value-of select="'---------------------------------------------------------------------------------------'"/>
+						<xsl:call-template name="NewLine"/>
+						<xsl:value-of select="concat('Rozdily souradnic                 ',$STDeltaSouradnice1,$STDeltaSouradnice2,$STDeltaVyska, '     Up: ',$Up )"/>
+						<xsl:call-template name="NewLine"/>
+						<xsl:call-template name="NewLine"/>
+					
+					</xsl:if>
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+					
+	<!--xxxxx Vypis souradnic xxxxx-->
+	<xsl:template name="StakeoutList">
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Classification = 'Stakeout'">
+	
+					<!--Nazev bodu-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				
+					<!--Jedna souradnice -->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+			
+					<!-- Druha souradnice-->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+			
+					<!-- Puvodni souradnice Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!-- Puvodni souradnice Kod-->
+					<xsl:value-of select="'   '"/>
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="40"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Code"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<xsl:call-template name="NewLine"/>
+	
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxx Cogo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+	<xsl:template name="Cogo_od_zakladny">
+		
+		<xsl:value-of select="'Staniceni a kolmice'"/>
+					<xsl:call-template name="NewLine"/>
+					<xsl:value-of select="'---------------------'"/>
+					<xsl:call-template name="NewLine"/>
+				
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:value-of select="'          Cislo bodu       Pocatecni bod  	     Koncovy bod    Staniceni   Kolmice     Vyska    Smer staniceni              X            Y         Z      Kod bodu'"/>
+						</xsl:when>
+					<xsl:otherwise>
+						<xsl:value-of select="'          Cislo bodu       Pocatecni bod  	     Koncovy bod    Staniceni   Kolmice     Vyska    Smer staniceni              Y            X         Z      Kod bodu'"/>
+					</xsl:otherwise>
+					</xsl:choose>
+					<xsl:call-template name="NewLine"/>	
+							<xsl:value-of select="'---------------------------------------------------------------------------------------------------------------------------------------------------------------------'"/>
+					<xsl:call-template name="NewLine"/>
+		
+		
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Method = 'FromABaseline'">
+					
+					
+					
+					<!--Nazev bodu-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Nazev bodu Pocatecni-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="EnteredData/PointOne"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Nazev bodu Koncovy-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="EnteredData/PointTwo"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Staniceni-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="10"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(EnteredData/DistanceOne * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Kolmice-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="11"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(EnteredData/DistanceTwo * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="11"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(EnteredData/VerticalOffset * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<xsl:value-of select="'    '"/>
+					
+					<!--Smer staniceni-->
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="21"/>
+						<xsl:with-param name="TheString">
+							<xsl:choose>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'InFromStart'">
+									<xsl:value-of select="'Od 1. bodu dovnitr'"/>
+								</xsl:when>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'OutFromStart'">
+									<xsl:value-of select="'Od 1. bodu ven'"/>
+								</xsl:when>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'InFromEnd'">
+									<xsl:value-of select="'Od 2. bodu dovnitr'"/>
+								</xsl:when>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'OutFromEnd'">
+									<xsl:value-of select="'Od 2. bodu ven'"/>
+								</xsl:when>							
+							</xsl:choose>
+						</xsl:with-param>
+					</xsl:call-template>					
+
+					<!--Jedna souradnice -->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Druha souradnice-->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Puvodni souradnice Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!-- Puvodni souradnice Kod-->
+					<xsl:value-of select="'   '"/>
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="40"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Code"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					<xsl:call-template name="NewLine"/>
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+	
+	
+	<xsl:template name="Cogo_protinani">
+		<xsl:value-of select="'Protinani z delek'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'---------------------'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:choose>
+			<xsl:when test="$NECoords = 'True'">
+				<xsl:value-of select="'          Cislo bodu              1. bod    Delka              2. bod      Delka           X           Y          Z      Kod bodu'"/>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:value-of select="'          Cislo bodu              1. bod    Delka              2. bod      Delka           Y           X          Z      Kod bodu'"/>
+			</xsl:otherwise>
+		</xsl:choose>
+		<xsl:call-template name="NewLine"/>
+				<xsl:value-of select="'---------------------------------------------------------------------------------------------------------------------------------------------------------------------'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Method = 'DistanceDistanceIntersection'">
+				
+					<!--Nazev bodu-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!--Nazev bodu Pocatecni-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="EnteredData/PointOne"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Delka 1-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(EnteredData/DistanceOne * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!--Nazev bodu Koncovy-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="EnteredData/PointTwo"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				
+
+					<!--Kolmice-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="11"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(EnteredData/DistanceTwo * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<xsl:value-of select="'    '"/>
+					<!--Smer staniceni-->
+					<!-- NEMAM PODLE CEHO TO URCIT-->
+					<!--<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="25"/>
+						<xsl:with-param name="TheString">
+							<xsl:choose>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'InFromStart'">
+									<xsl:value-of select="'Vpravo'"/>
+								</xsl:when>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'OutFromStart'">
+									<xsl:value-of select="'Od 1. bodu ven'"/>
+								</xsl:when>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'InFromEnd'">
+									<xsl:value-of select="'Od 2. bodu dovnitr'"/>
+								</xsl:when>
+								<xsl:when test="EnteredData/DirectionAlongLine = 'OutFromEnd'">
+									<xsl:value-of select="'Od 2. bodu ven'"/>
+								</xsl:when>
+							</xsl:choose>
+						</xsl:with-param>
+					</xsl:call-template>-->
+
+					<!--Jedna souradnice -->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Druha souradnice-->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Puvodni souradnice Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!-- Puvodni souradnice Kod-->
+					<xsl:value-of select="'   '"/>
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="40"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Code"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					<xsl:call-template name="NewLine"/>				
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+		<!-- vertikalni odsazeni -->
+<xsl:template name="Cogo_VtOdsazeni">
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'Vertikalni odsazeni'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'---------------------'"/>
+		<xsl:call-template name="NewLine"/>
+			<xsl:choose>
+				<xsl:when test="$NECoords = 'True'">
+					<xsl:value-of select="'          Cislo bodu    Delka       X           Y          Z 	    Z(puv)  Kod bodu'"/>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:value-of select="'          Cislo bodu    Delka       Y           X          Z		    Z(puv)  Kod bodu'"/>
+				</xsl:otherwise>
+			</xsl:choose>
+		<xsl:call-template name="NewLine"/>
+				<xsl:value-of select="'---------------------------------------------------------------------------------------------------------------------------------------------------------------------'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="GNSSVerticalOffset/VerticalOffset != ''">
+				
+					<!--Nazev bodu-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Delka-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(GNSSVerticalOffset/VerticalOffset * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!--Jedna souradnice -->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * (-1), $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * (-1), $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Druha souradnice-->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * (-1), $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * (-1), $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Puvodni souradnice Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!-- Puvodni souradnice Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number((ComputedGrid/Elevation + GNSSVerticalOffset/VerticalOffset) * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!-- Puvodni souradnice Kod-->
+					<xsl:value-of select="'   '"/>
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="40"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Code"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					<xsl:call-template name="NewLine"/>				
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+	
+	<xsl:template name="Cogo_HzOdsazeni">
+		<xsl:value-of select="'Horizontalni odsazeni'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'---------------------'"/>
+		<xsl:call-template name="NewLine"/>
+			<xsl:choose>
+				<xsl:when test="$NECoords = 'True'">
+					<xsl:value-of select="'          Cislo bodu         Pomocny bod    Delka         Azimut       X            Y          Z      Kod bodu'"/>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:value-of select="'          Cislo bodu         Pomocny bod    Delka         Azimut       Y            X          Z      Kod bodu'"/>
+				</xsl:otherwise>
+			</xsl:choose>
+		<xsl:call-template name="NewLine"/>
+				<xsl:value-of select="'---------------------------------------------------------------------------------------------------------------------------------------------------------------------'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Method = 'BearingDistancePointIntersection'">
+				
+					<!--Nazev bodu-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Name"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!--Nazev bodu Pocatecni-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="20"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="SourcePoint"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					
+					<!--Delka-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(Polar/HorizontalDistance * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!--Azimut-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="16"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(Polar/Azimuth, $DecPl4, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+				
+
+					<!--Jedna souradnice -->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Druha souradnice-->
+					<xsl:choose>
+						<xsl:when test="$NECoords = 'True'">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="12"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:when>
+						<xsl:otherwise>
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="13"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:otherwise>
+					</xsl:choose>
+
+					<!-- Puvodni souradnice Vyska-->
+					<xsl:call-template name="PadLeft">
+						<xsl:with-param name="StringWidth" select="9"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+						</xsl:with-param>
+					</xsl:call-template>
+
+					<!-- Puvodni souradnice Kod-->
+					<xsl:value-of select="'   '"/>
+					<xsl:call-template name="PadRight">
+						<xsl:with-param name="StringWidth" select="40"/>
+						<xsl:with-param name="TheString">
+							<xsl:value-of select="Code"/>
+						</xsl:with-param>
+					</xsl:call-template>
+					<xsl:call-template name="NewLine"/>				
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxx SS xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+		<!--xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-->
+	<xsl:template name="Merene_body_SS">
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+		<xsl:sort select="Name" data-type="number"/>
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="QualityControl1/PDOP!='' or Classification ='FromABaseline' or Classification ='DistanceDistanceIntersection' or Method = 'BearingDistancePointIntersection'">
+					<xsl:if test="not(contains(Name,'HTO'))">
+						<!--<xsl:choose>
+							<xsl:when test="key('PrumerID-search', @ID) != 1">
+							</xsl:when>
+							<xsl:otherwise>-->
+							
+								<!--Nazev bodu-->
+								<xsl:variable name="Name">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="20"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="Name"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:variable>
+			
+												<!--Jedna souradnice-->
+								<xsl:variable name="Coord1">
+									<xsl:choose>
+										<xsl:when test="Grid/North != ''">
+											<xsl:choose>
+												<xsl:when test="$NECoords = 'True'">
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:when>
+												<xsl:otherwise>
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:otherwise>
+											</xsl:choose>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:choose>
+												<xsl:when test="$NECoords = 'True'">
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:when>
+												<xsl:otherwise>
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:otherwise>
+											</xsl:choose>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:variable>
+				
+								<!--Druha souradnice-->
+								<xsl:variable name="Coord2">
+									<xsl:choose>
+										<xsl:when test="Grid/East != ''">
+											<xsl:choose>
+												<xsl:when test="$NECoords = 'True'">
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(Grid/East * $DistConvFactor, $DistRound * $Typ_SS, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:when>
+												<xsl:otherwise>
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:otherwise>
+											</xsl:choose>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:choose>
+												<xsl:when test="$NECoords = 'True'">
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:when>
+												<xsl:otherwise>
+													<xsl:call-template name="PadLeft">
+														<xsl:with-param name="StringWidth" select="13"/>
+														<xsl:with-param name="TheString">
+															<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+														</xsl:with-param>
+													</xsl:call-template>
+												</xsl:otherwise>
+											</xsl:choose>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:variable>
+				
+								<!--Vyska bodu-->
+								<xsl:variable name="Vyska">
+									<xsl:choose>
+										<xsl:when test="Grid/Elevation != ''">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="9"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="9"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:variable>
+								
+								<!--Vyska bodu-->
+								<xsl:variable name="Code">
+									<xsl:call-template name="PadRight">
+										<xsl:with-param name="StringWidth" select="40"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="Code"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:variable>
+								
+								<xsl:value-of select="concat($Name, $Coord1,$Coord2,$Vyska,'  ', $Code)"/>
+								<xsl:call-template name="NewLine"/>
+							<!--</xsl:otherwise>
+						</xsl:choose>-->
+					</xsl:if>
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+	<!-- xxxxxxxx Vypis souradnic vsech bodu -->
+	<xsl:template name="SS_vsech_bodu">
+		<xsl:for-each select="/JOBFile/FieldBook/PointRecord">
+		<xsl:sort select="Name" data-type="number"/>
+			<xsl:if test="Deleted = 'false'">
+				<xsl:if test="Name != 'Trimble'">
+					<xsl:if test="not(contains(Name,'HTO')) and not(contains(Name,'RTCM'))">
+			
+			
+						<!--Nazev bodu-->
+						<xsl:variable name="Name">
+							<xsl:call-template name="PadLeft">
+								<xsl:with-param name="StringWidth" select="20"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="Name"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:variable>
+			
+						<!--Jedna souradnice-->
+						<xsl:variable name="Coord1">
+							<xsl:choose>
+								<xsl:when test="Grid/North != ''">
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+		
+						<!--Druha souradnice-->
+						<xsl:variable name="Coord2">
+							<xsl:choose>
+								<xsl:when test="Grid/East != ''">
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/East * $DistConvFactor, $DistRound * $Typ_SS, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(Grid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:choose>
+										<xsl:when test="$NECoords = 'True'">
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/East * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:when>
+										<xsl:otherwise>
+											<xsl:call-template name="PadLeft">
+												<xsl:with-param name="StringWidth" select="13"/>
+												<xsl:with-param name="TheString">
+													<xsl:value-of select="format-number(ComputedGrid/North * $DistConvFactor * $Typ_SS, $DistRound, 'Standard')"/>
+												</xsl:with-param>
+											</xsl:call-template>
+										</xsl:otherwise>
+									</xsl:choose>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+		
+						<!--Vyska bodu-->
+						<xsl:variable name="Vyska">
+							<xsl:choose>
+								<xsl:when test="Grid/Elevation != '' ">
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="9"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(Grid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:when>
+								<xsl:otherwise>
+									<xsl:call-template name="PadLeft">
+										<xsl:with-param name="StringWidth" select="9"/>
+										<xsl:with-param name="TheString">
+											<xsl:value-of select="format-number(ComputedGrid/Elevation * $DistConvFactor, $DistRound, 'Standard')"/>
+										</xsl:with-param>
+									</xsl:call-template>
+								</xsl:otherwise>
+							</xsl:choose>
+						</xsl:variable>
+					
+						<!--Vyska bodu-->
+						<xsl:variable name="Code">
+							<xsl:call-template name="PadRight">
+								<xsl:with-param name="StringWidth" select="40"/>
+								<xsl:with-param name="TheString">
+									<xsl:value-of select="Code"/>
+								</xsl:with-param>
+							</xsl:call-template>
+						</xsl:variable>
+					
+						<xsl:value-of select="concat($Name, $Coord1,$Coord2,$Vyska,'  ', $Code)"/>
+						<xsl:call-template name="NewLine"/>
+					</xsl:if>
+				</xsl:if>
+			</xsl:if>
+		</xsl:for-each>
+	</xsl:template>
+	
+	<!-- ******************************************************************************************************************************** -->
+	<!-- ******************** Hlavicky *********************************************************************************** -->
+	<!-- ******************************************************************************************************************************** -->
+	
+	<!-- **************************************************************** -->
+	<!-- ************** Graficke prvky pro textovy format *************** -->
+	<!-- **************************************************************** -->
+	
+	<!-- Cara: kratka -->
+	<xsl:template name="DashLineS">
+	  <xsl:value-of select="'-------------------------'"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Cara: sredni -->
+	<xsl:template name="DashLineM">
+	  <xsl:value-of select="'--------------------------------------'"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Cara: sredni 2 -->
+	<xsl:template name="DashLineM2">
+	  <xsl:value-of select="'----------------------------------------------------------------------------'"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Cara: dlouha -->
+	<xsl:template name="DashLineL">
+	  <xsl:value-of select="'-----------------------------------------------------------------------------------------------------------------------------------'"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Cara: dlouha - No NewLine -->
+	<xsl:template name="DashLineL-NNL">
+	  <xsl:value-of select="'---------------------------------------------------------------------------------------------------------------------------------------------'"/>
+	</xsl:template>
+	
+	<!-- Cara: dvojteckova -->
+	<xsl:template name="ColonLineS">
+	  <xsl:value-of select="':::::::::::::::::::::::::'"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Cara: hvezdickova -->
+	<xsl:template name="StarLineS">
+	  <xsl:value-of select="'*************************'"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Hlavicka: Vytycovaci protokol -->
+	<xsl:template name="StakeoutHead">
+	  <xsl:call-template name="NewLine"/>
+	  <xsl:call-template name="DashLineS"/>
+	  <xsl:value-of select="'VYTYCOVACI PROTOKOL'"/>
+	  <xsl:call-template name="NewLine"/>
+	  <xsl:call-template name="DashLineS"/>
+	  <xsl:value-of select="' Hodnoty rozdilu souradnic oznacene *'"/>
+	  <xsl:call-template name="NewLine"/>
+	  <xsl:value-of select="' jsou mimo nastavene tolerance !'"/>
+	  <xsl:call-template name="NewLine"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Hlavicka: Residuals (Grid) -->
+	<xsl:template name="GridPointHead">
+		<xsl:call-template name="DashLineS"/>
+		<xsl:value-of select="'MERENE BODY'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:call-template name="NewLine"/>
+	
+		<xsl:choose>
+			<xsl:when test="$FS = 'Zkraceny'">
+				<xsl:choose>
+					<xsl:when test="$NECoords = 'True'">
+						<xsl:value-of select="'        Cislo bodu         X            Y          Z      Presnost     PDOP    Typ bodu        Kod bodu'"/>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:value-of select="'        Cislo bodu         Y            X          Z      Presnost     PDOP    Typ bodu        Kod bodu'"/>
+					</xsl:otherwise>
+				</xsl:choose>
+				<xsl:call-template name="NewLine"/>
+				<xsl:value-of select="'                                                          XY      Z'"/>
+				<xsl:call-template name="NewLine"/>
+				<xsl:value-of select="'------------------------------------------------------------------------------------------------------------------------------------------------'"/>
+				<xsl:call-template name="NewLine"/>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:choose>
+					<xsl:when test="$NECoords = 'True'">
+						<xsl:value-of select="'        Cislo bodu       X            Y          Z         Presnost   PDOP   Sit*        Pocet  Antena     Datum  Zacatek Doba      Typ bodu             Kod bodu'"/>
+					</xsl:when>
+					<xsl:otherwise>
+						<xsl:value-of select="'        Cislo bodu       Y            X          Z         Presnost   PDOP   Sit*        Pocet  Antena     Datum  Zacatek Doba      Typ bodu             Kod bodu'"/>
+					</xsl:otherwise>
+				</xsl:choose>
+				<xsl:call-template name="NewLine"/>
+				<xsl:value-of select="'                                                           XY      Z                     sat.   vyska; od**       mereni  mereni[s]'"/>
+				<xsl:call-template name="NewLine"/>
+				<xsl:call-template name="DashLineL-NNL"/>
+				<xsl:call-template name="NewLine"/>
+				<!--<xsl:if test="$PtNts = 'Ano'"><xsl:call-template name="DashLineL"/></xsl:if>-->
+			</xsl:otherwise>
+		</xsl:choose>
+	
+	</xsl:template>
+	
+	<!-- Zapati: Residuals (Grid) -->
+	<xsl:template name="GridPointBottom">
+		<xsl:call-template name="DashLineL"/>
+		<xsl:value-of select="' * Bod meren na: 1 VRS = Trimble VRS NOW CZ'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 2     = TOPNET'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 3 RTK = CZEPOS RTK a RTK3;		3 RTK3-MSM = CZEPOS RTK3-MSM;'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 3 PRS = CZEPOS RTK-PRS;			3 FKP = CZEPOS RTK-FKP;'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 3 MAX = CZEPOS VRS3-MAX;			3 iMAX = CZEPOS VRS3-iMAX;'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 3 MAXG = CZEPOS VRS3-MAX-GG;		3 iMAXG = CZEPOS VRS3-iMAX-GG; '"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 3 CMR = CZEPOS VRS3-iMAX-GG_CMR;	3 CMR+ = CZEPOS VRS3-iMAX-GG_CMR+; '"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 4     = GEOORBIT '"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="'                 5     = ostatni '"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="' ** Vyska anteny merena od: FC = fazoveho centra; SZ = spodku zavitu; SN = stredu narazniku, SR = spodek rychloupinaku'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="' Hodnoty PDOP oznacene * jsou mimo nastavenou toleranci: '"/>
+		<xsl:value-of select="format-number($PDOPTol * $DistConvFactor, $DecPl2, 'Standard')" />
+		<xsl:call-template name="NewLine"/>
+		<xsl:value-of select="' Hodnoty s RMS oznacene # jsou mimo nastavenou toleranci: '"/>
+		<xsl:value-of select="format-number($RMSset * $DistConvFactor, $DecPl2, 'Standard')" />
+		<xsl:call-template name="NewLine"/>
+		<xsl:if test="$PtFix = 'Ano'">
+			<xsl:value-of select="concat(' Body oznacene ', $NoFixMark, 'pred cislem bodu nebyly pri mereni Fixovany!')"/>
+			<xsl:call-template name="NewLine"/>
+		</xsl:if>
+		<xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Hlavicka: Residuals (Grid) - MeanPoint -->
+	<xsl:template name="MeanPointHead">
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:value-of select="'PRUMEROVANI BODU'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:call-template name="NewLine"/>
+		<!--<xsl:if test="$PtNts = 'Ano'"><xsl:call-template name="DashLineL"/></xsl:if>-->
+	</xsl:template>
+	
+	<!-- Hlavicka: Residuals (Grid) - MeanPoint -->
+	<xsl:template name="MeanPointHead2">
+		<xsl:call-template name="DashLineS"/>
+		<xsl:value-of select="'ZPRUMEROVANE BODY'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Hlavicka: Vytycovaci protokol seznam -->
+	<xsl:template name="StakeoutListHead">
+		<xsl:call-template name="NewLine"/>
+	  <xsl:call-template name="DashLineS"/>
+	  <xsl:value-of select="'VYTYCENE BODY'"/>
+	  <xsl:call-template name="NewLine"/>
+	  <xsl:call-template name="DashLineS"/>
+	  <xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Hlavicka: Residuals (Grid) - MeanPoint -->
+	<xsl:template name="MeasPointHead">
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:value-of select="'MERENE BODY'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+	<!-- Hlavicka: Residuals (Grid) - MeanPoint -->
+	<xsl:template name="Vsechny_body">
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:value-of select="'VSECHNY BODY'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+		<!-- Hlavicka: Residuals (Grid) - MeanPoint -->
+	<xsl:template name="COGO_body">
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:value-of select="'COGO BODY'"/>
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineS"/>
+		<xsl:call-template name="NewLine"/>
+	</xsl:template>
+	
+		<!-- Hlavicka: Residuals (Grid) - MeanPoint -->
+	<xsl:template name="Kratka_SS">
+
+		<xsl:choose>
+			<xsl:when test="$NECoords = 'True'">
+				<xsl:value-of select="'         Cislo bodu         X           Y          Z      Kod bodu'"/>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:value-of select="'         Cislo bodu         Y           X          Z      Kod bodu'"/>
+			</xsl:otherwise>
+		</xsl:choose>
+
+		<xsl:call-template name="NewLine"/>
+		<xsl:call-template name="DashLineL"/>
+		<!--<xsl:if test="$PtNts = 'Ano'"><xsl:call-template name="DashLineL"/></xsl:if>-->
+	</xsl:template>
+	
+	
+	<!-- ******************************************************************************************************************************** -->
+	<!-- ******************** Funkce *********************************************************************************** -->
+	<!-- ******************************************************************************************************************************** -->
+	
+	
+	<!-- **************************************************************** -->
+	<!-- ******************** Vrati absolutni hodnotu ******************* -->
+	<!-- **************************************************************** -->
+	<xsl:template name="Abs">
+	  <xsl:param name="TheValue"/>
+	  <xsl:variable name="Sign">
+	    <xsl:choose>
+	      <xsl:when test="$TheValue &lt; '0.0'">
+	        -1
+	      </xsl:when>
+	      <xsl:otherwise>
+	        1
+	      </xsl:otherwise>
+	    </xsl:choose>
+	  </xsl:variable>
+	
+	  <xsl:value-of select="number($Sign * $TheValue)"/>
+	</xsl:template>
+	
+	<!-- **************************************************************** -->
+	<!-- ********************** Format a DMS Angle ********************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="FormatDMSAngle">
+	  <xsl:param name="DecimalAngle"/>
+	  <xsl:param name="SecDecPlaces" select="0"/>
+	
+	  <xsl:variable name="Sign">
+	    <xsl:if test="$DecimalAngle &lt; '0.0'">-1</xsl:if>
+	    <xsl:if test="$DecimalAngle &gt;= '0.0'">1</xsl:if>
+	  </xsl:variable>
+	
+	  <xsl:variable name="PosDecimalDegrees" select="number($DecimalAngle * $Sign)"/>
+	
+	  <xsl:variable name="PositiveDecimalDegrees">  <!-- Ensure an angle very close to 360° is treated as 0° -->
+	    <xsl:choose>
+	      <xsl:when test="(360.0 - $PosDecimalDegrees) &lt; 0.00001">
+	        <xsl:value-of select="0"/>
+	      </xsl:when>
+	      <xsl:otherwise>
+	        <xsl:value-of select="$PosDecimalDegrees"/>
+	      </xsl:otherwise>
+	    </xsl:choose>
+	  </xsl:variable>
+	
+	  <xsl:variable name="decPlFmt">
+	    <xsl:choose>
+	      <xsl:when test="$SecDecPlaces = 0"><xsl:value-of select="''"/></xsl:when>
+	      <xsl:when test="$SecDecPlaces = 1"><xsl:value-of select="'.0'"/></xsl:when>
+	      <xsl:when test="$SecDecPlaces = 2"><xsl:value-of select="'.00'"/></xsl:when>
+	      <xsl:when test="$SecDecPlaces = 3"><xsl:value-of select="'.000'"/></xsl:when>
+	      <xsl:when test="$SecDecPlaces = 4"><xsl:value-of select="'.0000'"/></xsl:when>
+	      <xsl:when test="$SecDecPlaces = 5"><xsl:value-of select="'.00000'"/></xsl:when>
+	      <xsl:otherwise><xsl:value-of select="''"/></xsl:otherwise>
+	    </xsl:choose>
+	  </xsl:variable>
+	
+	  <xsl:variable name="Degrees" select="floor($PositiveDecimalDegrees)"/>
+	  <xsl:variable name="DecimalMinutes" select="number(number($PositiveDecimalDegrees - $Degrees) * 60 )"/>
+	  <xsl:variable name="Minutes" select="floor($DecimalMinutes)"/>
+	  <xsl:variable name="Seconds" select="number(number($DecimalMinutes - $Minutes)*60)"/>
+	
+	  <xsl:variable name="PartiallyNormalisedMinutes">
+	    <xsl:if test="number(format-number($Seconds, concat('00', $decPlFmt))) = 60"><xsl:value-of select="number($Minutes + 1)"/></xsl:if>
+	    <xsl:if test="not(number(format-number($Seconds, concat('00', $decPlFmt))) = 60)"><xsl:value-of select="$Minutes"/></xsl:if>
+	  </xsl:variable>
+	
+	  <xsl:variable name="NormalisedSeconds">
+	    <xsl:if test="number(format-number($Seconds, concat('00', $decPlFmt))) = 60"><xsl:value-of select="0"/></xsl:if>
+	    <xsl:if test="not(number(format-number($Seconds, concat('00', $decPlFmt))) = 60)"><xsl:value-of select="$Seconds"/></xsl:if>
+	  </xsl:variable>
+	
+	  <xsl:variable name="PartiallyNormalisedDegrees">
+	    <xsl:if test="format-number($PartiallyNormalisedMinutes, '0') = '60'"><xsl:value-of select="number($Degrees + 1)"/></xsl:if>
+	    <xsl:if test="not(format-number($PartiallyNormalisedMinutes, '0') = '60')"><xsl:value-of select="$Degrees"/></xsl:if>
+	  </xsl:variable>
+	
+	  <xsl:variable name="NormalisedDegrees">
+	    <xsl:if test="format-number($PartiallyNormalisedDegrees, '0') = '360'"><xsl:value-of select="0"/></xsl:if>
+	    <xsl:if test="not(format-number($PartiallyNormalisedDegrees, '0') = '360')"><xsl:value-of select="$PartiallyNormalisedDegrees"/></xsl:if>
+	  </xsl:variable>
+	
+	  <xsl:variable name="NormalisedMinutes">
+	    <xsl:if test="format-number($PartiallyNormalisedMinutes, '00') = '60'"><xsl:value-of select="0"/></xsl:if>
+	    <xsl:if test="not(format-number($PartiallyNormalisedMinutes, '00') = '60')"><xsl:value-of select="$PartiallyNormalisedMinutes"/></xsl:if>
+	  </xsl:variable>
+	
+	  <xsl:if test="$Sign = -1">-</xsl:if>
+	  <xsl:value-of select="format-number($NormalisedDegrees, '0')"/>
+	  <xsl:value-of select="$DegreesSymbol"/>
+	  <xsl:value-of select="format-number($NormalisedMinutes, '00')"/>
+	  <xsl:value-of select="$MinutesSymbol"/>
+	  <xsl:value-of select="format-number($NormalisedSeconds, concat('00', $decPlFmt))"/>
+	  <xsl:value-of select="$SecondsSymbol"/>
+	</xsl:template>
+	
+	<!-- **************************************************************** -->
+	<!-- ******************* Format a Quadrant Bearing ****************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="FormatQuadrantBearing">
+	  <xsl:param name="DecimalAngle"/>
+	  <xsl:param name="SecDecPlaces" select="0"/>
+	
+	  <xsl:choose>
+	    <!-- Null azimuth value -->
+	    <xsl:when test="string(number($DecimalAngle))='NaN'">
+	      <xsl:value-of select="'?'"/>
+	    </xsl:when>
+	    <!-- There is an azimuth value -->
+	    <xsl:otherwise>
+	      <xsl:variable name="QuadrantAngle">
+	        <xsl:if test="($DecimalAngle &lt;= '90.0')">
+	          <xsl:value-of select="number ( $DecimalAngle )"/>
+	        </xsl:if>
+	        <xsl:if test="($DecimalAngle &gt; '90.0') and ($DecimalAngle &lt;= '180.0')">
+	          <xsl:value-of select="number( 180.0 - $DecimalAngle )"/>
+	        </xsl:if>
+	        <xsl:if test="($DecimalAngle &gt; '180.0') and ($DecimalAngle &lt; '270.0')">
+	          <xsl:value-of select="number( $DecimalAngle - 180.0 )"/>
+	        </xsl:if>
+	        <xsl:if test="($DecimalAngle &gt;= '270.0') and ($DecimalAngle &lt;= '360.0')">
+	          <xsl:value-of select="number( 360.0 - $DecimalAngle )"/>
+	        </xsl:if>
+	      </xsl:variable>
+	
+	      <xsl:variable name="QuadrantPrefix">
+	        <xsl:if test="($DecimalAngle &lt;= '90.0') or ($DecimalAngle &gt;= '270.0')"><!--N--></xsl:if>
+	        <xsl:if test="($DecimalAngle &gt; '90.0') and ($DecimalAngle &lt; '270.0')"><!--S--></xsl:if>
+	      </xsl:variable>
+	
+	      <xsl:variable name="QuadrantSuffix">
+	        <xsl:if test="($DecimalAngle &lt;= '180.0')"><!--E--></xsl:if>
+	        <xsl:if test="($DecimalAngle &gt; '180.0')"><!--W--></xsl:if>
+	      </xsl:variable>
+	
+	      <xsl:value-of select="$QuadrantPrefix"/>
+	      <xsl:choose>
+	        <xsl:when test="$AngleUnit='DMSDegrees'">
+	          <xsl:call-template name="FormatDMSAngle">
+	            <xsl:with-param name="DecimalAngle" select="$QuadrantAngle"/>
+	            <xsl:with-param name="SecDecPlaces" select="$SecDecPlaces"/>
+	          </xsl:call-template>
+	        </xsl:when>
+	        <xsl:otherwise>
+	          <xsl:call-template name="FormatAngle">
+	            <xsl:with-param name="TheAngle" select="$QuadrantAngle"/>
+	            <xsl:with-param name="SecDecPlaces" select="$SecDecPlaces"/>
+	          </xsl:call-template>
+	        </xsl:otherwise>
+	      </xsl:choose>
+	      <xsl:value-of select="$QuadrantSuffix"/>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:template>
+	
+	
+	<!-- **************************************************************** -->
+	<!-- ************ Output Angle in Appropriate Format **************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="FormatAngle">
+	  <xsl:param name="TheAngle"/>
+	  <xsl:param name="SecDecPlaces" select="0"/>
+	  <xsl:param name="DMSOutput" select="'False'"/>
+	
+	  <xsl:choose>
+	    <!-- Null angle value -->
+	    <xsl:when test="string(number($TheAngle))='NaN'">
+	      <xsl:value-of select="'?'"/>
+	    </xsl:when>
+	    <!-- There is an angle value -->
+	    <xsl:otherwise>
+	      <xsl:choose>
+	        <xsl:when test="($AngleUnit='DMSDegrees') or not($DMSOutput = 'False')">
+	          <xsl:call-template name="FormatDMSAngle">
+	            <xsl:with-param name="DecimalAngle" select="$TheAngle"/>
+	            <xsl:with-param name="SecDecPlaces" select="$SecDecPlaces"/>
+	          </xsl:call-template>
+	        </xsl:when>
+	
+	        <xsl:when test="($AngleUnit='Gons') and ($DMSOutput = 'False')">
+	          <xsl:choose>
+	            <xsl:when test="$SecDecPlaces > 0">  <!-- More accurate angle output required -->
+	              <xsl:value-of select="format-number($TheAngle * $AngleConvFactor, $DecPl8, 'Standard')"/>
+	            </xsl:when>
+	            <xsl:otherwise>
+	              <xsl:value-of select="format-number($TheAngle * $AngleConvFactor, $DecPl5, 'Standard')"/>
+	            </xsl:otherwise>
+	          </xsl:choose>
+	        </xsl:when>
+	
+	        <xsl:when test="($AngleUnit='Mils') and ($DMSOutput = 'False')">
+	          <xsl:choose>
+	            <xsl:when test="$SecDecPlaces > 0">  <!-- More accurate angle output required -->
+	              <xsl:value-of select="format-number($TheAngle * $AngleConvFactor, $DecPl6, 'Standard')"/>
+	            </xsl:when>
+	            <xsl:otherwise>
+	              <xsl:value-of select="format-number($TheAngle * $AngleConvFactor, $DecPl4, 'Standard')"/>
+	            </xsl:otherwise>
+	          </xsl:choose>
+	        </xsl:when>
+	
+	        <xsl:when test="($AngleUnit='DecimalDegrees') and ($DMSOutput = 'False')">
+	          <xsl:choose>
+	            <xsl:when test="$SecDecPlaces > 0">  <!-- More accurate angle output required -->
+	              <xsl:value-of select="format-number($TheAngle * $AngleConvFactor, $DecPl8, 'Standard')"/>
+	            </xsl:when>
+	            <xsl:otherwise>
+	              <xsl:value-of select="format-number($TheAngle * $AngleConvFactor, $DecPl5, 'Standard')"/>
+	            </xsl:otherwise>
+	          </xsl:choose>
+	        </xsl:when>
+	      </xsl:choose>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:template>
+	
+	
+	<!-- **************************************************************** -->
+	<!-- ************ Output Azimuth in Appropriate Format ************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="FormatAzimuth">
+	  <xsl:param name="TheAzimuth"/>
+	  <xsl:param name="SecDecPlaces" select="0"/>
+	  <xsl:param name="DMSOutput" select="'False'"/>
+	
+	  <xsl:choose>
+	    <xsl:when test="//Environment/DisplaySettings/AzimuthFormat = 'QuadrantBearings'">
+	      <xsl:call-template name="FormatQuadrantBearing">
+	        <xsl:with-param name="DecimalAngle" select="$TheAzimuth"/>
+	        <xsl:with-param name="SecDecPlaces" select="$SecDecPlaces"/>
+	      </xsl:call-template>
+	    </xsl:when>
+	    <xsl:otherwise>
+	      <xsl:call-template name="FormatAngle">
+	        <xsl:with-param name="TheAngle" select="$TheAzimuth"/>
+	        <xsl:with-param name="SecDecPlaces" select="$SecDecPlaces"/>
+	        <xsl:with-param name="DMSOutput" select="$DMSOutput"/>
+	      </xsl:call-template>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:template>
+	
+	<!-- **************************************************************** -->
+	<!-- ********************** New Line Output ************************* -->
+	<!-- **************************************************************** -->
+	<xsl:template name="NewLine">
+	  <xsl:text>&#xa;</xsl:text>
+	</xsl:template>
+	
+	<!-- **************************************************************** -->
+	<!-- *********** Pad a string to the left with spaces *************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="PadLeft">
+	  <xsl:param name="StringWidth"/>
+	  <xsl:param name="TheString"/>
+	  <xsl:choose>
+	    <xsl:when test="$StringWidth = '0'">
+	      <xsl:value-of select="normalize-space($TheString)"/>
+	    </xsl:when>
+	    <xsl:otherwise>
+	      <xsl:variable name="PaddedStr" select="concat('                                       ', $TheString)"/>
+	      <xsl:value-of select="substring($PaddedStr, string-length($PaddedStr) - $StringWidth + 1)"/>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:template>
+	
+	<!-- **************************************************************** -->
+	<!-- *********** Pad a string to the right with spaces ************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="PadRight">
+	  <xsl:param name="StringWidth"/>
+	  <xsl:param name="TheString"/>
+	  <xsl:choose>
+	    <xsl:when test="$StringWidth = '0'">
+	      <xsl:value-of select="normalize-space($TheString)"/>
+	    </xsl:when>
+	    <xsl:otherwise>
+	      <xsl:variable name="PaddedStr" select="concat($TheString, '                                       ')"/>
+	      <xsl:value-of select="substring($PaddedStr, 1, $StringWidth)"/>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:template>
+	
+	<!-- **************************************************************** -->
+	<!-- *************** Return the square root of a value ************** -->
+	<!-- **************************************************************** -->
+	<xsl:template name="Sqrt">
+	  <xsl:param name="num" select="0"/>       <!-- The number you want to find the square root of -->
+	  <xsl:param name="try" select="1"/>       <!-- The current 'try'.  This is used internally. -->
+	  <xsl:param name="iter" select="1"/>      <!-- The current iteration, checked against maxiter to limit loop count - used internally -->
+	  <xsl:param name="maxiter" select="40"/>  <!-- Set this up to insure against infinite loops - used internally -->
+	
+	  <!-- This template uses Sir Isaac Newton's method of finding roots -->
+	
+	  <xsl:choose>
+	    <xsl:when test="$try * $try = $num or $iter &gt; $maxiter">
+	      <xsl:value-of select="$try"/>
+	    </xsl:when>
+	    <xsl:otherwise>
+	      <xsl:call-template name="Sqrt">
+	        <xsl:with-param name="num" select="$num"/>
+	        <xsl:with-param name="try" select="$try - (($try * $try - $num) div (2 * $try))"/>
+	        <xsl:with-param name="iter" select="$iter + 1"/>
+	        <xsl:with-param name="maxiter" select="$maxiter"/>
+	      </xsl:call-template>
+	    </xsl:otherwise>
+	  </xsl:choose>
+	</xsl:template>
+
+</xsl:stylesheet>

@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="1.0"
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform" >
+
+<!-- *** Hlavicka pro vystupni protokoly *************** -->
+<!-- *** ver.: 2.5 (01.02.2006) ************************ -->
+
+<!-- (c) 2005, Trimble Navigation Limited. All rights reserved.                                -->
+<!-- (c) 2005-2006, GEOTRONICS Praha, s.r.o. Vsechna prava vyhrazena.                          -->
+<!-- Trimble Navigation Limited a jeho Autorizovany distributor GEOTRONICS Praha, s.r.o.,      -->
+<!-- poskytuje tento vstupni/vystupni predpis (XSL Style Sheet) "TAK JAK JE" se vsemi moznymi  -->
+<!-- chybami a zrika se jakykoliv, i samozrejmych zaruk. Dale se pak zrika zaruky, ze tento    -->
+<!-- produkt bude neomezene funkcni a bez chyb.                                                -->
+
+<!-- *************************************************** -->
+<!-- *** Vase kontaktni udaje do hlavicky protokolu **** -->
+<!-- *************************************************** -->
+ <xsl:variable name="MyCompany" select="'GEOTRONICS Praha, s.r.o.'"/>
+  <xsl:variable name="MyAddress" select="'Pikovicka 206/11'"/>
+  <xsl:variable name="MyCity" select="'147 00  Praha 4'"/>
+
+<!-- *** Jak pouzivat tento dokument ******************* -->
+<!--
+  Tento XSL soubor obsahuje varialbilni hodnoty editovatelne uzivatelem:
+    - kontaktni udaje uzivatele, ktere se zobrazuji v hlavicce vystupnich protokolu
+
+  Volby pro nastaveni promennych:
+    MyCompany:        nazev spolecnosti
+    MyAddress:        adresa
+    MyCity:           PSC a mesto
+
+  ******************************************************
+
+  Pro spravnou funkci protokolu je nutne splnit nekolik podminek.
+
+  Pro vytvareni ASCII vystupu v PC:
+  1. cesta a nazev tohoto souboru:   \vas_adresar_s_xsl_stylesheety\Protokol-Head.xdt
+  2. cesta k souborum XSL protokolu: \vas_adresar_s_xsl_stylesheety\*.xsl
+     "vas_adresar_s_xsl_stylesheety" je vetsine pripadu "\Trimble ASCII XSL\"
+
+  Pro vytvareni ASCII vystupu v Trimble ACU nebo TCU:
+  1. cesta a nazev tohoto souboru:    \Trimble Data\Protokol-Head.xdt
+  2. cesta k souborum XSL protokolu:  \Trimble Data\*.xsl
+  3. hodnoty uvede mezi apostrofy ' ' musi byt bez ceske diakritiky
+  
+  Pro vytvareni ASCII vystupu v Trimble TSC2:
+  1. cesta a nazev tohoto souboru:    \Temp\Protokol-Head.xdt
+  2. cesta a nazev pomocneho souboru: \Temp\Protokol-mereni-GPS.xdt
+  3. cesta a nazev pomocneho souboru: \Built-in Storage\Trimble Data\*.xsl
+  4. hodnoty uvede mezi apostrofy ' ' musi byt bez ceske diakritiky
+
+  K editaci tohoto souboru je mozne pouzit standardni editor ASCII.
+  Doporucujeme program Notepad (Poznamkovy blok), ktery je soucasti OS MS-Windows.
+  POZOR: pokud editujete tento soubor, je nutne pri jeho ukladani zvolit
+         "Soubor" - "Ulozit jako" a ve volbe "Kodovani" vybrat hodnotu "UTF-8".
+-->
+
+</xsl:stylesheet>

@@ -61,7 +61,7 @@ class CadDokument:
     def otevri(cls, path: str | Path, rs=None) -> "CadDokument":
         """Otevře DXF; poškozený soubor se zkusí opravit (ezdxf.recover) a ve zprávě je, co se stalo."""
         p = Path(path)
-        if p.suffix.lower() == ".dgn":
+        if p.suffix.lower() in (".dgn", ".dgnlib"):  # .dgnlib = knihovna hladin a stylů (DGN V8)
             return cls._otevri_dgn(p, rs)
         opravy: list[str] = []
         try:
@@ -246,6 +246,24 @@ def sjtsk(x: float, y: float) -> tuple[float, float]:
     return -x, -y
 
 
+def hladiny_v8(p: Path) -> list[str]:
+    """Názvy všech hladin z tabulky hladin DGN V8 / .dgnlib (i nepoužitých); chyba → prázdný seznam."""
+    import olefile
+
+    from ..io.dgn_v8 import _levels
+    try:
+        o = olefile.OleFileIO(str(p))
+    except OSError:
+        return []
+    try:
+        jm = list(dict.fromkeys(n for n in _levels(o).values() if n and n.isprintable()))
+    except Exception:  # noqa: BLE001
+        jm = []
+    finally:
+        o.close()
+    return jm
+
+
 def _v8_do_ezdxf(p: Path, rs=None):
     """DGN V8 → ezdxf pro úpravy v CAD: čáry, plochy, oblouky (jako lomené čáry), texty a buňky jako
     vložené bloky (kresba buňky se z výkresu V8 nečte – blok je značka bodu, kresbu doplní knihovna .CEL)."""
@@ -261,6 +279,9 @@ def _v8_do_ezdxf(p: Path, rs=None):
     SY.zajisti_styly(doc)
     msp = doc.modelspace()
     ms_barvy: dict[str, int] = {}
+    for jm in hladiny_v8(p):  # všechny hladiny jako ve Správci vrstev MicroStationu (i prázdné ze seedu)
+        if jm not in doc.layers:
+            doc.layers.add(jm)
     for f in d.features:
         if f.layer not in doc.layers:
             doc.layers.add(f.layer)

@@ -362,3 +362,24 @@ def test_transformace_a_volne_stanovisko_jako_groma(druh, meritko, st, opravy, p
     v = f["Volné stanovisko"](s, {"mereni": m, "meritko": meritko, "metoda": "transformace", "vp": "", "nove": "4009"})
     assert (round(v.nove[0].y, 3), round(v.nove[0].x, 3)) == st
     assert f"Orientační posun [g]: {posun:.4f}" in "\n".join(v.protokol)
+
+
+TRIMBLE = Path(__file__).resolve().parents[1] / "podklady" / "trimble"
+
+
+def test_trimble_file_and_report_sablona():
+    """Šablona Geotronicsu (.xsl + .xdt) na JobXML dá stejný protokol GNSS jako Trimble File and Report."""
+    from kontrola.io.trimble import TrimbleError, exportuj
+    s = exportuj(TRIMBLE / "Vejda-sk3-mapovani-2026.jxl", TRIMBLE / "protokol" / "Kompletni_Protokol_mereni_GPS_2021.xsl")
+    ref = (TRIMBLE / "Vejda-sk3-mapovani-2026.txt").read_bytes().decode("cp1250")
+    assert [r.rstrip() for r in s.splitlines()] == [r.rstrip() for r in ref.splitlines()]
+    body = exportuj(TRIMBLE / "Vejda-sk3-mapovani-2026.jxl",
+                    TRIMBLE / "body" / "Merene body - YXZ - TXT GPS - ver-2.0.xsl")
+    assert "4004 -599388.984 -1159322.045   264.675" in body
+    with pytest.raises(TrimbleError, match="JobXML"):
+        p = TRIMBLE / "x.job"
+        try:
+            p.write_bytes(b"Trimble General Survey Journal\0\0")
+            exportuj(p, TRIMBLE / "body" / "Merene body - YXZ - TXT GPS - ver-2.0.xsl")
+        finally:
+            p.unlink()

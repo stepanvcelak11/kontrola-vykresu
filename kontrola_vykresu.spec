@@ -41,7 +41,8 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=["qrcode", "kontrola.checks.topology", "kontrola.checks.attributes", "pdfplumber", "pypdfium2",
-                   "openpyxl", "xlrd", "olefile", "PySide6.QtSvg", "reportlab.graphics.barcode"],
+                   "openpyxl", "xlrd", "olefile", "PySide6.QtSvg", "reportlab.graphics.barcode",
+                   "lxml.etree", "lxml._elementpath"],
     excludes=excludes,
     noarchive=False,
 )

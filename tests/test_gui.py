@@ -3543,3 +3543,16 @@ def test_vypocty_rozpracovane_ulohy(window):
     v.prepni_ulohu("02 Polygon")
     assert len(v.seznam) == 2 and v.zapisnik.stanoviska is not None
     assert v.lista.ulohy.currentData() == "02 Polygon"
+
+
+def test_vypocty_trimble_dialog(window, tmp_path):
+    from pathlib import Path
+    t = Path(__file__).resolve().parents[1] / "podklady" / "trimble"
+    v = window.vypocty
+    d = v.trimble_dialog(modal=False)
+    d.zdroj.setText(str(t / "Vejda-sk3-mapovani-2026.jxl"))
+    d.nastav_sablonu(str(t / "body" / "Merene body - YXZ - TXT GPS - ver-2.0.xsl"))
+    assert "4004" in d.exportovat() and d.b_seznam.isEnabled()
+    p = d.ulozit(str(tmp_path / "body.txt"))
+    assert p.read_bytes().count(b"\r\n") >= 12
+    v.menu.akce["Soubor/Import/Trimble (File and Report)…"]
