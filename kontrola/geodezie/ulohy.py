@@ -1563,6 +1563,8 @@ def u_prevod_uhlu(s, h):
         raise ChybaVstupu("Zadejte úhly (řádek = úhel).")
     for r in radky:
         g = _uhel_z_textu(r)
+        if not math.isfinite(g) or abs(g) > 1e9:
+            raise ChybaVstupu(f"Úhel „{r.strip()}“ není konečné číslo.")
         deg = g * 0.9
         a = abs(deg)
         d_ = int(a)
