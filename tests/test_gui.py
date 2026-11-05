@@ -3393,3 +3393,25 @@ def test_cad_vyber_stylu_z_rsc_v_liste(window):
     car = [e for e in c.dok.msp if e.dxftype() == "LINE"][-1]
     assert car.dxf.linetype == "2.163" and "2.163" in c.dok.doc.linetypes
     c.proved("styly čar odpoj")
+
+
+def test_cad_otoc_pohled(window):
+    from PySide6.QtCore import QPointF
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=30 y=30", ""):
+        c.zadej(t)
+    c.view.zoom_all()
+    c.proved("otoč pohled")
+    c.zadej("x=0 y=0")
+    c.zadej("x=30 y=30")
+    a, b = c.view.mapFromScene(QPointF(0, 0)), c.view.mapFromScene(QPointF(30, 30))
+    assert abs(a.y() - b.y()) <= 1 and b.x() > a.x()  # čára je vodorovně, zleva doprava
+    p = c.view.mapToScene(c.view.mapFromScene(QPointF(10, 20)))
+    assert abs(p.x() - 10) < 0.5 and abs(p.y() - 20) < 0.5
+    c.proved("otoč pohled 0")
+    a, b = c.view.mapFromScene(QPointF(0, 0)), c.view.mapFromScene(QPointF(10, 0))
+    assert abs(a.y() - b.y()) <= 1 and b.x() > a.x()
+    a2 = c.view.mapFromScene(QPointF(0, 10))
+    assert a2.y() < a.y()  # y nahoru

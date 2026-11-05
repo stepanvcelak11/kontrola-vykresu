@@ -180,6 +180,21 @@ class CadView(QGraphicsView):
         self.zapamatuj_pohled(vynutit=False)
         self.priblizeni(1.0015 ** e.angleDelta().y(), e.position())
 
+    def otoc_pohled(self, uhel_deg: float) -> None:
+        """Rotate View: směr ``uhel_deg`` (ve výkresu, proti směru hodin od osy x) bude na obrazovce vodorovně.
+        Střed pohledu i měřítko zůstanou."""
+        from PySide6.QtGui import QTransform
+        stred = self.mapToScene(self.viewport().rect().center())
+        t = self.transform()
+        s = math.sqrt(abs(t.m11() * t.m22() - t.m12() * t.m21())) or 1.0
+        self.natoceni = (uhel_deg + 180.0) % 360.0 - 180.0
+        r = math.radians(self.natoceni)
+        c, si = math.cos(r) * s, math.sin(r) * s
+        # x_v = c·x + s·y ,  y_v = s·x − c·y  (y nahoru, otočeno o −úhel)
+        self.setTransform(QTransform(c, si, si, -c, 0, 0))
+        self.centerOn(stred)
+        self.viewport().update()
+
     def zoom_all(self, rect: QRectF | None = None):
         r = rect or self.scene().itemsBoundingRect()
         if r.isEmpty():
@@ -421,6 +436,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "otoč pohled": "otočit pohled (Rotate View): dvěma body podle kresby, nebo „otoč pohled 30“; 0 = zpět",
         "čára pod úhlem": "čára z bodu pod zadaným úhlem k prvku (Construct Line at Active Angle), ° nebo gon",
         "zarovnej": "zarovnat vybrané prvky podle hrany vzorového prvku (Align Elements) – vlevo, vpravo, nahoru…",
         "popis souřadnic": "popis souřadnic Y, X bodu s odkazovou čarou (vytyčovací výkresy)",
@@ -492,6 +508,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "otoc pohled": "otoč pohled", "rotate view": "otoč pohled", "rv": "otoč pohled",
         "cara pod uhlem": "čára pod úhlem", "line at angle": "čára pod úhlem", "pod úhlem": "čára pod úhlem",
         "align": "zarovnej", "align elements": "zarovnej", "zarovnat": "zarovnej", "zarovnání prvků": "zarovnej",
         "popis souradnic": "popis souřadnic", "souřadnice bodu": "popis souřadnic", "id coordinates": "popis souřadnic",
@@ -2641,6 +2658,14 @@ class CadPage(QWidget):
             self._pohled(arg)
         elif cmd == "styly čar":
             self._styly_car(arg)
+        elif cmd == "otoč pohled" and arg.strip():
+            try:
+                u = float(arg.strip().replace(",", "."))
+            except ValueError:
+                self.vypis("Úhel ve stupních, např. „otoč pohled 30“ (0 = bez otočení).")
+            else:
+                self.view.otoc_pohled(u)
+                self.vypis(f"Pohled otočen o {u:g}°.")
         elif cmd == "písmo":
             self._pismo(arg)
         elif cmd == "arch":
@@ -3221,6 +3246,19 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_otoc_pohled(self):
+        """Rotate View dvěma body: zadaná čára bude na obrazovce vodorovně („otoč pohled 0“ = zpět k ose x)."""
+        a = yield self._bod_req("Otočit pohled – první bod směru, který má být vodorovně (Enter = zrušit otočení):",
+                                volitelne=True)
+        if a is None or isinstance(a, str):
+            self.view.otoc_pohled(0.0)
+            self.vypis("Pohled bez otočení.")
+            return
+        b = yield self._bod_req("Druhý bod směru:", a)
+        u = math.degrees(math.atan2(b[1] - a[1], b[0] - a[0]))
+        self.view.otoc_pohled(u)
+        self.vypis(f"Pohled otočen o {u:.3f}° („otoč pohled 0“ = zpět).")
 
     def n_cara_pod_uhlem(self):
         """Construct Line at Active Angle: čára z bodu na prvku pod úhlem k němu (úhel v ° nebo „50g“ v gonech)."""
