@@ -3333,3 +3333,19 @@ def test_cad_cara_pod_uhlem(window):
     import math
     assert abs(math.degrees(math.atan2(car.dxf.end.y - car.dxf.start.y, car.dxf.end.x - car.dxf.start.x)) - 45) < 1e-6
     assert abs(math.dist((car.dxf.end.x, car.dxf.end.y), (5, 0)) - 4) < 1e-9
+
+
+def test_chyba_z_kontroly_do_cad(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    window.show_page("vykres")
+    assert window._wait(lambda: window.drawing is not None and "kontrola_cad_zive" in str(window.drawing.path)
+                        and _idle(window))
+    from kontrola.checks.base import Issue, Severity
+    h = [e for e in c.dok.msp if e.dxftype() == "LINE"][0].dxf.handle
+    iss = Issue("x", "Test", list(Severity)[0], "chyba na čáře", 5.0, 0.0, handles=[h])
+    ents = window.ukaz_v_cad(iss)
+    assert len(ents) == 1 and c.vyber == ents and window.tabs.currentWidget() is c

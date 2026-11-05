@@ -41,7 +41,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "a jedno z devíti zarovnání jako v MicroStationu (LT … RB). Příkaz „písmo Arial“ změní písmo nových i "
         "vybraných textů.",
         "<b>CAD → Kontrola živě</b>: co nakreslíte v CAD, se po přepnutí na Výkres samo zkontroluje – bez "
-        "ukládání a nahrávání.",
+        "ukládání a nahrávání. A obráceně: pravým tlačítkem na chybě „Opravit v CAD“ vybere v CAD prvky chyby "
+        "a přiblíží je; po opravě stačí přepnout zpět na Výkres.",
     ]),
     (8, "5. listopadu 2026", [
         "<b>Kokeš</b> – nová stránka v levé liště: seznam souřadnic s čísly bodů KN (k.ú., ZPMZ, pořadové číslo, "

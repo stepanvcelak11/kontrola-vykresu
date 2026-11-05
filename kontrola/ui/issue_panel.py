@@ -1035,6 +1035,10 @@ class IssuePanel(QWidget):
             if cur.layer and len(on_layer) > 1:
                 m.addAction(f"Ignorovat vše na vrstvě „{cur.layer}“ ({len(on_layer)})",
                             lambda: self.set_state("ignorovat", on_layer))
+        win = self.window()
+        if cur is not None and hasattr(win, "ukaz_v_cad"):
+            m.addSeparator()
+            m.addAction("Opravit v CAD (vybrat prvky chyby)", lambda: win.ukaz_v_cad(cur))
         m.addSeparator()
         m.addAction("Jen tento typ", self._only_current)
         m.addAction("Zobrazit vše", self.show_all)

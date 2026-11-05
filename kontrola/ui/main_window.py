@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QInputDialog, QLabel, QMainWindow, QMenu, QMessageBox,
                                QProgressBar, QPushButton, QSizePolicy, QTabWidget, QToolBar, QToolButton, QWidget)
@@ -2189,6 +2189,36 @@ class MainWindow(QMainWindow):
             return
         if self.cad.otevri(str(src)):
             self.show_page("cad")
+
+    def ukaz_v_cad(self, issue=None) -> list:
+        """Z chyby rovnou do CAD: vybere prvky chyby (podle handle) a přiblíží je – oprava a zpět Výkres."""
+        issue = issue or self.issue_panel.current_issue()
+        if issue is None or self.drawing is None:
+            return []
+        cad = self.cad
+        zive = "kontrola_cad_zive" in str(self.drawing.path)
+        src = Path(self.drawing.source_path or self.drawing.path)
+        if not zive and (cad.dok is None or cad.dok.path is None or Path(cad.dok.path).resolve() != src.resolve()):
+            if src.suffix.lower() != ".dxf" or not cad.otevri(str(src)):
+                self.open_in_cad()
+                if cad.dok is None:
+                    return []
+        if not cad._je_model():
+            cad.nastav_model("Model")
+        db = cad.dok.doc.entitydb
+        ents = [db.get(h) for h in issue.handles if db.get(h) is not None and db.get(h).is_alive]
+        self.show_page("cad")
+        cad.vyber = ents
+        cad._zvyrazni()
+        if ents:
+            from ezdxf import bbox
+            b = bbox.extents(ents, fast=True)
+            if b.has_data:
+                w, h = max(b.size.x, 1.0) * 1.6, max(b.size.y, 1.0) * 1.6
+                cad.view.zoom_all(QRectF(b.center.x - w / 2, b.center.y - h / 2, w, h))
+        cad.vypis(f"Chyba ({issue.check_name}): {issue.message}" + ("" if ents else
+                  " – prvky se v CAD nenašly (výkres se mezitím změnil)."))
+        return ents
 
     def undo_dispatch(self):
         if self.tabs.currentWidget() is getattr(self, "vypocty", None):
