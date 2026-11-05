@@ -25,6 +25,8 @@ REZIMY_VYSKY = ("bez redukce", "z výšek bodů", "ručně")
 
 @dataclass
 class NastaveniVypoctu:
+    zakazka: str = ""
+    zpracovatel: str = ""
     ucel: str = "katastr"
     kod_kvality: int = 3
     trida_presnosti: int = 3
@@ -120,7 +122,12 @@ class NastaveniVypoctu:
 
     def hlavicka(self) -> list[str]:
         """Řádky do hlavičky protokolu."""
-        r = [f"Účel: {self.popis_ucelu()}",
+        r = []
+        if self.zakazka:
+            r.append(f"Zakázka: {self.zakazka}")
+        if self.zpracovatel:
+            r.append(f"Zpracoval: {self.zpracovatel}")
+        r += [f"Účel: {self.popis_ucelu()}",
              f"Přístroj: {self.pristroj} (σ směru {self.sigma_smer_mgon:g} mgon, σ délky "
              f"{self.sigma_delka_mm:g} mm + {self.sigma_delka_ppm:g} ppm)"]
         return r

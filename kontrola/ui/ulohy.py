@@ -274,7 +274,12 @@ class UlohyPanel(QWidget):
         win = getattr(self.page, "win", None)
         pr = getattr(win, "project", None) if win is not None else None
         nazev = getattr(pr, "name", "") if pr is not None else ""
-        out = protokol_pdf(text, cesta, nazev=f"Výpočetní protokol {nazev}".strip())
+        from ..geodezie.nastaveni import aktualni
+        n = aktualni()
+        hlav = n.hlavicka()
+        text = "\n".join(hlav + ["-" * max(len(r) for r in hlav), ""]) + text
+        out = protokol_pdf(text, cesta, nazev=f"Výpočetní protokol {n.zakazka or nazev}".strip(),
+                           autor=n.zpracovatel)
         self.chyba.setText(f"<span style='color:#16A34A'>✓ Protokol uložen: {out}</span>")
         return out
 

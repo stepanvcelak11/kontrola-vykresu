@@ -47,6 +47,14 @@ class NastaveniVypoctuDialog(QDialog):
         n = N.aktualni()
         lay = QVBoxLayout(self)
 
+        g0 = QGroupBox("Zakázka (hlavička protokolu)")
+        f0 = QFormLayout(g0)
+        self.zakazka = QLineEdit(n.zakazka)
+        self.zpracovatel = QLineEdit(n.zpracovatel)
+        f0.addRow("Zakázka:", self.zakazka)
+        f0.addRow("Zpracoval:", self.zpracovatel)
+        lay.addWidget(g0)
+
         g1 = QGroupBox("Účel měření")
         f1 = QFormLayout(g1)
         self.ucel = QComboBox()
@@ -125,6 +133,7 @@ class NastaveniVypoctuDialog(QDialog):
 
     def hodnota(self) -> N.NastaveniVypoctu:
         return N.NastaveniVypoctu(
+            zakazka=self.zakazka.text().strip(), zpracovatel=self.zpracovatel.text().strip(),
             ucel="katastr" if self.ucel.currentIndex() == 0 else "polohopis", kod_kvality=int(self.kod.currentText()),
             trida_presnosti=self.trida.value(), pristroj=self.pristroj.text().strip() or "Totální stanice",
             sigma_smer_mgon=self.s_smer.value(), sigma_delka_mm=self.s_a.value(), sigma_delka_ppm=self.s_b.value(),
