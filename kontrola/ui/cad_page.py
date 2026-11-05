@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QToolButton,
                                QVBoxLayout, QWidget)
 
@@ -683,7 +683,7 @@ class CadPage(QWidget):
         self.title = QLabel("Žádný výkres")
         self.title.setObjectName("cad_titulek")
         bar.addWidget(self.title)
-        lay.addLayout(bar)
+        self._skryta_lista = bar  # tlačítka se přesunou do pásu karet a nabídky Soubor
         # ---- lišta atributů (jako Attributes v MicroStationu): hladina, barva, styl, tloušťka, druh prvku
         arow = RadekTlacitek()
         arow.setContentsMargins(8, 2, 8, 5)
@@ -716,16 +716,59 @@ class CadPage(QWidget):
         self.predvolba_info.setObjectName("predvolba_info")
         self.predvolba_info.setMaximumWidth(420)
         arow.addWidget(self.predvolba_info)
-        lay.addLayout(arow)
+        self._skryta_lista_atr = arow
+        # skupina Atributy pásu karet (jako Attributes v MicroStationu)
+        self.atributy = QWidget()
+        ga = QGridLayout(self.atributy)
+        ga.setContentsMargins(0, 0, 0, 0)
+        ga.setHorizontalSpacing(4)
+        ga.setVerticalSpacing(2)
+        self.vrstvy.setMinimumWidth(170)
+        self.styl_cb.setMinimumWidth(120)
+        self.tl_cb.setMinimumWidth(90)
+        self.predvolby_cb.setMinimumWidth(220)
+        self.predvolby_cb.setMaximumWidth(320)
+        ga.addWidget(QLabel("Hladina:"), 0, 0)
+        ga.addWidget(self.vrstvy, 0, 1)
+        ga.addWidget(QLabel("Barva:"), 0, 2)
+        ga.addWidget(self.b_barva, 0, 3)
+        ga.addWidget(QLabel("Styl:"), 1, 0)
+        ga.addWidget(self.styl_cb, 1, 1)
+        ga.addWidget(QLabel("Tloušťka:"), 1, 2)
+        ga.addWidget(self.tl_cb, 1, 3)
+        ga.addWidget(QLabel("Šablona:"), 2, 0)
+        self.predvolby_cb.setToolTip("Šablona prvku ze zadání (MicroStation: Element Template) – hladina, barva, "
+                                     "styl, tloušťka a písmo se nastaví samy")
+        ga.addWidget(self.predvolby_cb, 2, 1, 1, 2)
+        ga.addWidget(self.b_na_vyber, 2, 3)
+        self.modely_w = skupina(QLabel("Model:"), self.modely)
         self._predvolby: list = []
         # ---- střed: paleta nástrojů | výkres | hladiny a vlastnosti
         from PySide6.QtWidgets import QSplitter, QTabWidget
 
         from .cad_panely import PaletaNastroju, PanelHladin, PanelVlastnosti
         from .theme import accent, is_dark
-        self.paleta = PaletaNastroju(self.PRIKAZY, "#D1D5DB" if is_dark() else "#374151", accent())
+        from .cad_ribbon import PanelUloh, PasKaret, menu_soubor
+        _barva_ik = "#D1D5DB" if is_dark() else "#374151"
+        self.paleta = PanelUloh(self.PRIKAZY, _barva_ik, accent())
         self.paleta.nastroj.connect(self._z_palety)
+        self.ribbon = PasKaret(self.PRIKAZY, self, _barva_ik, accent())
+        self.ribbon.nastroj.connect(self._z_palety)
+        self.ribbon.b_soubor.setMenu(menu_soubor(self))
+        from PySide6.QtWidgets import QSizePolicy
+        for w in (self.title, self.predvolba_info):  # dlouhý název souboru nesmí roztáhnout okno
+            w.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+            w.setMinimumWidth(40)
+            w.setMaximumWidth(260)
+        for w in (self.b_undo, self.b_redo, self.title, self.predvolba_info):
+            self.ribbon.vpravo.addWidget(w)
+        for b, t in ((self.b_undo, "↶"), (self.b_redo, "↷")):
+            b.setText(t)
+            b.setFixedWidth(34)
+        lay.insertWidget(0, self.ribbon)
         self.nastroje: dict[str, QToolButton] = dict(self.paleta.tlacitka)
+        self._tlacitka_nastroju = list(self.paleta.tlacitka.values()) + [
+            b for bs in self.ribbon.tlacitka.values() for b in bs]
         self.view = CadView()
         self.view.setCursor(Qt.CrossCursor)
         self.panel = QTabWidget()
@@ -743,12 +786,12 @@ class CadPage(QWidget):
         stred.addWidget(self.panel)
         stred.setStretchFactor(1, 1)
         stred.setCollapsible(1, False)
-        stred.setSizes([self.paleta.width(), 1000, 260])
+        stred.setSizes([210, 1000, 260])
         self.stred = stred
         lay.addWidget(stred, 1)
         self.historie = QPlainTextEdit()
         self.historie.setReadOnly(True)
-        self.historie.setMaximumHeight(86)
+        self.historie.setMaximumHeight(64)
         self.historie.setObjectName("cad_historie")
         lay.addWidget(self.historie)
         crow = QHBoxLayout()
@@ -790,6 +833,18 @@ class CadPage(QWidget):
             self._akce_uchytu[k] = a
         self.b_druhy_uchytu.setMenu(mu)
         crow.insertWidget(crow.indexOf(self.b_uchyty) + 1, self.b_druhy_uchytu)
+        # režimy úchytu jako ikony ve stavovém řádku (Snap Mode v MicroStationu)
+        from .cad_ribbon import ikona_uchytu
+        _poz = crow.indexOf(self.b_druhy_uchytu) + 1
+        for k, a in self._akce_uchytu.items():
+            a.setIcon(ikona_uchytu(k, "#D1D5DB" if is_dark() else "#374151"))
+            a.setToolTip(f"Úchyt: {TYPY[k]} (zapnout / vypnout)")
+            tb = QToolButton()
+            tb.setDefaultAction(a)
+            tb.setAutoRaise(True)
+            tb.setIconSize(QSize(16, 16))
+            crow.insertWidget(_poz, tb)
+            _poz += 1
         self.krok = QSpinBox()
         self.krok.setRange(1, 200)
         self.krok.setValue(50)
@@ -803,7 +858,7 @@ class CadPage(QWidget):
         crow.addWidget(self.aktivni)
         self.coords = QLabel("Y –  X –")
         self.coords.setObjectName("cad_souradnice")
-        self.coords.setMinimumWidth(300)
+        self.coords.setMinimumWidth(230)
         crow.addWidget(self.coords)
         lay.addLayout(crow)
         self.b_barva.clicked.connect(self._vyber_barvy)
@@ -1958,7 +2013,7 @@ class CadPage(QWidget):
         h = self.historie_zmen
         self.b_undo.setEnabled(bool(h and h.zpet))
         self.b_redo.setEnabled(bool(h and h.vpred))
-        for b in self.nastroje.values():
+        for b in self._tlacitka_nastroju:
             b.setEnabled(self.dok is not None)
         for b in (self.b_save, self.b_saveas, self.b_check, self.b_all, self.b_vrstvy, self.b_na_vyber, self.b_ref,
                   self.modely, self.b_tisk, self.b_body):
@@ -2304,7 +2359,7 @@ class CadPage(QWidget):
         self.view.vyber_oknem = True
         self.vyzva.setText("Příkaz:")
         if getattr(self, "paleta", None) is not None:
-            self.paleta.oznac(None)
+            self._oznac(None)
         self.view.viewport().update()
 
     def _enter(self):
@@ -2410,7 +2465,7 @@ class CadPage(QWidget):
     def _spust(self, gen):
         self._gen = gen
         if getattr(self, "paleta", None) is not None:
-            self.paleta.oznac(self._posledni_prikaz)
+            self._oznac(self._posledni_prikaz)
         self._posli(None, prvni=True)
 
     def _posli(self, hodnota, prvni: bool = False):
@@ -2453,7 +2508,7 @@ class CadPage(QWidget):
         self._req = None
         self.view.nahled = None
         if getattr(self, "paleta", None) is not None:
-            self.paleta.oznac(None)
+            self._oznac(None)
         self.view.gumicka = False
         self.view.vyber_oknem = True
         self.vyzva.setText("Příkaz:")
@@ -3051,7 +3106,17 @@ class CadPage(QWidget):
                                     nahled=lambda x, y: _posunute([g] if g is not None else [], x - b[0], y - b[1]))
             self._hotovo_vyber(U.posun(self.prostor, self.historie_zmen, [e], n[0] - b[0], n[1] - b[1]))
 
+    def _oznac(self, prikaz):
+        """Zvýrazní běžící nástroj v panelu Úlohy i v pásu karet (jako stisknutá ikona v MicroStationu)."""
+        self.paleta.oznac(prikaz)
+        for c, bs in self.ribbon.tlacitka.items():
+            for b in bs:
+                b.setChecked(c == prikaz)
+
     def _z_palety(self, cmd: str):
+        if not cmd:  # Výběr prvků
+            self.zrus()
+            return
         if cmd == "text" and self.dok is not None:
             self.text_dialog()
         else:
