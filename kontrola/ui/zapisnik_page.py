@@ -176,7 +176,7 @@ class ZapisnikPanel(QWidget):
     # ------------------------------------------------------------ akce
     def nacist(self, cesta: str | None = None) -> bool:
         if cesta is None:
-            cesta, _ = QFileDialog.getOpenFileName(self, "Načíst zápisník", "", "Zápisník (*.zap *.gsi *.txt)")
+            cesta, _ = QFileDialog.getOpenFileName(self, "Načíst zápisník", "", "Zápisník (*.zap *.gsi *.sdr *.txt)")
             if not cesta:
                 return False
         try:

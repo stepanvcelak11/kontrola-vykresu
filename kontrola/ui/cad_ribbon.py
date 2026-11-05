@@ -58,6 +58,7 @@ NAZVY = {
     "vrstvy": ("Správce hladin", "Level Manager"), "zhasni": ("Vypnout hladinu", "Level Display Off"),
     "rozsviť": ("Zapnout hladinu", "Level Display On"), "styly čar": ("Styly čar (.rsc)", "Line Styles"),
     "knihovny": ("Knihovny od učitele", "Standards / Cell Library + Line Styles"),
+    "pracovní sada": ("Pracovní sada", "WorkSet"),
     "reference": ("Reference", "References"), "rastr": ("Rastr", "Raster Manager"),
     "georeference": ("Georeference rastru", "Raster Warp"),
     "model": ("Modely", "Models"), "list": ("Nový list", "Sheet Model"), "výřez": ("Výřez na list", "Place Named Boundary"),
@@ -142,7 +143,7 @@ KARTY = [
     ("Připojit", [
         ("Reference", ["reference"]),
         ("Rastr", ["rastr", "georeference"]),
-        ("Knihovny", ["knihovny", "knihovna buněk", "styly čar"]),
+        ("Knihovny", ["pracovní sada", "knihovny", "knihovna buněk", "styly čar"]),
     ]),
     ("Nástroje", [
         ("Měření", ["vzdálenost", "délka", "výměra", "měř plochu", "měř úhel", "info", "vlastnosti"]),
@@ -466,6 +467,9 @@ def menu_soubor(stranka) -> QMenu:
         a.triggered.connect(b.click)
         a.setData(b)
     m.addSeparator()
+    ps = m.addAction("Pracovní sada…")
+    ps.setToolTip("Bez pracovní sady / MultiScale / Pasport / TM – seed, hladiny, buňky a styly čar")
+    ps.triggered.connect(lambda: stranka.pracovni_sada())
     z = m.addAction("Zavřít výkres")
     z.setToolTip("Zavře aktuální výkres a přepne na další rozpracovaný")
     z.triggered.connect(lambda: stranka.zavri_vykres())

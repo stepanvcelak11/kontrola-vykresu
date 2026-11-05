@@ -3556,3 +3556,37 @@ def test_vypocty_trimble_dialog(window, tmp_path):
     p = d.ulozit(str(tmp_path / "body.txt"))
     assert p.read_bytes().count(b"\r\n") >= 12
     v.menu.akce["Soubor/Import/Trimble (File and Report)…"]
+
+
+def test_cad_pracovni_sady(window, tmp_path):
+    """Pracovní sady jako v MicroStationu: WorkSets/<sada>/Standards (seed, Cell, Symb) a „Bez pracovní sady“."""
+    import shutil
+    from pathlib import Path
+
+    from kontrola.cad import pracovni_sady as PS
+    root = Path(__file__).resolve().parents[1] / "podklady"
+    ucitel = root / "ucitel-dalsi"
+    if not (ucitel / "NORMA.CEL").is_file():
+        return
+    std = tmp_path / "Konfigurace" / "WorkSpaces" / "Skola" / "WorkSets" / "Mapa" / "Standards"
+    for d, f in (("Seed", ucitel / "SJTSK-V8.DGN"), ("Cell", ucitel / "NORMA.CEL"),
+                 ("Symb", root / "skola-ms" / "linkyMJ.rsc")):
+        (std / d).mkdir(parents=True)
+        shutil.copy(f, std / d)
+    c = window.cad
+    window.show_page("cad")
+    d = c.pracovni_sada(modal=False)
+    sady = d.pridej_slozku(str(tmp_path / "Konfigurace"))
+    assert [s.klic for s in sady] == ["Skola/Mapa"]
+    sady = d.pridej_slozku(str(ucitel))
+    assert any(s.nazev == PS.BEZ_SADY and s.seed and s.seed.name == "SJTSK-V8.DGN" for s in sady)
+    d.seznam.setCurrentRow(1)  # Mapa
+    d.pouzij(novy=True)
+    c.po_zmene_knihoven()
+    c.novy()
+    assert PS.aktivni().nazev == "Mapa" and c.dok.path is None
+    assert len(list(c.dok.doc.layers)) > 60  # hladiny ze seedu
+    assert "1.030" in [b.name for b in c.dok.doc.blocks] and "2.09_" in c.styly_rsc()
+    PS.nastav_aktivni(None)
+    c.novy()
+    assert len(list(c.dok.doc.layers)) < 60

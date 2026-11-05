@@ -447,6 +447,7 @@ class CadPage(QWidget):
         "styl": "styl čáry nových / vybraných prvků: 0–7, kód stylu z knihovny („styl 2.103“), „styl dle“ = dle hladiny",
         "tloušťka": "tloušťka (wt 0–31) nových / vybraných prvků, „tloušťka dle“ = dle hladiny",
         "styly čar": "styly čar MicroStationu z knihovny .rsc (ploty, hranice…): seznam, „styly čar připoj“",
+        "pracovní sada": "pracovní sada jako v MicroStationu (Bez pracovní sady, MultiScale, Pasport, TM): seed, hladiny, buňky, styly čar",
         "knihovny": "knihovny od učitele – buňky (.cel) a styly čar (.rsc) pro všechny výkresy; přidat nové",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
         "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, natočení, tisk do PDF („arch A3 1000“, "
@@ -1420,10 +1421,31 @@ class CadPage(QWidget):
         if self.dok is None:
             return []
         try:
-            return K.do_vykresu(self.dok.doc)
+            from ..cad import pracovni_sady as PS
+            from ..cad.zadani import prevezmi_bloky
+            sada = PS.aktivni()
+            out = []
+            for c in (sada.bunky if sada is not None else []):  # buňky aktivní pracovní sady
+                try:
+                    out += prevezmi_bloky(self.dok.doc, [str(c)])
+                except Exception:  # noqa: BLE001
+                    self.vypis(f"⚠ Knihovnu buněk {c.name} z pracovní sady nejde načíst.")
+            return out + K.do_vykresu(self.dok.doc)
         except Exception as e:  # noqa: BLE001 – knihovna nesmí zabránit otevření výkresu
             self.vypis(f"⚠ Knihovny od učitele: {e}")
             return []
+
+    def pracovni_sada(self, modal: bool = True):
+        """Výběr pracovní sady (jako úvodní obrazovka MicroStationu); po změně se načtou její buňky a styly."""
+        from .pracovni_sada_dialog import PracovniSadaDialog
+        d = PracovniSadaDialog(self)
+        if not modal:
+            return d
+        if d.exec() and d.zmeneno:
+            self.po_zmene_knihoven()
+            if d.novy_soubor:
+                self.novy()
+        return d
 
     def knihovny(self, modal: bool = True):
         """Správce knihoven od učitele (buňky, styly čar) – po změně se hned projeví v otevřeném výkresu."""
@@ -2036,7 +2058,9 @@ class CadPage(QWidget):
         if isinstance(ulozene, str):
             ulozene = [ulozene]
         from ..cad import knihovny as K
-        return out + [Path(x) for x in ulozene] + K.soubory((".rsc",))
+        from ..cad import pracovni_sady as PS
+        sada = PS.aktivni()
+        return out + [Path(x) for x in ulozene] + K.soubory((".rsc",)) + (sada.styly if sada is not None else [])
 
     def styly_rsc(self) -> dict:
         from ..cad.styly_rsc import nacti
@@ -2203,7 +2227,27 @@ class CadPage(QWidget):
         return True
 
     def novy(self):
-        self.nastav_dokument(CadDokument())
+        """Nový výkres – ze seedu aktivní pracovní sady (hladiny, nastavení) jako v MicroStationu."""
+        from ..cad import pracovni_sady as PS
+        sada = PS.aktivni()
+        dok = None
+        if sada is not None and sada.seed is not None:
+            try:
+                dok = CadDokument.otevri(str(sada.seed), self._pravidla())
+            except ValueError as e:
+                self.vypis(f"⚠ Seed {sada.seed.name}: {e}")
+        if dok is None:
+            self.nastav_dokument(CadDokument())
+        else:
+            from ..cad.dokument import hladiny_v8
+            for lib in sada.dgnlib:  # hladiny z knihovny (.dgnlib), které v seedu nejsou
+                for jm in hladiny_v8(lib):
+                    if jm not in dok.doc.layers:
+                        dok.doc.layers.add(jm)
+            dok.path = None  # nový výkres, seed se nepřepíše
+            self.nastav_dokument(dok)
+            self.vypis(f"Nový výkres v pracovní sadě {sada.nazev} (seed {sada.seed.name}, "
+                       f"{len(list(dok.doc.layers))} hladin).")
         self.sjtsk = False
 
     def uloz(self, jako: bool = False, path: str | None = None) -> Path | None:
@@ -2866,6 +2910,8 @@ class CadPage(QWidget):
             self.atributy_zadani()
         elif cmd == "pohled":
             self._pohled(arg)
+        elif cmd == "pracovní sada":
+            self.pracovni_sada()
         elif cmd == "knihovny":
             self.knihovny()
         elif cmd == "styly čar":

@@ -9,9 +9,12 @@ from ..vypocet import Obs, Station, _merge_faces, read_zap
 
 
 def nacti(cesta: str | Path, dane: set[str] | None = None) -> list[Station]:
-    """Zápisník .zap (Groma) nebo GSI (Leica) – měření tak, jak jsou zapsaná (obě polohy zvlášť)."""
+    """Zápisník .zap (Groma), GSI (Leica) nebo SDR33 (Trimble) – měření tak, jak jsou zapsaná (obě polohy zvlášť)."""
     from .gsi import je_gsi, read_gsi
+    from .sdr import je_sdr, read_sdr
     text = Path(cesta).read_bytes()[:4000].decode("cp1250", errors="replace")
+    if je_sdr(text):  # SDR33 z Trimble S3
+        return read_sdr(cesta, dane)
     if not je_gsi(text):
         return read_zap(cesta, spojit=False)
     stations, _var = read_gsi(cesta)

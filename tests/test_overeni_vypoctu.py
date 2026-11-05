@@ -383,3 +383,17 @@ def test_trimble_file_and_report_sablona():
             exportuj(p, TRIMBLE / "body" / "Merene body - YXZ - TXT GPS - ver-2.0.xsl")
         finally:
             p.unlink()
+
+
+def test_zapisnik_sdr33_trimble_s3():
+    """SDR33 z Trimble S3 (cvičení SK3): stanoviska, výšky přístroje a cíle, orientace z 11TP, obě polohy."""
+    from kontrola.geodezie import zapisnik as Z
+    from kontrola.vypocet import _merge_faces
+    st = Z.nacti(TRIMBLE / "SK3.sdr")
+    assert [s.bod for s in st] == ["4001", "4011", "4009", "4012", "4010", "4006", "4004", "4003", "4002"]
+    s = st[0]
+    assert s.vp == 1.51 and s.orient[0].bod == "4002" and s.orient[0].vc == 1.6
+    o = s.orient[0]
+    assert (round(o.sd, 4), round(o.z, 4), o.hz) == (37.3312, 96.9803, 0.0)
+    m = _merge_faces(s.orient)
+    assert m[0].n >= 2 and abs(m[0].d_hz) < 0.01  # I. a II. poloha spojené
