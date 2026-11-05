@@ -207,11 +207,31 @@ class UlohyPanel(QWidget):
             return None
         self.chyba.clear()
         self.vystup.setPlainText("\n".join(self.vysledek.protokol))
-        self.b_add.setEnabled(bool(self.vysledek.nove))
+        self.b_add.setEnabled(bool(self.vysledek.nove or self.vysledek.vysky))
         self.page.protokol_append(self.vysledek.protokol)
         return self.vysledek
 
     def pridej(self) -> int:
+        if self.vysledek and getattr(self.vysledek, "vysky", None):
+            from dataclasses import asdict
+
+            from ..geodezie.body import Bod
+            vy = dict(self.vysledek.vysky)
+
+            def fn(body):
+                for i, b in enumerate(body):
+                    if b.cislo in vy:
+                        d = asdict(b)
+                        d["z"] = round(vy[b.cislo], 4)
+                        body[i] = Bod(**d)
+                return len(vy)
+
+            n = self.page.seznam.zmen(f"{ULOHY[self.lst.currentRow()][0]}: výšky", fn, len(vy))
+            self.page.model.refresh()
+            self.page._after_change()
+            self.chyba.setText(f"<span style='color:#16A34A'>✓ Výšky zapsány u {n} bodů.</span>")
+            if not self.vysledek.nove:
+                return n
         if not self.vysledek or not self.vysledek.nove:
             return 0
         n, konf = self.page.seznam.pridej(self.vysledek.nove, f"{ULOHY[self.lst.currentRow()][0]}: nové body")

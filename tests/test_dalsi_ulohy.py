@@ -513,3 +513,22 @@ def test_polygon_vetknuty_a_centrace():
                                   "smery": f"T {phi:.6f} {V.delka(Sp, T):.4f}"})
     cen = float(v.protokol[-1].split()[-1])
     assert abs(V.norm_gon(cen + o) - V.smernik(S, T)) < 2e-4
+
+
+def test_nivelacni_zapisnik():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import ChybaVstupu, u_nivelacni_zapisnik
+    s = SeznamBodu()
+    s.body[:] = [Bod("A", 0, 0, 250.000), Bod("B", 100, 0, 251.000), Bod("5", 50, 0)]
+    # skutečné převýšení +1,000 m, měření s uzávěrem +4 mm; boční záměra na bod 5
+    z = ("Z A 1.500 40\nB 5 1.200\nP T1 1.000 40\n"
+         "Z T1 1.800 35\nP B 1.296 35")
+    r = u_nivelacni_zapisnik(s, {"a": "A", "b": "B", "zapisnik": z})
+    t = "\n".join(r.protokol)
+    assert "odchylka uzávěru 4.0 mm" in t and "VYHOVUJE" in t
+    assert "Σ vzad − Σ vpřed = 3.3000 − 2.2960 = 1.0040" in t
+    # oprava −4 mm úměrně délkám (80 : 70); boční záměra z horizontu s polovinou opravy 1. sestavy
+    v1 = -0.004 * 80 / 150
+    assert abs(r.vysky["5"] - (250 + 1.5 + v1 / 2 - 1.2)) < 1e-9
+    with __import__("pytest").raises(ChybaVstupu):
+        u_nivelacni_zapisnik(s, {"a": "A", "b": "B", "zapisnik": "Z A 1500\nP T1 1000\nZ T2 1800\nP B 1296"})

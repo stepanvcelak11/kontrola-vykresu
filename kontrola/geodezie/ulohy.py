@@ -25,6 +25,7 @@ class ChybaVstupu(ValueError):
 class Vysledek:
     protokol: list[str]
     nove: list[Bod] = field(default_factory=list)
+    vysky: dict[str, float] = field(default_factory=dict)  # výšky existujících bodů (nivelace) → Z v seznamu
 
 
 @dataclass
@@ -1239,6 +1240,89 @@ def u_centrace(s, h):
         prot.append(f"  {c:<14} {phi:>12.4f} {d:>10.3f} {delta * 10000:>14.1f} {cen:>18.4f}")
     return Vysledek(prot)
 
+
+def u_nivelacni_zapisnik(s, h):
+    """Zápisník technické nivelace ze středu: čtení vzad (Z), vpřed (P) a boční záměry (B) po sestavách.
+
+    Řádky: „Z bod čtení [délka]“, „B bod čtení“, „P bod čtení [délka]“ – čtení v metrech (nebo v mm, je-li > 10).
+    Sestava = Z, případné B, P. Uzávěr na koncový výškový bod se rozdělí na sestavy (úměrně délkám, jinak rovným
+    dílem); boční záměry dostanou výšku z opraveného horizontu přístroje."""
+    a, b = _bod(s, h, "a", "počáteční bod"), _bod(s, h, "b", "koncový bod")
+    if a.z is None or b.z is None:
+        raise ChybaVstupu("Počáteční i koncový bod musí mít výšku.")
+    sestavy, cur = [], None
+    for i, line in enumerate((h.get("zapisnik") or "").splitlines(), 1):
+        t = line.replace(",", ".").split()
+        if not t:
+            continue
+        if len(t) < 3 or t[0].upper() not in ("Z", "P", "B"):
+            raise ChybaVstupu(f"Řádek {i}: zadejte „Z|B|P bod čtení [délka]“.")
+        try:
+            cteni = float(t[2])
+            delka = float(t[3]) if len(t) > 3 else None
+        except ValueError:
+            raise ChybaVstupu(f"Řádek {i}: čtení a délka musí být čísla.") from None
+        if abs(cteni) > 10:
+            cteni /= 1000.0  # čtení v mm
+        druh = t[0].upper()
+        if druh == "Z":
+            if cur is not None:
+                raise ChybaVstupu(f"Řádek {i}: sestava před ním nemá čtení vpřed (P).")
+            cur = {"z": (t[1], cteni, delka), "b": [], "p": None}
+        elif cur is None:
+            raise ChybaVstupu(f"Řádek {i}: sestava musí začít čtením vzad (Z).")
+        elif druh == "B":
+            cur["b"].append((t[1], cteni))
+        else:
+            cur["p"] = (t[1], cteni, delka)
+            sestavy.append(cur)
+            cur = None
+    if cur is not None:
+        raise ChybaVstupu("Poslední sestava nemá čtení vpřed (P).")
+    if not sestavy:
+        raise ChybaVstupu("Zápisník je prázdný.")
+    if sestavy[0]["z"][0] != a.cislo:
+        raise ChybaVstupu(f"První záměra vzad má být na počáteční bod {a.cislo}.")
+    if sestavy[-1]["p"][0] != b.cislo:
+        raise ChybaVstupu(f"Poslední záměra vpřed má být na koncový bod {b.cislo}.")
+    for k in range(1, len(sestavy)):
+        if sestavy[k]["z"][0] != sestavy[k - 1]["p"][0]:
+            raise ChybaVstupu(f"Sestava {k + 1}: záměra vzad na {sestavy[k]['z'][0]}, ale předchozí vpřed byla "
+                              f"na {sestavy[k - 1]['p'][0]} (přestavový bod musí navazovat).")
+    delky = [(x["z"][2] or 0.0) + (x["p"][2] or 0.0) for x in sestavy]
+    maji_delky = all(x["z"][2] is not None and x["p"][2] is not None for x in sestavy)
+    L = sum(delky) if maji_delky else 100.0 * len(sestavy)
+    dh = [x["z"][1] - x["p"][1] for x in sestavy]
+    w = sum(dh) - (b.z - a.z)
+    mez_km = _cislo(h, "mez", "mezní odchylku") if (h.get("mez") or "").strip() else 40.0
+    mez = mez_km / 1000.0 * math.sqrt(max(L, 1.0) / 1000.0)
+    sz, sp = sum(x["z"][1] for x in sestavy), sum(x["p"][1] for x in sestavy)
+    prot = _hlavicka("Nivelační zápisník (nivelace ze středu)")
+    prot += [f"{a.cislo} (H = {_f(a.z, 4)}) → {b.cislo} (H = {_f(b.z, 4)}), sestav {len(sestavy)}, délka "
+             + (f"{L:.1f} m" if maji_delky else f"neměřena (počítáno 100 m na sestavu = {L:.0f} m)"),
+             f"kontrola zápisníku: Σ vzad − Σ vpřed = {_f(sz, 4)} − {_f(sp, 4)} = {_f(sz - sp, 4)} m = Σ Δh",
+             f"odchylka uzávěru {w * 1000:.1f} mm, mezní {mez * 1000:.1f} mm ({mez_km:g} mm·√L) – "
+             + ("VYHOVUJE" if abs(w) <= mez else "NEVYHOVUJE"),
+             "  sest. bod              vzad      vpřed     boční   převýšení  oprava[mm]      výška"]
+    H, nove = a.z, []
+    for k, (x, d_) in enumerate(zip(sestavy, delky), 1):
+        v = -w * (d_ / L if maji_delky and L > 0 else 1 / len(sestavy))
+        horiz = H + x["z"][1] + v / 2  # horizont: polovina opravy na záměru vzad (rovnoměrně v sestavě)
+        prot.append(f"  {k:>4}  {x['z'][0]:<14} {x['z'][1]:>9.4f} {'':>9} {'':>9} {'':>10} {'':>10} {H:>10.4f}")
+        for c, ct in x["b"]:
+            hb = horiz - ct
+            prot.append(f"        {c:<14} {'':>9} {'':>9} {ct:>9.4f} {'':>10} {'':>10} {hb:>10.4f}")
+            nove.append((c, hb))
+        H = H + dh[k - 1] + v
+        prot.append(f"        {x['p'][0]:<14} {'':>9} {x['p'][1]:>9.4f} {'':>9} {dh[k - 1]:>10.4f} {v * 1000:>10.2f}"
+                    f" {H:>10.4f}")
+        if k < len(sestavy):
+            nove.append((x["p"][0], H))
+    vysky = {s.najdi(c).cislo: hz for c, hz in nove if s.najdi(c) is not None and c not in (a.cislo, b.cislo)}
+    if vysky:
+        prot.append(f"výšky {len(vysky)} bodů ze seznamu souřadnic se tlačítkem Přidat do seznamu zapíšou jako Z")
+    return Vysledek(prot, [], vysky)
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -1368,6 +1452,11 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
       Pole("oddily", "Oddíly (řádek: cílový bod převýšení délka)", "radky"),
       Pole("mez", "Mezní odchylka [mm/√km]", "m", "40")], u_nivelace),
+    ("Nivelační zápisník", "Technická nivelace ze středu: čtení vzad / vpřed / boční po sestavách, kontrola zápisníku, "
+     "uzávěr a výšky přestavových i bočních bodů.",
+     [Pole("a", "Počáteční výškový bod"), Pole("b", "Koncový výškový bod"),
+      Pole("zapisnik", "Zápisník (řádky: Z bod čtení [délka] / B bod čtení / P bod čtení [délka])", "radky"),
+      Pole("mez", "Mezní odchylka [mm/√km]", "m", "40")], u_nivelacni_zapisnik),
     ("Vyrovnání nivelační sítě", "Výšky bodů sítě z převýšení metodou nejmenších čtverců (váhy 1/L), opravy a m0.",
      [Pole("dane", "Výškově dané body (čísla)", "radky"),
       Pole("oddily", "Oddíly (řádek: od do převýšení[m] délka[m])", "radky")], u_nivelacni_sit),

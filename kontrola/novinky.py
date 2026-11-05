@@ -20,6 +20,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "Polární metoda dávkou (Zápisník) bere korekce délek z Nastavení výpočtů.",
         "<b>Výpočty</b>: Polygonový pořad vetknutý (bez orientací, kontrola délkou) a Centrace směrů "
         "z excentrického stanoviska.",
+        "<b>Nivelační zápisník</b>: technická nivelace ze středu – čtení vzad, vpřed a boční záměry po sestavách, "
+        "kontrola zápisníku, uzávěr s mezní odchylkou a výšky přestavových i bočních bodů rovnou do seznamu (Z).",
         "<b>Vzorek plochy v CAD</b> (Pattern Area): uzavřenou plochu vyplní buňkami v mřížce, do sponu, "
         "s natočením řad a odsazením od hranice – značky louky, zahrady, lesa jako v MicroStationu. Jedno Zpět.",
         "<b>Písmo textů v CAD</b>: v okně Text vyberete písmo (styly výkresu i všechna písma v počítači), šířku "
