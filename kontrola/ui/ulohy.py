@@ -234,7 +234,13 @@ class UlohyPanel(QWidget):
                 return n
         if not self.vysledek or not self.vysledek.nove:
             return 0
-        n, konf = self.page.seznam.pridej(self.vysledek.nove, f"{ULOHY[self.lst.currentRow()][0]}: nové body")
+        from dataclasses import replace
+
+        from ..geodezie.nastaveni import aktualni
+        d = aktualni().desetiny
+        nove = [replace(b, y=round(b.y, d), x=round(b.x, d), z=None if b.z is None else round(b.z, max(d, 3)))
+                for b in self.vysledek.nove]
+        n, konf = self.page.seznam.pridej(nove, f"{ULOHY[self.lst.currentRow()][0]}: nové body")
         self.page.model.refresh()
         self.page._after_change()
         if konf:

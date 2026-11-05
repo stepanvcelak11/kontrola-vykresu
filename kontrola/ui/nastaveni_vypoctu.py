@@ -108,6 +108,10 @@ class NastaveniVypoctuDialog(QDialog):
                                "2: úhlová 100·√(n+3) mgon, polohová 0,005·√Σs + 0,04 m"])
         self.p_trida.setCurrentIndex(1 if n.polygon_trida == 2 else 0)
         f4.addRow("Třída:", self.p_trida)
+        self.desetiny = QSpinBox()
+        self.desetiny.setRange(0, 4)
+        self.desetiny.setValue(n.desetiny)
+        f4.addRow("Zaokrouhlit souřadnice nových bodů na desetinná místa:", self.desetiny)
         lay.addWidget(g4)
         self.info = QLabel()
         self.info.setWordWrap(True)
@@ -139,7 +143,7 @@ class NastaveniVypoctuDialog(QDialog):
             sigma_smer_mgon=self.s_smer.value(), sigma_delka_mm=self.s_a.value(), sigma_delka_ppm=self.s_b.value(),
             meritko_rezim=self.m_rezim.currentText(), meritko_rucne=self.m_rucne.value(),
             vyska_rezim=self.v_rezim.currentText(), vyska=self.vyska.value(), ppm_fyzikalni=self.ppm.value(),
-            polygon_trida=self.p_trida.currentIndex() + 1)
+            polygon_trida=self.p_trida.currentIndex() + 1, desetiny=self.desetiny.value())
 
     def _ok(self):
         uloz(self.hodnota())

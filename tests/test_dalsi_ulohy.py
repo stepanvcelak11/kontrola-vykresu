@@ -569,3 +569,25 @@ def test_rajon_prostorovy_a_vymera_z_mer():
     assert "celkem 12.00 m²" in "\n".join(v.protokol)
     with pytest.raises(ChybaVstupu):
         u_vymera_z_mer(SeznamBodu(), {"trojuhelniky": "T 1 1 5"})
+
+
+def test_volne_stanovisko_mnc_i_jen_ze_smeru():
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_volne
+    st = Bod("S", 1000.0, 2000.0)
+    cile = [Bod("1", 1100.0, 2050.0), Bod("2", 950.0, 2120.0), Bod("3", 1020.0, 1900.0), Bod("4", 880.0, 1950.0)]
+    s = SeznamBodu()
+    s.body[:] = cile
+    o = 123.4567
+    sm = {b.cislo: V.norm_gon(V.smernik(st, b) - o) for b in cile}
+    radky = [f"{b.cislo} {sm[b.cislo]:.6f} {V.delka(st, b):.4f}" for b in cile[:2]] + \
+            [f"{b.cislo} {sm[b.cislo]:.6f}" for b in cile[2:]]
+    r = u_volne(s, {"mereni": "\n".join(radky), "nove": "S"})
+    b = r.nove[0]
+    assert math.hypot(b.y - st.y, b.x - st.x) < 1e-4 and "MNČ" in r.protokol[0]
+    r = u_volne(s, {"mereni": "\n".join(f"{b.cislo} {sm[b.cislo]:.6f}" for b in cile), "nove": "S"})
+    assert math.hypot(r.nove[0].y - st.y, r.nove[0].x - st.x) < 1e-4
+    r = u_volne(s, {"mereni": "\n".join(f"{b.cislo} {sm[b.cislo]:.6f} {V.delka(st, b):.4f}" for b in cile),
+                    "nove": "S", "metoda": "MNČ – směry a délky s váhami"})
+    assert math.hypot(r.nove[0].y - st.y, r.nove[0].x - st.x) < 1e-4
+    assert any("orientační posun" in t and f"{V.norm_gon(o):.4f}" in t for t in r.protokol)

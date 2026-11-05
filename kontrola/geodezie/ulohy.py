@@ -271,13 +271,22 @@ def u_zpet(s, h):
 def u_volne(s, h):
     """Volné stanovisko: řádek „bod směr délka“ (vodorovná), nebo „bod směr šikmá zenit [výška cíle]“ –
     pak se z trigonometrických převýšení určí i výška stanoviska (průměr, se zakřivením a refrakcí)."""
-    mer, trig = [], []
+    mer, trig, jen_smery = [], [], []
     for i, line in enumerate((h.get("mereni") or "").splitlines(), 1):
         parts = line.replace(",", ".").split()
         if not parts:
             continue
+        if len(parts) == 2:  # jen směr (bez délky) – vyrovnání MNČ
+            b = s.najdi(parts[0])
+            if b is None:
+                raise ChybaVstupu(f"Řádek {i}: bod {parts[0]} v seznamu není.")
+            try:
+                jen_smery.append((b, float(parts[1])))
+            except ValueError:
+                raise ChybaVstupu(f"Řádek {i}: směr musí být číslo.") from None
+            continue
         if len(parts) < 3:
-            raise ChybaVstupu(f"Řádek {i}: zadejte „číslo_bodu směr délka [zenit výška_cíle]“.")
+            raise ChybaVstupu(f"Řádek {i}: zadejte „číslo_bodu směr [délka [zenit výška_cíle]]“.")
         b = s.najdi(parts[0])
         if b is None:
             raise ChybaVstupu(f"Řádek {i}: bod {parts[0]} v seznamu není.")
@@ -295,19 +304,28 @@ def u_volne(s, h):
             d_ = d_ * math.sin(V.gon2rad(z))
         mer.append((b.cislo, b, sm_, d_))
     n = _nove_cislo(s, h)
-    k, kor = _korekce([m[1] for m in mer])
+    k, kor = _korekce([m[1] for m in mer] + [b for b, _s in jen_smery])
     mer = [(c, b, sm_, d_ * k) for c, b, sm_, d_ in mer]
-    try:
-        vs = V.volne_stanovisko(mer, meritko_volne=(h.get("meritko") == "volné"))
-    except ValueError as e:
-        raise ChybaVstupu(str(e)) from None
-    prot = _hlavicka("Volné stanovisko (MNČ)") + kor
-    prot += [f"stanovisko {n}:  Y = {_f(vs.stanovisko.y)}   X = {_f(vs.stanovisko.x)}",
-             f"orientační posun {_f(vs.posun, 4)} gon, měřítko {vs.meritko:.7f}, "
-             f"střední souřadnicová chyba m0 = {_f(vs.m0)} m", "", "opravy na známých bodech:",
-             "  bod                  vY [m]    vX [m]    vp [m]"]
-    for c, vy, vx in vs.opravy:
-        prot.append(f"  {c:<18} {vy:>9.3f} {vx:>9.3f} {math.hypot(vy, vx):>9.3f}")
+    mnc = bool(jen_smery) or str(h.get("metoda") or "").startswith("MNČ")
+    if mnc:
+        st_yx, posun, prot_mnc = _volne_mnc(n, mer, jen_smery)
+        prot = _hlavicka("Volné stanovisko (vyrovnání MNČ – směry a délky)") + kor
+        prot += [f"stanovisko {n}:  Y = {_f(st_yx[0])}   X = {_f(st_yx[1])}",
+                 f"orientační posun {_f(posun, 4)} gon"] + prot_mnc
+        vs_st = V.P(*st_yx)
+    else:
+        try:
+            vs = V.volne_stanovisko(mer, meritko_volne=(h.get("meritko") == "volné"))
+        except ValueError as e:
+            raise ChybaVstupu(str(e)) from None
+        prot = _hlavicka("Volné stanovisko (transformace)") + kor
+        prot += [f"stanovisko {n}:  Y = {_f(vs.stanovisko.y)}   X = {_f(vs.stanovisko.x)}",
+                 f"orientační posun {_f(vs.posun, 4)} gon, měřítko {vs.meritko:.7f}, "
+                 f"střední souřadnicová chyba m0 = {_f(vs.m0)} m", "", "opravy na známých bodech:",
+                 "  bod                  vY [m]    vX [m]    vp [m]"]
+        for c, vy, vx in vs.opravy:
+            prot.append(f"  {c:<18} {vy:>9.3f} {vx:>9.3f} {math.hypot(vy, vx):>9.3f}")
+        vs_st = vs.stanovisko
     z_st = None
     vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
     s_vyskou = [(b, d_, z, vc) for b, d_, z, vc in trig if b.z is not None]
@@ -322,7 +340,53 @@ def u_volne(s, h):
         z_st = sum(hs) / len(hs)
         rozp = max(hs) - min(hs)
         prot.append(f"  průměr H = {_f(z_st)} m, rozpětí {rozp * 1000:.0f} mm")
-    return Vysledek(prot, [Bod(n, vs.stanovisko.y, vs.stanovisko.x, z_st, poznamka="volné stanovisko")])
+    return Vysledek(prot, [Bod(n, vs_st.y, vs_st.x, z_st, poznamka="volné stanovisko")])
+
+
+def _volne_mnc(n: str, mer: list, jen_smery: list) -> tuple[tuple[float, float], float, list[str]]:
+    """Volné stanovisko vyrovnáním MNČ (směry a délky s váhami podle přesnosti přístroje z Nastavení)."""
+    from .nastaveni import aktualni
+    from .vyrovnani import Delka, Smer, vyrovnej
+    nast = aktualni()
+    if n in {b.cislo for _c, b, _s, _d in mer} | {b.cislo for b, _s in jen_smery}:
+        raise ChybaVstupu(f"Číslo stanoviska {n} je mezi měřenými body.")
+    pevne = {b.cislo: (b.y, b.x) for _c, b, _s, _d in mer}
+    pevne.update({b.cislo: (b.y, b.x) for b, _s in jen_smery})
+    smery = [Smer(n, b.cislo, sm_) for _c, b, sm_, _d in mer] + [Smer(n, b.cislo, sm_) for b, sm_ in jen_smery]
+    delky = [Delka(n, b.cislo, d_) for _c, b, _s, d_ in mer]
+    if len(smery) + len(delky) < 4:
+        raise ChybaVstupu("Na volné stanovisko je potřeba aspoň 2 body se směrem a délkou, nebo 3 body se směrem.")
+    # přibližná poloha: transformací (≥ 2 délky) nebo protínáním zpět ze tří směrů
+    if len(mer) >= 2:
+        pr = V.volne_stanovisko(mer).stanovisko
+        pribl = (pr.y, pr.x)
+    else:
+        tri = [(b, sm_) for _c, b, sm_, _d in mer] + list(jen_smery)
+        if len(tri) < 3:
+            raise ChybaVstupu("Bez délek je potřeba směr aspoň na tři známé body.")
+        (a, sa), (b_, sb), (c, sc) = tri[:3]
+        try:
+            pr = V.protinani_zpet(a, b_, c, sa, sb, sc)
+        except ValueError as e:
+            raise ChybaVstupu(str(e)) from None
+        pribl = (pr.y, pr.x)
+    try:
+        v = vyrovnej(smery, delky, pevne, sigma_smer_cc=nast.sigma_smer_mgon * 10, sigma_delka_mm=nast.sigma_delka_mm,
+                     sigma_delka_ppm=nast.sigma_delka_ppm, pribl={n: pribl})
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    yx = v.souradnice[n]
+    my, mx, mp = v.stredni_chyby.get(n, (0.0, 0.0, 0.0))
+    out = [f"střední chyby: my = {my * 1000:.1f} mm, mx = {mx * 1000:.1f} mm, mp = {mp * 1000:.1f} mm; "
+           f"jednotková střední chyba σ0 = {v.sigma0:.2f}, nadbytečných měření {v.redundance}",
+           f"váhy: σ směru {nast.sigma_smer_mgon:g} mgon, σ délky {nast.sigma_delka_mm:g} mm + "
+           f"{nast.sigma_delka_ppm:g} ppm (Nastavení výpočtů)", "", "opravy měření:",
+           "  bod                 směr [cc]   délka [mm]"]
+    od = {d.cil: o for d, o in v.opravy_delek}
+    for sm_, o in v.opravy_smeru:
+        dl = od.get(sm_.cil)
+        out.append(f"  {sm_.cil:<18} {o:>10.1f} {'' if dl is None else f'{dl * 1000:>11.1f}'}")
+    return yx, v.posuny.get(n, 0.0), out
 
 
 def u_transformace(s, h):
@@ -1406,6 +1470,7 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("mereni", "Měření (řádek: bod směr[gon] délka[m], nebo bod směr šikmá zenit [výška cíle])",
            "radky"),
       Pole("meritko", "Měřítko", "volba", "pevné (1)", ("pevné (1)", "volné")),
+      Pole("metoda", "Výpočet", "volba", "transformace", ("transformace", "MNČ – směry a délky s váhami")),
       Pole("vp", "Výška přístroje [m] (jen se zenity)", "m"),
       Pole("nove", "Číslo stanoviska", "text")], u_volne),
     ("Transformace", "Transformační klíč z identických bodů (shodnostní / podobnostní / afinní) s opravami; "
