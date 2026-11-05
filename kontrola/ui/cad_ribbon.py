@@ -57,6 +57,7 @@ NAZVY = {
     "pohled": ("Uložené pohledy", "Saved Views"),
     "vrstvy": ("Správce hladin", "Level Manager"), "zhasni": ("Vypnout hladinu", "Level Display Off"),
     "rozsviť": ("Zapnout hladinu", "Level Display On"), "styly čar": ("Styly čar (.rsc)", "Line Styles"),
+    "knihovny": ("Knihovny od učitele", "Standards / Cell Library + Line Styles"),
     "reference": ("Reference", "References"), "rastr": ("Rastr", "Raster Manager"),
     "georeference": ("Georeference rastru", "Raster Warp"),
     "model": ("Modely", "Models"), "list": ("Nový list", "Sheet Model"), "výřez": ("Výřez na list", "Place Named Boundary"),
@@ -141,7 +142,7 @@ KARTY = [
     ("Připojit", [
         ("Reference", ["reference"]),
         ("Rastr", ["rastr", "georeference"]),
-        ("Styly čar", ["styly čar"]),
+        ("Knihovny", ["knihovny", "knihovna buněk", "styly čar"]),
     ]),
     ("Nástroje", [
         ("Měření", ["vzdálenost", "délka", "výměra", "měř plochu", "měř úhel", "info", "vlastnosti"]),

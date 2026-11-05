@@ -447,6 +447,7 @@ class CadPage(QWidget):
         "styl": "styl čáry nových / vybraných prvků: 0–7, kód stylu z knihovny („styl 2.103“), „styl dle“ = dle hladiny",
         "tloušťka": "tloušťka (wt 0–31) nových / vybraných prvků, „tloušťka dle“ = dle hladiny",
         "styly čar": "styly čar MicroStationu z knihovny .rsc (ploty, hranice…): seznam, „styly čar připoj“",
+        "knihovny": "knihovny od učitele – buňky (.cel) a styly čar (.rsc) pro všechny výkresy; přidat nové",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
         "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, natočení, tisk do PDF („arch A3 1000“, "
                 "„arch otoč 30“, „arch smaž“)",
@@ -1018,6 +1019,7 @@ class CadPage(QWidget):
         for r in self.reference:
             if r.chyba:
                 self.vypis(f"⚠ Reference {r.cesta.name}: {r.chyba}")
+        self._knihovny_do_vykresu()
         if self.predvolba is not None:
             self.kresleni.nastav_predvolbu(self.predvolba)
         self._ulozena_zmena = 0
@@ -1305,6 +1307,37 @@ class CadPage(QWidget):
                    + (f" ({', '.join(bloky[:15])}{'…' if len(bloky) > 15 else ''})" if bloky else "")
                    + (f", {len(styly)} stylů" if styly else "") + ". Vložení příkazem „vlož“.")
         return bloky
+
+    def _knihovny_do_vykresu(self) -> list[str]:
+        """Buňky a typy čar z knihoven od učitele (Připojit → Knihovny) do právě otevřeného výkresu."""
+        from ..cad import knihovny as K
+        if self.dok is None:
+            return []
+        try:
+            return K.do_vykresu(self.dok.doc)
+        except Exception as e:  # noqa: BLE001 – knihovna nesmí zabránit otevření výkresu
+            self.vypis(f"⚠ Knihovny od učitele: {e}")
+            return []
+
+    def knihovny(self, modal: bool = True):
+        """Správce knihoven od učitele (buňky, styly čar) – po změně se hned projeví v otevřeném výkresu."""
+        from .knihovny_dialog import KnihovnyDialog
+        d = KnihovnyDialog(self)
+        if not modal:
+            return d
+        d.exec()
+        if d.zmeneno:
+            self.po_zmene_knihoven()
+        return d
+
+    def po_zmene_knihoven(self) -> None:
+        nove = self._knihovny_do_vykresu()
+        if self.dok is not None:
+            self._vykresli()
+            self._napln_styly()
+        from ..cad import knihovny as K
+        self.vypis(f"Knihovny od učitele: {len(K.soubory())} souborů" + (f", do výkresu přidáno {len(nove)} buněk"
+                                                                          if nove else "") + ".")
 
     def body_ze_seznamu(self, modal: bool = True):
         if self.dok is None:
@@ -1891,7 +1924,8 @@ class CadPage(QWidget):
         ulozene = QSettings().value("cad/rsc", []) or []
         if isinstance(ulozene, str):
             ulozene = [ulozene]
-        return out + [Path(x) for x in ulozene]
+        from ..cad import knihovny as K
+        return out + [Path(x) for x in ulozene] + K.soubory((".rsc",))
 
     def styly_rsc(self) -> dict:
         from ..cad.styly_rsc import nacti
@@ -2713,6 +2747,8 @@ class CadPage(QWidget):
             self.atributy_zadani()
         elif cmd == "pohled":
             self._pohled(arg)
+        elif cmd == "knihovny":
+            self.knihovny()
         elif cmd == "styly čar":
             self._styly_car(arg)
         elif cmd == "otoč pohled" and arg.strip():

@@ -3468,3 +3468,27 @@ def test_vypocty_rozvrzeni_jako_groma(window):
     assert not not v.tabs.okno(v.ulohy).isHidden()
     v.tabs.setCurrentWidget(v.zapisnik)
     assert not v.tabs.okno(v.zapisnik).isHidden()
+
+
+def test_cad_knihovny_od_ucitele(window, tmp_path, monkeypatch):
+    """Knihovny od učitele: přidají se jednou a buňky i styly čar jsou v každém novém výkresu."""
+    from pathlib import Path
+
+    from kontrola.cad import knihovny as K
+    monkeypatch.setattr(K, "slozka", lambda: (tmp_path / "knihovny").mkdir(exist_ok=True) or tmp_path / "knihovny")
+    root = Path(__file__).resolve().parents[1] / "podklady"
+    cel, rsc = root / "ucitel-dalsi" / "NORMA.CEL", root / "skola-ms" / "linkyMJ.rsc"
+    c = window.cad
+    window.show_page("cad")
+    d = c.knihovny(modal=False)
+    vys = d.pridej([str(rsc)] + ([str(cel)] if cel.is_file() else []) + [str(tmp_path / "x.txt")])
+    assert vys[0].pocet == 28 and vys[-1].pocet < 0  # nepodporovaný soubor se nepřipojí
+    assert d.seznam.count() == len(vys) - 1
+    c.po_zmene_knihoven()
+    c.novy()
+    assert "2.09_" in c.styly_rsc()
+    if cel.is_file():
+        assert "1.030" in [b.name for b in c.dok.doc.blocks]
+    d.seznam.setCurrentRow(0)
+    d.odeber()
+    assert d.seznam.count() == len(vys) - 2
