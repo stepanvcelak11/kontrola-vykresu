@@ -87,6 +87,7 @@ class GuideDialog(QDialog):
         self.b_back.clicked.connect(lambda: self.go(-1))
         self.b_next = QPushButton("Další ▶")
         self.b_next.setDefault(True)
+        self.b_next.setProperty("primarni", True)
         self.b_next.clicked.connect(lambda: self.go(1))
         bottom.addWidget(self.b_back)
         bottom.addWidget(self.b_next)

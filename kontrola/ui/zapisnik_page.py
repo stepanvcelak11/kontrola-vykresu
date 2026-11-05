@@ -57,6 +57,8 @@ class ZapisnikPanel(QWidget):
         nad.setObjectName("nadpis_sekce")
         ll.addWidget(nad)
         self.seznam_st = QListWidget()
+        from .theme import prazdny_stav
+        prazdny_stav(self.seznam_st, 'Žádná stanoviska.\nNačtěte zápisník (Načíst…) nebo přidejte stanovisko.')
         ll.addWidget(self.seznam_st, 1)
         row = QHBoxLayout()
         self.st_cislo = QLineEdit()

@@ -25,6 +25,7 @@ _ICONS = {
     "otevrit": '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 7v11a2 2 0 0 0 2 2h13l3-8H7l-3 8"/>',
     "zkontrolovat": '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
     "znovu": '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
+    "zpet": '<path d="M4 11a8 8 0 1 1 2.3 5.7"/><path d="M4 5v6h6"/>',
     "oprava": '<path d="M14.7 6.3a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.7-7.7z"/><path d="M5 5l3 3"/>'
               '<path d="M3 8l2-2 3 3-2 2z"/>',
     "nastaveni": '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/>'
@@ -220,14 +221,21 @@ QPushButton:hover {{ background: {HOVER}; border-color: #9CA3AF; }}
 QPushButton:pressed {{ background: #E5E7EB; }}
 QPushButton:disabled {{ color: #9CA3AF; background: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton:flat {{ border: none; background: transparent; }}
-QDialog QPushButton:default {{ background: {ACCENT}; color: white; border-color: {ACCENT}; font-weight: 600; }}
-QDialog QPushButton:default:hover {{ background: {ACCENT_HOVER}; }}
+QDialogButtonBox QPushButton:default {{ background: {ACCENT}; color: white; border-color: {ACCENT};
+    font-weight: 600; }}
+QDialogButtonBox QPushButton:default:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[primarni="true"] {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 {ACCENT});
     color: white; border-color: {ACCENT_HOVER}; font-weight: 700; }}
 QPushButton[primarni="true"]:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[primarni="true"]:disabled {{ background: #93C5FD; border-color: #93C5FD; color: white; }}
 QPushButton[uspech="true"] {{ background: #16A34A; color: white; border-color: #15803D; font-weight: 700; }}
 QPushButton[uspech="true"]:hover {{ background: #15803D; }}
+QFrame#dlazdice {{ border: 1px solid {BORDER}; border-radius: 10px; background: {PANEL}; }}
+QFrame#dlazdice:hover {{ background: {ACCENT_SOFT}; border-color: {ACCENT}; }}
+QLabel#dlazdice_nazev {{ font-weight: 700; background: transparent; }}
+QLabel#dlazdice_popis {{ color: {MUTED}; background: transparent; }}
+QPushButton[nebezpecne="true"] {{ color: #DC2626; }}
+QPushButton[nebezpecne="true"]:hover {{ background: #DC2626; color: white; border-color: #DC2626; }}
 QPushButton#rychly_filtr {{ padding: 4px 13px; border-radius: 14px; border-color: {BORDER}; color: #374151; }}
 QPushButton#rychly_filtr:hover {{ border-color: {BORDER_STRONG}; }}
 QPushButton#rychly_filtr:checked {{ background: {ACCENT}; color: white; border-color: {ACCENT}; font-weight: 700; }}
@@ -383,6 +391,7 @@ QLabel#stranka_info {{ background: {HEADER}; border: 1px solid {BORDER}; border-
     border-radius: 6px; padding: 7px 10px; color: #374151; }}
 QLabel#nadpis_sekce {{ font-weight: 700; color: {ACCENT_HOVER}; padding: 6px 0 2px 0; }}
 QLabel#poznamka {{ color: {MUTED}; }}
+QLabel#prazdny_stav {{ color: {MUTED}; font-size: 10pt; background: transparent; padding: 12px; }}
 QFrame#karta_obsah {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; }}
 
 /* ---- textové výpisy (protokol, příkazový řádek CAD) ---- */
@@ -420,6 +429,17 @@ def _arrow_files() -> dict[str, str]:
     d = Path(tempfile.gettempdir()) / "kontrola_vykresu_ui"
     d.mkdir(exist_ok=True)
     out = {}
+    f = d / "fajfka_bila.png"
+    if not f.exists():  # fajfka pro zaškrtávací pole (bílá na barvě zvýraznění)
+        pm = QPixmap(32, 32)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor("#FFFFFF"), 4.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.drawPolyline(QPolygonF([QPointF(7, 16.5), QPointF(13, 22.5), QPointF(25, 9.5)]))
+        p.end()
+        pm.save(str(f))
+    out["fajfka"] = f.as_posix()
     for name, pts in (("dolu", [(2, 5), (8, 11), (14, 5)]), ("nahoru", [(2, 11), (8, 5), (14, 11)])):
         for state, col in (("", themed("#4B5563")), ("_off", themed("#C0C4CC")), ("_bila", "#FFFFFF")):
             f = d / f"sipka_{name}{state}{'_tmava' if _dark else ''}.png"
@@ -454,7 +474,18 @@ QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover, QSpinBox::down-butto
 QDoubleSpinBox::down-button:hover {{ background: #F3F4F6; }}
 QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{a['nahoru']}"); width: 8px; height: 8px; }}
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{a['dolu']}"); width: 8px; height: 8px; }}
-QCheckBox::indicator, QGroupBox::indicator {{ width: 15px; height: 15px; }}
+QCheckBox::indicator, QGroupBox::indicator, QAbstractItemView::indicator {{ width: 15px; height: 15px;
+    border: 1.5px solid {BORDER_STRONG}; border-radius: 4px; background: {PANEL}; }}
+QCheckBox::indicator:hover, QAbstractItemView::indicator:hover {{ border-color: {ACCENT}; }}
+QCheckBox::indicator:checked, QGroupBox::indicator:checked, QAbstractItemView::indicator:checked {{
+    background: {ACCENT}; border-color: {ACCENT}; image: url("{a['fajfka']}"); }}
+QCheckBox::indicator:disabled, QAbstractItemView::indicator:disabled {{ background: {HOVER};
+    border-color: {BORDER}; }}
+QCheckBox::indicator:checked:disabled {{ background: {BORDER_STRONG}; border-color: {BORDER_STRONG}; }}
+QRadioButton::indicator {{ width: 14px; height: 14px; border: 1.5px solid {BORDER_STRONG}; border-radius: 8px;
+    background: {PANEL}; }}
+QRadioButton::indicator:hover {{ border-color: {ACCENT}; }}
+QRadioButton::indicator:checked {{ border: 4.5px solid {ACCENT}; background: {PANEL}; }}
 """
 
 
@@ -472,6 +503,74 @@ def fit_headers(table, extra: int = 30) -> None:
         need = fm.horizontalAdvance(text) + extra
         if table.columnWidth(c) < need:
             table.setColumnWidth(c, need)
+
+
+def dlazdice(nazev: str, popis: str):
+    """Klikací karta: tučný název a pod ním šedý popis, co funkce dělá (signál clicked jako tlačítko)."""
+    from PySide6.QtCore import Signal
+    from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+
+    class Dlazdice(QFrame):
+        clicked = Signal()
+
+        def mouseReleaseEvent(self, e):  # noqa: N802
+            if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
+                self.clicked.emit()
+            super().mouseReleaseEvent(e)
+
+        def click(self):
+            self.clicked.emit()
+
+    b = Dlazdice()
+    b.setObjectName("dlazdice")
+    b.setAttribute(Qt.WA_Hover, True)
+    b.setCursor(Qt.PointingHandCursor)
+    b.setAccessibleName(nazev)
+    b.setToolTip(popis)
+    v = QVBoxLayout(b)
+    v.setContentsMargins(14, 10, 14, 11)
+    v.setSpacing(3)
+    for t, jm in ((nazev, "dlazdice_nazev"), (popis, "dlazdice_popis")):
+        lbl = QLabel(t)
+        lbl.setObjectName(jm)
+        lbl.setWordWrap(True)
+        v.addWidget(lbl)
+    return b
+
+
+def prazdny_stav(view, text: str) -> None:
+    """Text uprostřed prázdné tabulky / seznamu (co sem patří a jak to naplnit) – zmizí s prvním řádkem."""
+    from PySide6.QtWidgets import QLabel
+    lbl = QLabel(text, view.viewport())
+    lbl.setObjectName("prazdny_stav")
+    lbl.setAlignment(Qt.AlignCenter)
+    lbl.setWordWrap(True)
+    lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+    def obnov(*_):
+        m = view.model()
+        lbl.setVisible(m is None or m.rowCount() == 0)
+        vp = view.viewport()
+        sirka = min(460, max(160, vp.width() - 40))
+        lbl.setFixedWidth(sirka)
+        lbl.adjustSize()
+        lbl.move((vp.width() - lbl.width()) // 2, max(10, (vp.height() - lbl.height()) // 3))
+
+    m = view.model()
+    if m is not None:
+        for sig in (m.rowsInserted, m.rowsRemoved, m.modelReset, m.layoutChanged):
+            sig.connect(obnov)
+    from PySide6.QtCore import QEvent, QObject
+
+    class _F(QObject):
+        def eventFilter(self, o, e):  # noqa: N802
+            if e.type() in (QEvent.Resize, QEvent.Show):
+                obnov()
+            return False
+    f = _F(view)
+    view.viewport().installEventFilter(f)
+    view._prazdny_filtr = f
+    obnov()
 
 
 class _Uprava:

@@ -59,6 +59,7 @@ class PruvodceOpravou(QDialog):
             b.setAutoDefault(False)  # jinak by dialog zvýraznil první tlačítko („Zpět“)
             row.addWidget(b)
         self.b_done.setDefault(True)
+        self.b_done.setProperty("primarni", True)
         lay.addLayout(row)
         row2 = QHBoxLayout()
         b_list = QPushButton("Uložit opravný list (HTML)…")

@@ -36,13 +36,20 @@ class RulesEditor(QWidget):
         self._loading = False
         lay = QVBoxLayout(self)
         row = RadekTlacitek()  # v úzkém okně se zalomí
-        for text, slot in (("Přidat pravidlo", self.add_rule), ("Smazat vybraná", self.delete_selected),
-                           ("Smazat všechna", self.delete_all),
-                           ("Načíst YAML…", self.load_yaml), ("Uložit do YAML…", self.save_yaml),
-                           ("Zobrazit obrázek", self._show_image)):
-            b = QPushButton(text)
-            b.clicked.connect(slot)
-            row.addWidget(b)
+        # skupiny: úpravy | soubor | ostatní (mezera mezi skupinami, mazání všeho odlišené)
+        skupiny = ((("Přidat pravidlo", self.add_rule), ("Smazat vybraná", self.delete_selected),
+                    ("Smazat všechna", self.delete_all)),
+                   (("Načíst YAML…", self.load_yaml), ("Uložit do YAML…", self.save_yaml)),
+                   (("Zobrazit obrázek", self._show_image),))
+        for i, sk in enumerate(skupiny):
+            if i:
+                row.addSpacing(14)
+            for text, slot in sk:
+                b = QPushButton(text)
+                b.clicked.connect(slot)
+                if text == "Smazat všechna":
+                    b.setProperty("nebezpecne", True)
+                row.addWidget(b)
         row.addStretch(1)
         self.count = QLabel()
         row.addWidget(self.count)
@@ -65,6 +72,8 @@ class RulesEditor(QWidget):
         row2.addWidget(self.program)
         lay.addLayout(row2)
         self.table = QTableWidget(0, len(COLS))
+        from .theme import prazdny_stav
+        prazdny_stav(self.table, 'Zatím žádná pravidla.\nNaimportujte tabulku atributů od učitele (záložka Tabulka atributů) – pravidla se z ní vytvoří sama. Nebo je přidejte ručně tlačítkem Přidat pravidlo.')
         self.table.setHorizontalHeaderLabels(COLS)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.verticalHeader().setVisible(False)

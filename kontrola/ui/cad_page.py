@@ -767,14 +767,17 @@ class CadPage(QWidget):
         self.vykresy_cb.setToolTip("Rozpracované výkresy – přepnutí na jiný (každý má svou historii Zpět a pohled)."
                                    " Zavřít výkres: Soubor → Zavřít výkres.")
         self.vykresy_cb.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.vykresy_cb.setMinimumWidth(60)
+        self.vykresy_cb.setMinimumWidth(140)
         self.vykresy_cb.setMaximumWidth(220)
         self.vykresy_cb.setVisible(False)
         self.vykresy_cb.activated.connect(self.prepni_vykres)
         for w in (self.b_undo, self.b_redo, self.vykresy_cb, self.title, self.predvolba_info):
             self.ribbon.vpravo.addWidget(w)
-        for b, t in ((self.b_undo, "↶"), (self.b_redo, "↷")):
-            b.setText(t)
+        from .theme import icon
+        for b, ik, tip in ((self.b_undo, "zpet", "Zpět (Ctrl+Z)"), (self.b_redo, "znovu", "Znovu (Ctrl+Y)")):
+            b.setText("")
+            b.setIcon(icon(ik, "#8B98A5"))
+            b.setToolTip(tip)
             b.setFixedWidth(34)
         lay.insertWidget(0, self.ribbon)
         self.nastroje: dict[str, QToolButton] = dict(self.paleta.tlacitka)

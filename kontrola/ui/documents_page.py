@@ -30,6 +30,7 @@ class DocumentsPage(QWidget):
                        "vytáhne požadavky (měřítko, písmo, vrstvy, pokyny „musí / nesmí“) a popisy vrstev "
                        "převede na pravidla kontroly. Soubor přetáhněte sem nebo kamkoli do záložky Zadání.")
         intro.setWordWrap(True)
+        intro.setObjectName("stranka_info")
         lay.addWidget(intro)
         row = RadekTlacitek()  # v úzkém okně se zalomí
         b_add = QPushButton("Přidat dokument…")
@@ -52,6 +53,8 @@ class DocumentsPage(QWidget):
 
         split = QSplitter(Qt.Horizontal)
         self.list = QListWidget()
+        from .theme import prazdny_stav
+        prazdny_stav(self.list, "Žádný dokument.\nPřidejte zadání od učitele (Word nebo PDF) tlačítkem Přidat dokument…")
         self.list.setMaximumWidth(260)
         self.list.currentItemChanged.connect(lambda *_: self._load())
         split.addWidget(self.list)

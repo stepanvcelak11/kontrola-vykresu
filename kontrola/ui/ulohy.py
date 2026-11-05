@@ -76,7 +76,7 @@ class UlohyPanel(QWidget):
         self.chyba.setWordWrap(True)
         rl.addWidget(self.chyba)
         self.vystup = QTextBrowser()
-        self.vystup.setStyleSheet("font-family: Consolas, 'DejaVu Sans Mono', monospace;")
+        self.vystup.setObjectName("vypis")
         rl.addWidget(self.vystup, 1)
         sp.addWidget(right)
         sp.setStretchFactor(1, 1)

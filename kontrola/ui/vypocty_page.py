@@ -387,6 +387,9 @@ class VypoctyPage(QWidget):
         self.proxy.setSourceModel(self.model)
         self.table = QTableView()
         self.table.setModel(self.proxy)
+        from .theme import prazdny_stav
+        prazdny_stav(self.table, "Seznam souřadnic je prázdný.\nImportujte body (Soubor → Import), přidejte bod "
+                                 "(+ Bod) nebo je spočítejte z karty Výpočty.")
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(-1, Qt.AscendingOrder)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)

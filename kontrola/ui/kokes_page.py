@@ -70,6 +70,8 @@ class KokesPage(QWidget):
             r.addWidget(b)
         v.addLayout(r)
         self.tab = QTableWidget(0, 7)
+        from .theme import prazdny_stav
+        prazdny_stav(self.tab, 'Seznam souřadnic je prázdný.\nNačtěte seznam (Načíst seznam…) nebo body spočítejte na stránce Výpočty – seznam je společný.')
         self.tab.setHorizontalHeaderLabels(["Číslo bodu", "ZPMZ-číslo", "Y", "X", "Z", "KK", "Kód"])
         self.tab.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tab.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -196,6 +198,8 @@ class KokesPage(QWidget):
             r.addWidget(b)
         v.addLayout(r)
         self.klice = QTableWidget(0, 6)
+        from .theme import prazdny_stav
+        prazdny_stav(self.klice, 'Zatím žádné kreslící klíče.\nKlíče se vezmou ze sloupce KK tabulky atributů (Zadání → Tabulka atributů).')
         self.klice.setHorizontalHeaderLabels(["KK", "Prvek", "Hladina", "Barva", "Styl", "Tloušťka"])
         self.klice.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.klice.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -297,17 +301,33 @@ class KokesPage(QWidget):
         info.setWordWrap(True)
         info.setObjectName("stranka_info")
         v.addWidget(info)
-        r = RadekTlacitek()
-        self.b_vfk = QPushButton("Otevřít data KN (VFK)…")
-        r.addWidget(self.b_vfk)
+        from PySide6.QtWidgets import QGridLayout
+        g = QGridLayout()
+        g.setSpacing(10)
+        # dlaždice: název funkce + krátký popis, co dělá (jako Nástroje na Úvodu)
+        popisy = {
+            "Otevřít data KN (VFK)…": "Výměnný formát katastru jako podklad pod výkres (parcely, body, budovy).",
+            "Výkaz výměr GP": "Výměry dílů a parcel geometrického plánu a výkaz pro GP.",
+            "Výměry parcel dávkou": "Výměry všech parcel ze seznamu souřadnic najednou.",
+            "Oddělení parcely": "Rozdělení parcely na zadanou výměru (posun dělicí čáry).",
+            "Kontrola dvou určení": "Porovnání dvou určení bodu proti meznímu rozdílu podle kódu kvality.",
+            "Výměra a obvod": "Výměra a obvod plochy z čísel bodů.",
+            "Převod S-JTSK ↔ WGS84": "Převod souřadnic mezi S-JTSK a zeměpisnými souřadnicemi.",
+        }
         self._ulohy_tlacitka = []
-        for nazev in ("Výkaz výměr GP", "Výměry parcel dávkou", "Oddělení parcely", "Kontrola dvou určení",
-                      "Výměra a obvod", "Převod S-JTSK ↔ WGS84"):
-            b = QPushButton(nazev)
-            b.clicked.connect(lambda _c=False, n=nazev: self.otevri_ulohu(n))
-            r.addWidget(b)
-            self._ulohy_tlacitka.append(b)
-        v.addLayout(r)
+        for k, (nazev, popis) in enumerate(popisy.items()):
+            from .theme import dlazdice
+            b = dlazdice(nazev, popis)
+            if k == 0:
+                self.b_vfk = b
+            else:
+                b.clicked.connect(lambda _c=False, n=nazev: self.otevri_ulohu(n))
+                self._ulohy_tlacitka.append(b)
+            g.addWidget(b, k // 3, k % 3)
+        for c in range(3):
+            g.setColumnStretch(c, 1)
+        v.addSpacing(6)
+        v.addLayout(g)
         v.addStretch(1)
         self.tabs.addTab(w, "Katastr a GP")
         self.b_vfk.clicked.connect(lambda: self.otevri_vfk())

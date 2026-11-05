@@ -49,12 +49,12 @@ class DropArea(QFrame):
         self.setAcceptDrops(True)
         self.setFrameShape(QFrame.StyledPanel)
         self.setMinimumHeight(70)
-        from .theme import themed
-        self.setStyleSheet(f"DropArea {{ border: 2px dashed {themed('#93C5FD')}; border-radius: 12px; "
-                           f"background: {themed('#EFF6FF')}; }} QLabel {{ color: {themed('#1D4ED8')}; "
+        from .theme import ACCENT_SOFT, MUTED, accent, themed
+        self.setStyleSheet(f"DropArea {{ border: 2px dashed {accent()}; border-radius: 12px; "
+                           f"background: {accent(ACCENT_SOFT)}; }} QLabel {{ color: {themed(MUTED)}; "
                            "font-weight: 600; background: transparent; }")
         lay = QVBoxLayout(self)
-        lab = QLabel(text)
+        lab = QLabel("⬇  " + text)
         lab.setAlignment(Qt.AlignCenter)
         lab.setWordWrap(True)
         lay.addWidget(lab)
@@ -115,6 +115,8 @@ class TablePage(QWidget):
         nad.setObjectName("nadpis_sekce")
         lay.addWidget(nad)
         self.list = QListWidget()
+        from .theme import prazdny_stav
+        prazdny_stav(self.list, 'Zatím žádná tabulka.\nPřetáhněte sem tabulku atributů od učitele nebo použijte Importovat tabulku…')
         self.list.itemDoubleClicked.connect(lambda it: self._reimport())
         lay.addWidget(self.list, 1)
         self.last = QTextBrowser()
@@ -711,6 +713,7 @@ class AttachmentsPage(QWidget):
         top = RadekTlacitek()  # v úzkém okně se zalomí
         self.proj_label = QLabel()
         self.proj_label.setWordWrap(True)
+        self.proj_label.setObjectName("stranka_info")
         top.addWidget(self.proj_label, 1)
         b_ren = QPushButton("Přejmenovat projekt…")
         b_ren.clicked.connect(self._rename)
@@ -729,6 +732,8 @@ class AttachmentsPage(QWidget):
         lay.addLayout(row)
         split = QSplitter(Qt.Horizontal)
         self.table = QTableWidget(0, 4)
+        from .theme import prazdny_stav
+        prazdny_stav(self.table, 'Ve složce projektu zatím nejsou žádné podklady.')
         self.table.setHorizontalHeaderLabels(["Druh", "Soubor", "Velikost", "Změněno"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)

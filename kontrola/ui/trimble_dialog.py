@@ -32,9 +32,12 @@ class TrimbleDialog(QDialog):
         self.setWindowTitle("Trimble – export podle šablony (File and Report)")
         self.resize(900, 620)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Vyberte zakázku JobXML (.jxl) a šablonu (.xsl). Soubory .xdt, které šablona vkládá "
-                             "(např. Protokol-Head.xdt s hlavičkou firmy), musí být ve stejné složce jako šablona. "
-                             "Zakázku .job nejdřív exportujte v kontroléru jako JobXML."))
+        info = QLabel("Vyberte zakázku JobXML (.jxl) a šablonu (.xsl). Soubory .xdt, které šablona vkládá "
+                      "(např. Protokol-Head.xdt s hlavičkou firmy), musí být ve stejné složce jako šablona. "
+                      "Zakázku .job nejdřív exportujte v kontroléru jako JobXML.")
+        info.setWordWrap(True)
+        info.setObjectName("stranka_info")
+        lay.addWidget(info)
         g = QGridLayout()
         self.zdroj = QLineEdit()
         self.sablona = QComboBox()
@@ -65,7 +68,7 @@ class TrimbleDialog(QDialog):
         self.nahled = QPlainTextEdit()
         self.nahled.setReadOnly(True)
         self.nahled.setLineWrapMode(QPlainTextEdit.NoWrap)
-        self.nahled.setStyleSheet("font-family: Consolas, 'Courier New', 'DejaVu Sans Mono', monospace;")
+        self.nahled.setObjectName("vypis")
         lay.addWidget(self.nahled, 1)
         self.vystup = ""
         b1.clicked.connect(self._vyber_zdroj)

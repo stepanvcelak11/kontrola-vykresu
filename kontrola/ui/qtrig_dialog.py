@@ -74,6 +74,7 @@ class QTrigDialog(QDialog):
         f.addRow(self.do_cad)
         self.b_sync = QPushButton("Stáhnout body zakázky")
         self.b_sync.setDefault(True)
+        self.b_sync.setProperty("primarni", True)
         self.b_odhlas = QPushButton("Odhlásit")
         r3 = QHBoxLayout()
         r3.addWidget(self.b_sync, 1)

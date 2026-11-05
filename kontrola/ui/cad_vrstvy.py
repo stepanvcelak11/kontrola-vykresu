@@ -24,7 +24,7 @@ class VrstvyDialog(QDialog):
         self.doc = page.dok.doc
         self.zmeneno = False
         self.setWindowTitle("Vrstvy")
-        self.resize(820, 480)
+        self.resize(1040, 600)
         lay = QVBoxLayout(self)
         self.info = QLabel()
         lay.addWidget(self.info)

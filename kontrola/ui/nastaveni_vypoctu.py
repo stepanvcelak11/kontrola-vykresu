@@ -172,6 +172,7 @@ class NastaveniVypoctuDialog(QDialog):
         row.addStretch(1)
         self.b_ok = QPushButton("Ok")
         self.b_ok.setDefault(True)
+        self.b_ok.setProperty("primarni", True)
         self.b_ok.setMinimumWidth(110)
         self.b_ok.clicked.connect(self._ok)
         row.addWidget(self.b_ok)
