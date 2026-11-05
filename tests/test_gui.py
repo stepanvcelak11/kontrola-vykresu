@@ -3246,3 +3246,19 @@ def test_cad_vzorek_plochy(window):
         c.zadej(t)
     ins = [e for e in c.dok.msp if e.dxftype() == "INSERT"]
     assert len(ins) > 30 and "Vzorek plochy" in c.historie.toPlainText()
+
+
+def test_cad_polylinie_s_obloukem(window):
+    import math
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("polylinie", "x=0 y=0", "x=10 y=0", "o", "x=15 y=5", "x=10 y=10", "x=0 y=10", ""):
+        c.zadej(t)
+    pl = [e for e in c.dok.msp if e.dxftype() == "LWPOLYLINE"][-1]
+    pts = pl.get_points("xyb")
+    assert len(pts) == 4 and abs(pts[1][2] - 1.0) < 1e-9  # půlkruh proti směru hodin: bulge = tan(π/4) = 1
+    from ezdxf import path
+    p = path.make_path(pl)
+    vrchol = max(v.x for v in p.flattening(0.001))
+    assert abs(vrchol - 15.0) < 1e-3 and math.isclose(pts[2][0], 10.0)

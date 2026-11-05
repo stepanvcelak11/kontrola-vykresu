@@ -2086,3 +2086,39 @@ def vzorek_plochy(doc, msp, h: Historie, plocha, nazev: str, dx: float, dy: floa
                                                    "zscale": meritko, "rotation": rot}) for b in body]
     h.proved("Vzorek plochy", nove)
     return nove
+
+
+def bunky_po_prvku(doc, msp, h: Historie, e, nazev: str, vzdalenost: float, meritko: float = 1.0,
+                   vrstva: str = "0", attrs: dict | None = None, natocit: bool = True, od_zacatku: float | None = None,
+                   vcetne_koncu: bool = False) -> list:
+    """Buňky po prvku v pravidelné vzdálenosti (stromořadí, značky hranice), natočené po směru čáry."""
+    import math as _m
+    if nazev not in doc.blocks or nazev.startswith("*"):
+        raise ValueError(f"Blok {nazev} ve výkresu není.")
+    g = geometrie(e)
+    if g is None or g.geom_type not in ("LineString", "LinearRing"):
+        raise ValueError("Buňky jde rozmístit po úsečce, polylinii, oblouku, kružnici nebo křivce.")
+    L = g.length
+    if vzdalenost <= EPS or L <= EPS:
+        raise ValueError("Vzdálenost i délka prvku musí být kladné.")
+    if L / vzdalenost > 20000:
+        raise ValueError("Příliš mnoho buněk – zvětšete vzdálenost.")
+    zac = vzdalenost / 2 if od_zacatku is None else od_zacatku
+    st = []
+    t = 0.0 if vcetne_koncu else zac
+    while t <= L + 1e-9:
+        st.append(min(t, L))
+        t += vzdalenost
+    if vcetne_koncu and L - st[-1] > 1e-6:
+        st.append(L)
+    a = {k: v for k, v in (attrs or {}).items() if k in ("color", "lineweight", "true_color")}
+    nove = []
+    for s_ in st:
+        p = g.interpolate(s_)
+        q0, q1 = g.interpolate(max(0.0, s_ - 0.01)), g.interpolate(min(L, s_ + 0.01))
+        rot = _m.degrees(_m.atan2(q1.y - q0.y, q1.x - q0.x)) if natocit else 0.0
+        nove.append(msp.add_blockref(nazev, (p.x, p.y), dxfattribs={**a, "layer": vrstva, "xscale": meritko,
+                                                                     "yscale": meritko, "zscale": meritko,
+                                                                     "rotation": rot}))
+    h.proved(f"Buňky po prvku ({len(nove)})", nove)
+    return nove

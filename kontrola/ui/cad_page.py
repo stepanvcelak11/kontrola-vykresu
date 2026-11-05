@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "buňky po prvku": "buňky po čáře v dané vzdálenosti, natočené po směru (stromořadí, značky hranice)",
         "vzorek": "vzorek plochy (Pattern Area): uzavřenou plochu vyplní buňkami – značky kultur do sponu",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
         "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, tisk do PDF („arch A3 1000“, „arch smaž“)",
@@ -483,7 +484,8 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
-        "pattern": "vzorek", "pattern area": "vzorek", "patt": "vzorek", "vzorkování": "vzorek",
+        "bunky po prvku": "buňky po prvku", "stromořadí": "buňky po prvku", "stromoradi": "buňky po prvku",
+        "cells along": "buňky po prvku", "pattern": "vzorek", "pattern area": "vzorek", "patt": "vzorek", "vzorkování": "vzorek",
         "značky plochy": "vzorek", "font": "písmo", "pismo": "písmo", "ft": "písmo", "text attributes": "písmo", "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
         "saved views": "pohled", "sv": "pohled", "pohledy": "pohled", "uloz pohled": "pohled",
         "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
@@ -2762,20 +2764,43 @@ class CadPage(QWidget):
             self._po_zmene(op.odebrano, op.pridano)
 
     def n_polylinie(self):
+        """Lomená čára (SmartLine): úseky rovné i obloukové – „o“ = další úsek obloukem přes bod na oblouku."""
         body = [(yield self._bod_req("Polylinie – první bod:"))]
+        bulge: list[float] = []
         while True:
-            q = yield self._bod_req("Další bod (Enter = konec, k = uzavřít, z = zpět o bod):", body[-1], True,
-                                    ("k", "z"), nahled=lambda x, y, b=list(body): [_linie(b + [(x, y)])])
+            q = yield self._bod_req("Další bod (Enter = konec, k = uzavřít, o = oblouk, z = zpět o bod):", body[-1],
+                                    True, ("k", "z", "o"),
+                                    nahled=lambda x, y, b=list(body), bl=list(bulge): [_linie_bulge(b + [(x, y)],
+                                                                                                    bl + [0.0])])
             if q == "z":
                 if len(body) > 1:
                     body.pop()
+                    bulge.pop()
+                continue
+            if q == "o":
+                a = body[-1]
+                m = yield self._bod_req("Oblouk – bod na oblouku:", a)
+                c = yield self._bod_req("Oblouk – koncový bod:", m, nahled=lambda x, y: [_oblouk3(a, m, (x, y))])
+                bg = _bulge3(a, m, c)
+                if bg is None:
+                    self.vypis("⚠ Body oblouku leží na přímce – úsek bude rovný.")
+                    bg = 0.0
+                body.append(c)
+                bulge.append(bg)
+                self.view.zvyraznene = [_linie_bulge(body, bulge + [0.0])]
                 continue
             if q is None or q == "k":
                 if len(body) >= 2:
-                    self.kresleni.polylinie(body, uzavrena=(q == "k" and len(body) > 2))
+                    zavr = q == "k" and len(body) > 2
+                    bl = bulge + [0.0]
+                    if any(abs(b) > 1e-12 for b in bl):
+                        self.kresleni.polylinie(body, uzavrena=zavr, bulge=bl)
+                    else:
+                        self.kresleni.polylinie(body, uzavrena=zavr)
                 return
             body.append(q)
-            self.view.zvyraznene = self.view.zvyraznene[:0] + [_linie(body)]
+            bulge.append(0.0)
+            self.view.zvyraznene = [_linie_bulge(body, bulge + [0.0])]
 
     def n_obdelnik(self):
         a = yield self._bod_req("Obdélník – první roh:")
@@ -3051,6 +3076,26 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_bunky_po_prvku(self):
+        """Buňky po prvku v dané vzdálenosti (stromořadí, značky na hranici), natočené po směru čáry."""
+        e, _k = yield Pozadavek("prvek", "Buňky po prvku – klikněte na čáru:")
+        jmena = U.bloky(self.dok.doc)
+        if not jmena:
+            raise ValueError("Ve výkresu nejsou žádné buňky.")
+        p = self.predvolba
+        vych = getattr(self, "_aktivni_bunka", None) or (p.blok if p is not None and p.blok in jmena else jmena[0])
+        nazev = yield Pozadavek("text", f"Buňka [{vych}]:", vychozi=vych)
+        if nazev not in jmena:
+            raise ValueError(f"Buňka {nazev} ve výkresu není.")
+        d = yield Pozadavek("cislo", "Vzdálenost buněk [10] m:", vychozi=10.0)
+        mv = (p.meritko_bunky if p is not None and p.meritko_bunky else None) or 1.0
+        m = yield Pozadavek("cislo", f"Měřítko buňky [{mv:g}]:", vychozi=mv)
+        nat = yield Pozadavek("text", "Natočit po směru čáry [a]/n, k = i na koncích:", vychozi="a")
+        nat = str(nat or "a").strip().lower()
+        nove = U.bunky_po_prvku(self.dok.doc, self.prostor, self.historie_zmen, e, nazev, d, m, self.kresleni.vrstva,
+                                self.kresleni._attr(), natocit=not nat.startswith("n"), vcetne_koncu="k" in nat)
+        self.vypis(f"Buňky po prvku: {len(nove)}× {nazev}.")
 
     def n_transformace(self):
         """Transformace výkresu podle identických bodů (jako geodetická transformace v MicroStationu / Gromě):
@@ -3979,6 +4024,41 @@ class CadPage(QWidget):
 def _linie(body):
     from shapely.geometry import LineString
     return LineString(body)
+
+
+def _bulge3(a, m, c):
+    """Bulge úseku a→c obloukem přes m (tan čtvrtiny středového úhlu, + = proti směru hodin)."""
+    st = _stred_3body(a, m, c)
+    if st is None:
+        return None
+    u = [math.atan2(p[1] - st[1], p[0] - st[0]) for p in (a, m, c)]
+    proti = (u[1] - u[0]) % (2 * math.pi) < (u[2] - u[0]) % (2 * math.pi)
+    rozsah = (u[2] - u[0]) % (2 * math.pi) if proti else -((u[0] - u[2]) % (2 * math.pi))
+    return math.tan(rozsah / 4)
+
+
+def _linie_bulge(body, bulge):
+    """Náhled lomené čáry s obloukovými úseky."""
+    from shapely.geometry import LineString
+    out = [body[0]]
+    for i in range(1, len(body)):
+        a, c, b = body[i - 1], body[i], bulge[i - 1] if i - 1 < len(bulge) else 0.0
+        if abs(b) < 1e-12:
+            out.append(c)
+            continue
+        th = 4 * math.atan(b)
+        d = math.dist(a, c)
+        if d < 1e-12:
+            continue
+        r = d / (2 * math.sin(abs(th) / 2))
+        mx, my = (a[0] + c[0]) / 2, (a[1] + c[1]) / 2
+        h = r * math.cos(th / 2)
+        nx, ny = -(c[1] - a[1]) / d, (c[0] - a[0]) / d
+        sx, sy = mx + nx * h * (1 if b > 0 else -1), my + ny * h * (1 if b > 0 else -1)
+        u0 = math.atan2(a[1] - sy, a[0] - sx)
+        n = max(6, int(abs(th) / (2 * math.pi) * 72))
+        out += [(sx + r * math.cos(u0 + th * k / n), sy + r * math.sin(u0 + th * k / n)) for k in range(1, n + 1)]
+    return LineString(out) if len(out) > 1 else LineString([body[0], body[0]])
 
 
 def _ascii(s: str) -> str:

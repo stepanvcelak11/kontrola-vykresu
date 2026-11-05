@@ -527,3 +527,20 @@ def test_vzorek_plochy_do_sponu():
     import pytest
     with pytest.raises(ValueError):
         U.vzorek_plochy(doc, msp, h, pl, "NENI", 10, 10)
+
+
+def test_bunky_po_prvku():
+    import ezdxf
+
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new("R2013")
+    doc.blocks.new("STROM").add_circle((0, 0), 0.5)
+    msp = doc.modelspace()
+    h = U.Historie(msp)
+    car = msp.add_lwpolyline([(0, 0), (30, 0), (30, 20)])
+    n = U.bunky_po_prvku(doc, msp, h, car, "STROM", 10)
+    assert [(round(e.dxf.insert.x, 6), round(e.dxf.insert.y, 6)) for e in n] == [(5, 0), (15, 0), (25, 0),
+                                                                                  (30, 5), (30, 15)]
+    assert abs(n[0].dxf.rotation) < 1e-6 and abs(n[-1].dxf.rotation - 90) < 1e-3
+    k = U.bunky_po_prvku(doc, msp, h, car, "STROM", 10, vcetne_koncu=True, natocit=False)
+    assert len(k) == 6 and (k[-1].dxf.insert.x, k[-1].dxf.insert.y) == (30, 20)
