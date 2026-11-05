@@ -465,5 +465,9 @@ def menu_soubor(stranka) -> QMenu:
         a.setToolTip(b.toolTip())
         a.triggered.connect(b.click)
         a.setData(b)
+    m.addSeparator()
+    z = m.addAction("Zavřít výkres")
+    z.setToolTip("Zavře aktuální výkres a přepne na další rozpracovaný")
+    z.triggered.connect(lambda: stranka.zavri_vykres())
     m.aboutToShow.connect(lambda: [a.setEnabled(a.data().isEnabled()) for a in m.actions() if a.data()])
     return m

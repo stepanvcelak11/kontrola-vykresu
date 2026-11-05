@@ -696,9 +696,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):  # noqa: N802
         cad = getattr(self, "cad", None)
-        if cad is not None and cad.dok is not None and cad.neulozeno and self.ptat_pri_zavreni:
+        if cad is not None and cad.dok is not None and self.ptat_pri_zavreni and (
+                cad.neulozeno or any(cad._neulozeny(e) for e in cad._otevrene)):
             self.show_page("cad")
-            if not cad._zahodit_zmeny():
+            if not cad.zavri_vse():
                 event.ignore()
                 return
         if getattr(self, "vypocty", None) is not None:

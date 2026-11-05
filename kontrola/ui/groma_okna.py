@@ -201,12 +201,21 @@ class ListaNastaveni(QWidget):
     """Lišta nastavení pod menu (jako v Gromě): kód kvality, měřítkový koeficient, najít bod."""
 
     hledej = Signal(str)
+    uloha = Signal(str)  # přepnout / založit úlohu
 
     def __init__(self, parent=None):
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(4, 2, 4, 2)
         lay.setSpacing(6)
+        self.ulohy = QComboBox()
+        self.ulohy.setToolTip("Rozpracovaná úloha – každá má svůj seznam souřadnic, zápisník a protokol "
+                              "(jako soubory v Gromě). Poslední položka založí novou.")
+        self.ulohy.setMinimumWidth(150)
+        self.ulohy.activated.connect(self._vyber_ulohy)
+        lay.addWidget(QLabel("Úloha:"))
+        lay.addWidget(self.ulohy)
+        self.nastav_ulohy([""], "")
         self.kod_kvality = QComboBox()
         for k in range(1, 9):
             self.kod_kvality.addItem(str(k), k)
@@ -231,6 +240,28 @@ class ListaNastaveni(QWidget):
         self.kod_kvality.currentIndexChanged.connect(self._uloz)
         self.meritko.valueChanged.connect(self._uloz)
         self.najit.textChanged.connect(self.hledej)
+
+    NOVA = "+ Nová úloha…"
+
+    def nastav_ulohy(self, nazvy: list[str], aktivni: str) -> None:
+        self.ulohy.blockSignals(True)
+        self.ulohy.clear()
+        for n in nazvy:
+            self.ulohy.addItem(n or "Hlavní seznam projektu", n)
+        self.ulohy.addItem(self.NOVA, None)
+        self.ulohy.setCurrentIndex(max(0, self.ulohy.findData(aktivni)))
+        self.ulohy.blockSignals(False)
+
+    def _vyber_ulohy(self, i: int) -> None:
+        n = self.ulohy.itemData(i)
+        if n is None:  # nová úloha
+            from PySide6.QtWidgets import QInputDialog
+            t, ok = QInputDialog.getText(self, "Nová úloha", "Název úlohy (např. 02 Polygon):")
+            if not ok or not t.strip():
+                self.ulohy.setCurrentIndex(0)
+                return
+            n = t.strip()
+        self.uloha.emit(n)
 
     def nacti(self) -> None:
         from ..geodezie import nastaveni as N

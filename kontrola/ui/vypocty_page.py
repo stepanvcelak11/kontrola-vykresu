@@ -318,6 +318,8 @@ class VypoctyPage(QWidget):
         from ..geodezie.spojnice import Spojnice
         self.spojnice = Spojnice()
         self._path: Path | None = None
+        self._root: Path | None = None  # složka projektu
+        self.uloha = ""  # rozpracovaná úloha („“ = hlavní seznam projektu), každá má svůj seznam a protokol
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -426,6 +428,7 @@ class VypoctyPage(QWidget):
         stav.addStretch(1)
         outer.addLayout(stav)
         self.lista.hledej.connect(self._najdi_bod)
+        self.lista.uloha.connect(self.prepni_ulohu)
         self.tabs.currentChanged.connect(lambda i: self.ulohy._completer_model.setStringList(
             [b.cislo for b in self.seznam.body]))
         lay = outer
@@ -462,9 +465,62 @@ class VypoctyPage(QWidget):
         self._refresh()
 
     # ------------------------------------------------------------ projekt / ukládání
+    # ------------------------------------------------------------ úlohy (jako soubory v Gromě)
+    def _slozka_ulohy(self, nazev: str) -> Path | None:
+        if self._root is None:
+            return None
+        return self._root / "vypocty" / "ulohy" / nazev if nazev else self._root / "vypocty"
+
+    def seznam_uloh(self) -> list[str]:
+        if self._root is None:
+            return [""]
+        d = self._root / "vypocty" / "ulohy"
+        return [""] + sorted(x.name for x in d.iterdir() if x.is_dir()) if d.is_dir() else [""]
+
+    def _uloz_zapisnik(self) -> None:
+        d = self._slozka_ulohy(self.uloha)
+        if d is None:
+            return
+        z = d / "zapisnik.zap"
+        try:
+            if self.zapisnik.stanoviska:
+                d.mkdir(parents=True, exist_ok=True)
+                self.zapisnik.ulozit(str(z))
+            elif z.exists():
+                z.unlink()
+        except OSError as e:
+            self.message(f"Zápisník úlohy nejde uložit: {e}", True)
+
+    def prepni_ulohu(self, nazev: str) -> None:
+        """Přepne na jinou rozpracovanou úlohu (01 rajón, 02 polygon…): uloží seznam souřadnic, zápisník
+        a protokol aktuální úlohy a načte ty druhé – jako přepínání souborů v Gromě."""
+        nazev = (nazev or "").strip().replace("/", "_").replace("\\", "_")
+        if nazev == self.uloha or self._root is None:
+            return
+        self._save_timer.stop()
+        self.save()
+        self._uloz_zapisnik()
+        self.uloha = nazev
+        d = self._slozka_ulohy(nazev)
+        d.mkdir(parents=True, exist_ok=True)
+        self._nacti_slozku(d)
+        z = d / "zapisnik.zap"
+        self.zapisnik.nastav([])
+        if z.exists():
+            self.zapisnik.nacist(str(z))
+        self.lista.nastav_ulohy(self.seznam_uloh(), self.uloha)
+        self.message(f"Úloha: {nazev or 'hlavní seznam projektu'}")
+
     def set_project(self, project) -> None:
         self._save_timer.stop()
-        self._path = Path(project.root) / "vypocty" / "seznam_bodu.json" if project is not None else None
+        self._root = Path(project.root) if project is not None else None
+        self.uloha = ""
+        self._nacti_slozku(self._root / "vypocty" if self._root is not None else None)
+        if hasattr(self, "lista"):
+            self.lista.nastav_ulohy(self.seznam_uloh(), "")
+
+    def _nacti_slozku(self, slozka: Path | None) -> None:
+        self._path = slozka / "seznam_bodu.json" if slozka is not None else None
         try:
             self.seznam = SeznamBodu.nacti(self._path) if self._path else SeznamBodu()
         except (OSError, ValueError, TypeError) as e:

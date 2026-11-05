@@ -588,6 +588,7 @@ class CadPage(QWidget):
         super().__init__(parent)
         self.win = win
         self.dok: CadDokument | None = None
+        self._otevrene: list[dict] = []  # rozpracované výkresy (přepínání jako v MicroStationu)
         self.sjtsk = True
         self._prikaz: str | None = None
         self._body: list[tuple[float, float]] = []
@@ -761,7 +762,15 @@ class CadPage(QWidget):
             w.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             w.setMinimumWidth(40)
             w.setMaximumWidth(260)
-        for w in (self.b_undo, self.b_redo, self.title, self.predvolba_info):
+        self.vykresy_cb = QComboBox()
+        self.vykresy_cb.setToolTip("Rozpracované výkresy – přepnutí na jiný (každý má svou historii Zpět a pohled)."
+                                   " Zavřít výkres: Soubor → Zavřít výkres.")
+        self.vykresy_cb.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.vykresy_cb.setMinimumWidth(60)
+        self.vykresy_cb.setMaximumWidth(220)
+        self.vykresy_cb.setVisible(False)
+        self.vykresy_cb.activated.connect(self.prepni_vykres)
+        for w in (self.b_undo, self.b_redo, self.vykresy_cb, self.title, self.predvolba_info):
             self.ribbon.vpravo.addWidget(w)
         for b, t in ((self.b_undo, "↶"), (self.b_redo, "↷")):
             b.setText(t)
@@ -859,7 +868,7 @@ class CadPage(QWidget):
         crow.addWidget(self.aktivni)
         self.coords = QLabel("Y –  X –")
         self.coords.setObjectName("cad_souradnice")
-        self.coords.setMinimumWidth(230)
+        self.coords.setMinimumWidth(130)  # malý notebook: celé okno ≤ 1100 px (CI má užší písmo)
         crow.addWidget(self.coords)
         lay.addLayout(crow)
         self.b_barva.clicked.connect(self._vyber_barvy)
@@ -1007,6 +1016,7 @@ class CadPage(QWidget):
     # ------------------------------------------------------------ dokument
     def nastav_dokument(self, dok: CadDokument):
         self.zrus(tise=True)
+        self._uloz_stav_vykresu()
         self.dok = dok
         self.prostor = dok.msp  # aktuální model (Model nebo list)
         self._historie_prostoru = {}
@@ -1035,6 +1045,102 @@ class CadPage(QWidget):
         self.view.zoom_all()
         self._aktualizuj_tlacitka()
         self.aktivni_atributy()
+        # nový výkres do seznamu rozpracovaných; nedotčený prázdný „Nový výkres“ se nahradí
+        self._otevrene = [e for e in self._otevrene if e["dok"] is not dok and not (
+            e["dok"].path is None and e["historie"] is not None and e["historie"].zmena == 0)]
+        self._otevrene.append(self._stav())
+        self._obnov_seznam_vykresu()
+
+    # ------------------------------------------------------------ více rozpracovaných výkresů
+    def _stav(self) -> dict:
+        return {"dok": self.dok, "prostor": self.prostor, "hp": self._historie_prostoru,
+                "historie": self.historie_zmen, "kresleni": self.kresleni, "reference": self.reference,
+                "ulozena": getattr(self, "_ulozena_zmena", 0), "sjtsk": self.sjtsk,
+                "pohled": self.view.transform(),
+                "stred": self.view.mapToScene(self.view.viewport().rect().center())}
+
+    def _uloz_stav_vykresu(self) -> None:
+        """Stav aktuálního výkresu (historie Zpět, model, pohled) do seznamu rozpracovaných."""
+        if self.dok is None:
+            return
+        for i, e in enumerate(self._otevrene):
+            if e["dok"] is self.dok:
+                self._otevrene[i] = self._stav()
+                return
+
+    @staticmethod
+    def _neulozeny(e: dict) -> bool:
+        return e["historie"] is not None and e["historie"].zmena != e["ulozena"]
+
+    def _nazev_vykresu(self, e: dict) -> str:
+        n = e["dok"].path.name if e["dok"].path else "Nový výkres"
+        return n + (" *" if self._neulozeny(e) else "")
+
+    def _obnov_seznam_vykresu(self) -> None:
+        cb = getattr(self, "vykresy_cb", None)
+        if cb is None:
+            return
+        self._uloz_stav_vykresu()
+        cb.blockSignals(True)
+        cb.clear()
+        for e in self._otevrene:
+            cb.addItem(self._nazev_vykresu(e))
+        i = next((i for i, e in enumerate(self._otevrene) if e["dok"] is self.dok), -1)
+        cb.setCurrentIndex(i)
+        cb.setVisible(len(self._otevrene) > 1)
+        cb.blockSignals(False)
+
+    def prepni_vykres(self, i: int) -> None:
+        """Přepne na jiný rozpracovaný výkres – každý si drží svou historii Zpět, model a pohled."""
+        if not 0 <= i < len(self._otevrene) or self._otevrene[i]["dok"] is self.dok:
+            return
+        self.zrus(tise=True)
+        self._uloz_stav_vykresu()
+        e = self._otevrene[i]
+        self.dok, self.prostor, self._historie_prostoru = e["dok"], e["prostor"], e["hp"]
+        self.historie_zmen, self.kresleni, self.reference = e["historie"], e["kresleni"], e["reference"]
+        self._ulozena_zmena, self.sjtsk = e["ulozena"], e["sjtsk"]
+        self.vyber = []
+        self._vykresli()
+        self._titulek()
+        self._napln_vrstvy()
+        self._napln_modely()
+        self.view.setTransform(e["pohled"])
+        self.view.centerOn(e["stred"])
+        self._aktualizuj_tlacitka()
+        self.aktivni_atributy()
+        self._obnov_seznam_vykresu()
+        self.vypis(f"Výkres: {self._nazev_vykresu(e)}")
+
+    def zavri_vykres(self) -> bool:
+        """Zavře aktuální výkres (neuložené změny nabídne uložit) a přepne na další rozpracovaný."""
+        if self.dok is None:
+            return True
+        if not self._zahodit_zmeny():
+            return False
+        self.zrus(tise=True)
+        self._otevrene = [e for e in self._otevrene if e["dok"] is not self.dok]
+        if self._otevrene:
+            self.dok = None  # zavřený výkres se do seznamu neukládá
+            self.prepni_vykres(len(self._otevrene) - 1)
+        else:
+            self.dok, self.historie_zmen, self.kresleni = None, None, None
+            self.vyber = []
+            self._vykresli()
+            self._titulek()
+            self._aktualizuj_tlacitka()
+            self._obnov_seznam_vykresu()
+        return True
+
+    def zavri_vse(self) -> bool:
+        """Při ukončení aplikace: každý neuložený rozpracovaný výkres nabídne uložit."""
+        self._uloz_stav_vykresu()
+        for i, e in enumerate(list(self._otevrene)):
+            if self._neulozeny(e):
+                self.prepni_vykres(self._otevrene.index(e))
+                if not self._zahodit_zmeny():
+                    return False
+        return True
 
     # ------------------------------------------------------------ zadání → předvolby
     def _pravidla(self):
@@ -1601,6 +1707,11 @@ class CadPage(QWidget):
             return
         n = self.dok.path.name if self.dok.path else "Nový výkres"
         self.title.setText(n + (" *" if self.neulozeno else ""))
+        cb = getattr(self, "vykresy_cb", None)
+        if cb is not None and cb.count() > 1:
+            i = next((i for i, e in enumerate(self._otevrene) if e["dok"] is self.dok), -1)
+            if i >= 0:
+                cb.setItemText(i, self.title.text())
 
     @property
     def neulozeno(self) -> bool:
@@ -2066,13 +2177,23 @@ class CadPage(QWidget):
         return False
 
     def otevri(self, path: str | None = None) -> bool:
-        if not self._zahodit_zmeny():
-            return False
         if path is None:
             path, _ = QFileDialog.getOpenFileName(self, "Otevřít výkres", "",
                                                   "Výkresy (*.dxf *.dgn);;DXF (*.dxf);;DGN MicroStation (*.dgn)")
         if not path:
             return False
+        for i, e in enumerate(list(self._otevrene)):
+            if e["dok"].path is not None and Path(e["dok"].path).resolve() == Path(path).resolve():
+                if e["dok"] is self.dok:
+                    self._uloz_stav_vykresu()
+                    e = self._otevrene[i]
+                if self._neulozeny(e):  # rozpracovaný s neuloženými změnami → jen přepnout
+                    self.prepni_vykres(i)
+                    return True
+                self._otevrene.pop(i)  # beze změn → načíst znovu z disku
+                if e["dok"] is self.dok:
+                    self.dok = None
+                break
         try:
             dok = CadDokument.otevri(path, self._pravidla())
         except ValueError as e:
@@ -2082,8 +2203,6 @@ class CadPage(QWidget):
         return True
 
     def novy(self):
-        if not self._zahodit_zmeny():
-            return
         self.nastav_dokument(CadDokument())
         self.sjtsk = False
 

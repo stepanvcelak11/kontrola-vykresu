@@ -3492,3 +3492,53 @@ def test_cad_knihovny_od_ucitele(window, tmp_path, monkeypatch):
     d.seznam.setCurrentRow(0)
     d.odeber()
     assert d.seznam.count() == len(vys) - 2
+
+
+def test_cad_vice_rozpracovanych_vykresu(window, tmp_path):
+    """Jako v MicroStationu: víc rozpracovaných výkresů, přepínání; každý má svou historii Zpět."""
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=10 y=0", ""):
+        c.zadej(t)
+    a = c.dok
+    p = tmp_path / "druhy.dxf"
+    c.novy()
+    for t in ("u", "x=0 y=0", "x=0 y=5", "x=0 y=9", ""):
+        c.zadej(t)
+    c.uloz(path=str(p))
+    b = c.dok
+    assert len(c._otevrene) == 2 and c.vykresy_cb.count() == 2 and c.vykresy_cb.isVisibleTo(c)
+    c.prepni_vykres(0)
+    assert c.dok is a and len(c.prostor.query("LINE")) == 1 and c.neulozeno
+    c.undo()
+    assert len(c.prostor.query("LINE")) == 0
+    c.prepni_vykres(1)
+    assert c.dok is b and len(c.prostor.query("LINE")) == 2 and not c.neulozeno
+    c.prepni_vykres(0)
+    assert c.otevri(str(p)) and len(c._otevrene) == 2 and c.dok is not b  # beze změn → načte se znovu
+    b = c.dok
+    c.prostor.add_line((0, 0), (1, 1))
+    c.historie_zmen.zmena += 1
+    assert c.otevri(str(p)) and c.dok is b  # s neuloženými změnami → jen přepne
+    c.zahod_zalohu()
+    c._ulozena_zmena = c.historie_zmen.zmena  # zavření bez dotazu
+    assert c.zavri_vykres() and c.dok is a and len(c._otevrene) == 1
+
+
+def test_vypocty_rozpracovane_ulohy(window):
+    """Výpočty: každá úloha má svůj seznam souřadnic a zápisník; přepnutí zpět vrátí data."""
+    from kontrola.geodezie.body import Bod
+    v = window.vypocty
+    v.seznam.pridej([Bod("1", 100.0, 200.0)])
+    v.save()
+    v.prepni_ulohu("02 Polygon")
+    assert len(v.seznam) == 0 and v.uloha == "02 Polygon"
+    v.seznam.pridej([Bod("5001", 1.0, 2.0), Bod("5002", 3.0, 4.0)])
+    v.zapisnik.pridej_stanovisko()
+    v.prepni_ulohu("")
+    assert [b.cislo for b in v.seznam.body] == ["1"]
+    assert v.seznam_uloh() == ["", "02 Polygon"]
+    v.prepni_ulohu("02 Polygon")
+    assert len(v.seznam) == 2 and v.zapisnik.stanoviska is not None
+    assert v.lista.ulohy.currentData() == "02 Polygon"
