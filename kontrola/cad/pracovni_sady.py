@@ -26,6 +26,7 @@ class Sada:
     styly: list[Path] = field(default_factory=list)
     dgnlib: list[Path] = field(default_factory=list)
     seedy: list[Path] = field(default_factory=list)  # všechny seedy sady – volí se podle druhu výkresu
+    pasy: list[Path] = field(default_factory=list)  # Dgnlib/GUI: vlastní pásy karet (styl kreslení, např. ÚM)
 
     @property
     def klic(self) -> str:
@@ -69,7 +70,8 @@ def _sada_z_standards(std: Path) -> Sada:
                 sorted(p for p in soubory if _pripona(p, ".cel")),
                 sorted(p for p in soubory if _pripona(p, ".rsc") and _je_knihovna_stylu(p)),
                 sorted(p for p in soubory if _pripona(p, ".dgnlib") and p.parent.name.lower() != "gui"),
-                sorted(p for p in seeds if _pripona(p, ".dgn")))
+                sorted(p for p in seeds if _pripona(p, ".dgn")),
+                sorted(p for p in soubory if _pripona(p, ".dgnlib") and p.parent.name.lower() == "gui"))
 
 
 def najdi(slozka: str | Path) -> list[Sada]:
@@ -153,6 +155,28 @@ def posledni_seed(sada: Sada | None) -> Path | None:
 def zapamatuj_seed(sada: Sada | None, seed: Path | None) -> None:
     if sada is not None:
         _qs().setValue(f"cad/seed/{sada.klic}", str(seed or ""))
+
+
+_PASY_CACHE: dict = {}
+
+
+def styly_kresleni(sada: Sada | None) -> list:
+    """Pásy karet (styly kreslení) aktivní sady – jen ty, které mají tlačítka s key-iny."""
+    from .ms_pas import nacti_pas
+    out = []
+    for p in (sada.pasy if sada is not None else []):
+        try:
+            k = (str(p), p.stat().st_mtime)
+        except OSError:
+            continue
+        if k not in _PASY_CACHE:
+            try:
+                _PASY_CACHE[k] = nacti_pas(p)
+            except Exception:  # noqa: BLE001 – poškozený .dgnlib nesmí shodit CAD
+                _PASY_CACHE[k] = None
+        if _PASY_CACHE[k] is not None:
+            out.append(_PASY_CACHE[k])
+    return out
 
 
 def nastav_aktivni(sada: Sada | None) -> None:

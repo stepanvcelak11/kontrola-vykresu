@@ -41,6 +41,7 @@ IKONY = {
     "Nastavení…": '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/>'
                   '<circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
     "Výchozí rozvržení": '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M14 4v16M3 13h11"/>',
+    "Okna / záložky": '<path d="M3 8h6V5h6v3h6v12H3z"/><path d="M3 8v12"/>',
     "Mozaika horizontálně": '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 12h18"/>',
     "Mozaika vertikálně": '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M12 4v16"/>',
     "Kaskáda": '<rect x="3" y="3" width="12" height="10" rx="1"/><rect x="9" y="11" width="12" height="10" rx="1"/>',

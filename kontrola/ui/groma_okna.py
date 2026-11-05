@@ -102,8 +102,18 @@ class _DatoveOkno(QMdiSubWindow):
         super().setWindowTitle(t)
         self.zahlavi.titul.setText(t)
 
+    def moveEvent(self, e):  # noqa: N802
+        super().moveEvent(e)
+        self._zmena()
+
+    def _zmena(self):
+        a = self.mdiArea()
+        if a is not None and hasattr(a, "uloz_rozvrzeni_pozdeji"):
+            a.uloz_rozvrzeni_pozdeji()
+
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
+        self._zmena()
         self.grip.move(self.obal.width() - self.grip.width(), self.obal.height() - self.grip.height())
         self.grip.raise_()
 
@@ -145,8 +155,8 @@ class DatovaOkna(QMdiArea):
         sub.setVisible(viditelne)
         return len(self._okna) - 1
 
-    def setDocumentMode(self, _on: bool) -> None:  # noqa: N802
-        pass
+    def setDocumentMode(self, on: bool) -> None:  # noqa: N802
+        QMdiArea.setDocumentMode(self, on)
 
     def count(self) -> int:
         return len(self._okna)
@@ -235,9 +245,91 @@ class DatovaOkna(QMdiArea):
 
     def showEvent(self, e):  # noqa: N802
         super().showEvent(e)
-        if not self._rozvrzeno:  # první zobrazení: okna pod sebou jako v Gromě (rozměr plochy už je známý)
+        if not self._rozvrzeno:  # první zobrazení: uložené rozvržení uživatele, jinak výchozí
             self._rozvrzeno = True
-            self.vychozi_rozvrzeni()
+            if self._rezim_ulozeny() == "zalozky":
+                self.nastav_rezim("zalozky")
+            elif not self.obnov_rozvrzeni():
+                self.vychozi_rozvrzeni()
+            self._nacteno = True
+
+    # --- rozvržení podle uživatele: zapamatuje se poloha a velikost oken (a režim okna / záložky)
+    KLIC = "vypocty/rozvrzeni"
+
+    def _qs(self):
+        from PySide6.QtCore import QSettings
+        return QSettings("KontrolaVykresu", "KontrolaVykresu")
+
+    def _rezim_ulozeny(self) -> str:
+        return str(self._qs().value(self.KLIC + "/rezim", "okna"))
+
+    def uloz_rozvrzeni_pozdeji(self) -> None:
+        if not getattr(self, "_nacteno", False) or self.viewMode() == QMdiArea.TabbedView:
+            return
+        from PySide6.QtCore import QTimer
+        if not hasattr(self, "_t_uloz"):
+            self._t_uloz = QTimer(self)
+            self._t_uloz.setSingleShot(True)
+            self._t_uloz.setInterval(500)
+            self._t_uloz.timeout.connect(self.uloz_rozvrzeni)
+        self._t_uloz.start()
+
+    def uloz_rozvrzeni(self) -> None:
+        r = self.viewport().rect()
+        if r.width() < 50 or r.height() < 50:
+            return
+        d = {}
+        for _w, sub, t in self._okna:
+            g = sub.geometry()
+            # poměrně k ploše – rozvržení sedí i po změně velikosti okna aplikace
+            d[t] = [g.x() / r.width(), g.y() / r.height(), g.width() / r.width(), g.height() / r.height(),
+                    not sub.isHidden(), sub.isMaximized()]
+        import json
+        self._qs().setValue(self.KLIC + "/okna", json.dumps(d))
+
+    def obnov_rozvrzeni(self) -> bool:
+        import json
+        try:
+            d = json.loads(self._qs().value(self.KLIC + "/okna", "") or "{}")
+        except (TypeError, ValueError):
+            return False
+        if not d:
+            return False
+        r = self.viewport().rect()
+        for _w, sub, t in self._okna:
+            v = d.get(t)
+            if not v:
+                continue
+            x, y, w, h, vid, mx = v
+            sub.setVisible(bool(vid))
+            sub.setGeometry(int(x * r.width()), int(y * r.height()), max(160, int(w * r.width())),
+                            max(100, int(h * r.height())))
+            if mx:
+                sub.showMaximized()
+        return True
+
+    def nastav_rezim(self, rezim: str) -> None:
+        """„okna“ = volná okna (jako Groma), „zalozky“ = každé okno na celou plochu, přepínání záložkami."""
+        tab = rezim == "zalozky"
+        if tab:
+            self.uloz_rozvrzeni()
+            self.setViewMode(QMdiArea.TabbedView)
+            self.setDocumentMode(True)
+            self.setTabsMovable(True)
+            from PySide6.QtWidgets import QTabBar
+            tb = self.findChild(QTabBar)
+            if tb is not None:
+                tb.setExpanding(False)
+        else:
+            self.setViewMode(QMdiArea.SubWindowView)
+            if not self.obnov_rozvrzeni():
+                self.vychozi_rozvrzeni()
+        for _w, sub, _t in self._okna:
+            sub.zahlavi.setVisible(not tab)
+        self._qs().setValue(self.KLIC + "/rezim", "zalozky" if tab else "okna")
+
+    def prepni_rezim(self) -> None:
+        self.nastav_rezim("okna" if self.viewMode() == QMdiArea.TabbedView else "zalozky")
 
     def vychozi_rozvrzeni(self) -> None:
         """Přehledné rozvržení: seznam souřadnic velký vlevo nahoře, zápisník pod ním, protokol vpravo."""
@@ -249,6 +341,8 @@ class DatovaOkna(QMdiArea):
             if s is not None:
                 s.show()
                 s.showNormal()
+        if self.viewMode() == QMdiArea.TabbedView:
+            self.nastav_rezim("okna")
         r = self.viewport().rect()
         g = 4
         sl = int(r.width() * 0.64)
@@ -389,7 +483,7 @@ KARTY_GROMA = [
                     ("Porovnání souřadnic…", "@porovnat_seznam"), ("Identické body…", "@duplicates_dialog")]),
         ("Kódování", [("Kresba z kódů…", "@kresba_z_kodu"), ("Kódovací tabulka…", "@otevri_kodovnik")]),
         ("Nastavení", [("Nastavení…", "@_nastaveni")]),
-        ("Pohledy", [("Výchozí rozvržení", "@_vychozi"), ("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
+        ("Pohledy", [("Výchozí rozvržení", "@_vychozi"), ("Okna / záložky", "@_rezim"), ("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
                      ("Kaskáda", "@_kaskada"), ("Okna", "@okna")]),
     ]),
     ("Protokol", [
@@ -529,7 +623,7 @@ class PasGromy(QWidget):
             return (lambda i=jmena[cil]: otevri_ulohu(p, i)) if cil in jmena else None
         vlastni = {
             "@_nastaveni": lambda: (p.ulohy.nastaveni_vypoctu(), p.lista.nacti()),
-            "@_vychozi": o.vychozi_rozvrzeni, "@_mozaika_h": o.mozaika_vodorovne, "@_mozaika_v": o.mozaika_svisle, "@_kaskada": o.cascadeSubWindows,
+            "@_vychozi": o.vychozi_rozvrzeni, "@_rezim": o.prepni_rezim, "@_mozaika_h": o.mozaika_vodorovne, "@_mozaika_v": o.mozaika_svisle, "@_kaskada": o.cascadeSubWindows,
             "@okna": lambda: self._menu_oken(), "@_protokol": lambda: o.otevri(p.protokol),
             "@_protokol_pdf": p.ulohy.protokol_pdf, "@_zapisnik": lambda: o.otevri(p.zapisnik),
             "@_zpracovani": lambda: getattr(p.win, "show_vypocet", lambda: None)(),

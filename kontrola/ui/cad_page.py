@@ -760,6 +760,8 @@ class CadPage(QWidget):
         self.paleta.nastroj.connect(self._z_palety)
         self.ribbon = PasKaret(self.PRIKAZY, self, _barva_ik, accent())
         self.ribbon.nastroj.connect(self._z_palety)
+        self.ribbon.keyin.connect(self.ms_keyin)
+        self.obnov_styly_kresleni()
         self.ribbon.b_soubor.setMenu(menu_soubor(self))
         from PySide6.QtWidgets import QSizePolicy
         for w in (self.title, self.predvolba_info):  # dlouhý název souboru nesmí roztáhnout okno
@@ -1464,7 +1466,37 @@ class CadPage(QWidget):
             self.po_zmene_knihoven()
         return d
 
+    def obnov_styly_kresleni(self) -> None:
+        """Styly kreslení (pásy karet z Dgnlib/GUI aktivní pracovní sady, např. Účelová mapa)."""
+        from ..cad import pracovni_sady as PS
+        try:
+            self.ribbon.nastav_pasy(PS.styly_kresleni(PS.aktivni()))
+        except Exception as e:  # noqa: BLE001
+            self.vypis(f"⚠ Styly kreslení: {e}")
+
+    def ms_keyin(self, keyin: str) -> None:
+        """Tlačítko stylu kreslení: aktivní hladina, barva, styl, tloušťka, buňka a nástroj (jako v MultiScale)."""
+        from ..cad.ms_pas import preloz
+        if self.dok is None:
+            self.novy()
+        nastav, prikazy = preloz(keyin)
+        if nastav:
+            self._keyiny(nastav)
+        zmena = [p for p in prikazy if p.split()[0] in ("vrstva", "barva", "styl", "tloušťka")]
+        if zmena:
+            if not self.vyber:
+                self.vypis("Změna atributů: nejdřív vyberte prvky, pak klikněte znovu.")
+            else:
+                for p in zmena:
+                    self.proved(p)
+                self.vypis(f"Atributy změněny u {len(self.vyber)} prvků.")
+        for p in prikazy:
+            if p not in zmena:
+                self.proved(p)
+                break
+
     def po_zmene_knihoven(self) -> None:
+        self.obnov_styly_kresleni()
         nove = self._knihovny_do_vykresu()
         if self.dok is not None:
             self._vykresli()

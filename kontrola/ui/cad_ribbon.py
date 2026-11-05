@@ -201,6 +201,7 @@ def _tlacitko(cmd: str, popisy, barva, zvyr, velke: bool) -> QToolButton:
 class PasKaret(QWidget):
     """Pás karet jako v MicroStationu CONNECT: tlačítko Soubor, záložky karet, skupiny nástrojů s názvem dole."""
     nastroj = Signal(str)
+    keyin = Signal(str)  # tlačítko pásu stylu kreslení (key-in MicroStationu z .dgnlib)
 
     def __init__(self, popisy, stranka, barva="#374151", zvyr="#2563EB", parent=None):
         super().__init__(parent)
@@ -226,6 +227,15 @@ class PasKaret(QWidget):
         self.pracovni_postup = QComboBox()
         self.pracovni_postup.setToolTip("Pracovní postup (Workflow): které karty jsou vidět")
         horni.addWidget(self.pracovni_postup)
+        self.styl_kresleni = QComboBox()
+        self.styl_kresleni.setToolTip("Styl kreslení (jako v MultiScale): např. Účelová mapa (ÚM) přidá karty "
+                                      "s přednastavenými prvky – hladina, barva, styl, tloušťka a nástroj jedním "
+                                      "kliknutím. Nabízí pásy z aktivní pracovní sady (Dgnlib/GUI).")
+        self.styl_kresleni.setMinimumWidth(170)
+        horni.addWidget(self.styl_kresleni)
+        self._pasy: list = []
+        self._dynamicke: list[QWidget] = []
+        self.styl_kresleni.activated.connect(lambda i: self.nastav_styl(i))
         self.karty = QTabBar()
         self.karty.setDrawBase(False)
         self.karty.setExpanding(False)
@@ -270,19 +280,118 @@ class PasKaret(QWidget):
         self.pracovni_postup.setCurrentText(ul if ul in self.POSTUPY else "Vše")
         self._postup(self.pracovni_postup.currentText())
 
+    def _ix(self, titul: str) -> int:
+        """Index standardní karty v pásu (karty stylu kreslení se vkládají mezi ně)."""
+        w = self._stranky.get(titul)
+        return self.stack.indexOf(w) if w is not None else -1
+
     def _postup(self, jm: str):
         vid = self.POSTUPY.get(jm, [])
-        for i, (k, _) in enumerate(KARTY):
-            self.karty.setTabVisible(i, k in vid)
+        for k, _ in KARTY:
+            self.karty.setTabVisible(self._ix(k), k in vid)
         if not self.karty.isTabVisible(self.karty.currentIndex()):
             self.karty.setCurrentIndex(0)
         QSettings("KontrolaVykresu", "KontrolaVykresu").setValue("cad/pracovni_postup", jm)
 
+    # ------------------------------------------------------------ styl kreslení (pásy z .dgnlib)
+    STANDARD = "Styl: standardní"
+    OBECNE_KARTY = ("Domů", "Výkres a tisk", "Pohled", "Připojit", "Zadání a kontrola")
+
+    def nastav_pasy(self, pasy: list) -> None:
+        """Nabídka stylů kreslení z pásů pracovní sady; obnoví naposledy zvolený."""
+        self._pasy = list(pasy)
+        self.styl_kresleni.blockSignals(True)
+        self.styl_kresleni.clear()
+        self.styl_kresleni.addItem(self.STANDARD)
+        for p in self._pasy:
+            self.styl_kresleni.addItem(f"Styl: {p.nazev}")
+        self.styl_kresleni.blockSignals(False)
+        self.styl_kresleni.setVisible(bool(self._pasy))
+        ul = str(QSettings("KontrolaVykresu", "KontrolaVykresu").value("cad/styl_kresleni", "") or "")
+        i = next((k + 1 for k, p in enumerate(self._pasy) if p.nazev == ul), 0)
+        self.nastav_styl(i, prepnout=False)
+
+    def nastav_styl(self, i: int, prepnout: bool = True) -> None:
+        for w in self._dynamicke:
+            j = self.stack.indexOf(w)
+            if j >= 0:
+                self.karty.removeTab(j)
+                self.stack.removeWidget(w)
+            w.deleteLater()
+        self._dynamicke = []
+        self.styl_kresleni.setCurrentIndex(i)
+        pas = self._pasy[i - 1] if 0 < i <= len(self._pasy) else None
+        QSettings("KontrolaVykresu", "KontrolaVykresu").setValue("cad/styl_kresleni", pas.nazev if pas else "")
+        if pas is None:
+            self._postup(self.pracovni_postup.currentText())
+            return
+        # jako v MultiScale: karty stylu hned za Domů, ze standardních zůstanou jen obecné
+        for k, _ in KARTY:
+            self.karty.setTabVisible(self._ix(k), k in self.OBECNE_KARTY)
+        for n, (titul, skupiny) in enumerate(pas.karty):
+            sc = self._karta_stylu(skupiny)
+            self.stack.insertWidget(1 + n, sc)
+            self.karty.insertTab(1 + n, titul)
+            self._dynamicke.append(sc)
+        if prepnout:
+            self.karty.setCurrentIndex(1)
+            self.stack.setCurrentIndex(1)
+
+    def _karta_stylu(self, skupiny) -> QWidget:
+        from .cad_ikony import ikona as cad_ikona
+        druh_ikona = {"cara": "polylinie", "bunka": "vlož", "text": "text", "atributy": "převod atributů", "plocha": "polylinie",
+                      "nastaveni": "vrstvy"}
+        sc = QScrollArea()
+        sc.setFrameShape(QFrame.NoFrame)
+        sc.setWidgetResizable(True)
+        sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        w = QWidget()
+        w.setObjectName("pas_obsah")
+        h = QHBoxLayout(w)
+        h.setContentsMargins(4, 2, 4, 0)
+        h.setSpacing(4)
+        for gtit, tlacitka in skupiny:
+            zvyr = barva_skupiny(gtit)
+            box = QWidget()
+            v = QVBoxLayout(box)
+            v.setContentsMargins(2, 0, 2, 0)
+            v.setSpacing(0)
+            g = QGridLayout()
+            g.setSpacing(0)
+            for k, t in enumerate(tlacitka):
+                b = QToolButton()
+                b.setText(t.popisek)
+                b.setAutoRaise(True)
+                b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+                b.setIconSize(QSize(16, 16))
+                ik = cad_ikona(druh_ikona.get(t.druh, ""), "#9CA3AF", zvyr)
+                if not ik.isNull():
+                    b.setIcon(ik)
+                tip = t.popis or t.popisek
+                b.setToolTip(f"<b>{tip}</b><br><span style='color:#888'>{t.keyin}</span>")
+                b.clicked.connect(lambda _c=False, ki=t.keyin: self.keyin.emit(ki))
+                g.addWidget(b, k % 3, k // 3)
+            v.addLayout(g)
+            v.addStretch(1)
+            lbl = QLabel(gtit)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setObjectName("pas_skupina")
+            lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {zvyr}; border-top: 2px solid {zvyr}; }}")
+            v.addWidget(lbl)
+            h.addWidget(box)
+            sep = QFrame()
+            sep.setObjectName("pas_oddelovac")
+            h.addWidget(sep)
+        h.addStretch(1)
+        sc.setWidget(w)
+        sc.setFixedHeight(max(self.stack.height(), w.sizeHint().height() + 14))
+        return sc
+
     def ukaz_kartu(self, titul: str):
-        for i, (k, _) in enumerate(KARTY):
-            if k == titul:
-                self.karty.setTabVisible(i, True)
-                self.karty.setCurrentIndex(i)
+        i = self._ix(titul)
+        if i >= 0:
+            self.karty.setTabVisible(i, True)
+            self.karty.setCurrentIndex(i)
 
     def _skupina(self, titul, polozky, popisy, stranka, barva, zvyr) -> QWidget:
         zvyr = barva_skupiny(titul)  # barevné části ikon podle skupiny (jako barevné ikony MicroStationu)

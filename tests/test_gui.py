@@ -3635,3 +3635,52 @@ def test_groma_nastaveni_parametru(window):
         assert d2._prvky["duplicitni"].isChecked() and d2.tol_nazev.text().startswith("1 - Velmi")
     finally:
         N.nastav(puvodni)
+
+
+def test_cad_styl_kresleni_um(window, tmp_path):
+    """Styl kreslení jako v MultiScale: pás karet z Dgnlib/GUI (UM_ribbon.dgnlib) – tlačítko nastaví hladinu,
+    barvu, styl, tloušťku a spustí nástroj."""
+    from pathlib import Path
+
+    from kontrola.cad import ms_pas
+    from kontrola.cad import pracovni_sady as PS
+    pas = Path(__file__).resolve().parents[1] / "podklady" / "skola-ms" / "UM_ribbon.dgnlib"
+    if not pas.is_file():
+        return
+    p = ms_pas.nacti_pas(pas)
+    assert p is not None and p.nazev == "Účelová mapa (ÚM)" and p.pocet > 200
+    karty = [k for k, _s in p.karty]
+    assert "Hranice" in karty and "9. Výškopis" in karty and "10. Popis" in karty
+    nast, prik = ms_pas.preloz('active level "GS02-hranice-plochy zpevněné"; active color 0; active weight 0; '
+                               'active style 0; place line constrained')
+    assert nast == "lv=GS02-hranice-plochy zpevněné;co=0;wt=0;lc=0" and prik == ["polylinie"]
+    assert ms_pas.preloz("active cell 1.01; place cell icon")[1] == ["vlož"]
+    # pracovní sada s pásem → v CAD volba „Styl: Účelová mapa (ÚM)“ s kartami
+    import shutil
+    std = tmp_path / "WS" / "WorkSpaces" / "MS" / "WorkSets" / "MultiScale" / "Standards"
+    (std / "Dgnlib" / "GUI").mkdir(parents=True)
+    (std / "Cell").mkdir(parents=True)
+    shutil.copy(pas, std / "Dgnlib" / "GUI")
+    ucitel = Path(__file__).resolve().parents[1] / "podklady" / "ucitel-dalsi" / "NORMA.CEL"
+    if ucitel.is_file():
+        shutil.copy(ucitel, std / "Cell")
+    sady = PS.pridej_slozku(str(tmp_path / "WS"))
+    PS.nastav_aktivni(sady[0])
+    c = window.cad
+    window.show_page("cad")
+    try:
+        c.novy(seed="")
+        c.po_zmene_knihoven()
+        r = c.ribbon
+        assert r.styl_kresleni.count() == 2 and r.styl_kresleni.isVisibleTo(r)
+        pocet = r.karty.count()
+        r.nastav_styl(1)
+        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == p.karty[0][0]
+        c.ms_keyin('active level "GS02-hranice-plochy zpevněné"; active color 3; active weight 2; active style 0; '
+                   'place line constrained')
+        assert c.vrstvy.currentText() == "GS02-hranice-plochy zpevněné"
+        r.nastav_styl(0)
+        assert r.karty.count() == pocet
+    finally:
+        PS.nastav_aktivni(None)
+        PS.odeber_slozku(str(tmp_path / "WS"))
