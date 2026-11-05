@@ -3349,3 +3349,26 @@ def test_chyba_z_kontroly_do_cad(window):
     iss = Issue("x", "Test", list(Severity)[0], "chyba na čáře", 5.0, 0.0, handles=[h])
     ents = window.ukaz_v_cad(iss)
     assert len(ents) == 1 and c.vyber == ents and window.tabs.currentWidget() is c
+
+
+def test_cad_styly_car_z_rsc(window):
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QGraphicsPathItem
+    geo = Path(__file__).resolve().parents[1] / "podklady" / "ucitel-dalsi" / "GEO.RSC"
+    if not geo.is_file():
+        return
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.proved(f"styly čar {geo}")
+    assert "2.103 PLD VP" in c.styly_rsc()
+    for t in ("polylinie", "x=0 y=0", "x=40 y=0", "x=40 y=30", ""):
+        c.zadej(t)
+    c.proved("vše")
+    c.proved("styl 2.103")
+    pl = [e for e in c.dok.msp if e.dxftype() == "LWPOLYLINE"][-1]
+    assert pl.dxf.linetype == "2.103"
+    its = c._polozky.get(id(pl), [])
+    assert its and isinstance(its[0], QGraphicsPathItem) and its[0].path().elementCount() > 20
+    c.proved("styly čar odpoj")

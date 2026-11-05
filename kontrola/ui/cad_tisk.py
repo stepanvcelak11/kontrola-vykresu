@@ -79,14 +79,14 @@ class TiskDialog(QDialog):
         try:
             if self.arch is not None and self.oblast.currentIndex() == 2:
                 self.vysledek = T.tisk_archu(pg.dok.doc, pg.prostor, self.soubor.text(), self.arch,
-                                             nazev=pg.dok.path.stem if pg.dok.path else "")
+                                             nazev=pg.dok.path.stem if pg.dok.path else "", styly=pg.styly_rsc())
                 pg.vypis(f"Vytištěno do PDF: {self.soubor.text()} (arch {self.arch.popis()})")
                 self.accept()
                 return
             self.vysledek = T.tisk_pdf(pg.dok.doc, pg.prostor, self.soubor.text(), papir=self.papir.currentText(),
                                        na_sirku=self.orientace.currentIndex() == 0,
                                        meritko=float(self.meritko.value()) or None, oblast=oblast,
-                                       nazev=pg.dok.path.stem if pg.dok.path else "")
+                                       nazev=pg.dok.path.stem if pg.dok.path else "", styly=pg.styly_rsc())
         except (ValueError, OSError) as e:
             QMessageBox.warning(self, "Tisk", str(e))
             return

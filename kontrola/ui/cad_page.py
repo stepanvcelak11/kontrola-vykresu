@@ -427,6 +427,9 @@ class CadPage(QWidget):
         "text po prvku": "text podél čáry (název ulice, vodního toku) natočený po směru čáry, čitelně",
         "buňky po prvku": "buňky po čáře v dané vzdálenosti, natočené po směru (stromořadí, značky hranice)",
         "vzorek": "vzorek plochy (Pattern Area): uzavřenou plochu vyplní buňkami – značky kultur do sponu",
+        "styl": "styl čáry nových / vybraných prvků: 0–7, kód stylu z knihovny („styl 2.103“), „styl dle“ = dle hladiny",
+        "tloušťka": "tloušťka (wt 0–31) nových / vybraných prvků, „tloušťka dle“ = dle hladiny",
+        "styly čar": "styly čar MicroStationu z knihovny .rsc (ploty, hranice…): seznam, „styly čar připoj“",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
         "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, natočení, tisk do PDF („arch A3 1000“, "
                 "„arch otoč 30“, „arch smaž“)",
@@ -1358,6 +1361,21 @@ class CadPage(QWidget):
             vzory += [a.path for a in pr.attachments() if a.path.suffix.lower() in (".cel", ".lin")
                       and a.kind != "vzor"]  # knihovna buněk a styly čar od učitele
         dok, zprava = novy_dokument(rs, vzory)
+        styly = self.styly_rsc()
+        if styly:  # styly čar ze zadání, které jsou v knihovně .rsc → typy čar ve výkresu (kreslí se složkami)
+            import re as _re
+
+            from ..io.rsc import najdi
+            pridane = 0
+            for r in rs.pravidla:
+                for kod in _re.split(r"[|,]", str(r.styl_cary or "")):
+                    kod = kod.strip()
+                    st = najdi(styly, kod) if _re.match(r"^\d+\.\d", kod) else None
+                    if st is not None and kod not in dok.doc.linetypes:
+                        dok.doc.linetypes.add(kod, pattern=[0.0], description=st.nazev)
+                        pridane += 1
+            if pridane:
+                zprava.append(f"styly čar z knihovny .rsc: {pridane}")
         self.nastav_dokument(dok)
         self.sjtsk = rs.rozsah == "sjtsk" or rs.rozsah is None
         self.obnov_predvolby()
@@ -1772,6 +1790,66 @@ class CadPage(QWidget):
             e = stack[0] if stack else it.data(CorrespondingDXFEntity)
             if e is not None:
                 self._polozky.setdefault(id(e), []).append(it)
+        styly = self.styly_rsc()
+        if styly:
+            from ..cad.styly_rsc import nahrad_v_scene
+            prvky = list(self.prostor) if cely else list(entity if isinstance(entity, (list, tuple)) else [entity])
+            nahrad_v_scene(sc, styly, self._polozky, prvky)
+
+    # ------------------------------------------------------------ styly čar MicroStationu (.rsc)
+    def soubory_rsc(self) -> list:
+        out = []
+        pr = getattr(self.win, "project", None) if self.win is not None else None
+        if pr is not None:
+            try:
+                out += [a.path for a in pr.attachments() if a.path.suffix.lower() == ".rsc"]
+            except Exception:  # noqa: BLE001
+                pass
+        from PySide6.QtCore import QSettings
+        ulozene = QSettings().value("cad/rsc", []) or []
+        if isinstance(ulozene, str):
+            ulozene = [ulozene]
+        return out + [Path(x) for x in ulozene]
+
+    def styly_rsc(self) -> dict:
+        from ..cad.styly_rsc import nacti
+        return nacti(self.soubory_rsc())
+
+    def _styly_car(self, arg: str):
+        """„styly čar“ = seznam stylů z knihoven .rsc; „styly čar soubor.rsc“ / bez souboru dialog = připojit."""
+        from PySide6.QtCore import QSettings
+        a = arg.strip()
+        if a.lower() in ("připoj", "pripoj", "načti", "nacti") or (a and Path(a).suffix.lower() == ".rsc"):
+            cesta = a if Path(a).suffix.lower() == ".rsc" else None
+            if cesta is None:
+                cesta, _ = QFileDialog.getOpenFileName(self, "Knihovna stylů čar MicroStationu", "",
+                                                       "Styly čar (*.rsc)")
+            if not cesta:
+                return
+            from ..io.rsc import RscError, nacti_rsc
+            try:
+                n = len(nacti_rsc(cesta))
+            except (RscError, OSError) as e:
+                self.vypis(f"⚠ {e}")
+                return
+            ulozene = [x for x in (QSettings().value("cad/rsc", []) or []) if x != str(cesta)]
+            QSettings().setValue("cad/rsc", ulozene + [str(cesta)])
+            self.vypis(f"Připojena knihovna stylů čar {Path(cesta).name}: {n} stylů.")
+            if self.dok is not None:
+                self._vykresli()
+            return
+        if a.lower() in ("odpoj", "zrus", "zruš"):
+            QSettings().setValue("cad/rsc", [])
+            self.vypis("Knihovny stylů čar odpojeny (zůstávají ty ze Zadání → Podklady).")
+            if self.dok is not None:
+                self._vykresli()
+            return
+        st = self.styly_rsc()
+        if not st:
+            self.vypis("Žádná knihovna stylů čar (.rsc) – „styly čar připoj“ nebo nahrajte .rsc do Zadání → Podklady.")
+            return
+        self.vypis(f"Styly čar ({len(st)}): " + ", ".join(list(st)[:80]) + (" …" if len(st) > 80 else "")
+                   + "\nStyl prvku nastavíte „styl 2.103“ (stačí číslo značky).")
 
     def _obnov_indexy(self, pridano=None, odebrano=()):
         """Úchyty a index výběru. Po běžné úpravě (``pridano``/``odebrano``) se index výběru jen doplní –
@@ -2552,6 +2630,8 @@ class CadPage(QWidget):
             self.atributy_zadani()
         elif cmd == "pohled":
             self._pohled(arg)
+        elif cmd == "styly čar":
+            self._styly_car(arg)
         elif cmd == "písmo":
             self._pismo(arg)
         elif cmd == "arch":
@@ -2682,7 +2762,13 @@ class CadPage(QWidget):
                 if hodnota.startswith("DGN Style"):
                     S.zajisti_styly(self.dok.doc)
                 if hodnota not in ("BYLAYER", "CONTINUOUS") and hodnota not in self.dok.doc.linetypes:
-                    raise KeyError(hodnota)
+                    from ..io.rsc import najdi
+                    st = najdi(self.styly_rsc(), a)
+                    if st is None:
+                        raise KeyError(hodnota)
+                    hodnota = a  # styl z knihovny .rsc – v DXF jako typ čáry stejného jména, kreslí se složkami
+                    if hodnota not in self.dok.doc.linetypes:
+                        self.dok.doc.linetypes.add(hodnota, pattern=[0.0], description=st.nazev)
                 attr = {"linetype": hodnota}
             else:
                 if not a:

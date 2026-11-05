@@ -9,6 +9,10 @@ KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
     (9, "6. listopadu 2026", [
+        "<b>Styly čar MicroStationu (.rsc)</b>: CAD čte knihovny stylů od učitele (GEO.RSC, UGEO_VP.RSC – ploty, "
+        "zdi, hranice, čárkované čáry…) a kreslí je stejně jako MicroStation – zuby plotů, symboly i čárky po "
+        "rozteči, i v tisku do PDF. Knihovnu stačí nahrát do Zadání → Podklady, nebo „styly čar připoj“; styl prvku "
+        "„styl 2.103“ (stačí číslo značky). Opraveno: příkazy „styl“ a „tloušťka“ z příkazového řádku.",
         "<b>Arch (papír) v CAD</b>: příkaz „arch“ (nebo tlačítko v paletě Zobrazení) položí pod výkres papír "
         "zvolené velikosti (A4–A0 i vlastní rozměr) v měřítku, myší ho posunete kam potřebujete a Tisk do PDF "
         "vytiskne přesně to, co je na papíře. Arch jde i natočit („arch otoč 30“ nebo dvěma body podle "

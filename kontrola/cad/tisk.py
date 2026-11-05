@@ -18,7 +18,7 @@ def rozmer_papiru(papir: str, na_sirku: bool = True) -> tuple[float, float]:
     return (w, h) if na_sirku else (h, w)
 
 
-def _scena(doc, layout):
+def _scena(doc, layout, styly: dict | None = None):
     from ezdxf.addons.drawing import Frontend, RenderContext
     from ezdxf.addons.drawing.config import BackgroundPolicy, ColorPolicy, Configuration
     from ezdxf.addons.drawing.pyqt import PyQtBackend
@@ -28,6 +28,9 @@ def _scena(doc, layout):
     ctx.set_current_layout(layout)
     cfg = Configuration(background_policy=BackgroundPolicy.WHITE, color_policy=ColorPolicy.COLOR)  # bílá → černá
     Frontend(ctx, PyQtBackend(sc), config=cfg).draw_layout(layout, finalize=True)
+    if styly:
+        from .styly_rsc import nahrad_v_scene
+        nahrad_v_scene(sc, styly)
     return sc
 
 
@@ -44,7 +47,8 @@ def automaticke_meritko(oblast, papir_mm, okraj: float = 10.0) -> float:
 
 
 def tisk_pdf(doc, layout, cesta, papir: str = "A3", na_sirku: bool = True, meritko: float | None = None,
-             oblast: tuple[float, float, float, float] | None = None, nazev: str = "") -> dict:
+             oblast: tuple[float, float, float, float] | None = None, nazev: str = "",
+             styly: dict | None = None) -> dict:
     """Vytiskne model (v měřítku 1:N, jednotky m) nebo list (1:1, jednotky mm) do PDF.
 
     Vrací {papir, meritko, oblast}. U modelu bez měřítka se zvolí nejbližší kulaté, aby se vešel."""
@@ -74,7 +78,7 @@ def tisk_pdf(doc, layout, cesta, papir: str = "A3", na_sirku: bool = True, merit
             x0, y0 = 0.0, 0.0
         zdroj = QRectF(float(x0), float(y0), pw, ph)
         meritko = 1.0
-    sc = _scena(doc, layout)
+    sc = _scena(doc, layout, styly)
     cesta = Path(cesta)
     cesta.parent.mkdir(parents=True, exist_ok=True)
     w = QPdfWriter(str(cesta))
@@ -274,16 +278,17 @@ def uloz_arch(doc, a: Arch | None) -> None:
             d.add_dict_var(k, v)
 
 
-def tisk_archu(doc, layout, cesta, a: Arch, nazev: str = "") -> dict:
+def tisk_archu(doc, layout, cesta, a: Arch, nazev: str = "", styly: dict | None = None) -> dict:
     """Vytiskne přesně to, co leží na archu (papír v modelu), v měřítku archu – i natočený arch."""
     if abs(a.natoceni) < 1e-12:
         x0, y0, x1, y1 = a.obdelnik()
-        return _tisk_oblasti(doc, layout, cesta, a.sirka, a.vyska, a.meritko, (x0, y0, x1 - x0, y1 - y0), nazev)
+        return _tisk_oblasti(doc, layout, cesta, a.sirka, a.vyska, a.meritko, (x0, y0, x1 - x0, y1 - y0), nazev,
+                             styly)
     from PySide6.QtCore import QMarginsF, QRectF, QSizeF, Qt
     from PySide6.QtGui import QPageLayout, QPageSize, QPainter, QPdfWriter
     x0, y0, x1, y1 = a.obdelnik()
     src = QRectF(x0, y0, x1 - x0, y1 - y0)
-    sc = _scena(doc, layout)
+    sc = _scena(doc, layout, styly)
     cesta = Path(cesta)
     cesta.parent.mkdir(parents=True, exist_ok=True)
     w = QPdfWriter(str(cesta))
@@ -315,11 +320,11 @@ def transformace_archu(a: Arch, k: float, vyska_px: float):
     return QTransform(c, -s_, -s_, -c, -c * a.x + s_ * a.y, vyska_px + s_ * a.x + c * a.y)
 
 
-def _tisk_oblasti(doc, layout, cesta, pw, ph, meritko, rect, nazev) -> dict:
+def _tisk_oblasti(doc, layout, cesta, pw, ph, meritko, rect, nazev, styly=None) -> dict:
     from PySide6.QtCore import QMarginsF, QRectF, QSizeF, Qt
     from PySide6.QtGui import QPageLayout, QPageSize, QPainter, QPdfWriter
     zdroj = QRectF(*rect)
-    sc = _scena(doc, layout)
+    sc = _scena(doc, layout, styly)
     cesta = Path(cesta)
     cesta.parent.mkdir(parents=True, exist_ok=True)
     w = QPdfWriter(str(cesta))
