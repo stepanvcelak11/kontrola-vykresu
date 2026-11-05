@@ -3451,12 +3451,13 @@ def test_vypocty_rozvrzeni_jako_groma(window):
     """Výpočty jako Groma 14: menu Výpočty otevře výpočetní okno s úlohou, Najít bod vybere bod."""
     from kontrola.geodezie.body import Bod
     v = window.vypocty
-    titulky = [a.text().replace("&", "") for a in v.menu.actions()]
-    assert titulky[:6] == ["Soubor", "Editace", "Souřadnice", "Měření", "Výpočty", "Okno"]
+    titulky = [v.menu.karty.tabText(i) for i in range(v.menu.karty.count())]
+    assert titulky == ["Soubor", "Protokol", "Výpočty"] and v.menu.karty.currentIndex() == 2
+    from kontrola.geodezie.ulohy import ULOHY
+    assert v.menu.ulohy_v_pasu == {n for n, *_x in ULOHY}
     v.seznam.body[:] = [Bod("1", 1000.0, 2000.0), Bod("25", 1100.0, 2000.0)]
     v._refresh()
-    polar = next(a for a in v.menu_vypocty.actions() if a.text().startswith("Polární metoda"))
-    polar.trigger()
+    v.menu.akce["Výpočty/Podrobné/Polární"].trigger()
     assert v.tabs.currentWidget() is v.ulohy and not v.tabs.okno(v.ulohy).isHidden()
     assert v.ulohy.lst.currentItem().text() == "Rajón (polární bod)"
     v.lista.najit.setText("25")

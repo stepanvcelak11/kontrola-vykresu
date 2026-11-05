@@ -12,42 +12,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit, QMdiArea,
-                               QMdiSubWindow, QMenu, QMenuBar, QPlainTextEdit, QWidget)
-
-# Menu Výpočty v pořadí z Gromy (kap. 28) → názvy úloh v ULOHY; podnabídka = n-tice (titul, [úlohy])
-MENU_VYPOCTY = [
-    ("Polární metoda", "Rajón (polární bod)"),
-    ("Ortogonální metoda", "Ortogonální metoda"),
-    ("Volné stanovisko", "Volné stanovisko"),
-    None,
-    ("Protínání z délek", "Protínání z délek"),
-    ("Protínání z orientovaných směrů", "Protínání vpřed ze směrů"),
-    ("Protínání vpřed z úhlů", "Protínání vpřed z úhlů"),
-    ("Protínání zpět", "Protínání zpět"),
-    ("Průsečík přímek", "Průsečíky"),
-    ("Bod na přímce", "Bod na přímce"),
-    ("Kružnice ze tří bodů", "Kružnice ze tří bodů"),
-    None,
-    ("Polygonový pořad", ["Polygonový pořad", "Polygonový pořad uzavřený", "Polygonový pořad volný",
-                          "Polygonový pořad jednostranně orientovaný", "Polygonový pořad vetknutý"]),
-    ("Výškový pořad", ["Nivelační pořad", "Nivelační zápisník", "Vyrovnání nivelační sítě",
-                       "Trigonometrická výška", "Trigonometrická výška oboustranně"]),
-    ("Transformace souřadnic", "Transformace"),
-    None,
-    ("Směrník a délka", "Směrník a délka"),
-    ("Úhel ze souřadnic", "Úhel ze souřadnic"),
-    ("Kontrolní oměrné", "Kontrolní oměrné míry"),
-    ("Výpočet výměr", ["Výměra a obvod", "Výměry parcel dávkou", "Výměra z měr", "Výkaz výměr GP",
-                       "Oddělení parcely"]),
-    ("Polární vytyčovací prvky", "Vytyčovací prvky"),
-    ("Ortogonální vytyčovací prvky", ["Staničení a kolmice", "Bod ze staničení a kolmice"]),
-    ("Rozložení oblouku", "Kružnicový oblouk"),
-    ("Kubatury", "Model terénu a kubatura"),
-    None,
-    ("Testování přesnosti", ["Kontrola dvou určení", "Testování přesnosti ÚM – body",
-                             "Testování přesnosti ÚM – délky"]),
-]
-
+                               QMdiSubWindow, QMenu, QPlainTextEdit, QWidget)
 
 class _DatoveOkno(QMdiSubWindow):
     """Datové okno: křížek okno jen schová (obsah i stav zůstanou), znovu se otevře z menu Okno."""
@@ -171,9 +136,9 @@ class DatovaOkna(QMdiArea):
 
     def showEvent(self, e):  # noqa: N802
         super().showEvent(e)
-        if not self._rozvrzeno:  # první zobrazení: viditelná okna vedle sebe (rozměr plochy už je známý)
+        if not self._rozvrzeno:  # první zobrazení: okna pod sebou jako v Gromě (rozměr plochy už je známý)
             self._rozvrzeno = True
-            self.mozaika_svisle()
+            self.mozaika_vodorovne()
 
 
 class OknoProtokolu(QPlainTextEdit):
@@ -287,91 +252,173 @@ class ListaNastaveni(QWidget):
         uloz(n)
 
 
-def postav_menu(page) -> QMenuBar:
-    """Roletové menu Výpočtů s názvy z Gromy; položky volají existující funkce stránky."""
-    mb = QMenuBar()
-    mb.setNativeMenuBar(False)
-    o = page.tabs
-    ul = page.ulohy
+# Pás karet jako v Gromě 14 (screenshoty G01–G06): karta → skupiny → tlačítka.
+# Tlačítko: (text, cíl) – cíl je název úlohy z ULOHY, seznam názvů (rozbalovací nabídka), nebo „@funkce“ stránky.
+KARTY_GROMA = [
+    ("Soubor", [
+        ("Soubor", [("Import souřadnic…", "@import_dialog"), ("Export souřadnic…", "@export_dialog"),
+                    ("Načíst z QTrig…", "@qtrig_dialog")]),
+        ("Editace", [("Krok zpět", "@undo"), ("Krok vpřed", "@redo"), ("Odstranit", "@delete_selected")]),
+        ("Seznam", [("Přidej bod…", "@add_point"), ("Hromadné změny…", "@bulk_dialog"),
+                    ("Porovnání souřadnic…", "@porovnat_seznam"), ("Identické body…", "@duplicates_dialog")]),
+        ("Kódování", [("Kresba z kódů…", "@kresba_z_kodu"), ("Kódovací tabulka…", "@otevri_kodovnik")]),
+        ("Nastavení", [("Nastavení…", "@_nastaveni")]),
+        ("Pohledy", [("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
+                     ("Kaskáda", "@_kaskada"), ("Okna", "@okna")]),
+    ]),
+    ("Protokol", [
+        ("Protokol", [("Zobrazit", "@_protokol"), ("Uložit do PDF…", "@_protokol_pdf")]),
+        ("Měření", [("Seznam měření", "@_zapisnik"), ("Zpracování zápisníku…", "@_zpracovani")]),
+    ]),
+    ("Výpočty", [
+        ("Podrobné", [("Polární", "Rajón (polární bod)"), ("Polární dávkou", "@_zpracovani"),
+                      ("Ortogonální", "Ortogonální metoda")]),
+        ("Protínání", [("Ze směrů", "Protínání vpřed ze směrů"), ("Z úhlů", "Protínání vpřed z úhlů"),
+                       ("Z délek", "Protínání z délek"), ("Zpět", "Protínání zpět")]),
+        ("Průsečíky", [("Přímka - přímka", "Průsečíky"), ("Bod na přímce", "Bod na přímce"),
+                       ("Kružnice ze 3 bodů", "Kružnice ze tří bodů")]),
+        ("Oměrné", [("Kontrolní", "Kontrolní oměrné míry"), ("Výměra z měr", "Výměra z měr")]),
+        ("Bodové pole", [("Volné stanovisko", "Volné stanovisko"),
+                         ("Polygonový pořad", ["Polygonový pořad", "Polygonový pořad uzavřený",
+                                               "Polygonový pořad volný", "Polygonový pořad jednostranně orientovaný",
+                                               "Polygonový pořad vetknutý"]),
+                         ("Transformace", "Transformace")]),
+        ("Výšky", [("Trigonometrická výška", ["Trigonometrická výška", "Trigonometrická výška oboustranně"]),
+                   ("Výškový pořad", ["Nivelační pořad", "Nivelační zápisník", "Vyrovnání nivelační sítě"]),
+                   ("Redukce délky", "Redukce délky")]),
+        ("Měření", [("Směrník a délka", "Směrník a délka"), ("Úhel", "Úhel ze souřadnic"),
+                    ("Výměry", ["Výměra a obvod", "Výměry parcel dávkou", "Výkaz výměr GP", "Oddělení parcely"]),
+                    ("Kubatury", "Model terénu a kubatura")]),
+        ("Vytyčovací prvky", [("Polární", "Vytyčovací prvky"),
+                              ("Ortogonální", ["Staničení a kolmice", "Bod ze staničení a kolmice"])]),
+        ("Speciální", [("Rozložení oblouku", "Kružnicový oblouk"), ("Centrace", "Centrace směrů"),
+                       ("Křovák (WGS84)", "Převod S-JTSK ↔ WGS84"), ("Převod úhlů", "Převod úhlů"),
+                       ("Testování přesnosti", ["Kontrola dvou určení", "Testování přesnosti ÚM – body",
+                                                "Testování přesnosti ÚM – délky"])]),
+    ]),
+]
 
-    def akce(menu: QMenu, text: str, fn, zkratka: str | None = None):
-        a = menu.addAction(text)
-        a.triggered.connect(lambda _c=False: fn())
-        if zkratka:
-            a.setShortcut(zkratka)
-            a.setShortcutContext(Qt.WidgetWithChildrenShortcut)
-            page.addAction(a)
-        return a
 
-    m = mb.addMenu("&Soubor")
-    akce(m, "Import seznamu souřadnic…", page.import_dialog)
-    akce(m, "Export seznamu souřadnic…", page.export_dialog)
-    akce(m, "Načíst z QTrig…", page.qtrig_dialog)
-    m.addSeparator()
-    akce(m, "Protokol do PDF…", ul.protokol_pdf)
-    m.addSeparator()
-    akce(m, "Nastavení…", lambda: (ul.nastaveni_vypoctu(), page.lista.nacti()))
+class PasGromy(QWidget):
+    """Pás karet Výpočtů (Soubor, Protokol, Výpočty) – rozložení skupin a názvy tlačítek jako v Gromě 14."""
 
-    m = mb.addMenu("&Editace")
-    page.a_zpet = akce(m, "Krok zpět", page.undo)
-    page.a_vpred = akce(m, "Krok vpřed", page.redo)
-    m.addSeparator()
-    akce(m, "Vymaž", page.delete_selected)
+    def __init__(self, page, parent=None):
+        super().__init__(parent)
+        from PySide6.QtGui import QAction
+        from PySide6.QtWidgets import (QFrame, QGridLayout, QScrollArea, QStackedWidget, QTabBar, QToolButton,
+                                       QVBoxLayout)
+        self.page = page
+        self.akce: dict[str, QAction] = {}  # „Karta/Skupina/Text“ → akce (i položky rozbalovacích nabídek)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        self.karty = QTabBar()
+        self.karty.setDrawBase(False)
+        self.karty.setExpanding(False)
+        lay.addWidget(self.karty)
+        self.stack = QStackedWidget()
+        lay.addWidget(self.stack)
+        jmena = {n: i for i, (n, _p, _f, _fn) in enumerate(_ulohy())}
+        pouzite = {n for _k, sk in KARTY_GROMA for _s, tl in sk for _t, c in tl
+                   for n in (c if isinstance(c, list) else [c])}
+        zbytek = [n for n in jmena if n not in pouzite]
+        self.ulohy_v_pasu = (pouzite | set(zbytek)) & set(jmena)  # všechny úlohy jsou dostupné z pásu
+        karty = [(k, sk + ([("Další", [("Další výpočty", zbytek)])] if k == "Výpočty" and zbytek else []))
+                 for k, sk in KARTY_GROMA]
+        for karta, skupiny in karty:
+            self.karty.addTab(karta)
+            obsah = QWidget()
+            h = QHBoxLayout(obsah)
+            h.setContentsMargins(4, 2, 4, 0)
+            h.setSpacing(2)
+            for skupina, tlacitka in skupiny:
+                box = QWidget()
+                v = QVBoxLayout(box)
+                v.setContentsMargins(2, 0, 2, 0)
+                v.setSpacing(0)
+                g = QGridLayout()
+                g.setSpacing(0)
+                for k, (text, cil) in enumerate(tlacitka):
+                    b = QToolButton()
+                    b.setAutoRaise(True)
+                    b.setToolButtonStyle(Qt.ToolButtonTextOnly)
+                    klic = f"{karta}/{skupina}/{text}"
+                    if isinstance(cil, list):
+                        b.setText(text + " ▾")
+                        b.setPopupMode(QToolButton.InstantPopup)
+                        m = QMenu(b)
+                        for n in cil:
+                            if n in jmena:
+                                a = m.addAction(n)
+                                a.triggered.connect(lambda _c=False, i=jmena[n]: otevri_ulohu(page, i))
+                                self.akce[f"{klic}/{n}"] = a
+                        b.setMenu(m)
+                    else:
+                        a = QAction(text, b)
+                        fn = self._funkce(cil, jmena)
+                        if fn is None:
+                            continue
+                        a.triggered.connect(lambda _c=False, f=fn: f())
+                        b.setDefaultAction(a)
+                        self.akce[klic] = a
+                    g.addWidget(b, k % 3, k // 3)
+                v.addLayout(g)
+                v.addStretch(1)
+                lbl = QLabel(skupina)
+                lbl.setAlignment(Qt.AlignCenter)
+                lbl.setStyleSheet("color: gray; font-size: 8pt;")
+                v.addWidget(lbl)
+                h.addWidget(box)
+                sep = QFrame()
+                sep.setFrameShape(QFrame.VLine)
+                sep.setStyleSheet("color: #d0d0d0;")
+                h.addWidget(sep)
+            h.addStretch(1)
+            sc = QScrollArea()
+            sc.setWidget(obsah)
+            sc.setWidgetResizable(True)
+            sc.setFrameShape(QFrame.NoFrame)
+            sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            sc.setFixedHeight(obsah.sizeHint().height() + 14)
+            self.stack.addWidget(sc)
+        self.karty.currentChanged.connect(self.stack.setCurrentIndex)
+        i = [k for k, _s in KARTY_GROMA].index("Výpočty")
+        self.karty.setCurrentIndex(i)
+        self.stack.setCurrentIndex(i)
 
-    m = mb.addMenu("S&ouřadnice")
-    akce(m, "Přidej položku…", page.add_point)
-    akce(m, "Hromadné změny…", page.bulk_dialog)
-    m.addSeparator()
-    akce(m, "Zobrazit graficky", lambda: o.otevri(page.grafika))
-    akce(m, "Porovnání souřadnic…", page.porovnat_seznam)
-    akce(m, "Vyhledání identických bodů…", page.duplicates_dialog)
-    m.addSeparator()
-    akce(m, "Kresba z kódů…", page.kresba_z_kodu)
-    akce(m, "Kódovací tabulka…", page.otevri_kodovnik)
+    def _funkce(self, cil: str, jmena: dict):
+        p, o = self.page, self.page.tabs
+        if not cil.startswith("@"):
+            return (lambda i=jmena[cil]: otevri_ulohu(p, i)) if cil in jmena else None
+        vlastni = {
+            "@_nastaveni": lambda: (p.ulohy.nastaveni_vypoctu(), p.lista.nacti()),
+            "@_mozaika_h": o.mozaika_vodorovne, "@_mozaika_v": o.mozaika_svisle, "@_kaskada": o.cascadeSubWindows,
+            "@okna": lambda: self._menu_oken(), "@_protokol": lambda: o.otevri(p.protokol),
+            "@_protokol_pdf": p.ulohy.protokol_pdf, "@_zapisnik": lambda: o.otevri(p.zapisnik),
+            "@_zpracovani": lambda: getattr(p.win, "show_vypocet", lambda: None)(),
+        }
+        return vlastni.get(cil) or getattr(p, cil[1:], None)
 
-    m = mb.addMenu("&Měření")
-    akce(m, "Seznam měření (zápisník)", lambda: o.otevri(page.zapisnik))
-    akce(m, "Zpracování zápisníku…", lambda: getattr(page.win, "show_vypocet", lambda: None)())
+    def _menu_oken(self) -> QMenu:
+        p, o = self.page, self.page.tabs
+        from PySide6.QtGui import QCursor
+        m = QMenu(self)
+        for w, t in ((p.seznam_okno, "Seznam souřadnic"), (p.zapisnik, "Seznam měření"), (p.grafika, "Grafika"),
+                     (p.protokol, "Protokol"), (p.ulohy, "Výpočetní okno")):
+            m.addAction(t).triggered.connect(lambda _c=False, w=w: o.otevri(w))
+        m.addSeparator()
+        m.addAction("Srovnání ikon").triggered.connect(o.srovnej_ikony)
+        m.addAction("Zavři aktivní okno").triggered.connect(o.zavri_aktivni)
+        if p.isVisible():
+            m.popup(QCursor.pos())
+        return m
 
-    m = mb.addMenu("&Výpočty")
-    jmena = {n: i for i, (n, _p, _f, _fn) in enumerate(_ulohy())}
-    pouzite: set[str] = set()
 
-    def uloha(menu: QMenu, text: str, nazev: str):
-        if nazev in jmena:
-            pouzite.add(nazev)
-            akce(menu, text + "…", lambda i=jmena[nazev]: otevri_ulohu(page, i))
-
-    for polozka in MENU_VYPOCTY:
-        if polozka is None:
-            m.addSeparator()
-            continue
-        text, cil = polozka
-        if isinstance(cil, list):
-            sub = m.addMenu(text)
-            for n in cil:
-                uloha(sub, n, n)
-        else:
-            uloha(m, text, cil)
-    zbytek = [n for n in jmena if n not in pouzite]
-    if zbytek:
-        sub = m.addMenu("Další výpočty")
-        for n in zbytek:
-            uloha(sub, n, n)
-    page.menu_vypocty = m
-
-    m = mb.addMenu("O&kno")
-    for w, t in ((page.seznam_okno, "Seznam souřadnic"), (page.zapisnik, "Seznam měření"),
-                 (page.grafika, "Grafika"), (page.protokol, "Protokol"), (page.ulohy, "Výpočetní okno")):
-        akce(m, t, lambda w=w: o.otevri(w))
-    m.addSeparator()
-    akce(m, "Mozaika horizontálně", o.mozaika_vodorovne)
-    akce(m, "Mozaika vertikálně", o.mozaika_svisle)
-    akce(m, "Kaskáda", o.cascadeSubWindows)
-    akce(m, "Srovnání ikon", o.srovnej_ikony)
-    m.addSeparator()
-    akce(m, "Zavři", o.zavri_aktivni)
-    return mb
+def postav_menu(page) -> PasGromy:
+    pas = PasGromy(page)
+    page.a_zpet = pas.akce.get("Soubor/Editace/Krok zpět")
+    page.a_vpred = pas.akce.get("Soubor/Editace/Krok vpřed")
+    return pas
 
 
 def _ulohy():

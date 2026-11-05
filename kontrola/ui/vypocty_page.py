@@ -400,20 +400,21 @@ class VypoctyPage(QWidget):
         self.msg = QLabel()
         self.msg.setWordWrap(True)
         lay.addWidget(self.msg)
+        # jako v Gromě: protokol, souřadnice a měření pod sebou; grafika a výpočetní okno na vyžádání
+        self.protokol = OknoProtokolu()
+        self.tabs.addTab(self.protokol, "Protokol")
         self.seznam_okno = seznam_w
         self.tabs.addTab(seznam_w, "Seznam souřadnic")
-        from .grafika_bodu import GrafikaBodu
-        self.grafika = GrafikaBodu(self)
-        self.tabs.addTab(self.grafika, "Grafika")
-        self.grafika.vybrano.connect(self._vyber_z_grafiky)
         from .zapisnik_page import ZapisnikPanel
         self.zapisnik = ZapisnikPanel(self)
-        self.tabs.addTab(self.zapisnik, "Seznam měření (zápisník)", viditelne=False)
+        self.tabs.addTab(self.zapisnik, "Seznam měření (zápisník)")
+        from .grafika_bodu import GrafikaBodu
+        self.grafika = GrafikaBodu(self)
+        self.tabs.addTab(self.grafika, "Grafika", viditelne=False)
+        self.grafika.vybrano.connect(self._vyber_z_grafiky)
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)
         self.tabs.addTab(self.ulohy, "Výpočetní okno", viditelne=False)
-        self.protokol = OknoProtokolu()
-        self.tabs.addTab(self.protokol, "Protokol", viditelne=False)
         self.menu = postav_menu(self)
         outer.insertWidget(0, self.menu)
         # stavový řádek: aktivní seznam, počet položek, počet označených
