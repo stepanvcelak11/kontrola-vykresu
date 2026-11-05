@@ -421,11 +421,13 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "popis souřadnic": "popis souřadnic Y, X bodu s odkazovou čarou (vytyčovací výkresy)",
         "text po prvku": "text podél čáry (název ulice, vodního toku) natočený po směru čáry, čitelně",
         "buňky po prvku": "buňky po čáře v dané vzdálenosti, natočené po směru (stromořadí, značky hranice)",
         "vzorek": "vzorek plochy (Pattern Area): uzavřenou plochu vyplní buňkami – značky kultur do sponu",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
-        "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, tisk do PDF („arch A3 1000“, „arch smaž“)",
+        "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, natočení, tisk do PDF („arch A3 1000“, "
+                "„arch otoč 30“, „arch smaž“)",
         "pohled": "uložené pohledy (Saved Views): „pohled ulož Náměstí“, „pohled Náměstí“, „pohled“ = seznam",
         "nahraď buňku": "nahradit vybrané buňky jinou buňkou – stejný bod, natočení a měřítko (Replace Cell)",
         "zvyš text": "kopírovat text se zvýšeným číslem kliknutím (Copy and Increment Text – čísla bodů)",
@@ -485,6 +487,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "popis souradnic": "popis souřadnic", "souřadnice bodu": "popis souřadnic", "id coordinates": "popis souřadnic",
         "text along": "text po prvku", "place text along": "text po prvku", "popis čáry": "text po prvku",
         "bunky po prvku": "buňky po prvku", "stromořadí": "buňky po prvku", "stromoradi": "buňky po prvku",
         "cells along": "buňky po prvku", "pattern": "vzorek", "pattern area": "vzorek", "patt": "vzorek", "vzorkování": "vzorek",
@@ -1516,11 +1519,10 @@ class CadPage(QWidget):
         a = T.nacti_arch(self.dok.doc)
         if a is None:
             return
+        from PySide6.QtGui import QPolygonF
         sc = self.view.scene()
-        x0, y0, x1, y1 = a.obdelnik()
-        o = 10.0 * a.meritko / 1000.0
-        r1 = sc.addRect(QRectF(x0, y0, x1 - x0, y1 - y0), QPen(QColor("#F59E0B"), 0))
-        r2 = sc.addRect(QRectF(x0 + o, y0 + o, x1 - x0 - 2 * o, y1 - y0 - 2 * o), QPen(QColor("#F59E0B"), 0, Qt.DotLine))
+        r1 = sc.addPolygon(QPolygonF([QPointF(*b) for b in a.rohy()]), QPen(QColor("#F59E0B"), 0))
+        r2 = sc.addPolygon(QPolygonF([QPointF(*b) for b in a.rohy(10.0)]), QPen(QColor("#F59E0B"), 0, Qt.DotLine))
         for r in (r1, r2):
             r.setZValue(60)
         self._arch_polozky = [r1, r2]
@@ -1545,6 +1547,23 @@ class CadPage(QWidget):
         if slova and slova[0].lower() in ("tisk", "pdf"):
             self.tisk_pdf()
             return
+        if a is not None and slova and slova[0].lower() in ("otoč", "otoc", "natoč", "natoc", "rotate"):
+            if len(slova) > 1:
+                try:
+                    uhel = float(slova[1].replace(",", "."))
+                except ValueError:
+                    self.vypis("Natočení zadejte ve stupních, např. „arch otoč 30“.")
+                    return
+            else:
+                p1 = yield self._bod_req("Natočení archu – první bod směru (spodní hrana papíru):")
+                p2 = yield self._bod_req("Druhý bod směru:", p1)
+                uhel = math.degrees(math.atan2(p2[1] - p1[1], p2[0] - p1[0]))
+            a.otoc(uhel)
+            T.uloz_arch(self.dok.doc, a)
+            self.dok.zmeneno = True
+            self._kresli_arch()
+            self.vypis(f"Arch {a.popis()}.")
+            return
         if a is None or (slova and slova[0].lower() not in ("posun", "posuň")):
             text = arg.strip()
             if not text:
@@ -1560,7 +1579,7 @@ class CadPage(QWidget):
                 self.vypis("Měřítko musí být kladné.")
                 return
             stary = a
-            a = T.Arch(nazev, w, h, meritko)
+            a = T.Arch(nazev, w, h, meritko, natoceni=stary.natoceni if stary is not None else 0.0)
             if stary is not None:
                 cx, cy = (stary.obdelnik()[0] + stary.obdelnik()[2]) / 2, (stary.obdelnik()[1] + stary.obdelnik()[3]) / 2
             else:
@@ -1569,10 +1588,12 @@ class CadPage(QWidget):
                 cx, cy = ((ext.extmin.x + ext.extmax.x) / 2, (ext.extmin.y + ext.extmax.y) / 2) if ext.has_data \
                     else (0.0, 0.0)
             a.na_stred(cx, cy)
-        wm, hm = a.rozmer_m
-
         def nahled(x, y):
-            return [_obdelnik((x - wm / 2, y - hm / 2), (x + wm / 2, y + hm / 2))]
+            from shapely.geometry import LineString
+            b = T.Arch(a.papir, a.sirka, a.vyska, a.meritko, a.x, a.y, a.natoceni)
+            b.na_stred(x, y)
+            r = b.rohy()
+            return [LineString(r + [r[0]])]
 
         T.uloz_arch(self.dok.doc, a)
         self.dok.zmeneno = True
@@ -3051,6 +3072,22 @@ class CadPage(QWidget):
         self.vyska_textu = v
         t = yield Pozadavek("text", "Text popisku:")
         self.kresleni.popisek(body, t, v)
+
+    def n_popis_souradnic(self):
+        """Popis souřadnic bodu (Y, X) s odkazovou čarou – vytyčovací výkresy, popis lomových bodů."""
+        v = None
+        while True:
+            a = yield self._bod_req("Popis souřadnic – bod (Enter = konec):", volitelne=True)
+            if a is None or isinstance(a, str):
+                return
+            b = yield self._bod_req("Umístění popisu (konec odkazové čáry):", a,
+                                    nahled=lambda x, y, a=a: [_linie([a, (x, y)])])
+            if v is None:
+                v = yield Pozadavek("cislo", f"Výška textu [{self.vyska_textu}]:", vychozi=self.vyska_textu)
+                self.vyska_textu = v
+            yy, xx = (-a[0], -a[1]) if self.sjtsk else (a[0], a[1])
+            n = 2  # souřadnice na cm (jako v Gromě)
+            self.kresleni.popisek([a, b], f"Y {yy:.{n}f}  X {xx:.{n}f}", v)
 
     def n_srafa(self):
         e, _k = yield Pozadavek("prvek", "Šrafa – klikněte na uzavřenou polylinii nebo kružnici:")

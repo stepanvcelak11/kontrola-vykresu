@@ -11,7 +11,9 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
     (9, "6. listopadu 2026", [
         "<b>Arch (papír) v CAD</b>: příkaz „arch“ (nebo tlačítko v paletě Zobrazení) položí pod výkres papír "
         "zvolené velikosti (A4–A0 i vlastní rozměr) v měřítku, myší ho posunete kam potřebujete a Tisk do PDF "
-        "vytiskne přesně to, co je na papíře. Arch se uloží do výkresu.",
+        "vytiskne přesně to, co je na papíře. Arch jde i natočit („arch otoč 30“ nebo dvěma body podle "
+        "kresby). Arch se uloží do výkresu.",
+        "<b>Popis souřadnic</b> v CAD: Y a X bodu s odkazovou čarou (vytyčovací výkresy).",
         "<b>Nastavení výpočtů</b> (Výpočty → Úlohy): účel měření (katastr s kódem kvality / polohopis s třídou "
         "přesnosti), přístroj a jeho přesnost, korekce délek – měřítko Křovákova zobrazení, redukce z nadmořské "
         "výšky, fyzikální korekce – a mezní odchylky polygonových pořadů. Korekce se použijí v rajónu, polygonech, "

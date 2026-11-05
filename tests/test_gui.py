@@ -3281,3 +3281,38 @@ def test_cad_text_po_prvku(window):
     assert abs(t.dxf.rotation - 45.0) < 1e-3 and t.dxf.halign == 1
     p = t.dxf.align_point
     assert abs(p.x - (10 - 0.7071068)) < 1e-4 and abs(p.y - (10 + 0.7071068)) < 1e-4
+
+
+def test_cad_popis_souradnic(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.proved("popis souřadnic")
+    for t in ("x=100 y=200", "x=110 y=205", "1", ""):
+        c.zadej(t)
+    t = [e for e in c.dok.msp if e.dxftype() == "TEXT"]
+    assert t and "Y 100.00  X 200.00" in t[-1].dxf.text
+
+
+def test_cad_arch_natoceny(window, tmp_path):
+    from kontrola.cad import tisk as T
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=0 y=0", "@300,300", ""):
+        c.zadej(t)
+    c.proved("arch A4 1000")
+    c.zadej("")
+    a = T.nacti_arch(c.dok.doc)
+    s0 = a.stred()
+    c.proved("arch otoč")
+    c.zadej("x=0 y=0")
+    c.zadej("x=10 y=10")
+    b = T.nacti_arch(c.dok.doc)
+    assert abs(b.natoceni - 45) < 1e-6 and all(abs(p - q) < 1e-3 for p, q in zip(b.stred(), s0))
+    d = c.tisk_pdf(modal=False)
+    d.soubor.setText(str(tmp_path / "otoceny.pdf"))
+    d.tisk()
+    assert (tmp_path / "otoceny.pdf").stat().st_size > 500
+    c.proved("arch otoč 0")
+    assert abs(T.nacti_arch(c.dok.doc).natoceni) < 1e-9

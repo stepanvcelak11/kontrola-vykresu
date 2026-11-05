@@ -146,7 +146,7 @@ def ramecek_a_razitko(layout, h=None, udaje: dict | None = None, okraj: float = 
 # posune pod výkres a tiskne se přesně to, co je na papíře. Uloží se do výkresu (vlastní vlastnosti DXF).
 from dataclasses import dataclass  # noqa: E402
 
-_ARCH_KLICE = ("ARCH_PAPIR", "ARCH_SIRKA", "ARCH_VYSKA", "ARCH_MERITKO", "ARCH_X", "ARCH_Y")
+_ARCH_KLICE = ("ARCH_PAPIR", "ARCH_SIRKA", "ARCH_VYSKA", "ARCH_MERITKO", "ARCH_X", "ARCH_Y", "ARCH_NATOCENI")
 
 
 @dataclass
@@ -157,21 +157,44 @@ class Arch:
     meritko: float = 1000.0  # 1:N
     x: float = 0.0  # levý dolní roh papíru v souřadnicích modelu (m)
     y: float = 0.0
+    natoceni: float = 0.0  # stupně proti směru hodin, kolem levého dolního rohu
 
     @property
     def rozmer_m(self) -> tuple[float, float]:
         return self.sirka * self.meritko / 1000.0, self.vyska * self.meritko / 1000.0
 
-    def obdelnik(self) -> tuple[float, float, float, float]:
+    def _bod(self, u: float, v: float) -> tuple[float, float]:
+        import math
+        r = math.radians(self.natoceni)
+        return self.x + u * math.cos(r) - v * math.sin(r), self.y + u * math.sin(r) + v * math.cos(r)
+
+    def rohy(self, okraj_mm: float = 0.0) -> list[tuple[float, float]]:
         w, h = self.rozmer_m
-        return self.x, self.y, self.x + w, self.y + h
+        o = okraj_mm * self.meritko / 1000.0
+        return [self._bod(o, o), self._bod(w - o, o), self._bod(w - o, h - o), self._bod(o, h - o)]
+
+    def obdelnik(self) -> tuple[float, float, float, float]:
+        """Obálka papíru v modelu (u natočeného archu větší než papír)."""
+        r = self.rohy()
+        return min(p[0] for p in r), min(p[1] for p in r), max(p[0] for p in r), max(p[1] for p in r)
+
+    def stred(self) -> tuple[float, float]:
+        w, h = self.rozmer_m
+        return self._bod(w / 2, h / 2)
 
     def na_stred(self, cx: float, cy: float) -> None:
-        w, h = self.rozmer_m
-        self.x, self.y = cx - w / 2, cy - h / 2
+        sx, sy = self.stred()
+        self.x, self.y = self.x + cx - sx, self.y + cy - sy
+
+    def otoc(self, uhel: float) -> None:
+        """Natočí arch kolem jeho středu (střed zůstane na místě)."""
+        c = self.stred()
+        self.natoceni = (uhel + 180.0) % 360.0 - 180.0
+        self.na_stred(*c)
 
     def popis(self) -> str:
-        return f"{self.papir} {self.sirka:g} × {self.vyska:g} mm, 1:{self.meritko:g}"
+        return (f"{self.papir} {self.sirka:g} × {self.vyska:g} mm, 1:{self.meritko:g}"
+                + (f", natočení {self.natoceni:g}°" if abs(self.natoceni) > 1e-9 else ""))
 
 
 def papir_z_textu(text: str, na_sirku: bool = True) -> tuple[str, float, float]:
@@ -231,7 +254,8 @@ def nacti_arch(doc) -> Arch | None:
         return None
     try:
         return Arch(hodn.get("ARCH_PAPIR") or "A3", float(hodn["ARCH_SIRKA"]), float(hodn["ARCH_VYSKA"]),
-                    float(hodn["ARCH_MERITKO"]), float(hodn["ARCH_X"]), float(hodn["ARCH_Y"]))
+                    float(hodn["ARCH_MERITKO"]), float(hodn["ARCH_X"]), float(hodn["ARCH_Y"]),
+                    float(hodn.get("ARCH_NATOCENI") or 0.0))
     except (KeyError, TypeError, ValueError):
         return None
 
@@ -242,8 +266,8 @@ def uloz_arch(doc, a: Arch | None) -> None:
         if d is not None:
             del doc.rootdict["KONTROLA_ARCH"]
         return
-    for k, v in zip(_ARCH_KLICE, (a.papir, f"{a.sirka:.3f}", f"{a.vyska:.3f}", f"{a.meritko:g}", f"{a.x:.3f}",
-                                  f"{a.y:.3f}")):
+    for k, v in zip(_ARCH_KLICE, (a.papir, f"{a.sirka:.3f}", f"{a.vyska:.3f}", f"{a.meritko:g}", f"{a.x:.4f}",
+                                  f"{a.y:.4f}", f"{a.natoceni:.6f}")):
         if k in d:
             d[k].dxf.value = v
         else:
@@ -251,9 +275,44 @@ def uloz_arch(doc, a: Arch | None) -> None:
 
 
 def tisk_archu(doc, layout, cesta, a: Arch, nazev: str = "") -> dict:
-    """Vytiskne přesně to, co leží na archu (papír v modelu), v měřítku archu."""
+    """Vytiskne přesně to, co leží na archu (papír v modelu), v měřítku archu – i natočený arch."""
+    if abs(a.natoceni) < 1e-12:
+        x0, y0, x1, y1 = a.obdelnik()
+        return _tisk_oblasti(doc, layout, cesta, a.sirka, a.vyska, a.meritko, (x0, y0, x1 - x0, y1 - y0), nazev)
+    from PySide6.QtCore import QMarginsF, QRectF, QSizeF, Qt
+    from PySide6.QtGui import QPageLayout, QPageSize, QPainter, QPdfWriter
     x0, y0, x1, y1 = a.obdelnik()
-    return _tisk_oblasti(doc, layout, cesta, a.sirka, a.vyska, a.meritko, (x0, y0, x1 - x0, y1 - y0), nazev)
+    src = QRectF(x0, y0, x1 - x0, y1 - y0)
+    sc = _scena(doc, layout)
+    cesta = Path(cesta)
+    cesta.parent.mkdir(parents=True, exist_ok=True)
+    w = QPdfWriter(str(cesta))
+    w.setResolution(1200)
+    w.setTitle(nazev or cesta.stem)
+    w.setCreator("Kontrola výkresu – CAD")
+    w.setPageLayout(QPageLayout(QPageSize(QSizeF(a.sirka, a.vyska), QPageSize.Millimeter), QPageLayout.Portrait,
+                                QMarginsF(0, 0, 0, 0), QPageLayout.Millimeter))
+    p = QPainter(w)
+    try:
+        k = w.width() / a.sirka * 1000.0 / a.meritko  # px na metr modelu
+        p.setTransform(transformace_archu(a, k, w.height()))
+        p.setClipRect(src)
+        sc.render(p, src, src, Qt.IgnoreAspectRatio)
+    finally:
+        p.end()
+    return {"papir": (a.sirka, a.vyska), "meritko": a.meritko, "oblast": (x0, y0, x1, y1)}
+
+
+def transformace_archu(a: Arch, k: float, vyska_px: float):
+    """QTransform model → papír (px, osa y dolů): posun do rohu archu, natočení zpět, měřítko, převrácení y."""
+    import math
+
+    from PySide6.QtGui import QTransform
+    r = math.radians(-a.natoceni)
+    c, s_ = math.cos(r) * k, math.sin(r) * k
+    # u = c·(X−x) − s·(Y−y),  v = s·(X−x) + c·(Y−y);  px = u,  py = H − v
+    # QTransform(m11, m12, m21, m22, dx, dy): x' = m11·x + m21·y + dx, y' = m12·x + m22·y + dy
+    return QTransform(c, -s_, -s_, -c, -c * a.x + s_ * a.y, vyska_px + s_ * a.x + c * a.y)
 
 
 def _tisk_oblasti(doc, layout, cesta, pw, ph, meritko, rect, nazev) -> dict:
