@@ -60,6 +60,16 @@ def dash_pattern(linetype: str) -> list[float] | None:
 CUSTOM_STYLE = re.compile(r"^\d+\.\d+[A-Z]?$")
 
 
+def _styl_rsc(linetype: str):
+    """Styl z připojené knihovny .rsc (ploty, zdi…) – kreslí se přesně jako v MicroStationu."""
+    from ..cad.styly_rsc import aktivni
+    st = aktivni()
+    if not st or not linetype:
+        return None
+    from ..io.rsc import najdi
+    return najdi(st, linetype)
+
+
 def is_custom_style(linetype: str) -> bool:
     """Uživatelský styl MicroStationu (2.103, 5.303…) – čára se značkami, v DXF bez čárkování."""
     return bool(CUSTOM_STYLE.match((linetype or "").upper()))
@@ -353,6 +363,18 @@ def prepare_drawing(drawing: Drawing) -> PreparedDrawing:
         key = (f.color_rgb, round(f.lineweight, 2),
                None if custom else (dash_pattern(f.linetype) and f.linetype.upper()))
         path = groups.setdefault(f.layer, {}).setdefault(key, QPainterPath())
+        rsc = _styl_rsc(f.linetype) if custom else None
+        if rsc is not None and f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.geometry is not None:
+            from ..io.rsc import vykresli
+            g = f.geometry.exterior if f.geom_type == GeomType.POLYGON else f.geometry
+            casti = [g] if g.geom_type in ("LineString", "LinearRing") else list(getattr(g, "geoms", []))
+            for cast in casti:
+                for c in vykresli(list(cast.coords), rsc, f.ltscale or 1.0):
+                    if len(c) >= 2:
+                        path.moveTo(pb.to_scene(*c[0]))
+                        for q in c[1:]:
+                            path.lineTo(pb.to_scene(*q))
+            continue
         if custom and f.geom_type in (GeomType.LINIE, GeomType.POLYGON) and f.geometry is not None:
             g = f.geometry.exterior if f.geom_type == GeomType.POLYGON else f.geometry
             if g.geom_type in ("LineString", "LinearRing"):

@@ -76,3 +76,22 @@ def test_tisk_se_styly(tmp_path):
     a.na_stred(20, 15)
     T.tisk_archu(d, d.modelspace(), tmp_path / "p.pdf", a, styly=styly)
     assert (tmp_path / "p.pdf").stat().st_size > 500
+
+
+def test_zobrazeni_v_kontrole_podle_rsc():
+    from kontrola.cad.styly_rsc import nacti, nastav_aktivni
+    from kontrola.io.dxf_loader import load_drawing
+    from kontrola.ui.drawing_view import prepare_drawing
+    sit = Path(__file__).resolve().parents[1] / "podklady" / "Situace-topologie.dgn"
+    if not sit.is_file():
+        return
+    d = load_drawing(sit)
+    nastav_aktivni({})
+    bez = prepare_drawing(d)
+    nastav_aktivni(nacti([GEO]))
+    try:
+        s = prepare_drawing(d)
+    finally:
+        nastav_aktivni({})
+    znacky = lambda p: sum(1 for g in p.groups.values() for k in g if "#znacky" in k)  # noqa: E731
+    assert znacky(bez) > 0 and znacky(s) < znacky(bez)  # ploty ze stylu, ne přibližné značky

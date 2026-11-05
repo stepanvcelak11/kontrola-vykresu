@@ -1261,6 +1261,11 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, APP_NAME, "Počkejte na dokončení probíhající úlohy.")
             return
         oda = self.project.config.oda_cesta if self.project else None
+        try:  # styly čar MicroStationu (.rsc) z projektu a CAD → přesné zobrazení plotů, zdí… i na stránce Výkres
+            from ..cad.styly_rsc import nastav_aktivni
+            nastav_aktivni(self.cad.styly_rsc() if getattr(self, "cad", None) is not None else {})
+        except Exception:  # noqa: BLE001
+            pass
 
         def job(progress, cancelled):
             drawing = load_drawing(path, lambda p, m="": progress(int(p * 0.85), m), oda)

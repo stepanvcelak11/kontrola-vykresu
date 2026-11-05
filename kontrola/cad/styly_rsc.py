@@ -28,6 +28,19 @@ def nacti(cesty) -> dict:
     return out
 
 
+_AKTIVNI: dict = {}
+
+
+def nastav_aktivni(styly: dict) -> None:
+    """Styly pro zobrazení na stránce Kontrola (nastaví hlavní okno podle projektu a CAD)."""
+    global _AKTIVNI
+    _AKTIVNI = dict(styly or {})
+
+
+def aktivni() -> dict:
+    return _AKTIVNI
+
+
 _BEZ_STYLU = {"", "BYLAYER", "BYBLOCK", "CONTINUOUS", "SOLID", "0"}
 
 
