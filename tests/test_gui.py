@@ -3206,3 +3206,26 @@ def test_cad_zive_do_kontroly_a_nastaveni_vypoctu(window):
             assert N.aktualni().meritko_rucne == 0.9999 and N.aktualni().korekce_zapnuta
     finally:
         N.nastav(puvodni)
+
+
+def test_cad_pismo_a_zarovnani_textu(window):
+    from kontrola.cad import upravy as U
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    rodiny = [r for r in U.seznam_pisem(None)]
+    assert rodiny, "v počítači musí být aspoň jedno písmo TrueType"
+    c.proved(f"písmo {rodiny[0]}")
+    st = c.kresleni.textovy_styl
+    assert st in c.dok.doc.styles and c.dok.doc.styles.get(st).dxf.font.lower().endswith((".ttf", ".otf", ".ttc"))
+    c.proved("písmo RB")
+    d = c.text_dialog(modal=False)
+    assert d.zar.count() == 10 and d.pis.findData(st) >= 0
+    d.sir.setValue(0.8)
+    c._nastav_pismo_z_dialogu(d.pis, d.sir)
+    c.umisti_text("Hřbitov", 2.0, 0.0, "BOTTOM_RIGHT")
+    c._klik(10.0, 10.0)
+    t = [e for e in c.dok.msp if e.dxftype() == "TEXT"][-1]
+    assert t.dxf.style == st and abs(t.dxf.width - 0.8) < 1e-9 and t.dxf.halign == 2
+    with __import__("pytest").raises(ValueError):
+        U.styl_pisma(c.dok.doc, "Neexistující písmo XYZ")

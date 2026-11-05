@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
         "arch": "arch (papír) pod výkresem: velikost, měřítko, posun myší, tisk do PDF („arch A3 1000“, „arch smaž“)",
         "pohled": "uložené pohledy (Saved Views): „pohled ulož Náměstí“, „pohled Náměstí“, „pohled“ = seznam",
         "nahraď buňku": "nahradit vybrané buňky jinou buňkou – stejný bod, natočení a měřítko (Replace Cell)",
@@ -481,7 +482,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
-        "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
+        "font": "písmo", "pismo": "písmo", "ft": "písmo", "text attributes": "písmo", "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
         "saved views": "pohled", "sv": "pohled", "pohledy": "pohled", "uloz pohled": "pohled",
         "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
         "vymen bunku": "nahraď buňku", "vyměň buňku": "nahraď buňku",
@@ -2513,6 +2514,8 @@ class CadPage(QWidget):
             self.atributy_zadani()
         elif cmd == "pohled":
             self._pohled(arg)
+        elif cmd == "písmo":
+            self._pismo(arg)
         elif cmd == "arch":
             self._posledni_prikaz = cmd
             self._spust(self.n_arch(arg))
@@ -2896,24 +2899,76 @@ class CadPage(QWidget):
         nat.setDecimals(2)
         nat.setSuffix(" °")
         f.addRow("Natočení:", nat)
+        pis = QComboBox()
+        pis.setEditable(True)
+        pis.addItem("(podle druhu prvku / Standard)", None)
+        for jm in U.seznam_pisem(self.dok.doc):
+            pis.addItem(jm, jm)
+        if self.kresleni.textovy_styl:
+            i = pis.findData(self.kresleni.textovy_styl)
+            if i >= 0:
+                pis.setCurrentIndex(i)
+        f.addRow("Písmo:", pis)
+        sir = QDoubleSpinBox()
+        sir.setRange(0.1, 10)
+        sir.setDecimals(3)
+        sir.setValue(self.kresleni.sirka_faktor or 1.0)
+        f.addRow("Šířka (poměr k výšce):", sir)
         zar = QComboBox()
-        for jm, kod in (("vlevo dole (výchozí)", None), ("vlevo uprostřed", "MIDDLE_LEFT"), ("na střed", "MIDDLE_CENTER"),
-                        ("vpravo dole", "BOTTOM_RIGHT"), ("vlevo nahoře", "TOP_LEFT"), ("střed dole", "BOTTOM_CENTER")):
+        for jm, kod in (("vlevo na účaří (výchozí)", None), ("LT vlevo nahoře", "TOP_LEFT"),
+                        ("LC vlevo uprostřed", "MIDDLE_LEFT"), ("LB vlevo dole", "BOTTOM_LEFT"),
+                        ("CT střed nahoře", "TOP_CENTER"), ("CC na střed", "MIDDLE_CENTER"),
+                        ("CB střed dole", "BOTTOM_CENTER"), ("RT vpravo nahoře", "TOP_RIGHT"),
+                        ("RC vpravo uprostřed", "MIDDLE_RIGHT"), ("RB vpravo dole", "BOTTOM_RIGHT")):
             zar.addItem(jm, kod)
-        i = zar.findData(self.kresleni.zarovnani)
-        zar.setCurrentIndex(max(0, i))
         f.addRow("Zarovnání:", zar)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText("Umístit")
         bb.accepted.connect(d.accept)
         bb.rejected.connect(d.reject)
         f.addRow(bb)
-        d.txt, d.vys, d.nat, d.zar = txt, vys, nat, zar  # pro testy
+        d.txt, d.vys, d.nat, d.zar, d.pis, d.sir = txt, vys, nat, zar, pis, sir  # pro testy
         if not modal:
             return d
         if d.exec():
+            self._nastav_pismo_z_dialogu(pis, sir)
             self.umisti_text(txt.toPlainText(), vys.value(), nat.value(), zar.currentData())
         return d
+
+    def _nastav_pismo_z_dialogu(self, pis, sir):
+        jm = pis.currentData() if pis.currentText() == pis.itemText(pis.currentIndex()) else pis.currentText()
+        if jm:
+            try:
+                self.kresleni.textovy_styl = U.styl_pisma(self.dok.doc, jm)
+            except ValueError as e:
+                self.vypis(f"⚠ {e}")
+        self.kresleni.sirka_faktor = sir.value()
+
+    def _pismo(self, arg: str):
+        """„písmo“ = seznam, „písmo Arial“ = písmo nových textů (a vybraných textů), „písmo LT“ = zarovnání."""
+        a = arg.strip()
+        if not a:
+            jm = U.seznam_pisem(self.dok.doc)
+            self.vypis(f"Písmo nových textů: {self.kresleni.textovy_styl or 'Standard'}. Dostupná: "
+                       + ", ".join(jm[:60]) + (" …" if len(jm) > 60 else ""))
+            return
+        if a.upper() in U.ZAROVNANI_MS:
+            self.kresleni.zarovnani = U.ZAROVNANI_MS[a.upper()]
+            self.vypis(f"Zarovnání textu: {a.upper()}")
+            return
+        try:
+            st = U.styl_pisma(self.dok.doc, a)
+        except ValueError as e:
+            self.vypis(f"⚠ {e}")
+            return
+        self.kresleni.textovy_styl = st
+        texty = [e for e in self.vyber if e.dxftype() in ("TEXT", "MTEXT", "ATTRIB")]
+        if texty:
+            nove = U.zmen_vlastnosti(self.prostor, self.historie_zmen, texty, style=st)
+            self._po_zmene(nove, texty)
+            self.vyber = nove
+            self._zvyrazni()
+        self.vypis(f"Písmo: {st}" + (f" (změněno u {len(texty)} textů)" if texty else ""))
 
     def umisti_text(self, text: str, vyska: float, natoceni: float = 0.0, zarovnani=None):
         radky = [r for r in (text or "").splitlines() if r.strip()]

@@ -18,6 +18,9 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "volném stanovisku a protínání z délek a vypíšou se do protokolu.",
         "<b>Výpočty – nové úlohy</b>: Kružnice ze tří bodů, Úhel ze souřadnic, Bod na přímce (i dělení úsečky). "
         "Polární metoda dávkou (Zápisník) bere korekce délek z Nastavení výpočtů.",
+        "<b>Písmo textů v CAD</b>: v okně Text vyberete písmo (styly výkresu i všechna písma v počítači), šířku "
+        "a jedno z devíti zarovnání jako v MicroStationu (LT … RB). Příkaz „písmo Arial“ změní písmo nových i "
+        "vybraných textů.",
         "<b>CAD → Kontrola živě</b>: co nakreslíte v CAD, se po přepnutí na Výkres samo zkontroluje – bez "
         "ukládání a nahrávání.",
     ]),

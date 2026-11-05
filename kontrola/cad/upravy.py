@@ -1968,3 +1968,51 @@ def pohled(doc, nazev: str) -> tuple[float, float, float, float]:
 
 def pohledy(doc) -> list[str]:
     return sorted(v.dxf.name for v in doc.views)
+
+
+# ------------------------------------------------------------------ písma (Text Attributes → Font)
+def seznam_pisem(doc=None) -> list[str]:
+    """Textové styly výkresu (fonty MicroStationu z DGN, styly ze zadání) a písma TrueType v počítači."""
+    out = []
+    if doc is not None:
+        out += [s.dxf.name for s in doc.styles if s.dxf.name and not s.dxf.name.startswith("*")]
+    try:
+        from ezdxf.fonts import fonts
+        fonts.find_best_match(family="Arial")  # načte seznam písem (ezdxf ho čte líně)
+        rodiny = sorted({e.font_face.family for e in fonts.font_manager._font_cache._cache.values() if e.font_face.family})
+    except Exception:  # noqa: BLE001
+        rodiny = []
+    return out + [r for r in rodiny if r not in out]
+
+
+def styl_pisma(doc, pismo: str) -> str:
+    """Textový styl pro písmo: existující styl výkresu, jinak nový styl s fontem TrueType dané rodiny."""
+    p = (pismo or "").strip()
+    if not p:
+        raise ValueError("Zadejte název písma.")
+    for s in doc.styles:
+        if s.dxf.name.lower() == p.lower():
+            return s.dxf.name
+    soubor = None
+    try:
+        from ezdxf.fonts import fonts
+        ff = fonts.find_best_match(family=p)
+        if ff is not None and ff.family.lower() == p.lower():
+            soubor = ff.filename
+    except Exception:  # noqa: BLE001
+        pass
+    if soubor is None:
+        raise ValueError(f"Písmo „{p}“ v počítači ani ve výkresu není.")
+    nazev = re.sub(r"[^\w\- ]", "_", p)[:60]
+    st = doc.styles.add(nazev, font=soubor)
+    try:
+        st.set_extended_font_data(p)
+    except Exception:  # noqa: BLE001
+        pass
+    return nazev
+
+
+# zarovnání textu jako v MicroStationu (Justification): L/C/R × T/C/B
+ZAROVNANI_MS = {"LT": "TOP_LEFT", "LC": "MIDDLE_LEFT", "LB": "BOTTOM_LEFT", "CT": "TOP_CENTER",
+                "CC": "MIDDLE_CENTER", "CB": "BOTTOM_CENTER", "RT": "TOP_RIGHT", "RC": "MIDDLE_RIGHT",
+                "RB": "BOTTOM_RIGHT"}
