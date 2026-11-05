@@ -625,3 +625,12 @@ def test_trig_oboustranne_vylouci_zakriveni():
     r = u_trig_oboustranne(s, {"a": "A", "d1": f"{math.hypot(dv, tam_m):.6f}", "z1": f"{z1:.8f}",
                                "d2": f"{math.hypot(dv, zpet_m):.6f}", "z2": f"{z2:.8f}", "nove": "B"})
     assert abs(r.vysky["B"] - (300 + dh_true)) < 1e-4
+
+
+def test_prevod_uhlu():
+    from kontrola.geodezie.body import SeznamBodu
+    from kontrola.geodezie.ulohy import u_prevod_uhlu
+    r = "\n".join(u_prevod_uhlu(SeznamBodu(), {"uhly": "100\n45°30'15\"\n3.14159265358979r\n-50g"}).protokol)
+    assert "90.000000" in r and "90°00′00.000″" in r
+    assert "50.56019" in r and "45°30′15.000″" in r
+    assert "200.00000" in r and "-45°00′00.000″" in r

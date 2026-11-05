@@ -1532,6 +1532,50 @@ def u_trig_oboustranne(s, h):
             vysky[b.cislo] = a.z + dh
     return Vysledek(prot, nove, vysky)
 
+
+def _uhel_z_textu(t: str) -> float:
+    """Úhel z textu → gony: „123.4567“ / „123,4567g“ = gony, „45°30'15\"“ nebo „45 30 15 d“ = stupně, „1.2r“ = rad."""
+    t = (t or "").strip().lower().replace(",", ".")
+    if not t:
+        raise ChybaVstupu("Zadejte úhel.")
+    try:
+        if t.endswith("r"):
+            return float(t[:-1]) * 200 / math.pi
+        if "°" in t or "'" in t or '"' in t or t.endswith("d"):
+            casti = [c for c in re.split(r"[°'\"d\s]+", t) if c]
+            vals = [float(c) for c in casti]
+            znam = -1 if t.startswith("-") else 1
+            st = abs(vals[0]) + (vals[1] / 60 if len(vals) > 1 else 0) + (vals[2] / 3600 if len(vals) > 2 else 0)
+            return znam * st / 0.9
+        if t.endswith("g"):
+            t = t[:-1]
+        return float(t)
+    except (ValueError, IndexError):
+        raise ChybaVstupu(f"Úhel „{t}“ nerozumím – např. 123.4567 (gony), 45°30'15\" nebo 1.2r.") from None
+
+
+def u_prevod_uhlu(s, h):
+    """Převod úhlů mezi gony, stupni (desetinně i ° ' "), radiány a dílci (řádek = jeden úhel)."""
+    prot = _hlavicka("Převod úhlů")
+    prot.append("  zadáno                gony          stupně       ° ′ ″                 radiány")
+    radky = [r for r in (h.get("uhly") or "").splitlines() if r.strip()]
+    if not radky:
+        raise ChybaVstupu("Zadejte úhly (řádek = úhel).")
+    for r in radky:
+        g = _uhel_z_textu(r)
+        deg = g * 0.9
+        a = abs(deg)
+        d_ = int(a)
+        m_ = int((a - d_) * 60)
+        s_ = (a - d_ - m_ / 60) * 3600
+        if s_ >= 59.9995:
+            s_, m_ = 0.0, m_ + 1
+        if m_ == 60:
+            m_, d_ = 0, d_ + 1
+        dms = f"{'-' if deg < 0 else ''}{d_}°{m_:02d}′{s_:06.3f}″"
+        prot.append(f"  {r.strip():<18} {g:>12.5f} {deg:>14.6f}   {dms:<18} {g * math.pi / 200:>12.8f}")
+    return Vysledek(prot)
+
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
@@ -1707,6 +1751,8 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
            napoveda="např. 125/3 450 zahrada: 1 2 3 4"),
       Pole("nove", "Nový stav (řádek: parcela [druh]: čísla bodů)", "radky",
            napoveda="např. 125/5 zahrada: 1 2 6 5")], u_vykaz_vymer),
+    ("Převod úhlů", "Gony ↔ stupně (desetinně i ° ′ ″) ↔ radiány; řádek = jeden úhel (123.4567, 45°30'15\", 1.2r).",
+     [Pole("uhly", "Úhly (řádek: hodnota; g = gony, ° nebo d = stupně, r = radiány)", "radky")], u_prevod_uhlu),
     ("Převod S-JTSK ↔ WGS84", "Zeměpisné souřadnice bodů (s odkazem na mapy.cz) a opačně, přesnost ≈ 1 m.",
      [Pole("smer", "Směr", "volba", "S-JTSK → WGS84", ("S-JTSK → WGS84", "WGS84 → S-JTSK")),
       Pole("body", "Body (čísla) pro S-JTSK → WGS84", "radky"),
