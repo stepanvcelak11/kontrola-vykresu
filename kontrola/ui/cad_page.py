@@ -2233,8 +2233,24 @@ class CadPage(QWidget):
         if not modal:
             return d
         if d.exec():
-            self.novy(seed=d.seed())
+            self.zaloz(d)
         return d
+
+    def zaloz(self, d) -> None:
+        """Založí výkres podle okna Nový: pracovní sada (buňky, styly, hladiny), seed a soubor na disku."""
+        self.novy(seed=d.seed())
+        self.po_zmene_knihoven()
+        cil = d.soubor()
+        if cil is not None:
+            if cil.exists():
+                self.vypis(f"⚠ Soubor {cil.name} už existuje – výkres zůstal bez názvu, uložte ho jinam.")
+            else:
+                # jméno a složka se určí hned (Uložit už se neptá); prázdný DGN nejde zapsat, uloží se s první kresbou
+                cil.parent.mkdir(parents=True, exist_ok=True)
+                self.dok.path = cil
+                self._titulek()
+                self._obnov_seznam_vykresu()
+                self.vypis(f"Nový soubor: {cil}")
 
     def novy(self, seed: str | Path | None = None):
         """Nový výkres – ze seedu (zvoleného, nebo naposledy použitého v aktivní pracovní sadě) jako

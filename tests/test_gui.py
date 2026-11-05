@@ -3599,3 +3599,15 @@ def test_cad_pracovni_sady(window, tmp_path):
     PS.nastav_aktivni(None)
     c.novy()
     assert len(list(c.dok.doc.layers)) < 60
+    # okno Nový jako v MicroStationu: pracovní prostředí + sada se volí při založení výkresu, soubor hned na disku
+    n = c.novy_soubor(modal=False)
+    assert n.prostredi.findData("Skola") >= 0
+    n.vyber_sadu("Skola/Mapa")
+    assert n.sada.nazev == "Mapa" and n.seed().endswith("UGEO.DGN")
+    n.nazev.setText("mapa1")
+    n.slozka.setText(str(tmp_path / "vykresy"))
+    n._ok()
+    c.zaloz(n)
+    assert PS.aktivni().nazev == "Mapa" and c.dok.path == tmp_path / "vykresy" / "mapa1.dgn"
+    assert "1.030" in [b.name for b in c.dok.doc.blocks] and "mapa1" in c.vykresy_cb.currentText()
+    PS.nastav_aktivni(None)
