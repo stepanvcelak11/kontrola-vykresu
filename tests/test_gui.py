@@ -2491,6 +2491,7 @@ def test_cad_schranka_mezi_vykresy(window):
     c.proved("vše")
     c.view.setFocus()
     c._schranka_klavesa("kopíruj do schránky")
+    c._ulozena_zmena = c.historie_zmen.zmena  # změny zahodit – nový výkres bez dotazu
     c.novy()
     c.view.setFocus()
     c._schranka_klavesa("vlož ze schránky")
@@ -3262,3 +3263,21 @@ def test_cad_polylinie_s_obloukem(window):
     p = path.make_path(pl)
     vrchol = max(v.x for v in p.flattening(0.001))
     assert abs(vrchol - 15.0) < 1e-3 and math.isclose(pts[2][0], 10.0)
+
+
+def test_cad_text_po_prvku(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=20 y=20", "x=0 y=0", ""):  # čára kreslená zprava doleva – text má být stejně čitelný
+        c.zadej(t)
+    c.view.zoom_all()
+    c.proved("text po prvku")
+    c._klik(10.0, 10.0)
+    for t in ("Potok", "2", "1"):
+        c.zadej(t)
+    c.zadej("")
+    t = [e for e in c.dok.msp if e.dxftype() == "TEXT"][-1]
+    assert abs(t.dxf.rotation - 45.0) < 1e-3 and t.dxf.halign == 1
+    p = t.dxf.align_point
+    assert abs(p.x - (10 - 0.7071068)) < 1e-4 and abs(p.y - (10 + 0.7071068)) < 1e-4

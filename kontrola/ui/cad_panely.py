@@ -14,7 +14,7 @@ from .cad_ikony import ikona
 # skupiny nástrojů palety (pořadí jako v MicroStationu: kreslení, úpravy, manipulace, výběr, měření…)
 SKUPINY = [
     ("Kreslení", ["úsečka", "polylinie", "obdélník", "mnohoúhelník", "kružnice", "oblouk", "elipsa", "křivka",
-                  "bod", "text", "popisek", "šrafa", "vzorek", "buňky po prvku", "kóta", "kóta úhlu", "kóta poloměru", "vlož", "kolmice",
+                  "bod", "text", "text po prvku", "popisek", "šrafa", "vzorek", "buňky po prvku", "kóta", "kóta úhlu", "kóta poloměru", "vlož", "kolmice",
                   "osa úhlu"]),
     ("Úpravy", ["posun", "kopie", "otoč", "měřítko", "zrcadli", "pole", "rovnoběžka", "ořež", "prodluž", "zaobli",
                 "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "uprav text", "zvyš text", "nahraď buňku",
@@ -29,7 +29,7 @@ NAZVY = {"vlož": "Vložit buňku", "body": "Body ze seznamu", "vrstvy": "Správ
          "podobné": "Vybrat podobné", "ohrada": "Výběr ohradou", "skupina": "Skupina prvků",
          "délka": "Délka výběru", "výměra": "Výměra prvku", "síť": "Souřadnicová síť", "vrstevnice": "Vrstevnice a TIN", "profil": "Podélný profil", "kódy": "Kresba z kódů", "kódovník": "Kódovník", "georeference": "Georeference rastru", "mračno": "Mračno bodů", "zvyš text": "Kopie textu se zvýšením čísla",
          "nahraď buňku": "Nahradit buňku",
-         "kolmice": "Kolmice z bodu na prvek", "osa úhlu": "Osa úhlu", "arch": "Arch (papír) pod výkresem", "vzorek": "Vzorek plochy (značky kultur)", "buňky po prvku": "Buňky po prvku (stromořadí)"}
+         "kolmice": "Kolmice z bodu na prvek", "osa úhlu": "Osa úhlu", "arch": "Arch (papír) pod výkresem", "vzorek": "Vzorek plochy (značky kultur)", "buňky po prvku": "Buňky po prvku (stromořadí)", "text po prvku": "Text podél prvku"}
 
 
 class PaletaNastroju(QScrollArea):

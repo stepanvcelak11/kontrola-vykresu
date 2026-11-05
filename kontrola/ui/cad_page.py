@@ -421,6 +421,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "text po prvku": "text podél čáry (název ulice, vodního toku) natočený po směru čáry, čitelně",
         "buňky po prvku": "buňky po čáře v dané vzdálenosti, natočené po směru (stromořadí, značky hranice)",
         "vzorek": "vzorek plochy (Pattern Area): uzavřenou plochu vyplní buňkami – značky kultur do sponu",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
@@ -484,6 +485,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "text along": "text po prvku", "place text along": "text po prvku", "popis čáry": "text po prvku",
         "bunky po prvku": "buňky po prvku", "stromořadí": "buňky po prvku", "stromoradi": "buňky po prvku",
         "cells along": "buňky po prvku", "pattern": "vzorek", "pattern area": "vzorek", "patt": "vzorek", "vzorkování": "vzorek",
         "značky plochy": "vzorek", "font": "písmo", "pismo": "písmo", "ft": "písmo", "text attributes": "písmo", "papír": "arch", "papir": "arch", "sheet": "arch", "print boundary": "arch", "hranice tisku": "arch",
@@ -2381,6 +2383,13 @@ class CadPage(QWidget):
         slovo = parts[0].lower() if parts else ""
         arg = parts[1] if len(parts) > 1 else ""
         cmd = self.ALIASY.get(t.lower(), self.ALIASY.get(slovo, slovo if slovo in self.PRIKAZY else t.lower()))
+        slova = t.strip().split()
+        for n in range(len(slova), 1, -1):  # víceslovný příkaz má přednost („text po prvku“ ≠ „text“)
+            kand = " ".join(slova[:n]).lower()
+            if kand in self.PRIKAZY or kand in self.ALIASY:
+                cmd = self.ALIASY.get(kand, kand)
+                arg = " ".join(slova[n:])
+                break
         if cmd not in self.PRIKAZY:
             try:
                 x, y = zadani_bodu(t, self.view.posledni, self.sjtsk, self._bod_seznamu)
@@ -3076,6 +3085,27 @@ class CadPage(QWidget):
         else:
             nove = U.body_po_prvku(self.prostor, self.historie_zmen, e, pocet=int(float(t)), attrs=self.kresleni._attr())
         self.vypis(f"Vloženo {len(nove)} bodů po prvku.")
+
+    def n_text_po_prvku(self):
+        """Text podél prvku (Place Text Along Element): natočený po směru čáry, čitelně, nad čarou."""
+        e, k = yield Pozadavek("prvek", "Text podél prvku – klikněte na čáru tam, kde má text být:")
+        text = yield Pozadavek("text", "Text:")
+        if not (text or "").strip():
+            return
+        v = yield Pozadavek("cislo", f"Výška textu [{self.vyska_textu}]:", vychozi=self.vyska_textu)
+        self.vyska_textu = v
+        od = yield Pozadavek("cislo", f"Odsazení od čáry [{v / 2:g}] (záporné = pod čarou):", vychozi=v / 2)
+        stare = self.kresleni.zarovnani
+        self.kresleni.zarovnani = "BOTTOM_CENTER" if od >= 0 else "TOP_CENTER"
+        try:
+            while True:
+                (x, y), u = U.poloha_textu_na_prvku(e, k, v, od)
+                self.kresleni.text((x, y), text, v, u)
+                k = yield self._bod_req("Další stejný text na prvku – klikněte (Enter = konec):", volitelne=True)
+                if k is None or isinstance(k, str):
+                    return
+        finally:
+            self.kresleni.zarovnani = stare
 
     def n_bunky_po_prvku(self):
         """Buňky po prvku v dané vzdálenosti (stromořadí, značky na hranici), natočené po směru čáry."""

@@ -2122,3 +2122,25 @@ def bunky_po_prvku(doc, msp, h: Historie, e, nazev: str, vzdalenost: float, meri
                                                                      "rotation": rot}))
     h.proved(f"Buňky po prvku ({len(nove)})", nove)
     return nove
+
+
+def poloha_textu_na_prvku(e, klik, vyska: float, odsazeni: float | None = None):
+    """Bod a natočení textu podél prvku u kliknutí: po směru čáry, vždy čitelně (zleva doprava / zdola),
+    nad čarou o ``odsazeni`` (výchozí polovina výšky). Vrací ((x, y), úhel°)."""
+    import math as _m
+
+    from shapely.geometry import Point
+    g = geometrie(e)
+    if g is None or g.geom_type not in ("LineString", "LinearRing"):
+        raise ValueError("Text jde umístit podél úsečky, polylinie, oblouku, kružnice nebo křivky.")
+    t = g.project(Point(_xy(klik)))
+    L = g.length
+    p = g.interpolate(t)
+    q0, q1 = g.interpolate(max(0.0, t - 0.05)), g.interpolate(min(L, t + 0.05))
+    u = _m.degrees(_m.atan2(q1.y - q0.y, q1.x - q0.x))
+    if u > 90.0 + 1e-9 or u <= -90.0 + 1e-9:
+        u += 180.0
+    u = (u + 180.0) % 360.0 - 180.0
+    o = vyska * 0.5 if odsazeni is None else odsazeni
+    r = _m.radians(u)
+    return (p.x - _m.sin(r) * o, p.y + _m.cos(r) * o), u
