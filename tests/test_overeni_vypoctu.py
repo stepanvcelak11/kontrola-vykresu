@@ -397,3 +397,21 @@ def test_zapisnik_sdr33_trimble_s3():
     assert (round(o.sd, 4), round(o.z, 4), o.hz) == (37.3312, 96.9803, 0.0)
     m = _merge_faces(s.orient)
     assert m[0].n >= 2 and abs(m[0].d_hz) < 0.01  # I. a II. poloha spojené
+
+
+def test_treningova_mapa_jako_vzor_gromy():
+    """Cvičení tréninková mapa: polární metoda dávkou proti vzorovému seznamu z Gromy (na cm)."""
+    from kontrola.checks.seznam import read_point_list
+    from kontrola.vypocet import compute, read_zap
+    d = Path(__file__).resolve().parents[1] / "podklady" / "groma-08-treningova"
+    r = compute(read_zap(d / "zapisnik.zap"), read_point_list(d / "pms.txt"), koeficient=0.9998609983)
+    vzor = {p.cislo: p for p in read_point_list(d / "vzor_seznam.txt")}
+    n = 0
+    for b in r.body:
+        g = vzor.get(b.bod)
+        if b.kontrolni or g is None:
+            continue
+        n += 1
+        assert math.hypot(b.y - abs(g.a), b.x - abs(g.b)) <= 0.0071, b.bod
+        assert b.z is None or not g.z or abs(b.z - g.z) <= 0.0071, b.bod
+    assert n >= 55
