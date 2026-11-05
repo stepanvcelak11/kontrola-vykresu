@@ -3611,3 +3611,27 @@ def test_cad_pracovni_sady(window, tmp_path):
     assert PS.aktivni().nazev == "Mapa" and c.dok.path == tmp_path / "vykresy" / "mapa1.dgn"
     assert "1.030" in [b.name for b in c.dok.doc.blocks] and "mapa1" in c.vykresy_cb.currentText()
     PS.nastav_aktivni(None)
+
+
+def test_groma_nastaveni_parametru(window):
+    """Nastavení parametrů jako v Gromě 14: 13 stránek, funkční volby jdou do výpočtů, ostatní se pamatují."""
+    from kontrola.geodezie import nastaveni as N
+    from kontrola.ui import nastaveni_vypoctu as NV
+    puvodni = N.aktualni()
+    try:
+        d = window.vypocty.ulohy.nastaveni_vypoctu(modal=False)
+        assert [d.zalozky.item(i).text() for i in range(d.zalozky.count())] == NV.STRANKY
+        assert d.stranky.count() == 13
+        d.zalozky.setCurrentRow(3)
+        assert d.stranky.currentIndex() == 3 and d.tol_pole[5].text() == "100.00*SQRT(n + 0.00)"
+        d.tol_seznam.setCurrentRow(0)
+        assert d.tol_nazev.text().startswith("1 - Velmi")
+        d.desetiny.setValue(2)
+        d.zpracovatel.setText("Žák")
+        d._prvky["duplicitni"].setChecked(True)
+        d._ok()
+        assert N.aktualni().desetiny == 2 and N.aktualni().zpracovatel == "Žák"
+        d2 = window.vypocty.ulohy.nastaveni_vypoctu(modal=False)
+        assert d2._prvky["duplicitni"].isChecked() and d2.tol_nazev.text().startswith("1 - Velmi")
+    finally:
+        N.nastav(puvodni)
