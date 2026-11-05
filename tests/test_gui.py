@@ -3372,3 +3372,24 @@ def test_cad_styly_car_z_rsc(window):
     its = c._polozky.get(id(pl), [])
     assert its and isinstance(its[0], QGraphicsPathItem) and its[0].path().elementCount() > 20
     c.proved("styly čar odpoj")
+
+
+def test_cad_vyber_stylu_z_rsc_v_liste(window):
+    from pathlib import Path
+    geo = Path(__file__).resolve().parents[1] / "podklady" / "ucitel-dalsi" / "GEO.RSC"
+    if not geo.is_file():
+        return
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    c.proved(f"styly čar {geo}")
+    i = c.styl_cb.findData("2.163")
+    assert i >= 0 and not c.styl_cb.itemIcon(i).isNull()
+    c.styl_cb.setCurrentIndex(i)
+    c._styl_z_listy(i)
+    assert c.kresleni.typ_cary == "2.163"
+    for t in ("u", "x=0 y=0", "x=30 y=0", ""):
+        c.zadej(t)
+    car = [e for e in c.dok.msp if e.dxftype() == "LINE"][-1]
+    assert car.dxf.linetype == "2.163" and "2.163" in c.dok.doc.linetypes
+    c.proved("styly čar odpoj")

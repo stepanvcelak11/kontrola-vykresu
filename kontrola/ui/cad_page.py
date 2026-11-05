@@ -1423,6 +1423,14 @@ class CadPage(QWidget):
                              and not lt.dxf.name.upper().startswith("DGN STYLE"))
             for jm in vlastni:
                 self.styl_cb.addItem(jm, jm)
+            styly = self.styly_rsc()
+            if styly:
+                uz = {self.styl_cb.itemData(i) for i in range(self.styl_cb.count())}
+                for jm, st in styly.items():
+                    if st.kod in uz:
+                        continue
+                    uz.add(st.kod)
+                    self.styl_cb.addItem(_ikona_stylu(st, barva), jm, st.kod)
         self.styl_cb.setIconSize(QSize(60, 14))
         self.styl_cb.blockSignals(False)
         self.tl_cb.blockSignals(True)
@@ -1837,6 +1845,7 @@ class CadPage(QWidget):
             self.vypis(f"Připojena knihovna stylů čar {Path(cesta).name}: {n} stylů.")
             if self.dok is not None:
                 self._vykresli()
+                self._napln_styly()
             return
         if a.lower() in ("odpoj", "zrus", "zruš"):
             QSettings().setValue("cad/rsc", [])
@@ -4211,6 +4220,28 @@ class CadPage(QWidget):
 def _linie(body):
     from shapely.geometry import LineString
     return LineString(body)
+
+
+def _ikona_stylu(st, barva):
+    """Náhled stylu z knihovny .rsc (60 × 14 px) do výběru stylů."""
+    from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPen, QPixmap
+
+    from ..io.rsc import vykresli
+    pm = QPixmap(60, 14)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(QPen(QColor(barva) if barva else QColor("#E5E7EB"), 1))
+    delky = [sum(u.delka for u in sl.useky) for sl in st.slozky if sl.useky]
+    k = 40.0 / max(max(delky or [1.0]), 1e-6) / 1.5  # aspoň ~1,5 periody na šířku ikony
+    cesta = QPainterPath()
+    for c in vykresli([(0.0, 0.0), (60.0 / k, 0.0)], st):
+        cesta.moveTo(c[0][0] * k, 7 - c[0][1] * k)
+        for x, y in c[1:]:
+            cesta.lineTo(x * k, 7 - y * k)
+    p.drawPath(cesta)
+    p.end()
+    return QIcon(pm)
 
 
 def _bulge3(a, m, c):
