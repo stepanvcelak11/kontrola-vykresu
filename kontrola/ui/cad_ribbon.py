@@ -455,7 +455,7 @@ def ikona_uchytu(typ: str, barva: str = "#374151") -> QIcon:
 
 def menu_soubor(stranka) -> QMenu:
     m = QMenu(stranka)
-    for text, b in (("Nový", stranka.b_new), ("Nový podle zadání", stranka.b_novy_zadani),
+    for text, b in (("Nový…", stranka.b_new), ("Nový podle zadání", stranka.b_novy_zadani),
                     ("Otevřít…", stranka.b_open), ("Uložit", stranka.b_save), ("Uložit jako…", stranka.b_saveas),
                     (None, None), ("Tisk do PDF…", stranka.b_tisk), (None, None),
                     ("Klávesové zkratky…", stranka.b_zkratky)):

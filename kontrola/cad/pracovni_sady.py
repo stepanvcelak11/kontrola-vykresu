@@ -25,6 +25,7 @@ class Sada:
     bunky: list[Path] = field(default_factory=list)
     styly: list[Path] = field(default_factory=list)
     dgnlib: list[Path] = field(default_factory=list)
+    seedy: list[Path] = field(default_factory=list)  # všechny seedy sady – volí se podle druhu výkresu
 
     @property
     def klic(self) -> str:
@@ -67,7 +68,8 @@ def _sada_z_standards(std: Path) -> Sada:
     return Sada(nazev, ws or nazev, std.parent, _seed(seeds, nazev),
                 sorted(p for p in soubory if _pripona(p, ".cel")),
                 sorted(p for p in soubory if _pripona(p, ".rsc") and _je_knihovna_stylu(p)),
-                sorted(p for p in soubory if _pripona(p, ".dgnlib") and p.parent.name.lower() != "gui"))
+                sorted(p for p in soubory if _pripona(p, ".dgnlib") and p.parent.name.lower() != "gui"),
+                sorted(p for p in seeds if _pripona(p, ".dgn")))
 
 
 def najdi(slozka: str | Path) -> list[Sada]:
@@ -85,10 +87,11 @@ def najdi(slozka: str | Path) -> list[Sada]:
                       and len({c.name.lower() for c in d.iterdir() if c.is_dir()} & {"cell", "symb", "seed"}) >= 2)
     for d in projekty:
         soubory = [p for p in d.rglob("*") if p.is_file()]
-        out.append(Sada(d.name, "V8i", d, _seed([p for p in soubory if p.parent.name.lower() == "seed"], d.name),
+        seeds = [p for p in soubory if p.parent.name.lower() == "seed" and _pripona(p, ".dgn")]
+        out.append(Sada(d.name, "V8i", d, _seed(seeds, d.name),
                         sorted(p for p in soubory if _pripona(p, ".cel")),
                         sorted(p for p in soubory if _pripona(p, ".rsc") and _je_knihovna_stylu(p)),
-                        sorted(p for p in soubory if _pripona(p, ".dgnlib"))))
+                        sorted(p for p in soubory if _pripona(p, ".dgnlib")), sorted(seeds)))
     volne: dict[Path, list[Path]] = {}
     for p in koren.rglob("*"):
         if (_pripona(p, ".cel", ".rsc", ".dgn") and "worksets" not in (x.lower() for x in p.parts)
@@ -98,7 +101,8 @@ def najdi(slozka: str | Path) -> list[Sada]:
         cel = sorted(p for p in soubory if _pripona(p, ".cel"))
         rsc = sorted(p for p in soubory if _pripona(p, ".rsc") and _je_knihovna_stylu(p))
         if cel or rsc:
-            out.append(Sada(BEZ_SADY, d.name, d, _seed(soubory, "sjtsk"), cel, rsc, []))
+            out.append(Sada(BEZ_SADY, d.name, d, _seed(soubory, "sjtsk"), cel, rsc, [],
+                            sorted(p for p in soubory if _pripona(p, ".dgn"))))
     return out
 
 
@@ -136,6 +140,19 @@ def vsechny() -> list[Sada]:
 def aktivni() -> Sada | None:
     k = str(_qs().value(KLIC_AKTIVNI, "") or "")
     return next((s for s in vsechny() if s.klic == k), None) if k else None
+
+
+def posledni_seed(sada: Sada | None) -> Path | None:
+    """Seed naposledy zvolený v této sadě (jinak výchozí seed sady)."""
+    if sada is None:
+        return None
+    v = str(_qs().value(f"cad/seed/{sada.klic}", "") or "")
+    return Path(v) if v and Path(v).is_file() else sada.seed
+
+
+def zapamatuj_seed(sada: Sada | None, seed: Path | None) -> None:
+    if sada is not None:
+        _qs().setValue(f"cad/seed/{sada.klic}", str(seed or ""))
 
 
 def nastav_aktivni(sada: Sada | None) -> None:

@@ -3587,6 +3587,15 @@ def test_cad_pracovni_sady(window, tmp_path):
     assert PS.aktivni().nazev == "Mapa" and c.dok.path is None
     assert len(list(c.dok.doc.layers)) > 60  # hladiny ze seedu
     assert "1.030" in [b.name for b in c.dok.doc.blocks] and "2.09_" in c.styly_rsc()
+    # seed podle druhu výkresu: nabídka seedů sady + libovolný soubor; volba se pamatuje
+    n = c.novy_soubor(modal=False)
+    assert n.seedy.findData(str(std / "Seed" / "SJTSK-V8.DGN")) >= 0
+    n.pridej_seed(str(ucitel / "UGEO.DGN"))
+    n._ok()
+    c.novy(seed=n.seed())
+    assert c.dok.path is None and PS.posledni_seed(PS.aktivni()).name == "UGEO.DGN"
+    c.novy(seed="")  # bez seedu
+    assert len(list(c.dok.doc.layers)) < 60
     PS.nastav_aktivni(None)
     c.novy()
     assert len(list(c.dok.doc.layers)) < 60

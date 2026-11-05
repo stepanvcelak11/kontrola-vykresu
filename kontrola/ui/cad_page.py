@@ -877,7 +877,7 @@ class CadPage(QWidget):
         self.tl_cb.activated.connect(self._tloustka_z_listy)
         # signály
         self.b_open.clicked.connect(lambda: self.otevri())
-        self.b_new.clicked.connect(self.novy)
+        self.b_new.clicked.connect(lambda: self.novy_soubor())
         self.b_save.clicked.connect(lambda: self.uloz())
         self.b_saveas.clicked.connect(lambda: self.uloz(jako=True))
         self.b_all.clicked.connect(lambda: self.view.zoom_all())
@@ -1444,7 +1444,7 @@ class CadPage(QWidget):
         if d.exec() and d.zmeneno:
             self.po_zmene_knihoven()
             if d.novy_soubor:
-                self.novy()
+                self.novy_soubor()
         return d
 
     def knihovny(self, modal: bool = True):
@@ -2226,28 +2226,42 @@ class CadPage(QWidget):
         self.nastav_dokument(dok)
         return True
 
-    def novy(self):
-        """Nový výkres – ze seedu aktivní pracovní sady (hladiny, nastavení) jako v MicroStationu."""
+    def novy_soubor(self, modal: bool = True):
+        """Nový soubor jako v MicroStationu: volba seedu podle druhu výkresu (seedy pracovní sady nebo jiný)."""
+        from .novy_soubor_dialog import NovySouborDialog
+        d = NovySouborDialog(self)
+        if not modal:
+            return d
+        if d.exec():
+            self.novy(seed=d.seed())
+        return d
+
+    def novy(self, seed: str | Path | None = None):
+        """Nový výkres – ze seedu (zvoleného, nebo naposledy použitého v aktivní pracovní sadě) jako
+        v MicroStationu; seed = "" znamená prázdný výkres bez seedu."""
         from ..cad import pracovni_sady as PS
         sada = PS.aktivni()
+        if seed is None:
+            seed = PS.posledni_seed(sada)
+        seed = Path(seed) if seed else None
         dok = None
-        if sada is not None and sada.seed is not None:
+        if seed is not None:
             try:
-                dok = CadDokument.otevri(str(sada.seed), self._pravidla())
+                dok = CadDokument.otevri(str(seed), self._pravidla())
             except ValueError as e:
-                self.vypis(f"⚠ Seed {sada.seed.name}: {e}")
+                self.vypis(f"⚠ Seed {seed.name}: {e}")
         if dok is None:
             self.nastav_dokument(CadDokument())
         else:
             from ..cad.dokument import hladiny_v8
-            for lib in sada.dgnlib:  # hladiny z knihovny (.dgnlib), které v seedu nejsou
+            for lib in (sada.dgnlib if sada is not None else []):  # hladiny z .dgnlib, které v seedu nejsou
                 for jm in hladiny_v8(lib):
                     if jm not in dok.doc.layers:
                         dok.doc.layers.add(jm)
             dok.path = None  # nový výkres, seed se nepřepíše
             self.nastav_dokument(dok)
-            self.vypis(f"Nový výkres v pracovní sadě {sada.nazev} (seed {sada.seed.name}, "
-                       f"{len(list(dok.doc.layers))} hladin).")
+            self.vypis(f"Nový výkres ze seedu {seed.name}" + (f" (pracovní sada {sada.nazev})" if sada else "")
+                       + f", {len(list(dok.doc.layers))} hladin.")
         self.sjtsk = False
 
     def uloz(self, jako: bool = False, path: str | None = None) -> Path | None:
