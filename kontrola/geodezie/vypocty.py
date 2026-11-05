@@ -518,9 +518,9 @@ def polygonovy_porad_volny(a, a_orient, uhly: list[float], delky: list[float], c
 
 
 # ------------------------------------------------------------------ testování přesnosti účelové mapy (ČSN 01 3410)
-# třída přesnosti → (u_xy, u_H, u_v) [m]; 3. třída podle Pokynu pro tvorbu ÚM (tab. 5.1), ostatní podle ČSN 01 3410
-TRIDY_PRESNOSTI = {1: (0.04, 0.03, 0.13), 2: (0.08, 0.07, 0.33), 3: (0.14, 0.12, 0.50),
-                   4: (0.26, 0.18, 0.88), 5: (0.50, 0.35, 1.75)}
+# třída přesnosti → (u_xy, u_H, u_v) [m] podle ČSN 01 3410:2014, tabulka 1 – Kritéria přesnosti
+TRIDY_PRESNOSTI = {1: (0.04, 0.03, 0.30), 2: (0.08, 0.07, 0.40), 3: (0.14, 0.12, 0.50),
+                   4: (0.26, 0.18, 0.80), 5: (0.50, 0.35, 1.50)}
 N_MIN = 100  # minimální rozsah reprezentativního výběru
 
 

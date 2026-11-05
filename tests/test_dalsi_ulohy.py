@@ -634,3 +634,10 @@ def test_prevod_uhlu():
     assert "90.000000" in r and "90°00′00.000″" in r
     assert "50.56019" in r and "45°30′15.000″" in r
     assert "200.00000" in r and "-45°00′00.000″" in r
+
+
+def test_tridy_presnosti_podle_csn_01_3410():
+    """Tabulka 1 ČSN 01 3410:2014 (u_xy, u_H, u_v) – opsáno z normy."""
+    from kontrola.geodezie.vypocty import TRIDY_PRESNOSTI
+    assert TRIDY_PRESNOSTI == {1: (0.04, 0.03, 0.30), 2: (0.08, 0.07, 0.40), 3: (0.14, 0.12, 0.50),
+                               4: (0.26, 0.18, 0.80), 5: (0.50, 0.35, 1.50)}
