@@ -3415,3 +3415,18 @@ def test_cad_otoc_pohled(window):
     assert abs(a.y() - b.y()) <= 1 and b.x() > a.x()
     a2 = c.view.mapFromScene(QPointF(0, 10))
     assert a2.y() < a.y()  # y nahoru
+
+
+def test_cad_orez_ohradou(window):
+    c = window.cad
+    window.show_page("cad")
+    c.novy()
+    for t in ("u", "x=-5 y=5", "x=15 y=5", ""):
+        c.zadej(t)
+    c.proved("ořež ohradou")
+    for t in ("x=0 y=0", "x=10 y=0", "x=10 y=10", "x=0 y=10", "", "u"):
+        c.zadej(t)
+    pl = [e for e in c.dok.msp if e.dxftype() == "LWPOLYLINE"]
+    assert len(pl) == 1 and not [e for e in c.dok.msp if e.dxftype() == "LINE"]
+    c.undo()
+    assert [e for e in c.dok.msp if e.dxftype() == "LINE"]

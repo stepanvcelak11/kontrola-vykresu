@@ -2204,3 +2204,52 @@ def smer_prvku(e, bod) -> float:
     L = g.length
     a, b = g.interpolate(max(0.0, t - 1e-3 * max(L, 1))), g.interpolate(min(L, t + 1e-3 * max(L, 1)))
     return _m.degrees(_m.atan2(b.y - a.y, b.x - a.x))
+
+
+# ------------------------------------------------------------------ ořezání ohradou (Fence Clip)
+def orez_ohradou(msp, h: Historie, ents, ohrada, uvnitr: bool = True) -> tuple[int, int, int]:
+    """Ořízne čáry ohradou (shapely Polygon): ``uvnitr`` = ponechá část uvnitř, jinak vně. Texty, buňky a body
+    zůstanou, jen když jejich bod leží v ponechané části. Vrací (ponechané beze změny, oříznuté, smazané)."""
+    from shapely.geometry import LineString, Point
+    if ohrada is None or ohrada.is_empty or ohrada.area <= 0:
+        raise ValueError("Ohrada musí být plocha (aspoň tři body).")
+    nove, stare = [], []
+    beze = ori = smaz = 0
+    for e in ents:
+        t = e.dxftype()
+        if t in ("TEXT", "MTEXT", "INSERT", "POINT"):
+            k = e.dxf.get("insert", None) if t != "POINT" else e.dxf.location
+            if k is None:
+                beze += 1
+                continue
+            uvn = ohrada.covers(Point(k[0], k[1]))
+            if uvn == uvnitr:
+                beze += 1
+            else:
+                stare.append(e)
+                smaz += 1
+            continue
+        g = geometrie(e)
+        if g is None or g.is_empty or g.geom_type not in ("LineString", "LinearRing", "MultiLineString"):
+            beze += 1
+            continue
+        cast = g.intersection(ohrada) if uvnitr else g.difference(ohrada)
+        if cast.is_empty:
+            stare.append(e)
+            smaz += 1
+            continue
+        if cast.equals(g) or abs(cast.length - g.length) < 1e-9:
+            beze += 1
+            continue
+        kusy = [cast] if isinstance(cast, LineString) else [x for x in getattr(cast, "geoms", [])
+                                                           if isinstance(x, LineString)]
+        attrs = {k: e.dxf.get(k) for k in ("layer", "color", "linetype", "lineweight", "ltscale", "true_color")
+                 if e.dxf.hasattr(k)}
+        for k_ in kusy:
+            if k_.length > 1e-9:
+                nove.append(msp.add_lwpolyline([c[:2] for c in k_.coords], dxfattribs=attrs))
+        stare.append(e)
+        ori += 1
+    if nove or stare:
+        h.proved("Ořezání ohradou", nove, stare)
+    return beze, ori, smaz

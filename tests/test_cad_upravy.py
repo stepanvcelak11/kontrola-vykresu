@@ -563,3 +563,27 @@ def test_zarovnani_prvku():
     h.krok_zpet()
     n = U.zarovnej(msp, h, [a, b], vzor, "sh")
     assert all(abs((e.dxf.start.y if e.dxftype() == "LINE" else e.dxf.center.y) - 5) < 1e-9 for e in n)
+
+
+def test_orez_ohradou():
+    import ezdxf
+    from shapely.geometry import box
+
+    from kontrola.cad import upravy as U
+    doc = ezdxf.new("R2013")
+    msp = doc.modelspace()
+    h = U.Historie(msp)
+    a = msp.add_line((-5, 5), (15, 5), dxfattribs={"layer": "A", "color": 3})
+    b = msp.add_line((20, 20), (30, 30))
+    c = msp.add_line((2, 2), (8, 8))
+    t = msp.add_text("x", dxfattribs={"insert": (50, 50)})
+    r = U.orez_ohradou(msp, h, [a, b, c, t], box(0, 0, 10, 10))
+    assert r == (1, 1, 2)
+    pl = [e for e in msp if e.dxftype() == "LWPOLYLINE"]
+    assert len(pl) == 1 and [p[:2] for p in pl[0].get_points("xy")] == [(0, 5), (10, 5)]
+    assert pl[0].dxf.layer == "A" and pl[0].dxf.color == 3
+    h.krok_zpet()
+    assert len([e for e in msp if e.dxftype() == "LINE"]) == 3
+    r = U.orez_ohradou(msp, h, list(msp), box(0, 0, 10, 10), uvnitr=False)
+    kusy = sorted(tuple(p[:2] for p in e.get_points("xy")) for e in msp if e.dxftype() == "LWPOLYLINE")
+    assert kusy == [((-5, 5), (0, 5)), ((10, 5), (15, 5))] and r[2] == 1

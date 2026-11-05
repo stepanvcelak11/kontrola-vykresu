@@ -436,6 +436,7 @@ class CadPage(QWidget):
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
+        "ořež ohradou": "oříznout kresbu ohradou (Fence Clip) – ponechat vnitřek nebo vnějšek, i podle uzavřeného prvku",
         "otoč pohled": "otočit pohled (Rotate View): dvěma body podle kresby, nebo „otoč pohled 30“; 0 = zpět",
         "čára pod úhlem": "čára z bodu pod zadaným úhlem k prvku (Construct Line at Active Angle), ° nebo gon",
         "zarovnej": "zarovnat vybrané prvky podle hrany vzorového prvku (Align Elements) – vlevo, vpravo, nahoru…",
@@ -508,6 +509,7 @@ class CadPage(QWidget):
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
         "perpendicular": "kolmice", "construct perpendicular": "kolmice", "kol": "kolmice",
         "bisector": "osa úhlu", "osa uhlu": "osa úhlu", "osa": "osa úhlu",
+        "orez ohradou": "ořež ohradou", "fence clip": "ořež ohradou", "ořezat ohradou": "ořež ohradou",
         "otoc pohled": "otoč pohled", "rotate view": "otoč pohled", "rv": "otoč pohled",
         "cara pod uhlem": "čára pod úhlem", "line at angle": "čára pod úhlem", "pod úhlem": "čára pod úhlem",
         "align": "zarovnej", "align elements": "zarovnej", "zarovnat": "zarovnej", "zarovnání prvků": "zarovnej",
@@ -4181,6 +4183,36 @@ class CadPage(QWidget):
         self.vyber = self.index.ohrada(body, protinajici=(q == "p"))
         self._zvyrazni()
         self.vypis(f"Ohrada: vybráno {len(self.vyber)} prvků.")
+
+    def n_orez_ohradou(self):
+        """Fence Clip: ohrada klikáním (nebo uzavřený prvek „p“) – prvky se oříznou, ponechá se vnitřek / vnějšek."""
+        from shapely.geometry import Polygon
+        a = yield self._bod_req("Ořezat ohradou – první bod ohrady (p = vybrat uzavřený prvek jako ohradu):",
+                                slova=("p",))
+        if a == "p":
+            e, _k = yield Pozadavek("prvek", "Klikněte na uzavřený prvek (hranici ořezu):")
+            pl = U.plocha_prvku(self.index.geometrie(e) if self.index is not None else None)
+            vynech = {id(e)}
+        else:
+            body = [a]
+            while True:
+                q = yield self._bod_req("Další bod ohrady (Enter = hotovo):", body[-1], True)
+                if q is None:
+                    break
+                body.append(q)
+                self.view.zvyraznene = [_linie(body + [body[0]])]
+            if len(body) < 3:
+                raise ValueError("Ohrada potřebuje aspoň tři body.")
+            pl = Polygon(body)
+            vynech = set()
+        t = yield Pozadavek("text", "Ponechat [u] = uvnitř, v = vně:", vychozi="u")
+        uvnitr = not str(t or "u").strip().lower().startswith("v")
+        ly = self.dok.doc.layers
+        zamcene = {x.dxf.name for x in ly if x.is_locked() or x.is_off() or x.is_frozen()}
+        ents = [x for x in self.prostor if id(x) not in vynech and x.dxf.get("layer", "0") not in zamcene
+                and x.dxftype() != "VIEWPORT"]
+        b, o, s_ = U.orez_ohradou(self.prostor, self.historie_zmen, ents, pl, uvnitr)
+        self.vypis(f"Ořezání ohradou: oříznuto {o}, smazáno {s_}, beze změny {b} prvků (Zpět vrátí vše).")
 
     def n_omerne_miry(self):
         ents = yield from self._vyber_req("Oměrné míry")
