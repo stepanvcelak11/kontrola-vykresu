@@ -278,6 +278,16 @@ def _v8_do_ezdxf(p: Path, rs=None):
             st = f.attributes.get("MS_STYL", "0")
             if st.lstrip("-").isdigit() and 0 <= int(st) <= 7:
                 a["linetype"] = SY.styl_na_typ(st)
+            elif st.startswith("-") and (f.linetype or "").strip():
+                # vlastní styl MicroStationu (ploty, zdi…) – jméno ponechat, CAD ho nakreslí z knihovny .rsc
+                jm = f.linetype.strip()
+                if jm not in doc.linetypes:
+                    try:
+                        doc.linetypes.add(jm, pattern=[0.0], description=f"styl MicroStationu {jm}")
+                    except Exception:  # noqa: BLE001 – neplatné jméno pro DXF
+                        jm = None
+                if jm:
+                    a["linetype"] = jm
         g = f.geometry
         if f.dxftype == "INSERT" and f.block_name:
             jm = f.block_name
