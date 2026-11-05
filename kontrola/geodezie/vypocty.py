@@ -442,6 +442,16 @@ def ortogonalni_davka(a, b, mereni: list[tuple[str, float, float]], delka_merena
 
 
 # ------------------------------------------------------------------ polygonový pořad
+def rozdel_odchylku(dys: list[float], dxs: list[float], ody: float, odx: float
+                    ) -> tuple[list[float], list[float]]:
+    """Opravy souřadnicových rozdílů stran pořadu jako v Gromě („klasicky“): odchylka v Y se rozdělí úměrně
+    absolutním hodnotám ΔY, odchylka v X úměrně |ΔX| (ověřeno na školním protokolu pořadu 4008 → 934200160)."""
+    def podil(d, o):
+        sa = sum(abs(v) for v in d)
+        return [-o * abs(v) / sa for v in d] if sa > 0 else [-o / len(d)] * len(d)
+    return podil(dys, ody), podil(dxs, odx)
+
+
 @dataclass
 class PolygonovyPorad:
     body: list[tuple[str, P]]
@@ -451,6 +461,8 @@ class PolygonovyPorad:
     polohova: float  # √(dy² + dx²) [m]
     delka: float  # [m]
     smerniky: list[float]
+    vy: list[float] = field(default_factory=list)  # opravy ΔY stran [m]
+    vx: list[float] = field(default_factory=list)
 
 
 def polygonovy_porad(a, a_orient, b, b_orient, uhly: list[float], delky: list[float],
@@ -460,7 +472,7 @@ def polygonovy_porad(a, a_orient, b, b_orient, uhly: list[float], delky: list[fl
     Začátek A (známý) s orientací na známý bod, konec B (známý) s orientací na známý bod.
     ``uhly`` = vrcholové (levé) úhly β měřené ve směru hodin od zadní k přední záměře na A, P1, …, Pn, B
     (n+2 úhlů), ``delky`` = délky stran A–P1, …, Pn–B (n+1), ``cisla`` = čísla nových bodů P1…Pn (n).
-    Úhlová odchylka se rozdělí rovnoměrně, souřadnicová úměrně délkám stran."""
+    Úhlová odchylka se rozdělí rovnoměrně, souřadnicová úměrně absolutním hodnotám ΔY a ΔX (jako Groma)."""
     n = len(cisla)
     if len(uhly) != n + 2 or len(delky) != n + 1:
         raise ValueError(f"Pořad s {n} novými body potřebuje {n + 2} úhlů a {n + 1} délek.")
@@ -490,12 +502,13 @@ def polygonovy_porad(a, a_orient, b, b_orient, uhly: list[float], delky: list[fl
     ody = sum(dys) - (yb - ya)
     odx = sum(dxs) - (xb - xa)
     L = sum(delky)
+    vy, vx = rozdel_odchylku(dys, dxs, ody, odx)
     body, y, x = [], ya, xa
     for i in range(n):
-        y += dys[i] - ody * delky[i] / L
-        x += dxs[i] - odx * delky[i] / L
+        y += dys[i] + vy[i]
+        x += dxs[i] + vx[i]
         body.append((cisla[i], P(y, x)))
-    return PolygonovyPorad(body, w, ody, odx, math.hypot(ody, odx), L, strany)
+    return PolygonovyPorad(body, w, ody, odx, math.hypot(ody, odx), L, strany, vy, vx)
 
 
 def polygonovy_porad_volny(a, a_orient, uhly: list[float], delky: list[float], cisla: list[str]) -> list[tuple[str, P]]:

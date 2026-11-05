@@ -987,7 +987,7 @@ def u_polygon(s, h):
             d = strany[i][1]
             sg = r.smerniky[i]
             dy_, dx_ = d * math.sin(V.gon2rad(sg)), d * math.cos(V.gon2rad(sg))
-            vy_, vx_ = -r.dy * d / r.delka * 1000, -r.dx * d / r.delka * 1000
+            vy_, vx_ = r.vy[i] * 1000, r.vx[i] * 1000
             radek += f" {sg:>14.4f} {d:>10.3f} {dy_:>10.3f} {dx_:>10.3f} {vy_:>7.1f} {vx_:>7.1f}"
         else:
             radek += " " * 68
@@ -1487,10 +1487,14 @@ def u_polygon_jednostranne_orientovany(s, h):
              f"souřadnicové odchylky dY = {_f(ody)} m, dX = {_f(odx)} m, polohová {_f(pol)} m, mezní {_f(mez_p)} m"
              + ("" if pol <= mez_p else "  ← PŘEKROČENA"),
              "  bod                 Y            X"]
-    nove, kum = [], 0.0
+    # souřadnicové rozdíly stran z volného pořadu → opravy úměrně |ΔY|, |ΔX| (jako Groma)
+    vrch = [(a.y, a.x)] + [(p.y, p.x) for _c, p in volne]
+    vy, vx = V.rozdel_odchylku([q[0] - p[0] for p, q in zip(vrch, vrch[1:])],
+                               [q[1] - p[1] for p, q in zip(vrch, vrch[1:])], ody, odx)
+    nove, sy, sx = [], 0.0, 0.0
     for i, (c, p) in enumerate(volne[:-1]):
-        kum += delky[i]
-        y, x = p.y - ody * kum / L, p.x - odx * kum / L
+        sy, sx = sy + vy[i], sx + vx[i]
+        y, x = p.y + sy, p.x + sx
         prot.append(f"  {c:<14} {y:>12.3f} {x:>12.3f}")
         nove.append(Bod(c, y, x, poznamka="polygonový pořad jednostranně orientovaný"))
     return Vysledek(prot, nove)

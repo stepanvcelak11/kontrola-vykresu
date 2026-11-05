@@ -307,3 +307,25 @@ def test_rajon_01_jako_protokol_gromy():
     assert "Kontrolní určení bodu číslo 2" in t and "Polohová odchylka: 0.055, Stř. souř. chyba: 0.039" in t
     dy, dx = map(float, next(x for x in t.splitlines() if x.startswith("Rozdíl ")).split()[1:3])
     assert abs(dy - -0.053) <= 0.0011 and abs(dx - 0.013) <= 0.0011  # Groma: −0.053 0.013 (zaokrouhlení na mm)
+
+
+def test_polygon_jako_protokol_gromy():
+    """Školní pořad 4008 → 934200160 (protokol Gromy): úhly, délky a orientační posuny z protokolu.
+    Groma rozděluje souřadnicovou odchylku úměrně |ΔY| a |ΔX| – vypočtené body na mm stejně."""
+    from kontrola.geodezie import ulohy as U
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    a, b = (584714.530, 1146428.040), (584854.560, 1145852.080)
+
+    def fiktivni(p, sm):  # orientace ve směru nulového směru osnovy (orientační posun z Gromy)
+        return (p[0] + 1000 * math.sin(sm * math.pi / 200), p[1] + 1000 * math.cos(sm * math.pi / 200))
+    s = SeznamBodu()
+    s.pridej([Bod("4008", *a), Bod("160", *b), Bod("O1", *fiktivni(a, 199.9948)), Bod("O2", *fiktivni(b, 196.3304))])
+    fn = next(f for n, _p, _pole, f in U.ULOHY if n == "Polygonový pořad")
+    v = fn(s, {"ao": "O1", "a": "4008", "b": "160", "bo": "O2",
+               "uhly": "4008 337.8310\n25001 244.9713\n25002 198.1256\n25003 227.8916\n25004 204.7555\n160 182.7175",
+               "delky": "4008 121.987\n25001 103.266\n25002 182.208\n25003 111.645\n25004 126.289"})
+    groma = {"25001": (584815.570, 1146359.733), "25002": (584843.105, 1146260.201),
+             "25003": (584896.817, 1146086.082), "25004": (584881.354, 1145975.504)}
+    for n in v.nove:
+        gy, gx = groma[n.cislo]
+        assert abs(n.y - gy) <= 0.0011 and abs(n.x - gx) <= 0.0011, n.cislo
