@@ -974,11 +974,29 @@ def u_polygon(s, h):
              f"mezní {_f(mez_p)} m" + ("" if r.polohova <= mez_p else "  ← PŘEKROČENA"),
              f"(mezní odchylky pro třídu {nast.polygon_trida} – Nastavení výpočtů) → "
              + ("pořad VYHOVUJE" if ok else "pořad NEVYHOVUJE"),
-             "  bod                 směrník        délka            Y            X"]
+             "",
+             "  bod           úhel β [gon] opr.[cc]  směrník [gon]  délka [m]     ΔY [m]     ΔX [m]  vY[mm]  vX[mm]"
+             "            Y            X"]
+    n_v = len(cisla) + 2
+    opr = -r.uhlova_odchylka / n_v * 10000
+    vrcholy = [(a.cislo, a.y, a.x)] + [(c, p.y, p.x) for c, p in r.body] + [(b.cislo, b.y, b.x)]
     nove = []
-    for i, (c, p) in enumerate(r.body):
-        prot.append(f"  {c:<14} {r.smerniky[i]:>12.4f} {strany[i][1]:>12.3f} {p.y:>12.3f} {p.x:>12.3f}")
+    for i, (c, y, x) in enumerate(vrcholy):
+        radek = f"  {c:<12} {uhly[i][1]:>13.4f} {opr:>8.1f}"
+        if i < len(r.smerniky):
+            d = strany[i][1]
+            sg = r.smerniky[i]
+            dy_, dx_ = d * math.sin(V.gon2rad(sg)), d * math.cos(V.gon2rad(sg))
+            vy_, vx_ = -r.dy * d / r.delka * 1000, -r.dx * d / r.delka * 1000
+            radek += f" {sg:>14.4f} {d:>10.3f} {dy_:>10.3f} {dx_:>10.3f} {vy_:>7.1f} {vx_:>7.1f}"
+        else:
+            radek += " " * 68
+        radek += f" {y:>12.3f} {x:>12.3f}"
+        prot.append(radek.rstrip())
+    for c, p in r.body:
         nove.append(Bod(c, p.y, p.x, poznamka="polygonový pořad"))
+    prot.append(f"  součty: Σ délek {_f(r.delka)} m, Σ oprav úhlů {-r.uhlova_odchylka * 10000:.1f} cc, "
+                f"Σ vY {-r.dy * 1000:.1f} mm, Σ vX {-r.dx * 1000:.1f} mm")
     return Vysledek(prot, nove)
 
 
