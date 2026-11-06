@@ -347,6 +347,7 @@ class DatovaOkna(QMdiArea):
         g = 4
         sl = int(r.width() * 0.64)
         rh = int(r.height() * 0.58)
+        rh = min(rh, r.height() - min(300, int(r.height() * 0.55)))  # zápisník potřebuje ~300 px (malý displej)
         if hlavni is not None:
             hlavni.setGeometry(g, g, sl - 2 * g, rh - g)
         if dole is not None:
@@ -432,7 +433,12 @@ class ListaNastaveni(QWidget):
             self.kod_kvality.addItem(str(k), k)
         self.kod_kvality.setToolTip("Kód kvality – podle něj se počítají mezní odchylky (bez platného kódu Groma "
                                     "předpokládá 3)")
-        self.meritko = QDoubleSpinBox()
+        class _Meritko(QDoubleSpinBox):  # přesnost 12 míst, ale bez zbytečných nul (1.000000, 0.99990537)
+            def textFromValue(self, v):  # noqa: N802
+                t = f"{v:.12f}".rstrip("0")
+                cela, _, des = t.partition(".")
+                return f"{cela}.{des.ljust(6, '0')}"
+        self.meritko = _Meritko()
         self.meritko.setDecimals(12)
         self.meritko.setRange(0.99, 1.01)
         self.meritko.setSingleStep(0.00001)
