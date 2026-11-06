@@ -201,6 +201,21 @@ def _tlacitko(cmd: str, popisy, barva, zvyr, velke: bool) -> QToolButton:
     return b
 
 
+
+class _PruzneCombo(QComboBox):
+    """Rozbalovací pole v plné šířce podle textu, ale v úzkém okně se smí zúžit (okno se vejde na notebook)."""
+
+    def __init__(self, minimum: int):
+        super().__init__()
+        self._min = minimum
+        from PySide6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+    def minimumSizeHint(self):  # noqa: N802
+        h = super().minimumSizeHint()
+        h.setWidth(min(h.width(), self._min))
+        return h
+
 class PasKaret(QWidget):
     """Pás karet jako v MicroStationu CONNECT: tlačítko Soubor, záložky karet, skupiny nástrojů s názvem dole."""
     nastroj = Signal(str)
@@ -227,18 +242,13 @@ class PasKaret(QWidget):
                                     "border-radius:6px;font-weight:700;margin:3px 0} QToolButton#cad_soubor"
                                     "::menu-indicator{image:none}")
         horni.addWidget(self.b_soubor)
-        self.pracovni_postup = QComboBox()
+        self.pracovni_postup = _PruzneCombo(70)
         self.pracovni_postup.setToolTip("Pracovní postup (Workflow): které karty jsou vidět")
-        # šířka podle pevného počtu znaků, ne podle nejdelší položky – dlouhý název stylu nerozšíří okno
-        self.pracovni_postup.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.pracovni_postup.setMinimumContentsLength(7)
         horni.addWidget(self.pracovni_postup)
-        self.styl_kresleni = QComboBox()
+        self.styl_kresleni = _PruzneCombo(110)
         self.styl_kresleni.setToolTip("Styl kreslení (jako v MultiScale): např. Účelová mapa (ÚM) přidá karty "
                                       "s přednastavenými prvky – hladina, barva, styl, tloušťka a nástroj jedním "
                                       "kliknutím. Nabízí pásy z aktivní pracovní sady (Dgnlib/GUI).")
-        self.styl_kresleni.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.styl_kresleni.setMinimumContentsLength(12)
         horni.addWidget(self.styl_kresleni)
         self._pasy: list = []
         self._dynamicke: list[QWidget] = []
