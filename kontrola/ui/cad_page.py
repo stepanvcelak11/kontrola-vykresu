@@ -909,6 +909,8 @@ class CadPage(QWidget):
             tb.setDefaultAction(a)
             tb.setAutoRaise(True)
             tb.setIconSize(QSize(16, 16))
+            tb.setStyleSheet("QToolButton{padding:2px;margin:0}")
+            tb.setFixedWidth(30)  # i s větším písmem / jiným vzhledem stejně úzké – okno se vejde na notebook
             crow.insertWidget(_poz, tb)
             _poz += 1
         self.krok = QSpinBox()
@@ -916,6 +918,7 @@ class CadPage(QWidget):
         self.krok.setValue(50)
         self.krok.setSuffix(" g")
         self.krok.setToolTip("Krok polárního režimu v gonech")
+        self.krok.setMaximumWidth(80)
         crow.addWidget(self.krok)
         self.anotace_cb = QComboBox()
         self.anotace_cb.addItem("Anot. vyp.", 0)
