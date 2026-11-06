@@ -243,6 +243,7 @@ def obal_hladin(panel: PanelHladin, stranka) -> QWidget:
     v.addWidget(panel, 1)
     tip = QLabel("☑ = zobrazená · dvojklik = aktivní hladina")
     tip.setObjectName("poznamka")
+    tip.setWordWrap(True)
     v.addWidget(tip)
     return w
 

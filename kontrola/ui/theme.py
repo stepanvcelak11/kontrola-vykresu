@@ -51,7 +51,9 @@ _ICONS = {
     "okno": '<rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3"/>',
     "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
     "hledat": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2"/>',
-    "uvod": '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+    "start": '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/>'
+             '<rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>',
+    "uvod": '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     "vykres": '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
     "cad": '<path d="M4 20l7-16 9 16"/><path d="M7.5 13h9"/><circle cx="11" cy="4" r="1.6"/>',
     "kokes": '<path d="M4 20V4"/><path d="M4 12l8-8"/><path d="M8 9l8 11"/><circle cx="18" cy="6" r="2.2"/>',

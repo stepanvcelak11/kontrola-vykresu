@@ -125,7 +125,10 @@ class MainWindow(QMainWindow):
         from .home_page import HomePage
         self.home = HomePage(self)
         self.home.openRecent.connect(self.open_path)
-        self.tabs.insertTab(0, self.home, "Úvod")
+        self.tabs.insertTab(0, self.home, "Přehled")
+        from .rozcestnik import Rozcestnik
+        self.rozcestnik = Rozcestnik(self)
+        self.tabs.insertTab(0, self.rozcestnik, "Start")
         self.tabs.setCurrentWidget(self.home)
         self.tabs.setIconSize(QSize(18, 18))
         self._apply_icons()
@@ -135,6 +138,10 @@ class MainWindow(QMainWindow):
             self.set_project(project)
         else:
             self._open_last_project()
+        from .rozcestnik import KLIC_PRI_STARTU
+        if project is None and QSettings("KontrolaVykresu", "KontrolaVykresu").value(KLIC_PRI_STARTU, True,
+                                                                                      type=bool):
+            self.show_page("start")  # aplikace se zapíná na rozcestníku
 
     # ------------------------------------------------------------------ UI
     def _build_status(self):
@@ -459,7 +466,8 @@ class MainWindow(QMainWindow):
         self.page_group = QActionGroup(self)
         self.page_group.setExclusive(True)
         self.a_page = {}
-        for key, text, tip in (("uvod", "Úvod", "Úvodní stránka – stav projektu a další krok"),
+        for key, text, tip in (("start", "Start", "Rozcestník: projekt, nový projekt, části procesu, programy"),
+                               ("uvod", "Přehled", "Přehled kontroly výkresu – stav projektu a další krok"),
                                ("vykres", "Výkres", "Výkres a seznam chyb"),
                                ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady"),
                                ("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)"),
@@ -588,23 +596,34 @@ class MainWindow(QMainWindow):
         self._apply_icons()
 
     def show_page(self, key: str):
-        w = {"uvod": getattr(self, "home", None), "vykres": self.split, "zadani": self.zadani,
+        w = {"start": getattr(self, "rozcestnik", None), "uvod": getattr(self, "home", None), "vykres": self.split,
+             "zadani": self.zadani,
              "vypocty": getattr(self, "vypocty", None), "cad": getattr(self, "cad", None),
              "kokes": getattr(self, "kokes", None)}.get(key)
         if w is not None:
             from .crash import step
             step(f"stránka {key}")
             self.tabs.setCurrentWidget(w)
+            if key != "start" and getattr(self, "project", None) is not None:
+                self.project.meta["posledni_stranka"] = key  # rozcestník otevře projekt tam, kde se skončilo
 
     def _sync_page_buttons(self):
         if not hasattr(self, "a_page"):
             return
         w = self.tabs.currentWidget()
-        key = ("uvod" if w is getattr(self, "home", None) else "vykres" if w is self.split
+        key = ("start" if w is getattr(self, "rozcestnik", None) else "uvod" if w is getattr(self, "home", None)
+               else "vykres" if w is self.split
                else "vypocty" if w is getattr(self, "vypocty", None)
                else "cad" if w is getattr(self, "cad", None)
                else "kokes" if w is getattr(self, "kokes", None) else "zadani")
         self.a_page[key].setChecked(True)
+
+    def nastav_procesy(self, procesy) -> None:
+        """Levá lišta ukáže jen stránky zvolených částí procesu (Start je vždy)."""
+        from .rozcestnik import stranky_procesu
+        vid = stranky_procesu(procesy) | {"start"}
+        for k, a in getattr(self, "a_page", {}).items():
+            a.setVisible(k in vid)
 
     def _popup_main_menu(self):
         btn = self.toolbar.widgetForAction(self.a_menu)
@@ -626,7 +645,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QColor
 
         from .theme import is_dark
-        barvy = {"uvod": "#2563EB", "vykres": "#0D9488", "zadani": "#D97706", "vypocty": "#7C3AED",
+        barvy = {"start": "#0F766E", "uvod": "#2563EB", "vykres": "#0D9488", "zadani": "#D97706", "vypocty": "#7C3AED",
                  "cad": "#EA580C", "kokes": "#059669"}
 
         def barva(k, akt):
@@ -1224,6 +1243,9 @@ class MainWindow(QMainWindow):
 
     def set_project(self, project: Project):
         self.project = project
+        self.nastav_procesy(project.meta.get("procesy"))
+        if getattr(self, "rozcestnik", None) is not None and self.rozcestnik.isVisible():
+            self.rozcestnik.obnov()
         if getattr(self, "vypocty", None) is not None:
             self.vypocty.set_project(project)
         self._syncing_wip = True

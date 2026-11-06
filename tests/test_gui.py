@@ -375,7 +375,7 @@ def test_rychle_tipy():
 @pytest.mark.skipif(not UKAZKA.exists(), reason="ukázkový výkres chybí")
 def test_uvod_a_skore(window):
     w = window
-    assert w.tabs.widget(0) is w.home
+    assert w.tabs.widget(0) is w.rozcestnik and w.tabs.widget(1) is w.home  # Start (rozcestník), pak Přehled
     w.home.refresh()
     assert w.home.gauge.value is None
     w.load_drawing_file(UKAZKA)
@@ -3956,3 +3956,31 @@ def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
         assert abs(t.dxf.height - 1.25) < 1e-9
     finally:
         PS.nastav_aktivni(None)
+
+
+def test_rozcestnik_projekty_a_casti_procesu(window, tmp_path, monkeypatch):
+    """Rozcestník: nový projekt jen s vybranými částmi procesu → levá lišta ukáže jen je; otevření projektu."""
+    import kontrola.project as P
+    monkeypatch.setattr(P, "default_projects_dir", lambda: tmp_path)
+    r = window.rozcestnik
+    window.show_page("start")
+    assert window.tabs.currentWidget() is r and window.a_page["start"].isChecked()
+    for k, c in r.zaskrt.items():
+        c.setChecked(k in ("vypocty", "kresleni"))
+    assert not r.cely.isChecked()
+    assert r.zvolene() == ["vypocty", "kresleni"]
+    assert r.zaloz("Mapování Husovice")
+    assert window.project.meta["procesy"] == ["vypocty", "kresleni"]
+    assert window.tabs.currentWidget() is window.vypocty
+    vid = {k for k, a in window.a_page.items() if a.isVisible()}
+    assert vid == {"start", "vypocty", "cad"}
+    window.show_page("cad")
+    cesta = str(window.project.root)
+    window.show_page("start")
+    r.obnov()
+    assert any(r.projekty.item(i).data(0x0100) == str(Path(cesta).resolve()) for i in range(r.projekty.count()))
+    assert r.otevri(cesta)
+    assert window.tabs.currentWidget() is window.cad  # tam, kde se skončilo
+    r.cely.setChecked(True)
+    r.pouzij()
+    assert all(a.isVisible() for a in window.a_page.values())
