@@ -93,10 +93,12 @@ def test_dokument_zprava_a_ulozeni_beze_ztrat(tmp_path):
 def test_dokument_novy_a_starsi_verze(tmp_path):
     d = CadDokument()
     d.msp.add_line((0, 0), (1, 1))
-    p = d.uloz(tmp_path / "novy.dxf", verze="R2004")
-    assert ezdxf.readfile(p).dxfversion == "AC1018"
+    p = d.uloz(tmp_path / "novy.dxf")
+    assert ezdxf.readfile(p).dxfversion == "AC1032"  # nové výkresy v nejnovější verzi (AutoCAD 2018)
     with pytest.raises(ValueError):
         d.uloz(tmp_path / "x.dxf", verze="R2000")  # do starší verze ne – ztráta dat
+    s = CadDokument(ezdxf.new("R2000"))
+    assert ezdxf.readfile(s.uloz(tmp_path / "s.dxf", verze="R2004")).dxfversion == "AC1018"
 
 
 def test_poskozeny_dxf(tmp_path):

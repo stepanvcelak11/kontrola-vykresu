@@ -533,6 +533,9 @@ class MainWindow(QMainWindow):
                                        else ""))
         for btn in tb.findChildren(QToolButton):
             btn.setMinimumWidth(72)  # stejně široká tlačítka – sloupec je zarovnaný
+        # na nízké obrazovce (720 px) se spodní akce zmenší na ikony – Nastavení a Nabídka zůstanou vidět
+        self._male_akce = [self.a_recheck, self.a_ready, self.a_exp_pdf, a_por, self.a_open, self.a_settings,
+                           self.a_menu]
         b_open = tb.widgetForAction(self.a_open)
         if b_open is not None:  # šipka vedle: naposledy otevřené výkresy jedním klikem
             # klik = nabídka: Otevřít výkres… a naposledy otevřené (malá šipka v rohu, ne vysoký pruh)
@@ -617,6 +620,22 @@ class MainWindow(QMainWindow):
                else "cad" if w is getattr(self, "cad", None)
                else "kokes" if w is getattr(self, "kokes", None) else "zadani")
         self.a_page[key].setChecked(True)
+
+    def _prizpusob_listu(self) -> None:
+        """Spodní tlačítka levé lišty jen s ikonou, když se s popisky nevejdou na výšku okna."""
+        tb = getattr(self, "toolbar", None)
+        if tb is None or not getattr(self, "_male_akce", None):
+            return
+        tlac = [b for b in (tb.widgetForAction(a) for a in self._male_akce) if b is not None]
+        for b in tlac:
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        if tb.sizeHint().height() > tb.height() > 0:
+            for b in tlac:
+                b.setToolButtonStyle(Qt.ToolButtonIconOnly)
+
+    def resizeEvent(self, e):  # noqa: N802
+        super().resizeEvent(e)
+        self._prizpusob_listu()
 
     def nastav_procesy(self, procesy) -> None:
         """Levá lišta ukáže jen stránky zvolených částí procesu (Start je vždy)."""

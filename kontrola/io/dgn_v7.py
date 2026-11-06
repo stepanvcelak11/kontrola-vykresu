@@ -278,12 +278,12 @@ def read_dgn_v7(path: str | Path, progress=None) -> Drawing:
 
 # ------------------------------------------------------------------ pro CAD
 def do_ezdxf(path: str | Path, rs=None):
-    """DGN V7 → dokument ezdxf (R2013). Vrací (doc, ms_barvy {handle: barva MicroStationu}, poznámky)."""
+    """DGN V7 → dokument ezdxf (R2018). Vrací (doc, ms_barvy {handle: barva MicroStationu}, poznámky)."""
     import ezdxf
 
     from ..cad import symbologie as SY
     prvky, neznamy = nacti_prvky(path)
-    doc = ezdxf.new("R2013", setup=True)
+    doc = ezdxf.new("R2018", setup=True)
     doc.header["$INSUNITS"] = 6
     SY.zajisti_styly(doc)
     msp = doc.modelspace()

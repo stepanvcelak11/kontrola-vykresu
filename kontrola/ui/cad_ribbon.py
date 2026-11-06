@@ -336,9 +336,10 @@ class PasKaret(QWidget):
             self.stack.insertWidget(1 + n, sc)
             self.karty.insertTab(1 + n, titul)
             self._dynamicke.append(sc)
-        if prepnout:
-            self.karty.setCurrentIndex(1)
-            self.stack.setCurrentIndex(1)
+        if prepnout and pas.karty:  # otevřít kartu s nejvíc nástroji (Pasport nezačne na kartě s jedním tlačítkem)
+            n = max(range(len(pas.karty)), key=lambda k: (sum(len(t) for _s, t in pas.karty[k][1]), -k))
+            self.karty.setCurrentIndex(1 + n)
+            self.stack.setCurrentIndex(1 + n)
 
     def _karta_stylu(self, skupiny) -> QWidget:
         from .cad_ikony import ikona as cad_ikona

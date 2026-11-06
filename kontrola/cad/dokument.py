@@ -50,7 +50,7 @@ class CadDokument:
         self._souhrn()
 
     @staticmethod
-    def novy_doc(verze: str = "R2000") -> Drawing:
+    def novy_doc(verze: str = "R2018") -> Drawing:
         doc = ezdxf.new(verze, setup=True)
         doc.header["$INSUNITS"] = 6  # metry
         doc.header["$MEASUREMENT"] = 1
@@ -274,7 +274,7 @@ def _v8_do_ezdxf(p: Path, rs=None):
         d = read_dgn(p)
     except (DgnError, OSError) as e:
         raise ValueError(f"{p.name}: {e}") from None
-    doc = ezdxf.new("R2013", setup=True)
+    doc = ezdxf.new("R2018", setup=True)
     doc.header["$INSUNITS"] = 6
     SY.zajisti_styly(doc)
     msp = doc.modelspace()

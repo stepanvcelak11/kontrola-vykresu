@@ -537,7 +537,7 @@ KARTY_GROMA = [
     ]),
     ("Výpočty", [
         ("Podrobné", [("Polární", "Rajón (polární bod)"), ("Polární dávkou", "Polární metoda dávkou"),
-                      ("Ortogonální", ["Ortogonální metoda (Groma)", "Ortogonální metoda", "Bod ze staničení a kolmice"])]),
+                      ("Ortogonální", "Ortogonální metoda (Groma)")]),
         ("Protínání", [("Ze směrů", ["Protínání vpřed ze směrů", "Protínání vpřed z úhlů", "Protínání zpět"]),
                        ("Z délek", "Protínání z délek")]),
         ("Průsečíky", [("Přímka - přímka", "Průsečíky"), ("Přímka - směr", "Průsečík přímka - směr"),

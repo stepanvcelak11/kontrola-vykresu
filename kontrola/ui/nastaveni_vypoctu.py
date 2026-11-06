@@ -260,15 +260,14 @@ class NastaveniVypoctuDialog(QDialog):
         self.zpracovatel = QLineEdit(self._n.zpracovatel)
         v.addWidget(_skupina("Informace o instalaci:", _formular(("Název uživatele:", self.zpracovatel))))
         g2 = QGridLayout()
-        g2.addWidget(_skupina("Formát nově zakládaných datových souborů:",
-                              *self._radia("format_novych", ["Nový formát (.crds, .mess)",
-                                                             "Starý formát (.crd, .mes)"], 1)), 0, 0)
-        g2.addWidget(_skupina("Vzhled aplikace:", *self._radia("vzhled", ["Nový vzhled (pás karet)",
-                                                                          "Starý vzhled (roletové menu)"])), 0, 1)
+        fmt = QLabel("Seznam souřadnic se ukládá jako text (.txt – číslo Y X Z kód), výkresy jako DXF "
+                     "AutoCAD 2018 nebo DGN V7 (MicroStation).")
+        fmt.setWordWrap(True)
+        g2.addWidget(_skupina("Formát nově zakládaných datových souborů:", fmt), 0, 0)
         g2.addWidget(_skupina("Umístění výpočetních oken:",
                               *self._radia("umisteni", ["Pravý spodní roh obrazovky",
-                                                        "Pravý spodní roh hlavního okna aplikace"])), 1, 0)
-        g2.addWidget(_skupina("Zálohování:", self._ch("zalohy", "Vytvářet záložní soubory při otevření")), 1, 1)
+                                                        "Pravý spodní roh hlavního okna aplikace"])), 0, 1)
+        g2.addWidget(_skupina("Zálohování:", self._ch("zalohy", "Vytvářet záložní soubory při otevření")), 1, 0)
         v.addLayout(g2)
 
     def _vstup_vystup(self, v):

@@ -3678,7 +3678,8 @@ def test_cad_styl_kresleni_um(window, tmp_path):
         assert r.styl_kresleni.count() == 2 and r.styl_kresleni.isVisibleTo(r)
         pocet = r.karty.count()
         r.nastav_styl(1)
-        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == p.karty[0][0]
+        nejvic = max(p.karty, key=lambda k: sum(len(t) for _s, t in k[1]))[0]  # karta s nejvíc nástroji
+        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == nejvic
         c.ms_keyin('active level "GS02-hranice-plochy zpevněné"; active color 3; active weight 2; active style 0; '
                    'place line constrained')
         assert c.vrstvy.currentText() == "GS02-hranice-plochy zpevněné"

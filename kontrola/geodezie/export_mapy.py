@@ -17,7 +17,7 @@ from . import sjtsk
 
 def do_dxf(path: str | Path, body, spojnice=(), vyska_textu: float = 1.0, des_z: int = 2) -> Path:
     import ezdxf
-    doc = ezdxf.new("R2013", setup=True)
+    doc = ezdxf.new("R2018", setup=True)
     doc.header["$INSUNITS"] = 6
     doc.header["$PDMODE"] = 3
     doc.header["$PDSIZE"] = vyska_textu * 0.6

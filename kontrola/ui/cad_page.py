@@ -2604,7 +2604,7 @@ class CadPage(QWidget):
             return None
         if path is None and (jako or self.dok.path is None):
             path, _ = QFileDialog.getSaveFileName(self, "Uložit výkres", str(self.dok.path or "vykres.dxf"),
-                                                  "DXF R2000 (*.dxf);;DGN V7 – MicroStation (*.dgn)")
+                                                  "DXF – AutoCAD 2018 (*.dxf);;DGN V7 – MicroStation (*.dgn)")
             if not path:
                 return None
         try:

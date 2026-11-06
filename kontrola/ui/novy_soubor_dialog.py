@@ -37,7 +37,7 @@ class NovySouborDialog(QDialog):
         self.b_slozka = QPushButton("Procházet…")
         self.typ = QComboBox()
         self.typ.addItem("DGN V7 – MicroStation (*.dgn)", ".dgn")
-        self.typ.addItem("DXF R2000 (*.dxf)", ".dxf")
+        self.typ.addItem("DXF – AutoCAD 2018 (*.dxf)", ".dxf")
         for r, (t, w, b) in enumerate((("Pracovní prostředí:", self.prostredi, self.b_slozky),
                                        ("Pracovní sada:", self.sada_cb, None),
                                        ("Seed:", self.seedy, self.b_jiny),
