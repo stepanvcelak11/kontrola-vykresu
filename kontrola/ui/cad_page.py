@@ -3777,15 +3777,17 @@ class CadPage(QWidget):
 
     def _n_umisti_text(self, radky, v, a):
         r = math.radians(a)
-        sirka = max(len(t) for t in radky) * v * 0.75 * (self.kresleni.sirka_faktor or 1.0)
-        krok = v * 1.6
+        f = (self.anotace or 1000) / 1000.0  # náhled a řádkování ve skutečné velikosti (měřítko anotací)
+        vm = v * f
+        sirka = max(len(t) for t in radky) * vm * 0.75 * (self.kresleni.sirka_faktor or 1.0)
+        krok = vm * 1.6
 
         def ramecek(x, y):
             from shapely.geometry import LineString
             out = []
             for i in range(len(radky)):
                 ox, oy = x + math.sin(r) * krok * i, y - math.cos(r) * krok * i
-                pts = [(0, 0), (sirka, 0), (sirka, v), (0, v), (0, 0)]
+                pts = [(0, 0), (sirka, 0), (sirka, vm), (0, vm), (0, 0)]
                 out.append(LineString([(ox + px * math.cos(r) - py * math.sin(r), oy + px * math.sin(r) + py * math.cos(r))
                                        for px, py in pts]))
             return out
