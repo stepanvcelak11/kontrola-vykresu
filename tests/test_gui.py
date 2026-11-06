@@ -3998,3 +3998,16 @@ def test_pasy_pasport_a_tm():
     assert any(t.popisek == "mapový rám" for t in tl) and not any(t.popisek == "Nový nástroj" for t in tl)
     nast, prik = ms_pas.preloz(next(t.keyin for t in tl if t.popisek == "mapový rám"))
     assert nast.startswith('lv=mapový rám') and prik == ["polylinie"]
+
+
+def test_rozcestnik_prejmenovat_a_skryt(window, tmp_path, monkeypatch):
+    import kontrola.project as P
+    monkeypatch.setattr(P, "default_projects_dir", lambda: tmp_path)
+    r = window.rozcestnik
+    assert r.zaloz("Projekt A")
+    cesta = str(Path(window.project.root).resolve())
+    assert r.prejmenuj(cesta, "Projekt B") and window.project.name == "Projekt B"
+    r.skryj(cesta)
+    assert not any(r.projekty.item(i).data(0x0100) == cesta for i in range(r.projekty.count()))
+    from PySide6.QtCore import QSettings
+    QSettings("KontrolaVykresu", "KontrolaVykresu").remove("start/skryte")

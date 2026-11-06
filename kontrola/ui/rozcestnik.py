@@ -125,13 +125,16 @@ class Rozcestnik(QScrollArea):
         radek = QHBoxLayout()
         radek.setSpacing(14)
         # ---- projekty
-        k, v = _karta("Pokračovat v projektu", "Dvojklik otevře projekt na části, kde jste skončili.")
+        k, v = _karta("Pokračovat v projektu", "Dvojklik otevře projekt na části, kde jste skončili. Pravé "
+                                               "tlačítko: přejmenovat, složka, skrýt.")
         self.projekty = QListWidget()
         self.projekty.setObjectName("seznam_projektu")
         self.projekty.setMinimumHeight(220)
         self.projekty.setIconSize(QSize(18, 18))
         self.projekty.itemDoubleClicked.connect(lambda it: self.otevri(it.data(Qt.UserRole)))
         self.projekty.currentItemChanged.connect(lambda *_a: self._vybrany_zmenen())
+        self.projekty.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.projekty.customContextMenuRequested.connect(self._nabidka)
         v.addWidget(self.projekty, 1)
         r = QHBoxLayout()
         self.b_otevrit = QPushButton("Otevřít projekt")
@@ -239,6 +242,57 @@ class Rozcestnik(QScrollArea):
         z = [k for k, c in self.zaskrt.items() if c.isChecked()]
         return z or list(PROCESY)
 
+    def _nabidka(self, pos) -> None:
+        it = self.projekty.itemAt(pos)
+        cesta = it.data(Qt.UserRole) if it is not None else None
+        if not cesta:
+            return
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+        m.addAction("Otevřít", lambda: self.otevri(cesta))
+        m.addAction("Přejmenovat…", lambda: self.prejmenuj(cesta))
+        m.addAction("Otevřít složku projektu", lambda: self._slozka(cesta))
+        m.addSeparator()
+        m.addAction("Skrýt ze seznamu", lambda: self.skryj(cesta))
+        m.exec(self.projekty.viewport().mapToGlobal(pos))
+
+    def _slozka(self, cesta: str) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl.fromLocalFile(cesta))
+
+    def prejmenuj(self, cesta: str, nazev: str | None = None) -> bool:
+        import yaml
+
+        from ..safeio import write_text_atomic
+        if nazev is None:
+            from PySide6.QtWidgets import QInputDialog
+            nazev, ok = QInputDialog.getText(self, "Přejmenovat projekt", "Nový název:")
+            if not ok:
+                return False
+        nazev = (nazev or "").strip()
+        if not nazev:
+            return False
+        cur = getattr(self.win, "project", None)
+        if cur is not None and Path(cur.root).resolve() == Path(cesta).resolve():
+            cur.meta["nazev"] = nazev
+            cur.save()
+        else:
+            f = Path(cesta) / "projekt.yaml"
+            meta = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            meta["nazev"] = nazev
+            write_text_atomic(f, yaml.safe_dump(meta, allow_unicode=True, sort_keys=False))
+        self.obnov()
+        return True
+
+    def skryj(self, cesta: str) -> None:
+        """Skryje projekt ze seznamu (složka na disku zůstane)."""
+        st = QSettings("KontrolaVykresu", "KontrolaVykresu")
+        skryte = st.value("start/skryte", []) or []
+        skryte = [skryte] if isinstance(skryte, str) else list(skryte)
+        st.setValue("start/skryte", skryte + [str(Path(cesta).resolve())])
+        self.obnov()
+
     def _vybrany(self) -> str | None:
         it = self.projekty.currentItem()
         return it.data(Qt.UserRole) if it is not None else None
@@ -252,7 +306,11 @@ class Rozcestnik(QScrollArea):
                                + "Vyberte projekt, založte nový, nebo jděte rovnou do programu.")
         self.projekty.clear()
         from .theme import icon
+        skryte = QSettings("KontrolaVykresu", "KontrolaVykresu").value("start/skryte", []) or []
+        skryte = {skryte} if isinstance(skryte, str) else set(skryte)
         for ulozeno, r, meta in seznam_projektu(self.win):
+            if str(r) in skryte:
+                continue
             try:
                 kdy = dt.datetime.fromisoformat(ulozeno).strftime("%d.%m. %H:%M") if ulozeno else ""
             except ValueError:
