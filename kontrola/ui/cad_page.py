@@ -1179,6 +1179,8 @@ class CadPage(QWidget):
             if p.soubor.stem.lower() == "um_ribbon":
                 styl = i
                 break
+        if not styl and sada is not None and r._pasy:
+            styl = 1  # Pasport, TM: vlastní pás sady (nástroje s hladinou a stylem čáry)
         r.nastav_styl(styl)
         self.nastav_anotace(1000 if sada is not None and "multiscale" in sada.nazev.lower() else None,
                             prepocitat=False)

@@ -131,8 +131,55 @@ def _hezky(segment: str) -> str:
     return re.sub(r"\s+-\s+empty$", "", s)
 
 
-NAZVY = {"um_ribbon": "Účelová mapa (ÚM)", "dgnlib_gui_mapovani": "Mapování",
+NAZVY = {"um_ribbon": "Účelová mapa (ÚM)", "pasport": "Pasportizace staveb", "tm25": "Technická mapa (TM25)", "dgnlib_gui_mapovani": "Mapování",
          "dgnlib_gui_customribbon": "Vlastní pás"}
+
+
+def _norm(t: str) -> str:
+    return re.sub(r"[^\w]+", " ", t.lower()).strip()
+
+
+def _nastroje_drawcomp(gui: Path) -> dict[str, tuple[str, str]]:
+    """Nástroje palet (Dgnlib/DrawComp vedle Dgnlib/GUI): normalizovaný název hladiny → (hladina, styl čáry)."""
+    out: dict[str, tuple[str, str]] = {}
+    d = gui.parent.parent / "DrawComp"
+    if not d.is_dir():
+        return out
+    for f in sorted(d.glob("*")):
+        if f.suffix.lower() != ".dgnlib":
+            continue
+        try:
+            zaz = _zaznamy(f)
+        except Exception:  # noqa: BLE001
+            continue
+        for r in zaz:
+            if r and r[0] == "Ustn_ElementParams":
+                lv = _po(r, "Value")
+                if lv:
+                    out.setdefault(_norm(lv), (lv, _po(r, "LineStyle")))
+    return out
+
+
+def _keyin_nastroje(keyin: str, nastroje: dict[str, tuple[str, str]]) -> str:
+    """„DMSG ACTIVATETOOLBYPATH Pasport\\…\\Nástroj“ → key-in hladiny a stylu nástroje + kreslení čáry."""
+    cesta = keyin.split(None, 2)[2] if len(keyin.split(None, 2)) > 2 else ""
+    casti = [c for c in cesta.split("\\") if c]
+    if not casti:
+        return ""
+    if _norm(casti[-1]) in ("nový nástroj", "new tool"):
+        return ""  # nepojmenovaný rozpracovaný nástroj ze školní knihovny
+    n = _norm(casti[-1])
+    hit = nastroje.get(n) or next((v for k, v in nastroje.items() if k.startswith(n) or (n.startswith(k) and k)),
+                                  None)
+    if hit is None:
+        if not any("vrstv" in c.lower() for c in casti[:-1]):
+            return ""
+        hit = (casti[-1], "")  # TM: nástroj „název vrstvy\\…\\X“ kreslí do hladiny X
+    lv, ls = hit
+    k = f'active level "{lv}"'
+    if ls:
+        k += f'; active style "{ls}"'
+    return k + "; place smartline"
 
 
 def nacti_pas(cesta: str | Path) -> Pas | None:
@@ -140,6 +187,7 @@ def nacti_pas(cesta: str | Path) -> Pas | None:
     cesta = Path(cesta)
     tl: dict[str, Tlacitko] = {}
     popisky: dict[str, str] = {}
+    nastroje = _nastroje_drawcomp(cesta)
     for r in _zaznamy(cesta):
         if not r:
             continue
@@ -152,6 +200,13 @@ def nacti_pas(cesta: str | Path) -> Pas | None:
         k = _po(r, "Keyin")
         if not k or r[0] != "Button":
             continue
+        if k.upper().startswith("DMSG ACTIVATETOOLBYPATH"):  # Pasport, TM: nástroj z palety DrawComp
+            jm_nastroje = [c for c in k.split(None, 2)[-1].split("\\") if c][-1:]
+            k = _keyin_nastroje(k, nastroje)
+            if not k:
+                continue
+            if jm_nastroje and (not lbl or lbl in ("Description", "CommandType", "Name", "Nový nástroj")):
+                lbl = jm_nastroje[0]  # popisek chybí nebo je výchozí – název nástroje z cesty palety
         if not re.search(r"active (level|cell|color)|change attributes|place ", k, re.I):
             continue
         tl.setdefault(jm, Tlacitko(jm, lbl, k.strip(), _po(r, "NamedIcon"), _po(r, "Description")))

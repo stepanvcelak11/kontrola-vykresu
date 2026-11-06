@@ -3938,7 +3938,7 @@ def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
         c.novy_v_sade("MultiScale/Pasport")
         assert PS.aktivni().nazev == "Pasport" and c.anotace is None
         hl_pasport = {ly.dxf.name for ly in c.dok.doc.layers}
-        assert c.ribbon.styl_kresleni.currentIndex() == 0
+        assert c.ribbon.styl_kresleni.currentText() == "Styl: Pasportizace staveb"  # vlastní pás, ne ÚM
         c.novy_um()
         assert PS.aktivni().nazev == "MultiScale" and c.anotace == 1000
         assert c.ribbon.styl_kresleni.currentText().startswith("Styl: Účelová")
@@ -3984,3 +3984,17 @@ def test_rozcestnik_projekty_a_casti_procesu(window, tmp_path, monkeypatch):
     r.cely.setChecked(True)
     r.pouzij()
     assert all(a.isVisible() for a in window.a_page.values())
+
+
+def test_pasy_pasport_a_tm():
+    """Pásy Pasportu a TM: tlačítka „DMSG ACTIVATETOOLBYPATH“ → hladina a styl nástroje z Dgnlib/DrawComp."""
+    from kontrola.cad import ms_pas
+    from kontrola.cad import pracovni_sady as PS
+    sady = {s.nazev: s for s in PS.vsechny()}
+    pas = PS.styly_kresleni(sady["Pasport"])
+    assert len(pas) == 1 and pas[0].pocet > 500 and "Obecné" in [k for k, _ in pas[0].karty]
+    tm = PS.styly_kresleni(sady["TM"])[0]
+    tl = [t for _k, sk in tm.karty for _s, ts in sk for t in ts]
+    assert any(t.popisek == "mapový rám" for t in tl) and not any(t.popisek == "Nový nástroj" for t in tl)
+    nast, prik = ms_pas.preloz(next(t.keyin for t in tl if t.popisek == "mapový rám"))
+    assert nast.startswith('lv=mapový rám') and prik == ["polylinie"]

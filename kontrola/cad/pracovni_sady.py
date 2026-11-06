@@ -188,8 +188,10 @@ def styly_kresleni(sada: Sada | None) -> list:
                 _PASY_CACHE[k] = nacti_pas(p)
             except Exception:  # noqa: BLE001 – poškozený .dgnlib nesmí shodit CAD
                 _PASY_CACHE[k] = None
-        if _PASY_CACHE[k] is not None:
-            out.append(_PASY_CACHE[k])
+        pas = _PASY_CACHE[k]
+        if pas is not None and not any(o.pocet == pas.pocet and [t for t, _ in o.karty] == [t for t, _ in pas.karty]
+                                       for o in out):  # stejný pás ve dvou knihovnách (Pasport_konfigurace_dwg)
+            out.append(pas)
     return out
 
 
