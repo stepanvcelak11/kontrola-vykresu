@@ -624,7 +624,8 @@ class MainWindow(QMainWindow):
     def _prizpusob_listu(self) -> None:
         """Spodní tlačítka levé lišty jen s ikonou, když se s popisky nevejdou na výšku okna."""
         tb = getattr(self, "toolbar", None)
-        if tb is None or not getattr(self, "_male_akce", None):
+        # zavřené / rušené okno nechat být – při rušení přijde resize, když lišta už zaniká (pád na Windows)
+        if tb is None or not getattr(self, "_male_akce", None) or not self.isVisible() or not tb.isVisible():
             return
         tlac = [b for b in (tb.widgetForAction(a) for a in self._male_akce) if b is not None]
         for b in tlac:
@@ -635,7 +636,10 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, e):  # noqa: N802
         super().resizeEvent(e)
-        self._prizpusob_listu()
+        try:
+            self._prizpusob_listu()
+        except RuntimeError:  # C++ objekt lišty už zrušený
+            pass
 
     def nastav_procesy(self, procesy) -> None:
         """Levá lišta ukáže jen stránky zvolených částí procesu (Start je vždy)."""
