@@ -367,9 +367,9 @@ QScrollArea#cad_paleta, QScrollArea#cad_paleta > QWidget > QWidget {{ background
 QLabel#cad_paleta_nadpis {{ color: {MUTED}; font-size: 8pt; font-weight: 600; padding: 6px 2px 1px 2px; }}
 QLabel#cad_vyzva {{ font-weight: 600; color: {ACCENT}; }}
 QLabel#cad_titulek {{ font-weight: 600; }}
-QToolBar#hlavni_panel {{ background: {PANEL}; border: none; border-right: 1px solid {BORDER}; padding: 6px 4px;
-    spacing: 2px; }}
-QToolBar#hlavni_panel QToolButton {{ padding: 5px 2px; margin: 1px 4px; border-radius: 10px; font-size: 8.5pt; }}
+QToolBar#hlavni_panel {{ background: {PANEL}; border: none; border-right: 1px solid {BORDER}; padding: 4px 4px;
+    spacing: 1px; }}
+QToolBar#hlavni_panel QToolButton {{ padding: 3px 2px; margin: 0px 4px; border-radius: 10px; font-size: 8pt; }}
 QToolBar#hlavni_panel QToolButton:checked {{ background: {ACCENT_SOFT}; color: #1E40AE; border: 1px solid #C7D2FE;
     font-weight: 700; }}
 QTableView#karty_chyb {{ background: transparent; border: none; }}
@@ -502,6 +502,7 @@ QComboBox {{ padding-right: 22px; }}
 QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 20px;
     border: none; }}
 QComboBox::down-arrow {{ image: url("{a['dolu']}"); width: 10px; height: 10px; }}
+
 QComboBox::down-arrow:disabled {{ image: url("{a['dolu_off']}"); }}
 QComboBox QAbstractItemView {{ border: 1px solid {BORDER}; background: {PANEL}; selection-background-color: {ACCENT_SOFT};
     selection-color: {TEXT}; outline: 0; }}

@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         tb.setFloatable(False)
         tb.setOrientation(Qt.Vertical)
-        tb.setIconSize(QSize(22, 22))
+        tb.setIconSize(QSize(20, 20))
         tb.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         from PySide6.QtGui import QActionGroup
         self.page_group = QActionGroup(self)
@@ -513,7 +513,7 @@ class MainWindow(QMainWindow):
             if not act.shortcut().isEmpty():
                 self.addAction(act)
         # krátké popisky pod ikonou (celé znění je v tooltipu)
-        for act, short in ((self.a_open, "Otevřít\nvýkres"), (self.a_check, "Kontrola"), (self.a_recheck, "Znovu"),
+        for act, short in ((self.a_open, "Otevřít ▾"), (self.a_check, "Kontrola"), (self.a_recheck, "Znovu"),
                            (self.a_ready, "Odevzdat"), (self.a_exp_pdf, "Protokol"), (a_por, "Poradce"), (self.a_settings, "Nastavení"),
                            (self.a_menu, "Nabídka")):
             act.setIconText(short)
@@ -523,11 +523,23 @@ class MainWindow(QMainWindow):
                 btn.setToolTip(full + (f" – {act.toolTip()}" if act.toolTip() and act.toolTip() != act.text()
                                        else ""))
         for btn in tb.findChildren(QToolButton):
-            btn.setMinimumWidth(66)
+            btn.setMinimumWidth(72)  # stejně široká tlačítka – sloupec je zarovnaný
         b_open = tb.widgetForAction(self.a_open)
         if b_open is not None:  # šipka vedle: naposledy otevřené výkresy jedním klikem
-            b_open.setMenu(self.m_recent)
-            b_open.setPopupMode(QToolButton.MenuButtonPopup)
+            # klik = nabídka: Otevřít výkres… a naposledy otevřené (malá šipka v rohu, ne vysoký pruh)
+            m_otevrit = QMenu(b_open)
+
+            def _napln_otevrit(m=m_otevrit):
+                m.clear()
+                m.addAction(self.a_open)
+                m.addSeparator()
+                self._fill_recent()
+                for a in self.m_recent.actions():
+                    m.addAction(a)
+            m_otevrit.aboutToShow.connect(_napln_otevrit)
+            b_open.setMenu(m_otevrit)
+            b_open.setPopupMode(QToolButton.InstantPopup)
+            b_open.setObjectName("otevrit_vykres")
         # nástroje pohledu jako plovoucí lišta nad výkresem (jako ovládání mapy)
         vt = QToolBar("Pohled")
         vt.setObjectName("plovouci_lista")
