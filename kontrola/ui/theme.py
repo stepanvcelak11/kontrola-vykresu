@@ -69,16 +69,16 @@ _ICONS = {
 
 # tmavý režim: každá barva světlého vzhledu má svůj tmavý protějšek (nahrazuje se najednou, bez řetězení)
 DARK_MAP = {  # vzhled „Studio“: břidlicově modrá tma, panely o odstín světlejší (návrh vzhledu A)
-    "#F3F4F6": "#0E141B", "#FFFFFF": "#141B23", "#D1D5DB": "#2A3644", "#1F2937": "#E6EDF3",
-    "#6B7280": "#8B98A5", "#9CA3AF": "#6B7785", "#2563EB": "#3B82F6", "#1D4ED8": "#2563EB",
-    "#DBEAFE": "#12304A", "#EEF2F7": "#1A232E", "#93C5FD": "#3B82F6", "#F9FAFB": "#0F151C",
-    "#E5E7EB": "#1E2833", "#EEF0F3": "#1A232E", "#374151": "#C9D1D9", "#EFF6FF": "#102233",
+    "#F3F4F6": "#1E252E", "#FFFFFF": "#252D38", "#D1D5DB": "#46525F", "#1F2937": "#F1F4F8",
+    "#6B7280": "#AEB9C4", "#9CA3AF": "#8F9CA9", "#2563EB": "#3B82F6", "#1D4ED8": "#2563EB",
+    "#DBEAFE": "#12304A", "#EEF2F7": "#2E3744", "#93C5FD": "#3B82F6", "#F9FAFB": "#20272F",
+    "#E5E7EB": "#36414E", "#EEF0F3": "#2E3744", "#374151": "#DCE2E8", "#EFF6FF": "#102233",
     "#BFDBFE": "#264866", "#1E3A8A": "#BFDBFE", "#FEF3C7": "#3A2A0C", "#FCD34D": "#806521",
-    "#78350F": "#FDE68A", "#DC2626": "#F87171", "#B45309": "#FBBF24", "#4B5563": "#A9B4BF", "#C0C4CC": "#4A5664",
-    "#F4F6FA": "#0B1016", "#E3E7EE": "#1E2833", "#CBD2DC": "#2A3644", "#F1F4F9": "#1E2731",
-    "#F8FAFC": "#19212B", "#E9EDF2": "#0A0E13", "#EEF2F6": "#1C242E", "#DCE2EA": "#29333F",
-    "#C3CCD7": "#3A4553", "#F6F8FB": "#18202A", "#111827": "#E6EDF3", "#E8F0FE": "#123040", "#EEF2FF": "#16233A",
-    "#C7D2FE": "#2E4A6A", "#0F172A": "#05080C", "#1E40AE": "#BFDBFE",
+    "#78350F": "#FDE68A", "#DC2626": "#F87171", "#B45309": "#FBBF24", "#4B5563": "#C3CCD5", "#C0C4CC": "#5E6B7A",
+    "#F4F6FA": "#1B222B", "#E3E7EE": "#36414E", "#CBD2DC": "#46525F", "#F1F4F9": "#323C49",
+    "#F8FAFC": "#29323D", "#E9EDF2": "#1A2029", "#EEF2F6": "#2F3845", "#DCE2EA": "#404B59",
+    "#C3CCD7": "#58657A", "#F6F8FB": "#2A333F", "#111827": "#F3F6F9", "#E8F0FE": "#123040", "#EEF2FF": "#16233A",
+    "#C7D2FE": "#2E4A6A", "#0F172A": "#11161C", "#1E40AE": "#BFDBFE",
 }
 _dark = False
 
@@ -416,6 +416,10 @@ QLabel#nadpis_sekce {{ font-weight: 700; color: {ACCENT_HOVER}; padding: 6px 0 2
 QLabel#poznamka {{ color: {MUTED}; }}
 QFrame#oddil_ulohy {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 6px; }}
 QFrame#oddil_ulohy QLabel {{ background: transparent; }}
+QToolButton#ulozit_vysledek {{ color: #16A34A; font-size: 17pt; font-weight: 800; border: 1px solid {BORDER_STRONG};
+    border-radius: 6px; background: {PANEL}; }}
+QToolButton#ulozit_vysledek:hover {{ background: #DCFCE7; color: #15803D; }}
+QToolButton#ulozit_vysledek:disabled {{ color: {BORDER_STRONG}; }}
 QLabel#nadpis_uloha {{ font-weight: 700; color: {TEXT}; padding: 0 0 2px 0; }}
 QWidget#vypocetni_okno {{ background: {BG}; }}
 QWidget#zadani_ulohy {{ background: {BG}; }}
@@ -577,6 +581,12 @@ def prazdny_stav(view, text: str) -> None:
     lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
     def obnov(*_):
+        try:
+            _obnov()
+        except RuntimeError:  # tabulka už je zrušená (zavírání aplikace) – nic nedělat
+            pass
+
+    def _obnov():
         m = view.model()
         lbl.setVisible(m is None or m.rowCount() == 0)
         vp = view.viewport()

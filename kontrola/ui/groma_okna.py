@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit, QMdiArea,
                                QMdiSubWindow, QMenu, QPlainTextEdit, QWidget)
 
@@ -400,6 +400,18 @@ class ListaNastaveni(QWidget):
         lay.addWidget(QLabel("Úloha:"))
         lay.addWidget(self.ulohy)
         self.nastav_ulohy([""], "")
+        from PySide6.QtCore import QSettings
+        self.predcisli = QComboBox()
+        self.predcisli.setEditable(True)
+        self.predcisli.setMinimumWidth(120)
+        self.predcisli.setToolTip("Předčíslí (k.ú. + ZPMZ) – doplní se k číslům bodů zadaným bez předčíslí a "
+                                  "předvyplní se u nových bodů ve výpočetních oknech (jako v Gromě)")
+        self.predcisli.addItem(str(QSettings().value("vypocty/predcisli", "") or ""))
+        self.predcisli.currentTextChanged.connect(
+            lambda t: QSettings().setValue("vypocty/predcisli", t.strip()))
+        lay.addSpacing(10)
+        lay.addWidget(QLabel("Předčíslí:"))
+        lay.addWidget(self.predcisli)
         self.kod_kvality = QComboBox()
         for k in range(1, 9):
             self.kod_kvality.addItem(str(k), k)
@@ -502,31 +514,25 @@ KARTY_GROMA = [
         ("Měření", [("Seznam měření", "@_zapisnik"), ("Zpracování zápisníku…", "@_zpracovani")]),
     ]),
     ("Výpočty", [
-        ("Podrobné", [("Polární", "Rajón (polární bod)"), ("Polární dávkou", "@_zpracovani"),
-                      ("Ortogonální", "Ortogonální metoda")]),
-        ("Protínání", [("Ze směrů", "Protínání vpřed ze směrů"), ("Z úhlů", "Protínání vpřed z úhlů"),
-                       ("Z délek", "Protínání z délek"), ("Zpět", "Protínání zpět")]),
-        ("Průsečíky", [("Přímka - přímka", "Průsečíky"), ("Bod na přímce", "Bod na přímce"),
-                       ("Kružnice ze 3 bodů", "Kružnice ze tří bodů")]),
-        ("Oměrné", [("Kontrolní", "Kontrolní oměrné míry"), ("Výměra z měr", "Výměra z měr")]),
+        ("Podrobné", [("Polární", "Rajón (polární bod)"), ("Polární dávkou", "Polární metoda dávkou"),
+                      ("Ortogonální", ["Ortogonální metoda (Groma)", "Ortogonální metoda", "Bod ze staničení a kolmice"])]),
+        ("Protínání", [("Ze směrů", ["Protínání vpřed ze směrů", "Protínání vpřed z úhlů", "Protínání zpět"]),
+                       ("Z délek", "Protínání z délek")]),
+        ("Průsečíky", [("Přímka - přímka", "Průsečíky"), ("Přímka - směr", "Průsečík přímka - směr"),
+                       ("Přímka - kružnice", "Průsečík přímka - kružnice")]),
+        ("Vyrovnání", [("Na přímku", "Vyrovnání na přímku"), ("Na kružnici", "Vyrovnání na kružnici"),
+                       ("MNČ", ["Vyrovnávací přímka", "Vyrovnávací kružnice", "Vyrovnání nivelační sítě"])]),
+        ("Oměrné", [("Kontrolní", ["Kontrolní oměrné míry", "Výměra z měr", "Kontrola dvou určení"]),
+                    ("Konstrukční", "Konstrukční oměrné")]),
         ("Bodové pole", [("Volné stanovisko", "Volné stanovisko"),
-                         ("Polygonový pořad", ["Polygonový pořad", "Polygonový pořad uzavřený",
-                                               "Polygonový pořad volný", "Polygonový pořad jednostranně orientovaný",
-                                               "Polygonový pořad vetknutý"]),
-                         ("Transformace", "Transformace")]),
-        ("Výšky", [("Trigonometrická výška", ["Trigonometrická výška", "Trigonometrická výška oboustranně"]),
-                   ("Výškový pořad", ["Nivelační pořad", "Nivelační zápisník", "Vyrovnání nivelační sítě"]),
-                   ("Redukce délky", "Redukce délky")]),
-        ("Měření", [("Směrník a délka", "Směrník a délka"), ("Úhel", "Úhel ze souřadnic"),
-                    ("Výměry", ["Výměra a obvod", "Výměry parcel dávkou", "Výkaz výměr GP", "Oddělení parcely"]),
+                         ("Polygonový pořad", "Polygonový pořad (Groma)"), ("Transformace", "Transformace")]),
+        ("Výšky", [("Výška stanoviska", "Výška stanoviska"), ("Výškový pořad", "Výškový pořad"),
+                   ("Výšky dávkou", "Výšky dávkou")]),
+        ("Měření", [("Směrník a délka", "Směrník a délka"), ("Výměry", "Výměra a obvod"),
                     ("Kubatury", "Model terénu a kubatura")]),
-        ("Vytyčovací prvky", [("Polární", "Vytyčovací prvky"),
-                              ("Ortogonální", ["Staničení a kolmice", "Bod ze staničení a kolmice"])]),
-        ("Speciální", [("Rozložení oblouku", "Kružnicový oblouk"), ("Centrace", "Centrace směrů"),
-                       ("Křovák", "@zkresleni_dialog"), ("S-JTSK ↔ WGS84", "Převod S-JTSK ↔ WGS84"),
-                       ("Převod úhlů", "Převod úhlů"),
-                       ("Testování přesnosti", ["Kontrola dvou určení", "Testování přesnosti ÚM – body",
-                                                "Testování přesnosti ÚM – délky"])]),
+        ("Vytyčovací prvky", [("Polární", "Vytyčovací prvky"), ("Ortogonální", "Staničení a kolmice")]),
+        ("Speciální", [("Rozložení oblouku", "Kružnicový oblouk"), ("Nivelace", "Nivelační zápisník"),
+                       ("Křovák", "@zkresleni_dialog"), ("Trojúhelníková kalkulačka", "Trojúhelníková kalkulačka")]),
     ]),
 ]
 
@@ -666,17 +672,33 @@ def postav_menu(page) -> PasGromy:
 
 
 def _ulohy():
-    from ..geodezie.ulohy import ULOHY
-    return ULOHY
+    from .ulohy import OKNA_ULOH
+    return OKNA_ULOH
 
 
-def otevri_ulohu(page, i: int) -> None:
-    """Výpočet z menu: otevře výpočetní okno s danou úlohou (zadání, Vypočítat, protokol)."""
-    ul = page.ulohy
+def otevri_ulohu(page, i: int):
+    """Výpočet z pásu: otevře nové výpočetní okno úlohy (jako v Gromě – víc oken najednou, i stejné úlohy
+    „Polární metoda - [2]“). Nepoužité (zavřené) okno se použije znovu. Vrátí okno."""
+    from .ulohy import UlohyPanel
+    okna = page.okna_uloh
+    ul = next((o for o in okna if not o.isVisible()), None)
+    if ul is None:
+        ul = UlohyPanel(page)
+        okna.append(ul)
+        vid = [o for o in okna if o.isVisible()]
+        if vid:  # nové okno kousek vedle posledního, ať se nepřekrývají úplně
+            ul.resize(vid[-1].size())
+            ul.move(vid[-1].pos() + QPoint(32, 32))
+            ul._umisteno = True
     if ul.hledat.text():
         ul.hledat.clear()
-    if ul.lst.currentRow() == i and ul.isVisible():
-        ul.otevri()
-        return
-    ul.lst.setCurrentRow(i)
+    if ul.lst.currentRow() == i:
+        ul._show(i)
+    else:
+        ul.lst.setCurrentRow(i)
+    stejne = [o for o in okna if o is not ul and o.isVisible() and o.lst.currentRow() == i]
+    if stejne:
+        ul.setWindowTitle(f"{ul.windowTitle()} - [{len(stejne) + 1}]")
+    page.ulohy = ul
     ul.otevri()
+    return ul

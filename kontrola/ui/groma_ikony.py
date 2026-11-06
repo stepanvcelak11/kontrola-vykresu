@@ -11,7 +11,7 @@ BARVY_SKUPIN = {
     "Soubor": "#2563EB", "Import": "#2563EB", "Editace": "#475569", "Seznam": "#0D9488", "Kódování": "#EA580C",
     "Nastavení": "#64748B", "Pohledy": "#7C3AED", "Protokol": "#B45309", "Měření": "#CA8A04",
     "Podrobné": "#2563EB", "Protínání": "#7C3AED", "Průsečíky": "#DB2777", "Oměrné": "#EA580C",
-    "Bodové pole": "#059669", "Výšky": "#0891B2", "Vytyčovací prvky": "#DC2626", "Speciální": "#4F46E5",
+    "Bodové pole": "#059669", "Vyrovnání": "#0F766E", "Výšky": "#0891B2", "Vytyčovací prvky": "#DC2626", "Speciální": "#4F46E5",
     "Další": "#64748B",
 }
 
@@ -92,6 +92,19 @@ IKONY = {
                       '<path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>',
     "Převod úhlů": '<circle cx="12" cy="12" r="8"/><path d="M12 12V4"/><path d="M12 12l6 4"/>',
     "Testování přesnosti": '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/>' + _bod(12, 12),
+    "Ze směrů": '<path d="M3 20L12 5L21 20"/>' + _bod(3, 20) + _bod(21, 20) + _bod(12, 5),
+    "Přímka - směr": '<path d="M3 17L21 9"/><path d="M5 4l9 17"/>' + _bod(5, 4) + _bod(11.6, 13.2),
+    "Přímka - kružnice": '<circle cx="13" cy="12" r="6.5"/><path d="M2 18L22 8"/>',
+    "Na přímku": '<path d="M3 18L21 8"/><path d="M11 5l3.5 8"/>' + _bod(11, 5) + _bod(14.2, 12.7),
+    "Na kružnici": '<circle cx="12" cy="13" r="7"/><path d="M12 13l5-9"/>' + _bod(17.5, 3.5),
+    "MNČ": '<path d="M3 19L21 6"/>' + _bod(5, 15) + _bod(9, 15.5) + _bod(13, 9) + _bod(17, 10) + _bod(20, 5),
+    "Konstrukční": '<path d="M4 20V8h8v5h8v7z"/><path d="M4 5h8M20 10v-0"/>',
+    "Výška stanoviska": '<path d="M3 21h18"/><path d="M12 21V9"/><path d="M8 9l4-6 4 6"/><path d="M16 15h4"/>',
+    "Výšky dávkou": '<path d="M3 21h18"/><rect x="4" y="12" width="3" height="9"/><rect x="10.5" y="8" width="3" '
+                    'height="13"/><rect x="17" y="5" width="3" height="16"/>',
+    "Výměry": '<path d="M4 7l8-3 8 4-2 12H6z"/><path d="M9 12h6M9 15h4"/>',
+    "Nivelace": '<path d="M3 15l4-4 4 3 4-6 6 5"/><path d="M3 20h18"/>',
+    "Trojúhelníková kalkulačka": '<path d="M4 19L12 5L20 19Z"/><path d="M9 15h6"/>',
     "Další výpočty": _bod(5, 12) + _bod(12, 12) + _bod(19, 12),
 }
 

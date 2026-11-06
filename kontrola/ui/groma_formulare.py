@@ -18,16 +18,33 @@ BARVY = {"cislo": "zluta", "kod": "zluta", "sour": "zelena", "mer": "modra", "vy
 
 
 def tint(druh: str) -> str:
+    """Světlé pastelové podbarvení jako v Gromě – i v tmavém vzhledu (s tmavým písmem), aby šlo dobře číst."""
     from .theme import is_dark
     sv = {"zluta": "#FFF6CC", "zelena": "#DDF6D6", "modra": "#E4EEFB", "fialova": "#F0E6FB"}
-    tm = {"zluta": "#3A3214", "zelena": "#18351E", "modra": "#16283D", "fialova": "#2C2140"}
+    tm = {"zluta": "#F6EBB5", "zelena": "#CDEEC4", "modra": "#D3E3F7", "fialova": "#E3D6F5"}
     return (tm if is_dark() else sv)[BARVY.get(druh, druh)]
+
+
+STYL_POLE = ("QLineEdit {{ background: {bg}; color: #111827; selection-background-color: #2563EB; "
+             "selection-color: #FFFFFF; border: 1px solid #9AA6B4; }} "
+             "QLineEdit:focus {{ border: 2px solid #2563EB; }} "
+             "QLineEdit:read-only {{ border: 1px solid #B4BEC9; }}")
+
+
+def obarvi(w, druh: str) -> None:
+    """Podbarví pole a nastaví tmavý text i šedý placeholder (čitelné ve světlém i tmavém vzhledu)."""
+    from PySide6.QtGui import QColor, QPalette
+    w.setStyleSheet(STYL_POLE.format(bg=tint(druh)))
+    pal = w.palette()
+    pal.setColor(QPalette.PlaceholderText, QColor("#6B7280"))
+    pal.setColor(QPalette.Text, QColor("#111827"))
+    w.setPalette(pal)
 
 
 def pole(druh: str, sirka: int | None = None, jen_cteni: bool = False, tip: str = "") -> QLineEdit:
     """Vstupní pole v barvě podle druhu údaje (jako v Gromě)."""
     w = QLineEdit()
-    w.setStyleSheet(f"QLineEdit {{ background: {tint(druh)}; }}")
+    obarvi(w, druh)
     if sirka:
         w.setMinimumWidth(sirka)
     if druh in ("sour", "mer", "vys"):
@@ -97,13 +114,32 @@ def fmt(v: float | None, d: int = 3) -> str:
     return "" if v is None else f"{v:.{d}f}"
 
 
+def predcisli_listy() -> str:
+    """Předčíslí z lišty nastavení Výpočtů (doplňuje se k číslům bodů bez předčíslí, jako v Gromě)."""
+    from PySide6.QtCore import QSettings
+    return str(QSettings().value("vypocty/predcisli", "") or "").strip()
+
+
+def rozdel_cislo(c: str) -> tuple[str, str]:
+    """Číslo bodu → (předčíslí, číslo): 15místné číslo KN = k.ú. (6) + ZPMZ (5) | číslo (4)."""
+    c = (c or "").strip()
+    if len(c) == 15 and c.isdigit():
+        return c[:11], c[11:]
+    return "", c
+
+
 class BodBox(QWidget):
-    """Číslo bodu (+ Y, X, Z) – po zapsání čísla se souřadnice doplní ze seznamu, nebo se bod přetáhne."""
+    """Bod jako ve výpočetních oknech Gromy: Předč. a Číslo (žluté), Kvalita, souřadnice Y, X, Z (zelené).
+    Po zapsání čísla se souřadnice doplní ze seznamu; bod jde přetáhnout ze seznamu souřadnic.
+
+    rozlozeni: „vedle“ = Předč./Číslo vlevo, Y/X/Z vpravo (stanovisko); „pod“ = vše pod sebou (úzký sloupec
+    vedle tabulky orientací)."""
 
     zmena = Signal()
 
-    def __init__(self, page, z: bool = True, cislo_druh: str = "cislo", radky: bool = True, dva_sloupce: bool = False,
-                 vlevo: list | None = None, parent=None):
+    def __init__(self, page, z: bool = True, kvalita: bool = False, rozlozeni: str = "vedle",
+                 vlevo: list | None = None, vpravo: list | None = None, cislo_druh: str = "cislo", parent=None,
+                 **_stare):
         super().__init__(parent)
         self.page = page
         self.setAcceptDrops(True)
@@ -111,53 +147,98 @@ class BodBox(QWidget):
         g.setContentsMargins(0, 0, 0, 0)
         g.setHorizontalSpacing(6)
         g.setVerticalSpacing(4)
-        self.cislo = pole(cislo_druh, 120, tip="Číslo bodu – souřadnice se doplní ze seznamu. Bod lze také "
-                                               "přetáhnout myší ze seznamu souřadnic.")
+        self.predc = pole(cislo_druh, 90, tip="Předčíslí (k.ú. a ZPMZ) – prázdné = předčíslí z lišty nastavení")
+        self.cislo = pole(cislo_druh, 70, tip="Číslo bodu – souřadnice se doplní ze seznamu. Bod lze také "
+                                              "přetáhnout myší ze seznamu souřadnic.")
+        self.kvalita = None
+        if kvalita:
+            from PySide6.QtWidgets import QComboBox
+            self.kvalita = QComboBox()
+            self.kvalita.addItems([""] + [str(i) for i in range(1, 9)])
+            self.kvalita.setStyleSheet(f"QComboBox {{ background: {tint('cislo')}; color: #111827; }}")
+            self.kvalita.setMaximumWidth(56)
         self.y = pole("sour", 110)
         self.x = pole("sour", 110)
         self.z = pole("sour", 80) if z else None
-        prvky = [("Číslo:", self.cislo), ("Y:", self.y), ("X:", self.x)] + ([("Z:", self.z)] if z else [])
+        lev = [("Předč.:", self.predc), ("Číslo:", self.cislo)] + ([("Kvalita:", self.kvalita)] if kvalita else []) \
+            + list(vlevo or [])
+        prav = [("Y:", self.y), ("X:", self.x)] + ([("Z:", self.z)] if z else []) + list(vpravo or [])
 
         def dej(t, w, r, c):
             lbl = QLabel(t)
             lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             g.addWidget(lbl, r, c)
             g.addWidget(w, r, c + 1)
-        if dva_sloupce:  # Groma: číslo (a výška stroje) vlevo, Y X Z vpravo
-            dej(*prvky[0], 0, 0)
-            for i, (t, w) in enumerate(vlevo or [], 1):
+        if rozlozeni == "pod":
+            for i, (t, w) in enumerate(lev[:2] + prav[:3 if z else 2] + lev[2:] + prav[3 if z else 2:]):
                 dej(t, w, i, 0)
-            for i, (t, w) in enumerate(prvky[1:]):
+            g.setColumnStretch(1, 1)
+        else:
+            for i, (t, w) in enumerate(lev):
+                dej(t, w, i, 0)
+            for i, (t, w) in enumerate(prav):
                 dej(t, w, i, 2)
             g.setColumnStretch(1, 1)
             g.setColumnStretch(3, 1)
-            g.setColumnMinimumWidth(2, 30)
-        else:
-            for i, (t, w) in enumerate(prvky):
-                dej(t, w, *((i, 0) if radky else (0, 2 * i)))
-            g.setColumnStretch(1 if radky else 3, 1)
+            g.setColumnMinimumWidth(2, 24)
+        g.setRowStretch(max(len(lev), len(prav)) + 1, 1)
         self._ze_seznamu = False
         self.cislo.editingFinished.connect(self._dopln)
+        self.predc.editingFinished.connect(self._dopln)
         for w in (self.y, self.x, self.z):
             if w is not None:
                 w.textEdited.connect(lambda _t: self.zmena.emit())
 
+    # --- číslo bodu (předčíslí + číslo)
+    def hodnota(self) -> str:
+        """Celé číslo bodu; bez předčíslí se zkusí i předčíslí z lišty (jako v Gromě)."""
+        c, pc = self.cislo.text().strip(), self.predc.text().strip()
+        if not c:
+            return ""
+        if pc:
+            return pc + c
+        lp = predcisli_listy()
+        if lp and self.page.seznam.najdi(c) is None and self.page.seznam.najdi(lp + c) is not None:
+            return lp + c
+        return c
+
+    def nastav_hodnotu(self, t: str):
+        pc, c = rozdel_cislo(str(t))
+        self._ze_seznamu = self._ze_seznamu and bool(c)
+        self.predc.setText(pc)
+        self.cislo.setText(c)
+        self._dopln()
+
+    def text(self) -> str:  # kompatibilita s QLineEdit
+        return self.hodnota()
+
+    def setText(self, t: str):  # noqa: N802
+        self.nastav_hodnotu(t)
+
     def _dopln(self):
-        b = self.page.seznam.najdi(self.cislo.text().strip()) if self.cislo.text().strip() else None
+        c = self.hodnota()
+        b = self.page.seznam.najdi(c) if c else None
         if b is not None:
-            self.nastav(b.cislo, b.y, b.x, b.z)
+            self.nastav(b.cislo, b.y, b.x, b.z, b.kvalita)
             self._ze_seznamu = True
         elif self._ze_seznamu:  # číslo přepsané na bod, který v seznamu není – staré souřadnice pryč
-            self.nastav(self.cislo.text().strip())
+            pc, cc = self.predc.text(), self.cislo.text()
+            self.nastav("")
+            self.predc.setText(pc)
+            self.cislo.setText(cc)
         self.zmena.emit()
 
-    def nastav(self, cislo: str, y=None, x=None, z=None):
+    def nastav(self, cislo: str, y=None, x=None, z=None, kvalita=None):
         self._ze_seznamu = False
-        self.cislo.setText(cislo)
+        pc, c = rozdel_cislo(cislo)
+        self.predc.setText(pc)
+        self.cislo.setText(c)
         self.y.setText(fmt(y))
         self.x.setText(fmt(x))
         if self.z is not None:
             self.z.setText(fmt(z))
+        if self.kvalita is not None:
+            self.kvalita.setCurrentText("" if kvalita is None else str(kvalita))
 
     def vymaz(self):
         self.nastav("")
@@ -178,7 +259,7 @@ class BodBox(QWidget):
     def rucni_bod(self):
         """Bod s ručně zapsanými souřadnicemi, který v seznamu není (pro výpočet bez uložení do seznamu)."""
         from ..geodezie.body import Bod
-        c = self.cislo.text().strip()
+        c = self.hodnota()
         s = self.souradnice()
         if not c or s is None or self.page.seznam.najdi(c) is not None:
             return None
@@ -193,7 +274,9 @@ class BodBox(QWidget):
     def dropEvent(self, e):  # noqa: N802
         b = body_z_mime(e.mimeData())
         if b:
-            self.nastav(*b[0])
+            bod = self.page.seznam.najdi(b[0][0])
+            self.nastav(*b[0], bod.kvalita if bod else None)
+            self._ze_seznamu = bod is not None
             self.zmena.emit()
             e.acceptProposedAction()
 

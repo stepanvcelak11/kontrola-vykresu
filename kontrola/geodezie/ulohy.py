@@ -113,16 +113,24 @@ def _korekce(body: list) -> tuple[float, list[str]]:
 
 # ------------------------------------------------------------------ úlohy
 def u_smernik(s, h):
-    a, b = _bod(s, h, "a", "bod A"), _bod(s, h, "b", "bod B")
+    """Směrník a délka (Groma): směrník z prvního bodu na druhý a délka; s výškami i prostorová délka,
+    sklon ve stupních a spád v procentech."""
+    a, b = _bod(s, h, "a", "počáteční bod"), _bod(s, h, "b", "koncový bod")
     _ruzne(a, b)
+    sm, d = V.smernik(a, b), V.delka(a, b)
     p = _hlavicka("Směrník a délka")
     p += [f"z bodu {a.cislo} na bod {b.cislo}",
-          f"  směrník σ = {_f(V.smernik(a, b), 4)} gon",
-          f"  délka   d = {_f(V.delka(a, b))} m",
+          f"  směrník σ = {_f(sm, 4)} gon",
+          f"  délka   d = {_f(d)} m",
           f"  ΔY = {_f(b.y - a.y)} m, ΔX = {_f(b.x - a.x)} m"]
+    data = {"smernik": sm, "delka": d}
     if a.z is not None and b.z is not None:
-        p.append(f"  převýšení Δh = {_f(b.z - a.z)} m")
-    return Vysledek(p)
+        dz = b.z - a.z
+        data.update(prevyseni=dz, prostorova=math.hypot(d, dz), sklon=math.degrees(math.atan2(dz, d)),
+                    spad=dz / d * 100)
+        p += [f"  převýšení Δh = {_f(dz)} m",
+              f"  prostorová délka {_f(data['prostorova'])} m, sklon {data['sklon']:.4f}°, spád {data['spad']:.2f} %"]
+    return Vysledek(p, data=data)
 
 
 def _orientace_osnovy(s, h, st: Bod, k: float) -> tuple[float, list[tuple]]:
@@ -294,7 +302,15 @@ def u_vpred_smery(s, h):
              f"úhel protnutí {_f(min(gama, 200 - gama) if gama > 100 else gama, 4)} gon"
              + ("  (POZOR: ostrý úhel protnutí, výsledek je nejistý)" if min(gama, 200 - gama) < 30 else ""),
              f"bod {n}:  Y = {_f(p.y)}   X = {_f(p.x)}"]
-    return Vysledek(prot, [Bod(n, float(p.y), float(p.x), poznamka="protínání vpřed ze směrů")])
+    data = {"bod": (n, float(p.y), float(p.x), None)}
+    for k_, st_ in (("ora", a), ("orb", b)):
+        try:
+            _po, orr = _orientace_osnovy(s, {"orientace": h.get(k_)}, st_, 1.0)
+            data[k_] = {b_.cislo: (v,) for b_, _s, _k, v, _w, _d, _vd in orr}
+        except ChybaVstupu:
+            pass
+    return Vysledek(prot, [Bod(n, float(p.y), float(p.x), (h.get("kod") or "").strip(),
+                               poznamka="protínání vpřed ze směrů")], data=data)
 
 
 def u_z_delek(s, h):
@@ -313,7 +329,8 @@ def u_z_delek(s, h):
     prot += [f"{a.cislo}–{b.cislo}: {_f(V.delka(a, b))} m, dA = {_f(da)} m, dB = {_f(db)} m, bod "
              f"{'vlevo' if vlevo else 'vpravo'} od směru {a.cislo}→{b.cislo}",
              f"bod {n}:  Y = {_f(p.y)}   X = {_f(p.x)}"]
-    return Vysledek(prot, [Bod(n, p.y, p.x, poznamka="protínání z délek")])
+    return Vysledek(prot, [Bod(n, p.y, p.x, None, (h.get("kod") or "").strip(), poznamka="protínání z délek")],
+                    data={"bod": (n, p.y, p.x, None)})
 
 
 def u_zpet(s, h):
@@ -543,15 +560,59 @@ def u_transformace(s, h):
 
 
 def u_vymera(s, h):
-    body = _radky_bodu(s, h.get("body") or "")
+    """Výměra a obvod (Groma Výpočet výměr): body po obvodu; řádek „bod o“ = vrchol oblouku (oblouk je dán
+    předchozím bodem, vrcholem a následujícím bodem – připočte se kruhová úseč)."""
+    radky = [r.split() for r in (h.get("body") or "").replace(",", " ").replace(";", "\n").splitlines() if r.strip()]
+    if len(radky) == 1:  # čísla na jednom řádku
+        radky = [[c] for c in radky[0]]
+    body, vrch = [], set()
+    for r in radky:
+        b = s.najdi(r[0])
+        if b is None:
+            raise ChybaVstupu(f"Bod {r[0]} v seznamu souřadnic není.")
+        if len(r) > 1 and r[1].lower() in ("o", "oblouk", "1", "ano"):
+            vrch.add(len(body))
+        body.append(b)
     if len(body) < 3:
         raise ChybaVstupu("Výměra potřebuje aspoň tři body (zadejte čísla bodů po obvodu).")
-    p = V.vymera(body)
-    prot = _hlavicka("Výměra a obvod")
-    prot += ["body: " + " – ".join(b.cislo for b in body),
-             f"výměra P = {_f(p, 2)} m²  (zaokrouhleně {round(p):d} m²)",
-             f"obvod  o = {_f(V.obvod(body))} m"]
-    return Vysledek(prot)
+    poly = [b for i, b in enumerate(body) if i not in vrch]
+    p = V.vymera(poly) if len(poly) >= 3 else 0.0
+    obv = 0.0
+    use = []
+    n = len(body)
+    i = 0
+    while i < n:
+        a = body[i]
+        if (i + 1) % n in vrch:
+            v, c = body[(i + 1) % n], body[(i + 2) % n]
+            sy, sx, r = _kruznice3(a, v, c)
+            t = V.delka(a, c)
+            uhel = 2 * math.asin(min(1.0, t / (2 * r)))
+            # vrchol na opačné straně tětivy než střed → oblouk větší než půlkruh
+            if (V.stanicni_kolmice(a, c, v)[1] > 0) == (V.stanicni_kolmice(a, c, V.P(sy, sx))[1] > 0):
+                uhel = 2 * math.pi - uhel
+            usec = r * r / 2 * (uhel - math.sin(uhel))
+            # vrchol mimo obrazec (bez vrcholu) → úseč se přičte, uvnitř → odečte
+            s_vrch = abs(V.vymera([b_ for j, b_ in enumerate(body) if j not in vrch or j == (i + 1) % n]))
+            ven = s_vrch > abs(p)
+            use.append((a.cislo, v.cislo, c.cislo, r, usec if ven else -usec))
+            obv += r * uhel
+            i += 2
+        else:
+            obv += V.delka(a, body[(i + 1) % n])
+            i += 1
+    celkem = abs(p) + sum(u[4] for u in use)
+    prot = _hlavicka("Výpočet výměr")
+    parc = " ".join(x for x in ((h.get("parcela") or "").strip(), (h.get("dil") or "").strip() and
+                                f"díl {(h.get('dil') or '').strip()}") if x)
+    if parc:
+        prot.append(f"parcela {parc}")
+    prot += ["body: " + " – ".join(b.cislo + (" (vrchol oblouku)" if i in vrch else "") for i, b in enumerate(body))]
+    for a, v, c, r, u in use:
+        prot.append(f"  oblouk {a} – {v} – {c}: poloměr {_f(r)} m, úseč {u:+.2f} m²")
+    prot += [f"výměra P = {_f(celkem, 2)} m²  (zaokrouhleně {round(celkem):d} m²)",
+             f"obvod  o = {_f(obv)} m"]
+    return Vysledek(prot, data={"vymera": celkem, "obvod": obv})
 
 
 def _cislo_nepovinne(h: dict, key: str, nazev: str, vychozi: float | None) -> float | None:
@@ -831,11 +892,30 @@ def u_prusecik(s, h):
     if druh == "dvou přímek":
         c, d = _bod(s, h, "c", "bod C"), _bod(s, h, "d", "bod D")
         _ruzne(c, d)
+        o1 = _f_nebo((h.get("o1") or "").strip() or None) or 0.0
+        o2 = _f_nebo((h.get("o2") or "").strip() or None) or 0.0
+
+        def posun(p1, p2, o):  # odsazení: kladné vpravo od směru p1→p2 (záporné vlevo), jako v Gromě
+            if not o:
+                return p1, p2
+            dl = V.delka(p1, p2)
+            uy, ux = (p2.y - p1.y) / dl, (p2.x - p1.x) / dl
+            return V.P(p1.y + ux * o, p1.x - uy * o), V.P(p2.y + ux * o, p2.x - uy * o)
+        a1, b1 = posun(a, b, o1)
+        c1, d1 = posun(c, d, o2)
         try:
-            body = [V.prusecik_primek(a, b, c, d)]
+            body = [V.prusecik_primek(a1, b1, c1, d1)]
         except ValueError as e:
             raise ChybaVstupu(str(e)) from None
-        prot.append(f"přímky {a.cislo}–{b.cislo} a {c.cislo}–{d.cislo}")
+        prot.append(f"přímky {a.cislo}–{b.cislo}" + (f" (odsazení {_f(o1)} m)" if o1 else "")
+                    + f" a {c.cislo}–{d.cislo}" + (f" (odsazení {_f(o2)} m)" if o2 else ""))
+        t1 = V.stanicni_kolmice(a1, b1, body[0])[0] / V.delka(a1, b1)
+        prot.append("průsečík leží " + {(True, True): "na obou úsečkách", (True, False): f"na úsečce {a.cislo}–{b.cislo}",
+                                         (False, True): f"na úsečce {c.cislo}–{d.cislo}",
+                                         (False, False): "mimo obě úsečky"}[
+            (0 <= t1 <= 1, 0 <= V.stanicni_kolmice(c1, d1, body[0])[0] / V.delka(c1, d1) <= 1)])
+        if a.z is not None and b.z is not None:
+            h["_z"] = a.z + (b.z - a.z) * t1
     elif druh == "přímky a kružnice":
         c = _bod(s, h, "c", "střed kružnice (bod C)")
         r = _cislo(h, "r1", "poloměr")
@@ -854,32 +934,61 @@ def u_prusecik(s, h):
     if not body:
         raise ChybaVstupu("Průsečík neexistuje (přímka kružnici neprotíná / kružnice se neprotínají).")
     nove = []
+    z = h.get("_z")
     for i, p in enumerate(body):
         c = n if i == 0 else n + "b"
-        prot.append(f"bod {c}:  Y = {_f(p.y)}   X = {_f(p.x)}")
-        nove.append(Bod(c, p.y, p.x, poznamka="průsečík"))
+        prot.append(f"bod {c}:  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None and not i else ""))
+        nove.append(Bod(c, p.y, p.x, z if not i else None, (h.get("kod") or "").strip(), poznamka="průsečík"))
     if len(body) > 1:
         prot.append("(dvě řešení – druhé má k číslu připojené „b“)")
-    return Vysledek(prot, nove)
+    return Vysledek(prot, nove, data={"bod": (n, body[0].y, body[0].x, z)})
 
 
 def u_vytyceni(s, h):
-    st, o = _bod(s, h, "st", "stanovisko"), _bod(s, h, "o", "orientaci")
-    _ruzne(st, o)
+    """Polární vytyčovací prvky (Groma): Orientace + směry / Orientace + směrníky / Směrníky; směr na orientaci
+    (nenulový), délky děleny měřítkem (skutečné délky v terénu), s výškou stroje a cíle i převýšení a zenit."""
+    st = _bod(s, h, "st", "stanovisko")
+    volba = (h.get("volba") or "Orientace + směry").lower()
     body = _radky_bodu(s, h.get("body") or "")
     if not body:
-        raise ChybaVstupu("Zadejte čísla vytyčovaných bodů.")
-    prot = _hlavicka("Vytyčovací prvky")
-    prot += [f"stanovisko {st.cislo}, orientace na {o.cislo} (směrník {_f(V.smernik(st, o), 4)} gon, "
-             f"délka {_f(V.delka(st, o))} m); úhel měřen od orientace po směru hodin",
-             "  bod              úhel [gon]   délka [m]  směrník [gon]"]
+        raise ChybaVstupu("Zadejte vytyčované body (čísla, nebo je přetáhněte ze seznamu).")
+    o = None
+    if not volba.startswith("směrník"):
+        o = _bod(s, h, "o", "orientaci")
+        _ruzne(st, o)
+    so = _cislo_nepovinne(h, "so", "směr na orientaci", 0.0) or 0.0
+    vp = _cislo_nepovinne(h, "vp", "výšku stroje", None)
+    vc = _cislo_nepovinne(h, "vc", "výšku cíle", 0.0) or 0.0
+    from .nastaveni import aktualni
+    k = aktualni().koeficient() or 1.0
+    prot = _hlavicka("Polární vytyčovací prvky")
+    prot.append(f"stanovisko {st.cislo}" + (f", orientace na {o.cislo} (směrník {_f(V.smernik(st, o), 4)} gon, "
+                                            f"směr na orientaci {_f(so, 4)} gon)" if o else "") + f"; {volba}")
+    if abs(k - 1) > 1e-12:
+        prot.append(f"délky jsou skutečné (v terénu) – vyděleny měřítkem {k:.10f}")
+    prot.append(f"  {'bod':<16} {'směr [gon]':>11} {'směrník [gon]':>14} {'délka [m]':>10}"
+                + ("   převýšení   zenit [gon]" if vp is not None else ""))
+    vysl = {}
     for b in body:
         if V.delka(st, b) < 1e-9:
-            prot.append(f"  {b.cislo:<14} leží na stanovisku")
+            prot.append(f"  {b.cislo:<16} leží na stanovisku")
             continue
-        u, d, sm = V.vytycovaci_prvky(st, o, b)
-        prot.append(f"  {b.cislo:<14} {u:>12.4f} {d:>11.3f} {sm:>14.4f}")
-    return Vysledek(prot)
+        sm = V.smernik(st, b)
+        d = V.delka(st, b) / k
+        smer = V.norm_gon(sm - V.smernik(st, o) + so) if o is not None and volba.startswith("orientace + směry") \
+            else None
+        rad = f"  {b.cislo:<16} {('' if smer is None else f'{smer:.4f}'):>11} {sm:>14.4f} {d:>10.3f}"
+        dz = zen = None
+        if vp is not None and st.z is not None and b.z is not None:
+            dz = b.z - st.z
+            zen = V.rad2gon(math.atan2(d, dz - vp + vc))
+            rad += f" {dz:>11.3f} {zen:>13.4f}"
+        prot.append(rad)
+        if o is not None and volba.startswith("orientace + směrník"):
+            prot.append(f"  {'':<16} z orientace {o.cislo}: směrník {V.smernik(o, b):.4f} gon, délka "
+                        f"{V.delka(o, b) / k:.3f} m")
+        vysl[b.cislo] = (smer, sm, d, dz, zen)
+    return Vysledek(prot, data={"prvky": vysl})
 
 
 def u_trig_vyska(s, h):
@@ -1050,6 +1159,56 @@ def u_ortogonalni(s, h):
         prot.append(f"  {c:<14} {st:>10.3f} {k:>10.3f} {p.y:>12.3f} {p.x:>12.3f}")
         nove.append(Bod(c, p.y, p.x, poznamka="ortogonální metoda"))
     return Vysledek(prot, nove)
+
+
+def u_ortogonalni_groma(s, h):
+    """Ortogonální metoda (Groma): transformační klíč z identických bodů (řádek: bod staničení kolmice, aspoň
+    dva), podobnostní transformace; oprava délky mezi 1. a 2. identickým bodem; určované body (staničení,
+    kolmice). Kolmice kladná vpravo."""
+    ident = []
+    for i, r in enumerate(_radky_mereni(h.get("identicke"), "identické"), 1):
+        b = s.najdi(r[0])
+        if b is None:
+            raise ChybaVstupu(f"Identický bod {r[0]} v seznamu souřadnic není.")
+        st_, kol = (_f_nebo(r[k]) if len(r) > k else None for k in (1, 2))
+        ident.append((b, st_ or 0.0, kol or 0.0))
+    if len(ident) < 2:
+        raise ChybaVstupu("Zadejte aspoň dva identické body (číslo, staničení a kolmice).")
+    o0, o1 = V.P(0.0, 0.0), V.P(0.0, 1.0)
+    mist = [V.bod_ze_stanicni(o0, o1, st_, kol) for _b, st_, kol in ident]
+    try:
+        t = V.transformace(mist, [(b.y, b.x) for b, _s, _k in ident], "podobnostni")
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    d_sour = V.delka(ident[0][0], ident[1][0])
+    d_mist = V.delka(mist[0], mist[1])
+    from .nastaveni import aktualni
+    k = aktualni().koeficient() or 1.0
+    prot = _hlavicka("Ortogonální metoda")
+    prot += [f"identických bodů {len(ident)}, měřítko klíče {t.meritko:.6f}",
+             f"oprava délky mezi 1. a 2. identickým bodem: {_f(d_sour - d_mist * k)} m "
+             f"(ze souřadnic {_f(d_sour)} m, měřeno {_f(d_mist)} m)",
+             "", f"  {'bod':<16} {'staničení':>10} {'kolmice':>10} {'dY':>8} {'dX':>8} {'dP':>8}"]
+    opravy = {}
+    for (b, st_, kol), (vy, vx) in zip(ident, t.opravy):
+        opravy[b.cislo] = (vy, vx, math.hypot(vy, vx))
+        prot.append(f"  {b.cislo:<16} {st_:>10.3f} {kol:>10.3f} {vy:>8.3f} {vx:>8.3f} {math.hypot(vy, vx):>8.3f}")
+    nove = []
+    rad = _radky_mereni(h.get("mereni"), "měření")
+    if (h.get("nove") or "").strip() and (h.get("st") or "").strip():
+        rad.append([h["nove"].strip(), h["st"], h.get("kol") or "0"])
+    if not rad:
+        raise ChybaVstupu("Zadejte určovaný bod: číslo, staničení a kolmici.")
+    prot += ["", "určované body:", f"  {'bod':<16} {'staničení':>10} {'kolmice':>10} {'Y':>12} {'X':>12}"]
+    for r in rad:
+        if len(r) < 2:
+            raise ChybaVstupu(f"Bod {r[0]}: zadejte staničení (a kolmici).")
+        st_, kol = _f_nebo(r[1]) or 0.0, (_f_nebo(r[2]) if len(r) > 2 else 0.0) or 0.0
+        y, x = t.preved(V.bod_ze_stanicni(o0, o1, st_, kol))
+        prot.append(f"  {r[0]:<16} {st_:>10.3f} {kol:>10.3f} {y:>12.3f} {x:>12.3f}")
+        nove.append(Bod(r[0], y, x, None, (h.get("kod") or "").strip(), poznamka="ortogonální metoda"))
+    return Vysledek(prot, nove, data={"opravy": opravy, "oprava_delky": d_sour - d_mist * k,
+                                       "bod": (nove[-1].cislo, nove[-1].y, nove[-1].x, None)})
 
 
 def u_polygon(s, h):
@@ -1734,7 +1893,8 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
       Pole("jung", "Jungova dotransformace", "volba", "ne", ("ne", "ano – opravy z identických bodů")),
       Pole("predpona", "Předpona nových čísel", "text", "T")], u_transformace),
     ("Výměra a obvod", "Výměra a obvod plochy z bodů zadaných po obvodu.",
-     [Pole("body", "Body po obvodu (čísla)", "radky")], u_vymera),
+     [Pole("body", "Body po obvodu (čísla; „bod o“ = vrchol oblouku)", "radky"), Pole("parcela", "Parcela", "text"),
+      Pole("dil", "Díl", "text")], u_vymera),
     ("Kružnicový oblouk", "Hlavní body oblouku (ZO, KO, VO, střed) a podrobné body po délce – vytyčení oblouku.",
      [Pole("v", "Vrchol tečen V"), Pole("a", "Bod na první tečně A (směr k ZO)"), Pole("b", "Bod na druhé tečně B"),
       Pole("r", "Poloměr R [m]", "m"), Pole("krok", "Podrobné body po [m] (nepovinné)", "m"),
@@ -1818,8 +1978,10 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("e", "Excentricita e [m]", "m"), Pole("fs", "Směr na centr [gon]", "gon"),
       Pole("smery", "Měřené směry (řádek: bod směr délka)", "radky")], u_centrace),
     ("Vytyčovací prvky", "Úhel od orientace a délka ze stanoviska pro vytyčení bodů.",
-     [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("body", "Vytyčované body (čísla)", "radky")],
-     u_vytyceni),
+     [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("so", "Směr na orientaci [gon]", "gon"),
+      Pole("volba", "Počítat", "volba", "Orientace + směry", ("Orientace + směry", "Orientace + směrníky", "Směrníky")),
+      Pole("vp", "Výška stroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
+      Pole("body", "Vytyčované body (čísla)", "radky")], u_vytyceni),
     ("Trigonometrická výška", "Výška bodu ze šikmé délky a zenitového úhlu (se zakřivením a refrakcí).",
      [Pole("st", "Stanovisko (s výškou)"), Pole("d", "Šikmá délka [m]", "m"), Pole("z", "Zenitový úhel [gon]", "gon"),
       Pole("vp", "Výška přístroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
@@ -1874,4 +2036,578 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
      [Pole("smer", "Směr", "volba", "S-JTSK → WGS84", ("S-JTSK → WGS84", "WGS84 → S-JTSK")),
       Pole("body", "Body (čísla) pro S-JTSK → WGS84", "radky"),
       Pole("wgs", "WGS84 → S-JTSK (řádek: číslo šířka délka)", "radky")], u_wgs),
+]
+
+
+# ------------------------------------------------------------------ další úlohy podle Gromy 14 (okna Výpočty)
+def _kruznice3(a, b, c) -> tuple[float, float, float]:
+    """(Y středu, X středu, poloměr) kružnice třemi body (počítáno od těžiště kvůli přesnosti)."""
+    oy, ox = (a.y + b.y + c.y) / 3, (a.x + b.x + c.x) / 3
+    ay, ax, by, bx, cy, cx = a.y - oy, a.x - ox, b.y - oy, b.x - ox, c.y - oy, c.x - ox
+    d = 2 * (ay * (bx - cx) + by * (cx - ax) + cy * (ax - bx))
+    if abs(d) < 1e-9 * max(1.0, V.delka(a, b) * V.delka(b, c)):
+        raise ChybaVstupu("Body kružnice leží na přímce – kružnice jimi neprochází.")
+    sy = ((ay * ay + ax * ax) * (bx - cx) + (by * by + bx * bx) * (cx - ax) + (cy * cy + cx * cx) * (ax - bx)) / d
+    sx = ((ay * ay + ax * ax) * (cy - by) + (by * by + bx * bx) * (ay - cy) + (cy * cy + cx * cx) * (by - ay)) / d
+    return sy + oy, sx + ox, math.hypot(ay - sy, ax - sx)
+
+
+def _radky_mereni(text: str, nazev: str) -> list[list[str]]:
+    return [r.replace(",", ".").split() for r in (text or "").splitlines() if r.strip()]
+
+
+def _f_nebo(t: str | None) -> float | None:
+    if t is None or t in ("", "-"):
+        return None
+    try:
+        v = float(t)
+    except ValueError:
+        raise ChybaVstupu(f"„{t}“ není číslo.") from None
+    if not math.isfinite(v):
+        raise ChybaVstupu(f"„{t}“ není konečné číslo.")
+    return v
+
+
+def u_vyska_stanoviska(s, h):
+    """Výpočet výšky stanoviska (Groma): z orientací s výškou – délka + zenitový úhel (trigonometricky,
+    se zakřivením a refrakcí), nebo měřené převýšení; výška stanoviska = průměr, opravy V přev."""
+    radky = _radky_mereni(h.get("orientace"), "orientace")
+    if not radky:
+        raise ChybaVstupu("Zadejte orientace s výškou (bod, délka a zenitový úhel nebo převýšení).")
+    vp = _cislo(h, "vp", "výšku stroje") if (h.get("vp") or "").strip() else 0.0
+    vys, prot_r = [], []
+    for i, r in enumerate(radky, 1):
+        b = s.najdi(r[0])
+        if b is None:
+            raise ChybaVstupu(f"Řádek {i}: bod {r[0]} v seznamu souřadnic není.")
+        if b.z is None:
+            raise ChybaVstupu(f"Řádek {i}: bod {b.cislo} nemá výšku.")
+        d, z, dh, vc = (_f_nebo(r[k]) if len(r) > k else None for k in (1, 2, 3, 4))
+        vc = vc or 0.0
+        if d is not None and z is not None:
+            _hh, dhtt = V.trigonometricka_vyska(0.0, d, z, vp, vc)
+            zp = f"délka {d:.3f}, zenit {z:.4f}"
+        elif dh is not None:
+            dhtt = dh + vp - vc
+            zp = f"převýšení {dh:.3f}"
+        else:
+            raise ChybaVstupu(f"Řádek {i}: zadejte délku a zenitový úhel, nebo převýšení.")
+        vys.append((b, b.z - dhtt))
+        prot_r.append((b, zp, vc, dhtt))
+    hst = sum(v for _b, v in vys) / len(vys)
+    n = _nove_cislo(s, h)
+    prot = _hlavicka("Výpočet výšky stanoviska")
+    prot += [f"stanovisko {n}, výška stroje {_f(vp)} m", "",
+             f"  {'bod':<18} {'H bodu':>9} {'měření':<32} {'výška cíle':>10} {'Δh':>9} {'H st.':>9} {'V přev.':>8}"]
+    opravy = {}
+    for (b, zp, vc, dhtt), (_b, v) in zip(prot_r, vys):
+        opravy[b.cislo] = [v - hst]
+        prot.append(f"  {b.cislo:<18} {b.z:>9.3f} {zp:<32} {vc:>10.3f} {dhtt:>9.3f} {v:>9.3f} {v - hst:>8.3f}")
+    prot.append(f"výška stanoviska H = {_f(hst)} m" + (f" (průměr z {len(vys)}, rozpětí "
+                                                       f"{(max(v for _b, v in vys) - min(v for _b, v in vys)) * 1000:.0f} mm)"
+                                                       if len(vys) > 1 else ""))
+    st = s.najdi(n)
+    data = {"opravy": opravy, "bod": (n, st.y if st else None, st.x if st else None, hst)}
+    if st is not None:
+        return Vysledek(prot, [], {n: hst}, data=data)
+    yy, xx = (h.get("y") or "").strip(), (h.get("x") or "").strip()
+    if yy and xx:
+        return Vysledek(prot, [Bod(n, float(yy), float(xx), hst, poznamka="výška stanoviska")], data=data)
+    raise ChybaVstupu(f"Stanovisko {n} v seznamu není – zapište jeho souřadnice Y a X, nebo ho nejdřív spočtěte.")
+
+
+def u_na_primku(s, h):
+    """Vyrovnání na přímku (Groma): pata kolmice z bodu na přímku A–B a vzdálenost bodu od přímky."""
+    a, b, p = _bod(s, h, "a", "počáteční bod přímky"), _bod(s, h, "b", "koncový bod přímky"), _bod(s, h, "p", "vyrovnávaný bod")
+    _ruzne(a, b)
+    st, kol = V.stanicni_kolmice(a, b, p)
+    q = V.bod_ze_stanicni(a, b, st, 0.0)
+    n = (h.get("nove") or "").strip() or p.cislo
+    z = None
+    if a.z is not None and b.z is not None:
+        z = a.z + (b.z - a.z) * st / V.delka(a, b)
+    prot = _hlavicka("Vyrovnání na přímku")
+    prot += [f"přímka {a.cislo} – {b.cislo}, délka {_f(V.delka(a, b))} m, vyrovnávaný bod {p.cislo}",
+             f"  staničení {_f(st)} m, vzdálenost od přímky (kolmice) {_f(kol)} m",
+             f"bod {n}:  Y = {_f(q.y)}   X = {_f(q.x)}" + (f"   Z = {_f(z)}" if z is not None else "")]
+    return Vysledek(prot, [Bod(n, q.y, q.x, z if z is not None else p.z, p.kod, p.kvalita, "vyrovnání na přímku")],
+                    data={"bod": (n, q.y, q.x, z), "vzdalenost": kol})
+
+
+def u_na_kruznici(s, h):
+    """Vyrovnání na kružnici (Groma): středový průmět bodu na kružnici danou třemi body."""
+    k1, k2, k3 = _bod(s, h, "k1", "1. bod kružnice"), _bod(s, h, "k2", "2. bod kružnice"), _bod(s, h, "k3", "3. bod kružnice")
+    p = _bod(s, h, "p", "vyrovnávaný bod")
+    sy, sx, r = _kruznice3(k1, k2, k3)
+    d = math.hypot(p.y - sy, p.x - sx)
+    if d < 1e-9:
+        raise ChybaVstupu("Vyrovnávaný bod je ve středu kružnice – průmět není určený.")
+    q = V.P(sy + (p.y - sy) * r / d, sx + (p.x - sx) * r / d)
+    n = (h.get("nove") or "").strip() or p.cislo
+    prot = _hlavicka("Vyrovnání na kružnici")
+    prot += [f"kružnice {k1.cislo}, {k2.cislo}, {k3.cislo}: střed Y = {_f(sy)} X = {_f(sx)}, poloměr {_f(r)} m",
+             f"vyrovnávaný bod {p.cislo}: vzdálenost od kružnice {_f(d - r)} m",
+             f"bod {n}:  Y = {_f(q.y)}   X = {_f(q.x)}"]
+    return Vysledek(prot, [Bod(n, q.y, q.x, p.z, p.kod, p.kvalita, "vyrovnání na kružnici")],
+                    data={"bod": (n, q.y, q.x, p.z), "vzdalenost": d - r})
+
+
+def _definicni(s, h) -> list[tuple[Bod, bool]]:
+    out = []
+    for i, r in enumerate(_radky_mereni(h.get("body"), "body"), 1):
+        b = s.najdi(r[0])
+        if b is None:
+            raise ChybaVstupu(f"Řádek {i}: bod {r[0]} v seznamu souřadnic není.")
+        out.append((b, not (len(r) > 1 and r[1] in ("0", "ne", "-"))))
+    return out
+
+
+def u_vyrovnavaci_primka(s, h):
+    """Vyrovnávací přímka (Groma): přímka MNČ (min. součet čtverců kolmých vzdáleností), vzdálenosti bodů
+    a průměty bodů na přímku. Řádek: bod [1 = definiční (výchozí) / 0 = jen vzdálenost]."""
+    body = _definicni(s, h)
+    defin = [b for b, d in body if d]
+    if len(defin) < 2:
+        raise ChybaVstupu("Vyrovnávací přímka potřebuje aspoň dva definiční body.")
+    my, mx = sum(b.y for b in defin) / len(defin), sum(b.x for b in defin) / len(defin)
+    syy = sum((b.y - my) ** 2 for b in defin)
+    sxx = sum((b.x - mx) ** 2 for b in defin)
+    syx = sum((b.y - my) * (b.x - mx) for b in defin)
+    th = 0.5 * math.atan2(2 * syx, syy - sxx)  # směr přímky v rovině (Y, X)
+    uy, ux = math.cos(th), math.sin(th)
+
+    def proj(b):
+        t = (b.y - my) * uy + (b.x - mx) * ux
+        return t, (b.y - my) * ux - (b.x - mx) * uy, V.P(my + t * uy, mx + t * ux)
+    vse = str(h.get("vse") or "ano").startswith("ano")
+    pre = (h.get("predpona") or "").strip()
+    prot = _hlavicka("Vyrovnávací přímka")
+    prot += [f"definičních bodů {len(defin)}, směrník přímky {_f(V.norm_gon(V.rad2gon(math.atan2(uy, ux))), 4)} gon",
+             "", f"  {'bod':<18} {'def.':>4} {'vzdálenost [m]':>15}"]
+    vzd, nove = {}, []
+    for b, d in body:
+        _t, v, _q = proj(b)
+        vzd[b.cislo] = [v]
+        prot.append(f"  {b.cislo:<18} {'ano' if d else 'ne':>4} {v:>15.3f}")
+    ts = [proj(b)[0] for b in defin]
+    k1, k2 = V.P(my + min(ts) * uy, mx + min(ts) * ux), V.P(my + max(ts) * uy, mx + max(ts) * ux)
+    prot += ["", f"koncové body přímky:  Y = {_f(k1.y)} X = {_f(k1.x)}  –  Y = {_f(k2.y)} X = {_f(k2.x)}",
+             "", "průměty bodů na přímku:"]
+    for b, d in body:
+        if not d and not vse:
+            continue
+        _t, v, q = proj(b)
+        nove.append(Bod(pre + b.cislo, q.y, q.x, b.z, b.kod, b.kvalita, "vyrovnávací přímka"))
+        prot.append(f"  {pre + b.cislo:<18} Y = {_f(q.y)}   X = {_f(q.x)}   vzdálenost {_f(v)} m")
+    if len(defin) > 2:
+        m0 = math.sqrt(sum(proj(b)[1] ** 2 for b in defin) / (len(defin) - 2))
+        prot.append(f"střední vzdálenost od přímky m0 = {_f(m0)} m")
+    return Vysledek(prot, nove, data={"opravy": vzd, "koncove": (k1, k2)})
+
+
+def u_vyrovnavaci_kruznice(s, h):
+    """Vyrovnávací kružnice (Groma): kružnice MNČ (iteračně, start ze tří bodů), volitelně s pevným poloměrem;
+    vzdálenosti bodů od kružnice, střed a průměty bodů na kružnici."""
+    body = _definicni(s, h)
+    defin = [b for b, d in body if d]
+    if len(defin) < 3:
+        raise ChybaVstupu("Vyrovnávací kružnice potřebuje aspoň tři definiční body.")
+    sy, sx, r = _kruznice3(defin[0], defin[len(defin) // 2], defin[-1])
+    pevny = _f_nebo((h.get("r") or "").strip() or None)
+    if pevny is not None:
+        r = pevny
+    for _it in range(50):  # Gauss–Newton: v_i = |P_i − S| − r
+        rows, rhs = [], []
+        for b in defin:
+            d = math.hypot(b.y - sy, b.x - sx) or 1e-12
+            rows.append([-(b.y - sy) / d, -(b.x - sx) / d] + ([] if pevny is not None else [-1.0]))
+            rhs.append(-(d - r))
+        n = len(rows[0])
+        ata = [[sum(rw[i] * rw[j] for rw in rows) for j in range(n)] for i in range(n)]
+        atb = [sum(rw[i] * v for rw, v in zip(rows, rhs)) for i in range(n)]
+        try:
+            dx = _resit(ata, atb)
+        except ZeroDivisionError:
+            raise ChybaVstupu("Kružnici nelze vyrovnat (body leží na přímce?).") from None
+        sy, sx = sy + dx[0], sx + dx[1]
+        if pevny is None:
+            r += dx[2]
+        if max(abs(v) for v in dx) < 1e-9:
+            break
+    else:
+        raise ChybaVstupu("Vyrovnání kružnice nekonverguje – zkontrolujte body a pevný poloměr.")
+    pre = (h.get("predpona") or "").strip()
+    stred = (h.get("stred") or "").strip()
+    vse = str(h.get("vse") or "ano").startswith("ano")
+    prot = _hlavicka("Vyrovnávací kružnice")
+    prot += [f"definičních bodů {len(defin)}" + (", pevný poloměr" if pevny is not None else ""),
+             f"střed  Y = {_f(sy)}   X = {_f(sx)}, poloměr r = {_f(r)} m", "",
+             f"  {'bod':<18} {'def.':>4} {'vzdálenost [m]':>15}"]
+    vzd, nove = {}, []
+    for b, d in body:
+        v = math.hypot(b.y - sy, b.x - sx) - r
+        vzd[b.cislo] = [v]
+        prot.append(f"  {b.cislo:<18} {'ano' if d else 'ne':>4} {v:>15.3f}")
+    if stred:
+        nove.append(Bod(stred, sy, sx, poznamka="střed vyrovnávací kružnice"))
+    prot += ["", "průměty bodů na kružnici:"]
+    for b, d in body:
+        if not d and not vse:
+            continue
+        dd = math.hypot(b.y - sy, b.x - sx) or 1e-12
+        q = V.P(sy + (b.y - sy) * r / dd, sx + (b.x - sx) * r / dd)
+        nove.append(Bod(pre + b.cislo, q.y, q.x, b.z, b.kod, b.kvalita, "vyrovnávací kružnice"))
+        prot.append(f"  {pre + b.cislo:<18} Y = {_f(q.y)}   X = {_f(q.x)}")
+    return Vysledek(prot, nove, data={"opravy": vzd, "stred": (sy, sx, r)})
+
+
+def _resit(a: list[list[float]], b: list[float]) -> list[float]:
+    """Malá soustava lineárních rovnic (Gaussova eliminace s výběrem pivotu)."""
+    n = len(b)
+    m = [row[:] + [b[i]] for i, row in enumerate(a)]
+    for c in range(n):
+        p = max(range(c, n), key=lambda r: abs(m[r][c]))
+        if abs(m[p][c]) < 1e-15:
+            raise ZeroDivisionError
+        m[c], m[p] = m[p], m[c]
+        for r in range(n):
+            if r != c:
+                f = m[r][c] / m[c][c]
+                m[r] = [x - f * y for x, y in zip(m[r], m[c])]
+    return [m[i][n] / m[i][i] for i in range(n)]
+
+
+def u_prusecik_smer(s, h):
+    """Průsečík přímka – směr (Groma): orientovaný směr ze stanoviska (orientace jako u polární metody)
+    a přímka A–B; výška z paprsku, pokud je výška stanoviska, výška stroje a zenitový úhel."""
+    st = _bod(s, h, "st", "stanovisko")
+    a, b = _bod(s, h, "a", "bod A přímky"), _bod(s, h, "b", "bod B přímky")
+    _ruzne(a, b)
+    k, kor = _korekce([st])
+    posun, orient = _orientace_osnovy(s, h, st, k)
+    sm = _cislo(h, "sm", "měřený směr")
+    sig = V.norm_gon(sm + posun)
+    t = V.rajon(st, sig, 1000.0)
+    try:
+        p = V.prusecik_primek(st, t, a, b)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    n = _nove_cislo(s, h)
+    z = None
+    zen = (h.get("zenit") or "").strip()
+    if zen and st.z is not None:
+        vp = _cislo(h, "vp", "výšku stroje") if (h.get("vp") or "").strip() else 0.0
+        d = V.delka(st, p)
+        z = st.z + vp + d / math.tan(V.gon2rad(_cislo(h, "zenit", "zenitový úhel")))
+    prot = _hlavicka("Průsečík přímka - směr") + kor
+    prot += [f"stanovisko {st.cislo}, orientační posun {_f(posun, 4)} gon, směr {_f(sm, 4)} → směrník {_f(sig, 4)} gon",
+             f"přímka {a.cislo} – {b.cislo}",
+             f"bod {n}:  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None else "")]
+    return Vysledek(prot, [Bod(n, p.y, p.x, z, (h.get("kod") or "").strip(), poznamka="průsečík přímka - směr")],
+                    data={"orientace": {b_.cislo: (v, vd) for b_, _s, _k, v, _w, _d, vd in orient},
+                          "bod": (n, p.y, p.x, z)})
+
+
+def u_prusecik_kruznice3(s, h):
+    """Průsečík přímka – kružnice (Groma): kružnice třemi body, přímka dvěma body; dvě řešení."""
+    k1, k2, k3 = _bod(s, h, "k1", "1. bod kružnice"), _bod(s, h, "k2", "2. bod kružnice"), _bod(s, h, "k3", "3. bod kružnice")
+    a, b = _bod(s, h, "a", "bod A přímky"), _bod(s, h, "b", "bod B přímky")
+    _ruzne(a, b)
+    sy, sx, r = _kruznice3(k1, k2, k3)
+    body = V.prusecik_primky_kruznice(a, b, V.P(sy, sx), r)
+    if not body:
+        raise ChybaVstupu("Přímka kružnici neprotíná.")
+    n = _nove_cislo(s, h)
+    reseni = 1 if str(h.get("reseni") or "1").startswith("2") and len(body) > 1 else 0
+    prot = _hlavicka("Průsečík přímka - kružnice")
+    prot += [f"kružnice {k1.cislo}, {k2.cislo}, {k3.cislo}: střed Y = {_f(sy)} X = {_f(sx)}, r = {_f(r)} m",
+             f"přímka {a.cislo} – {b.cislo}"]
+    for i, p in enumerate(body, 1):
+        prot.append(f"  řešení {i}:  Y = {_f(p.y)}   X = {_f(p.x)}" + ("  ← uloženo" if i - 1 == reseni else ""))
+    p = body[reseni]
+    return Vysledek(prot, [Bod(n, p.y, p.x, poznamka="průsečík přímka - kružnice")], data={"bod": (n, p.y, p.x, None)})
+
+
+def u_konstrukcni(s, h):
+    """Konstrukční oměrné (Groma): obrazec z oměrných (pravé úhly, + vpravo / − vlevo od předchozí spojnice),
+    umístěný shodnostní nebo podobnostní transformací na body o známých souřadnicích (aspoň dva)."""
+    radky = _radky_mereni(h.get("mereni"), "oměrné")
+    if len(radky) < 3:
+        raise ChybaVstupu("Zadejte body obrazce s oměrnými (řádek: bod oměrná), aspoň tři.")
+    lok = [(radky[0][0], 0.0, 0.0)]
+    smer = (0.0, 1.0)  # (dY, dX) – první strana do +X místní soustavy
+    for i, r in enumerate(radky[1:], 2):
+        m = _f_nebo(r[1] if len(r) > 1 else None)
+        if m is None:
+            raise ChybaVstupu(f"Řádek {i}: zadejte oměrnou.")
+        if i > 2:  # od třetího bodu: pravý úhel vpravo (+) nebo vlevo (−)
+            smer = (smer[1], -smer[0]) if m > 0 else (-smer[1], smer[0])
+        d = abs(m) if i > 2 else m
+        y0, x0 = lok[-1][1], lok[-1][2]
+        lok.append((r[0], y0 + smer[0] * d, x0 + smer[1] * d))
+    prot = _hlavicka("Konstrukční oměrné")
+    uzavr = len(lok) > 3 and lok[0][0] == lok[-1][0]
+    if uzavr:
+        ey, ex = lok[-1][1] - lok[0][1], lok[-1][2] - lok[0][2]
+        prot.append(f"uzavřený obrazec: uzávěr dY = {_f(ey)} m, dX = {_f(ex)} m – rozdělen úměrně pořadí")
+        n = len(lok) - 1
+        lok = [(c, y - ey * i / n, x - ex * i / n) for i, (c, y, x) in enumerate(lok)][:-1]
+    zdroj, cil = [], []
+    for c, y, x in lok:
+        b = s.najdi(c)
+        if b is not None:
+            zdroj.append(V.P(y, x))
+            cil.append((b.y, b.x))
+    if len(zdroj) < 2:
+        raise ChybaVstupu("Mezi body obrazce musí být aspoň dva body o známých souřadnicích.")
+    druh = "podobnostni" if str(h.get("druh") or "").startswith("podob") else "shodnostni"
+    try:
+        t = V.transformace(zdroj, cil, druh)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    prot += [f"identických bodů {len(zdroj)}, transformace {'podobnostní' if druh == 'podobnostni' else 'shodnostní'}, "
+             f"měřítko {t.meritko:.6f}, m0 = {_f(t.m0)} m", "",
+             f"  {'bod':<18} {'Y':>12} {'X':>12}"]
+    jen_nove = str(h.get("jen_nove") or "ano").startswith("ano")
+    nove = []
+    for c, y, x in lok:
+        yy, xx = t.preved(V.P(y, x))
+        dany = s.najdi(c) is not None
+        prot.append(f"  {c:<18} {yy:>12.3f} {xx:>12.3f}" + ("  (identický)" if dany else ""))
+        if not (dany and jen_nove):
+            nove.append(Bod(c, yy, xx, poznamka="konstrukční oměrné"))
+    return Vysledek(prot, nove)
+
+
+def u_trojuhelnik(s, h):
+    """Trojúhelníková kalkulačka (Groma): ze tří údajů (strany a, b, c a úhly α, β, γ v gonech, ne tři úhly)
+    dopočte zbytek trojúhelníku, výměru a výšky."""
+    a, b, c = (_f_nebo((h.get(k) or "").strip() or None) for k in ("a", "b", "c"))
+    al, be, ga = (_f_nebo((h.get(k) or "").strip() or None) for k in ("alfa", "beta", "gama"))
+    rad = V.gon2rad
+    strany = [x for x in (a, b, c) if x is not None]
+    uhly = [x for x in (al, be, ga) if x is not None]
+    if len(strany) + len(uhly) < 3 or not strany:
+        raise ChybaVstupu("Zadejte aspoň tři údaje, z toho aspoň jednu stranu (ne tři úhly).")
+    if any(x <= 0 for x in strany + uhly):
+        raise ChybaVstupu("Strany i úhly musí být kladné.")
+    if len(uhly) >= 2:  # dva úhly → třetí
+        if al is None:
+            al = 200 - be - ga
+        elif be is None:
+            be = 200 - al - ga
+        elif ga is None:
+            ga = 200 - al - be
+        if min(al, be, ga) <= 0:
+            raise ChybaVstupu("Součet úhlů musí být 200 gon.")
+        k = next(x / math.sin(rad(u)) for x, u in ((a, al), (b, be), (c, ga)) if x is not None)
+        a, b, c = (k * math.sin(rad(u)) for u in (al, be, ga))
+    elif len(strany) == 3:
+        if max(strany) * 2 >= sum(strany):
+            raise ChybaVstupu("Strany nesplňují trojúhelníkovou nerovnost.")
+    elif len(strany) == 2 and len(uhly) == 1:
+        if a is None and al is not None or b is None and be is not None or c is None and ga is not None:
+            # úhel proti chybějící straně (sevřený úhel) → kosinová věta
+            if a is None:
+                a = math.sqrt(b * b + c * c - 2 * b * c * math.cos(rad(al)))
+            elif b is None:
+                b = math.sqrt(a * a + c * c - 2 * a * c * math.cos(rad(be)))
+            else:
+                c = math.sqrt(a * a + b * b - 2 * a * b * math.cos(rad(ga)))
+        else:  # úhel proti známé straně (SSA) – jednoznačné řešení s ostrým úhlem
+            par = [(a, al, "a"), (b, be, "b"), (c, ga, "c")]
+            zn = next(p for p in par if p[0] is not None and p[1] is not None)
+            k = zn[0] / math.sin(rad(zn[1]))
+            dr = next(p for p in par if p[0] is not None and p[1] is None)
+            sv = dr[0] / k
+            if sv > 1:
+                raise ChybaVstupu("Trojúhelník s těmito údaji neexistuje.")
+            u2 = V.rad2gon(math.asin(sv))
+            u3 = 200 - zn[1] - u2
+            if u3 <= 0:
+                raise ChybaVstupu("Trojúhelník s těmito údaji neexistuje.")
+            vals = {zn[2]: (zn[0], zn[1]), dr[2]: (dr[0], u2)}
+            tret = ({"a", "b", "c"} - set(vals)).pop()
+            vals[tret] = (k * math.sin(rad(u3)), u3)
+            (a, al), (b, be), (c, ga) = vals["a"], vals["b"], vals["c"]
+    else:
+        raise ChybaVstupu("Z těchto údajů nejde trojúhelník určit – zadejte jinou trojici.")
+
+    def uhel(x, y, z):  # úhel proti straně x
+        return V.rad2gon(math.acos(max(-1.0, min(1.0, (y * y + z * z - x * x) / (2 * y * z)))))
+    al, be, ga = uhel(a, b, c), uhel(b, a, c), uhel(c, a, b)
+    sp = (a + b + c) / 2
+    pl = math.sqrt(max(0.0, sp * (sp - a) * (sp - b) * (sp - c)))
+    prot = _hlavicka("Trojúhelníková kalkulačka")
+    prot += [f"  a = {_f(a)} m   b = {_f(b)} m   c = {_f(c)} m",
+             f"  α = {_f(al, 4)} gon   β = {_f(be, 4)} gon   γ = {_f(ga, 4)} gon",
+             f"  výměra P = {_f(pl, 2)} m², obvod {_f(a + b + c)} m",
+             f"  výšky: va = {_f(2 * pl / a)} m, vb = {_f(2 * pl / b)} m, vc = {_f(2 * pl / c)} m"]
+    return Vysledek(prot, data={"hodnoty": {"a": a, "b": b, "c": c, "alfa": al, "beta": be, "gama": ga, "P": pl}})
+
+
+def u_polygon_groma(s, h):
+    """Polygonový pořad jako v Gromě: počáteční a koncový bod s orientacemi, měřená data po stanoviscích
+    (směr a délka zpět / vpřed); typ pořadu se pozná sám ze zadání."""
+    a = _bod(s, h, "a", "počáteční bod")
+    b = _bod(s, h, "b", "koncový bod")
+    rad = _radky_mereni(h.get("mereni"), "měřená data")
+    if len(rad) < 2:
+        raise ChybaVstupu("Zadejte měřená data: počáteční bod, nové body a koncový bod (řádek: bod směr_zpět "
+                          "délka_zpět směr_vpřed délka_vpřed).")
+    if rad[0][0] != a.cislo or rad[-1][0] != b.cislo:
+        raise ChybaVstupu("První řádek měřených dat musí být počáteční bod a poslední koncový bod pořadu.")
+    st = [(r[0], *[_f_nebo(r[k]) if len(r) > k else None for k in (1, 2, 3, 4)]) for r in rad]
+    cisla = [r[0] for r in st[1:-1]]
+    # délky stran: průměr vpřed z i a zpět z i+1
+    strany = []
+    for i in range(len(st) - 1):
+        d = [x for x in (st[i][4], st[i + 1][2]) if x is not None]
+        if not d:
+            raise ChybaVstupu(f"Chybí délka strany {st[i][0]} – {st[i + 1][0]}.")
+        strany.append(sum(d) / len(d))
+    # vrcholové úhly na nových bodech: vpřed − zpět
+    uhly_n = []
+    for c, sz, _dz, sv, _dv in st[1:-1]:
+        if sz is None or sv is None:
+            raise ChybaVstupu(f"Na bodě {c} zadejte směr zpět i vpřed.")
+        uhly_n.append(V.norm_gon(sv - sz))
+    or_a = bool((h.get("ora") or "").strip())
+    or_b = bool((h.get("orb") or "").strip())
+    k, _kor = _korekce([a, b])
+
+    def uhel_orient(bod, klic, smer, vpred: bool):
+        posun, orient = _orientace_osnovy(s, {"orientace": h.get(klic)}, bod, k)
+        o = orient[0][0]
+        # úhel od orientace k sousednímu bodu (vpřed) / od sousedního k orientaci (zpět)
+        return o, (V.norm_gon(smer + posun - V.smernik(bod, o)) if vpred else V.norm_gon(V.smernik(bod, o) - (smer + posun)))
+    d = {"delky": "\n".join(f"{st[i][0]} {strany[i]}" for i in range(len(strany)))}
+    if a.cislo == b.cislo and or_a:
+        typ = "uzavřený"
+        o, ua = uhel_orient(a, "ora", st[0][3], True)
+        _o2, ub = uhel_orient(b, "ora", st[-1][1], False)
+        d.update(ao=o.cislo, a=a.cislo, uhly="\n".join(
+            f"{c} {u}" for c, u in [(a.cislo, ua)] + list(zip(cisla, uhly_n)) + [(a.cislo, ub)]))
+        r = u_polygon_uzavreny(s, d)
+    elif or_a and or_b:
+        typ = "oboustranně připojený a orientovaný"
+        o, ua = uhel_orient(a, "ora", st[0][3], True)
+        ob, ub = uhel_orient(b, "orb", st[-1][1], False)
+        d.update(ao=o.cislo, a=a.cislo, b=b.cislo, bo=ob.cislo, uhly="\n".join(
+            f"{c} {u}" for c, u in [(a.cislo, ua)] + list(zip(cisla, uhly_n)) + [(b.cislo, ub)]))
+        r = u_polygon(s, d)
+    elif or_a and h.get("volny") != "ano" and s.najdi(b.cislo) is not None:
+        typ = "oboustranně připojený, jednostranně orientovaný"
+        o, ua = uhel_orient(a, "ora", st[0][3], True)
+        d.update(ao=o.cislo, a=a.cislo, b=b.cislo, uhly="\n".join(
+            f"{c} {u}" for c, u in [(a.cislo, ua)] + list(zip(cisla, uhly_n))))
+        r = u_polygon_jednostranne_orientovany(s, d)
+    elif not or_a and not or_b:
+        typ = "vetknutý (bez orientací)"
+        d.update(a=a.cislo, b=b.cislo, uhly="\n".join(f"{c} {u}" for c, u in zip(cisla, uhly_n)))
+        r = u_polygon_vetknuty(s, d)
+    else:
+        raise ChybaVstupu("Orientaci zadejte na počátečním bodě (pořad jen orientovaný na konci obraťte).")
+    r.protokol.insert(3, f"typ pořadu: {typ}")
+    r.data["typ"] = typ
+    return r
+
+
+def u_vyskovy_porad(s, h):
+    """Výškový pořad (Groma): trigonometrická převýšení mezi body pořadu měřená vpřed a zpět (délka, zenit,
+    výška stroje a cíle), průměr, uzávěr na koncový bod a jeho rozdělení úměrně délkám."""
+    a, b = _bod(s, h, "a", "počáteční bod"), _bod(s, h, "b", "koncový bod")
+    if a.z is None or b.z is None:
+        raise ChybaVstupu("Počáteční i koncový bod musí mít výšku.")
+    rad = _radky_mereni(h.get("mereni"), "měření")
+    # řádek: bod výška_stroje délka_zpět zenit_zpět výška_cíle_zpět délka_vpřed zenit_vpřed výška_cíle_vpřed
+    st = []
+    for i, r in enumerate(rad, 1):
+        st.append((r[0], *[_f_nebo(r[k]) if len(r) > k else None for k in range(1, 8)]))
+    if len(st) < 2 or st[0][0] != a.cislo or st[-1][0] != b.cislo:
+        raise ChybaVstupu("Měření zadejte od počátečního ke koncovému bodu (první a poslední řádek).")
+    oddily = []
+    for i in range(len(st) - 1):
+        c0, vp0, *_z, dv, zv, vcv = st[i]
+        c1, vp1, dz, zz, vcz, *_v = st[i + 1]
+        dh, dd = [], []
+        if dv is not None and zv is not None:
+            _hh, x = V.trigonometricka_vyska(0.0, dv, zv, vp0 or 0.0, vcv or 0.0)
+            dh.append(x)
+            dd.append(dv * math.sin(V.gon2rad(zv)))
+        if dz is not None and zz is not None:
+            _hh, x = V.trigonometricka_vyska(0.0, dz, zz, vp1 or 0.0, vcz or 0.0)
+            dh.append(-x)
+            dd.append(dz * math.sin(V.gon2rad(zz)))
+        if not dh:
+            raise ChybaVstupu(f"Mezi body {c0} a {c1} chybí měření (délka a zenit vpřed nebo zpět).")
+        oddily.append((c1, sum(dh) / len(dh), sum(dd) / len(dd), dh))
+    sum_dh = sum(o[1] for o in oddily)
+    sum_d = sum(o[2] for o in oddily)
+    uzaver = (b.z - a.z) - sum_dh
+    prot = _hlavicka("Výškový pořad")
+    prot += [f"{a.cislo} (H = {_f(a.z)}) → {b.cislo} (H = {_f(b.z)}), délka {_f(sum_d)} m",
+             f"výškový uzávěr {uzaver * 1000:.0f} mm", "",
+             f"  {'bod':<18} {'Δh tam':>9} {'Δh zpět':>9} {'rozdíl':>8} {'délka':>9} {'oprava':>8} {'H':>9}"]
+    vys, hcur = {}, a.z
+    for c, dh, d, mer in oddily:
+        opr = uzaver * d / sum_d if sum_d else 0.0
+        hcur += dh + opr
+        tam = f"{mer[0]:9.3f}" if len(mer) > 0 else " " * 9
+        zpet = f"{mer[1]:9.3f}" if len(mer) > 1 else " " * 9
+        roz = f"{(mer[0] - mer[1]) * 1000:6.0f}mm" if len(mer) > 1 else " " * 8
+        prot.append(f"  {c:<18} {tam} {zpet} {roz} {d:9.3f} {opr:8.3f} {hcur:9.3f}")
+        if c != b.cislo:
+            vys[c] = hcur
+    return Vysledek(prot, [], vys, data={"vysky": vys, "uzaver": uzaver})
+
+
+ULOHY += [
+    ("Ortogonální metoda (Groma)", "Ortogonální metoda s identickými body (staničení, kolmice) – klíč transformací.",
+     [Pole("identicke", "Identické body (řádek: bod staničení kolmice)", "radky"),
+      Pole("nove", "Číslo určovaného bodu", "text"), Pole("st", "Staničení [m]", "m"), Pole("kol", "Kolmice [m]", "m"),
+      Pole("mereni", "Další body (řádek: bod staničení kolmice)", "radky")], u_ortogonalni_groma),
+    ("Výška stanoviska", "Výška stanoviska z orientací s výškou (délka + zenit, nebo převýšení).",
+     [Pole("orientace", "Orientace (řádek: bod délka zenit převýšení výška_signálu)", "radky"),
+      Pole("nove", "Stanovisko (číslo)", "text"), Pole("vp", "Výška stroje [m]", "m")], u_vyska_stanoviska),
+    ("Vyrovnání na přímku", "Pata kolmice z bodu na přímku a vzdálenost bodu od přímky.",
+     [Pole("a", "Počáteční bod přímky"), Pole("b", "Koncový bod přímky"), Pole("p", "Vyrovnávaný bod"),
+      Pole("nove", "Číslo výsledného bodu", "text")], u_na_primku),
+    ("Vyrovnání na kružnici", "Středový průmět bodu na kružnici danou třemi body.",
+     [Pole("k1", "1. bod kružnice"), Pole("k2", "2. bod kružnice"), Pole("k3", "3. bod kružnice"),
+      Pole("p", "Vyrovnávaný bod"), Pole("nove", "Číslo výsledného bodu", "text")], u_na_kruznici),
+    ("Vyrovnávací přímka", "Přímka MNČ z definičních bodů, vzdálenosti a průměty bodů.",
+     [Pole("body", "Body (řádek: bod [1 = definiční / 0])", "radky"),
+      Pole("vse", "Vyrovnat i body nepoužité pro určení přímky", "volba", "ano", ("ano", "ne")),
+      Pole("predpona", "Předpona čísel průmětů", "text", "P")], u_vyrovnavaci_primka),
+    ("Vyrovnávací kružnice", "Kružnice MNČ z definičních bodů (i s pevným poloměrem), střed a průměty.",
+     [Pole("body", "Body (řádek: bod [1 = definiční / 0])", "radky"), Pole("r", "Pevný poloměr [m]", "m"),
+      Pole("stred", "Číslo středu", "text"),
+      Pole("vse", "Vyrovnat i body nepoužité pro určení kružnice", "volba", "ano", ("ano", "ne")),
+      Pole("predpona", "Předpona čísel průmětů", "text", "P")], u_vyrovnavaci_kruznice),
+    ("Průsečík přímka - směr", "Průsečík orientovaného směru ze stanoviska s přímkou A–B.",
+     [Pole("st", "Stanovisko"), Pole("orientace", "Orientace (řádek: bod směr [délka])", "radky"),
+      Pole("sm", "Směr [gon]", "gon"), Pole("zenit", "Zenitový úhel [gon]", "gon"), Pole("vp", "Výška stroje [m]", "m"),
+      Pole("a", "Bod A přímky"), Pole("b", "Bod B přímky"), Pole("nove", "Číslo bodu", "text")], u_prusecik_smer),
+    ("Průsečík přímka - kružnice", "Průsečík přímky (2 body) a kružnice (3 body).",
+     [Pole("k1", "1. bod kružnice"), Pole("k2", "2. bod kružnice"), Pole("k3", "3. bod kružnice"),
+      Pole("a", "Bod A přímky"), Pole("b", "Bod B přímky"),
+      Pole("reseni", "Řešení", "volba", "1", ("1", "2")), Pole("nove", "Číslo bodu", "text")], u_prusecik_kruznice3),
+    ("Konstrukční oměrné", "Body obrazce z oměrných (pravé úhly) umístěné transformací na známé body.",
+     [Pole("mereni", "Body a oměrné (řádek: bod oměrná, + vpravo / − vlevo)", "radky"),
+      Pole("druh", "Transformace", "volba", "shodnostní", ("shodnostní", "podobnostní")),
+      Pole("jen_nove", "Ukládat jen nově určené body", "volba", "ano", ("ano", "ne"))], u_konstrukcni),
+    ("Trojúhelníková kalkulačka", "Trojúhelník ze tří údajů (strany a úhly v gonech).",
+     [Pole("a", "Strana a [m]", "m"), Pole("b", "Strana b [m]", "m"), Pole("c", "Strana c [m]", "m"),
+      Pole("alfa", "Úhel α [gon]", "gon"), Pole("beta", "Úhel β [gon]", "gon"), Pole("gama", "Úhel γ [gon]", "gon")],
+     u_trojuhelnik),
+    ("Polygonový pořad (Groma)", "Polygonový pořad ze směrů a délek zpět / vpřed, typ pořadu se pozná sám.",
+     [Pole("a", "Počáteční bod"), Pole("ora", "Orientace na počátečním bodě (řádek: bod směr [délka])", "radky"),
+      Pole("b", "Koncový bod"), Pole("orb", "Orientace na koncovém bodě (řádek: bod směr [délka])", "radky"),
+      Pole("mereni", "Měřená data (řádek: bod směr_zpět délka_zpět směr_vpřed délka_vpřed)", "radky")],
+     u_polygon_groma),
+    ("Výškový pořad", "Trigonometrický výškový pořad tam a zpět s rozdělením uzávěru.",
+     [Pole("a", "Počáteční bod"), Pole("b", "Koncový bod"),
+      Pole("mereni", "Měření (řádek: bod vp d_zpět z_zpět vc_zpět d_vpřed z_vpřed vc_vpřed)", "radky")],
+     u_vyskovy_porad),
 ]

@@ -102,7 +102,81 @@ class _BodPole(QWidget):
 
 
 # názvy oken jako v Gromě
-TITULKY = {"Rajón (polární bod)": "Polární metoda", "Transformace": "Transformace souřadnic"}
+def _davka(s, vysky: bool):
+    """Polární metoda dávkou / Výšky dávkou (Groma): celý Seznam měření (zápisník) proti seznamu souřadnic."""
+    from .groma_formulare import pole
+    from .groma_ulohy import formular
+    page, p = s.page, s.p
+    zap = page.zapisnik
+    info = QLabel()
+    info.setWordWrap(True)
+
+    def obnov():
+        n = len(zap.stanoviska)
+        zameru = sum(len(st.orient) + len(st.detail) for st in zap.stanoviska)
+        info.setText(f"Měření: <b>{zap.soubor.name if zap.soubor else 'Seznam měření'}</b> – {n} stanovisek, "
+                     f"{zameru} záměr<br>Souřadnice: <b>aktivní seznam</b> ({len(page.seznam.body)} bodů)")
+    obnov()
+
+    def nacist():
+        if zap.nacist():
+            obnov()
+    s.pridej(s.oddil("Soubory:", info, s.vedle(s.tlacitko("Načíst měření…", nacist,
+                                                          "Zápisník Gromy (.zap), Leica GSI…"),
+                                               s.tlacitko("Seznam měření", lambda: page.tabs.otevri(zap)), None,
+                                               natahnout=(0, 0, 1))))
+    ulozit = s.prepinac("", "Vypočtené " + ("výšky" if vysky else "body") + " uložit do aktivního seznamu",
+                        zapnuto=True)
+    s.pridej(s.oddil("Volby:", ulozit, s.poznamka("Měřítkový koeficient se bere z lišty nastavení (Měřítko). "
+                                                  "Orientace = body se známými souřadnicemi v seznamu.")))
+    stav = {k: pole("mer", 120, True) for k in ("st", "bod", "met", "nst", "nb", "nn")}
+    s.pridej(s.vedle(s.oddil("Okamžitý stav výpočtu:", formular([("Stanovisko:", stav["st"]), ("Bod:", stav["bod"]),
+                                                                 ("Metoda:", stav["met"])], nahoru=False)),
+                     s.oddil("Celkový stav výpočtu:", formular([("Stanovisek:", stav["nst"]),
+                                                                ("Podrobných bodů:", stav["nb"]),
+                                                                ("Nepoužito:", stav["nn"])], nahoru=False))))
+    p.form.addStretch(1)
+
+    def vypocet(_seznam, _h):
+        if not zap.stanoviska:
+            raise ChybaVstupu("Seznam měření je prázdný – načtěte zápisník (Načíst měření…).")
+        r = zap.vypocitej()
+        if r is None:
+            raise ChybaVstupu(zap.info.text().lstrip("⚠ ") or "Výpočet se nepovedl.")
+        body = [b for b in r.body if not b.kontrolni]
+        zameru = sum(len(st.detail) for st in zap.stanoviska)
+        stav["st"].setText(body[-1].stanovisko if body else "")
+        stav["bod"].setText(body[-1].bod if body else "")
+        stav["met"].setText("výšky" if vysky else "polární metoda")
+        stav["nst"].setText(str(len(r.stanoviska)))
+        stav["nb"].setText(str(len(body)))
+        stav["nn"].setText(str(max(0, zameru - len(r.body))))
+        prot = zap.vystup.toPlainText().splitlines()
+        if vysky:
+            vys = {b.bod: b.z for b in body if b.z is not None and page.seznam.najdi(b.bod) is not None}
+            v = Vysledek(prot, [], vys)
+        else:
+            from ..geodezie.body import Bod
+            v = Vysledek(prot, [Bod(b.bod, b.y, b.x, b.z, poznamka=f"polární metoda ze st. {b.stanovisko}")
+                                for b in body])
+        if ulozit.isChecked():
+            QTimer_single(lambda: p.pridej())
+        return v
+    p._vlastni_vypocet = vypocet
+    p._pri_pretazeni_mereni = None
+
+
+def QTimer_single(fn):  # noqa: N802
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(0, fn)
+
+
+VLASTNI_OKNA = {"Polární metoda dávkou": lambda s: _davka(s, False), "Výšky dávkou": lambda s: _davka(s, True)}
+OKNA_ULOH = list(ULOHY) + [
+    ("Polární metoda dávkou", "Celý Seznam měření najednou: orientace, podrobné body, výšky.", [], None),
+    ("Výšky dávkou", "Výšky bodů ze Seznamu měření (trigonometricky) do seznamu souřadnic.", [], None),
+]
+
 # pole výšek a zenitů (fialová), ostatní čísla jsou měření (modrá)
 _VYSKOVE = {"vp", "vc", "zenit", "z", "z1", "z2", "dh", "H", "zref", "vp1", "vp2", "vc1", "vc2", "mez", "interval"}
 
@@ -130,7 +204,7 @@ class UlohyPanel(QWidget):
         # seznam úloh zůstává (hledání, výběr z pásu), v okně se ale neukazuje – úlohy jsou v pásu jako v Gromě
         self.lst = QListWidget(self)
         self.lst.hide()
-        for nazev, _p, _f, _fn in ULOHY:
+        for nazev, _p, _f_, _fn in OKNA_ULOH:
             sk, text = kde.get(nazev, ("Další", "Další výpočty"))
             self.lst.addItem(QListWidgetItem(g_ikona(sk, text), nazev))
         self.hledat = QLineEdit(self)
@@ -158,7 +232,8 @@ class UlohyPanel(QWidget):
         self.split.addWidget(self.vystup)
         self.split.setStretchFactor(0, 3)
         self.split.setStretchFactor(1, 1)
-        self.split.setChildrenCollapsible(False)
+        self.split.setChildrenCollapsible(True)
+        self.split.setCollapsible(0, False)
         lay.addWidget(self.split, 1)
         self.chyba = QLabel()
         self.chyba.setWordWrap(True)
@@ -169,16 +244,19 @@ class UlohyPanel(QWidget):
         self.b_add = QPushButton("✓ Do seznamu")
         self.b_add.setToolTip("Vypočtené body uložit do seznamu souřadnic")
         self.b_add.setEnabled(False)
-        self.b_cad = QPushButton("Do výkresu")
-        self.b_cad.setToolTip("Vypočtené body rovnou do výkresu v CAD (značka nebo buňka, číslo a výška)")
-        self.b_cad.setEnabled(False)
         from PySide6.QtWidgets import QMenu, QToolButton
         self.b_dalsi = QToolButton()
         self.b_dalsi.setText("Další ▾")
         self.b_dalsi.setPopupMode(QToolButton.InstantPopup)
         m = QMenu(self.b_dalsi)
+        self.b_cad = m.addAction("Vypočtené body do výkresu (CAD)")
+        self.b_cad.setToolTip("Vypočtené body rovnou do výkresu v CAD (značka nebo buňka, číslo a výška)")
+        self.b_cad.setEnabled(False)
         self.b_copy = m.addAction("Kopírovat výsledek")
         self.b_pdf = m.addAction("Protokol do PDF…")
+        self.a_vystup = m.addAction("Výsledek výpočtu v okně")
+        self.a_vystup.setCheckable(True)
+        self.a_vystup.toggled.connect(lambda _c: self._rozdel())
         m.addSeparator()
         self.b_nast = m.addAction("Nastavení výpočtů…")
         self.b_dalsi.setMenu(m)
@@ -191,7 +269,6 @@ class UlohyPanel(QWidget):
         QShortcut(QKeySequence("Alt+V"), self, activated=lambda: self.vypocitej())
         row.addWidget(self.b_novy)
         row.addWidget(self.b_add)
-        row.addWidget(self.b_cad)
         row.addStretch(1)
         for w in (self.b_dalsi, self.b_prot, self.b_calc):
             row.addWidget(w)
@@ -208,7 +285,7 @@ class UlohyPanel(QWidget):
         self.b_copy.triggered.connect(self._copy)
         self.b_pdf.triggered.connect(lambda: self.protokol_pdf())
         self.b_nast.triggered.connect(lambda: self.nastaveni_vypoctu())
-        self.b_cad.clicked.connect(lambda: self.do_cad())
+        self.b_cad.triggered.connect(lambda: self.do_cad())
         self.b_novy.clicked.connect(lambda: self._show(self.lst.currentRow()))
         self.b_prot.clicked.connect(self._ukaz_protokol)
         from .nastaveni_vypoctu import nacti
@@ -223,14 +300,16 @@ class UlohyPanel(QWidget):
         """Ukáže okno úlohy (poprvé u pravého okraje hlavního okna, pak kde ho uživatel nechal)."""
         from PySide6.QtCore import QByteArray, QSettings
         if not self.isVisible():
-            g = QSettings().value(self.KLIC_GEOM)
-            if isinstance(g, (QByteArray, bytes)) and g:
-                self.restoreGeometry(QByteArray(g))
-            else:
-                hl = self.page.window()
-                if hl is not None and hl is not self:
-                    r = hl.frameGeometry()
-                    self.move(max(r.left(), r.right() - self.width() - 20), r.top() + 160)
+            if not getattr(self, "_umisteno", False):
+                self._umisteno = True
+                g = QSettings().value(self.KLIC_GEOM)
+                if isinstance(g, (QByteArray, bytes)) and g:
+                    self.restoreGeometry(QByteArray(g))
+                else:
+                    hl = self.page.window()
+                    if hl is not None and hl is not self:
+                        r = hl.frameGeometry()
+                        self.move(max(r.left(), r.right() - self.width() - 20), r.top() + 160)
             self.show()
         if self.isMinimized():
             self.showNormal()
@@ -276,7 +355,7 @@ class UlohyPanel(QWidget):
             return unicodedata.normalize("NFKD", t.lower()).encode("ascii", "ignore").decode()
         slova = bez(text).split()
         prvni = None
-        for i, (nazev, popis, _pole, _fn) in enumerate(ULOHY):
+        for i, (nazev, popis, _pole, _fn) in enumerate(OKNA_ULOH):
             ok = all(w in bez(nazev + " " + popis) for w in slova)
             self.lst.item(i).setHidden(not ok)
             if ok and prvni is None:
@@ -313,31 +392,39 @@ class UlohyPanel(QWidget):
         self._pred_vypoctem = None
         self._pri_pretazeni_mereni = None
         self._rucni = {}
+        self._tlacitka_ulozit = []
+        self._ma_ulozeni = False
+        self._kvalita_nove = None
+        self._vlastni_vypocet = None
+        self.zalozky = None
 
     def _show(self, i: int):
         if i < 0:
             return
         self._vycisti()
-        nazev, popis, pole, _fn = ULOHY[i]
+        nazev, popis, pole, _fn = OKNA_ULOH[i]
         from .groma_ikony import ikona as g_ikona
+        from .groma_ulohy import NOVY, OKNA, TITULKY, Stavitel
         sk, text = self._kde.get(nazev, ("Další", "Další výpočty"))
         self.setWindowTitle(TITULKY.get(nazev, nazev))
         self.setWindowIcon(g_ikona(sk, text))
-        self.setToolTip("")
         self.formbox.setToolTip(popis)
         self._completer_model.setStringList([b.cislo for b in self.page.seznam.body])
-        stavba = {"Rajón (polární bod)": self._polarni, "Volné stanovisko": self._volne,
-                  "Transformace": self._transformace}.get(nazev)
-        nove = {"Rajón (polární bod)": "Nové stanovisko", "Volné stanovisko": "Nové stanovisko",
-                "Transformace": "Nová transformace"}.get(nazev, "Nový výpočet")
-        self.b_novy.setText(nove)
+        self.b_novy.setText(NOVY.get(nazev, "Nový výpočet"))
+        stavba = OKNA.get(nazev) or VLASTNI_OKNA.get(nazev)
+        # okna Gromy mají výsledky přímo v polích (a celý protokol v okně Protokol) – pruh s výpisem je sbalený
+        self._sbalit_vystup = nazev in OKNA
+        self.a_vystup.setChecked(not self._sbalit_vystup)
         if stavba is not None:
-            stavba()
+            stavba(Stavitel(self))
         else:
             self._obecny(pole)
+        self.b_add.setVisible(not self._ma_ulozeni)
         self.vysledek = None
         self.b_add.setEnabled(False)
         self.b_cad.setEnabled(False)
+        for t in self._tlacitka_ulozit:
+            t.setEnabled(False)
         self.chyba.clear()
         self.vystup.clear()
         self._rozdel()
@@ -345,171 +432,12 @@ class UlohyPanel(QWidget):
     def _rozdel(self):
         """Zadání nahoře zabere většinu okna, výsledek dole je malý (celý protokol je v okně Protokol)."""
         t = max(self.split.height(), self.height() - 110, 300)
-        self.split.setSizes([t - 140, 140])
+        dole = 140 if self.a_vystup.isChecked() else 0
+        self.split.setSizes([t - dole, dole])
 
     def showEvent(self, e):  # noqa: N802
         super().showEvent(e)
         self._rozdel()
-
-    def _sekce(self, text: str, *widgety, natahnout: bool = False) -> QWidget:
-        """Oddíl okna jako v Gromě: tučný nadpis a pod ním obsah v rámečku."""
-        from PySide6.QtWidgets import QFrame
-        from .groma_formulare import nadpis
-        box = QFrame()
-        box.setObjectName("oddil_ulohy")
-        v = QVBoxLayout(box)
-        v.setContentsMargins(10, 6, 10, 8)
-        v.setSpacing(5)
-        v.addWidget(nadpis(text))
-        for w in widgety:
-            if isinstance(w, QWidget):
-                v.addWidget(w, 1 if natahnout else 0)
-            else:
-                v.addLayout(w)
-        return box
-
-    def _pole(self, key: str, druh: str, sirka: int = 110, tip: str = ""):
-        from .groma_formulare import pole
-        w = pole(druh, sirka, tip=tip)
-        self.inputs[key] = w
-        return w
-
-    def _bodbox(self, key: str, z: bool = True, **kw):
-        from .groma_formulare import BodBox
-        bb = BodBox(self.page, z=z, **kw)
-        c = QCompleter(self._completer_model, bb.cislo)
-        c.setCaseSensitivity(Qt.CaseInsensitive)
-        c.setFilterMode(Qt.MatchStartsWith)
-        bb.cislo.setCompleter(c)
-        if key:
-            self.inputs[key] = bb.cislo
-            self._bodboxy[key] = bb
-        return bb
-
-    def _vypoctene(self, s_cislem: bool = True) -> tuple[QWidget, dict]:
-        """Oddíl Vypočtené souřadnice (jen ke čtení) – vyplní ho výpočet."""
-        from .groma_formulare import pole, radek_poli
-        p = {k: pole("cislo" if k == "c" else "sour", 110, True) for k in ("c", "y", "x", "z")}
-        w = radek_poli(*([("Číslo:", p["c"])] if s_cislem else []), ("Y:", p["y"]), ("X:", p["x"]), ("Z:", p["z"]))
-        return w, p
-
-    @staticmethod
-    def _vypln(p: dict, bod):
-        from .groma_formulare import fmt
-        c, y, x, z = bod if bod else ("", None, None, None)
-        p["c"].setText(c)
-        p["y"].setText(fmt(y))
-        p["x"].setText(fmt(x))
-        p["z"].setText(fmt(z))
-
-    # --- Polární metoda (G10): Stanovisko | Určovaný bod
-    def _polarni(self):
-        from PySide6.QtWidgets import QTabWidget
-        from .groma_formulare import Prepinac, TabulkaRadku, formular, radek_poli
-        tabs = QTabWidget()
-        self.zalozky = tabs
-        # Stanovisko
-        st = QWidget()
-        sl = QVBoxLayout(st)
-        sl.setContentsMargins(0, 6, 0, 0)
-        vp = self._pole("vp", "vys", 90, "Výška stroje (přístroje) nad stabilizací [m]")
-        bb = self._bodbox("st", dva_sloupce=True, vlevo=[("Výška stroje:", vp)])
-        sl.addWidget(self._sekce("Stanovisko:", bb))
-        ob = self._bodbox("o")
-        so = self._pole("so", "mer", 110, "Měřený vodorovný směr na orientaci [gon]")
-        od = self._pole("od", "mer", 110, "Vodorovná délka na orientaci [m] (nepovinné – pro kontrolu)")
-        tab = TabulkaRadku(["Bod", "Směr [g]", "Délka [m]", "V or. [g]", "V délky [m]"], 3)
-        self.inputs["orientace"] = tab
-        prava = QWidget()
-        pl = QVBoxLayout(prava)
-        pl.setContentsMargins(0, 0, 0, 0)
-        pl.addWidget(ob)
-        pl.addWidget(formular([("Směr:", so), ("Vod. délka:", od)]))
-        bp, bo = QPushButton("Přidat"), QPushButton("Odebrat")
-        pl.addWidget(radek_poli(("", bp), ("", bo)))
-        pl.addStretch(1)
-        h = QHBoxLayout()
-        h.addWidget(tab, 3)
-        h.addWidget(prava, 2)
-        sl.addWidget(self._sekce("Orientace:", h, natahnout=True), 1)
-
-        def pridej_or():
-            c = ob.cislo.text().strip()
-            if not c or not so.text().strip():
-                self.chyba.setText("<span style='color:#B45309'>Pro přidání orientace vyplňte číslo bodu a směr."
-                                   "</span>")
-                return
-            r = ob.rucni_bod()
-            if r is not None:
-                self._rucni[r.cislo] = r
-            tab.pridej([c, so.text().strip(), od.text().strip()])
-            ob.vymaz()
-            so.clear()
-            od.clear()
-        bp.clicked.connect(pridej_or)
-        bo.clicked.connect(tab.odeber)
-        self._pred_vypoctem = lambda: pridej_or() if ob.cislo.text().strip() and so.text().strip() else None
-
-        def or_drop(md):
-            from .groma_formulare import body_z_mime, mereni_z_mime
-            sth, mer = mereni_z_mime(md)
-            if sth is not None and not bb.cislo.text().strip():
-                b = self.page.seznam.najdi(sth[0])
-                bb.nastav(sth[0], *((b.y, b.x, b.z) if b else ()))
-                vp.setText(f"{sth[1]:.3f}")
-            for m in mer:
-                tab.pridej([m["bod"], f"{m['hz']:.4f}", f"{m['d']:.3f}"])
-            for c, *_r in ([] if mer else body_z_mime(md)):
-                tab.pridej([c, "", ""])
-            return True
-        tab.pri_pretazeni = or_drop
-        tabs.addTab(st, "Stanovisko")
-        # Určovaný bod
-        ur = QWidget()
-        ul = QVBoxLayout(ur)
-        ul.setContentsMargins(0, 6, 0, 0)
-        nove = self._pole("nove", "cislo", 120, "Číslo určovaného bodu")
-        kod = self._pole("kod", "kod", 90)
-        sm = self._pole("sm", "mer", 110, "Měřený vodorovný směr [gon]")
-        d = self._pole("d", "mer", 110, "Délka [m] – vodorovná; se zenitovým úhlem šikmá")
-        dh = self._pole("dh", "vys", 110, "Převýšení [m] (bez zenitového úhlu)")
-        zen = self._pole("zenit", "vys", 110, "Zenitový úhel [gon] – délka je pak šikmá")
-        vc = self._pole("vc", "vys", 110, "Výška signálu (cíle) [m]")
-        g = QHBoxLayout()
-        g.addWidget(formular([("Číslo:", nove), ("Kód:", kod)]), 1)
-        g.addWidget(formular([("Směr:", sm), ("Délka:", d), ("Převýšení:", dh), ("Zenitový úhel:", zen),
-                              ("Výška signálu:", vc)]), 1)
-        mer_box = self._sekce("Měřené hodnoty:", g)
-        mer_box.setAcceptDrops(True)
-        ul.addWidget(mer_box)
-        ch1 = Prepinac("Výpočet ze směrníků")
-        ch1.setToolTip("Směr je přímo směrník (jižník) na bod – orientace osnovy není potřeba")
-        ch2 = Prepinac("Výpočet pro bodové pole")
-        ch2.setToolTip("Bod se spočte zvlášť s každým orientačním směrem, výsledek je průměr, rozdíly v protokolu")
-        self.inputs["ze_smerniku"] = ch1
-        self.inputs["bodove_pole"] = ch2
-        ul.addWidget(ch1)
-        ul.addWidget(ch2)
-        vw, vpole = self._vypoctene()
-        ul.addWidget(self._sekce("Vypočtené souřadnice:", vw))
-        hint = QLabel("Tip: záměry přetáhněte myší ze Seznamu měření (zápisníku) sem do okna – bod se hned "
-                      "spočítá. Víc označených záměr = víc bodů najednou.")
-        hint.setWordWrap(True)
-        hint.setObjectName("poznamka")
-        ul.addWidget(hint)
-        ul.addStretch(1)
-        tabs.addTab(ur, "Určovaný bod")
-        tabs.setAcceptDrops(True)
-        self.form.addWidget(tabs, 1)
-
-        def po(v):
-            o = v.data.get("orientace") if v else None
-            if o:
-                tab.nastav_vysledky({k: [a, b] for k, (a, b) in o.items()})
-            self._vypln(vpole, v.data.get("bod") if v else None)
-        self._po_vypoctu = po
-        self._pri_pretazeni_mereni = self._polarni_drop
-        self.formbox.setAcceptDrops(True)
 
     def _polarni_drop(self, md) -> bool:
         """Záměry ze zápisníku do Určovaného bodu: každá se hned spočte (jako přetažení v Gromě)."""
@@ -539,141 +467,6 @@ class UlohyPanel(QWidget):
         if self.vysledek:
             self.page.protokol_append(self.vysledek.protokol)
         return True
-
-    # --- Volné stanovisko (G15)
-    def _volne(self):
-        from PySide6.QtWidgets import QComboBox as _CB
-        from .groma_formulare import TabulkaRadku, formular, pole, radek_poli
-        ob = self._bodbox("", z=True)
-        ob.setToolTip("Orientační bod – zapište číslo nebo přetáhněte bod ze seznamu souřadnic; záměry jdou "
-                      "přetáhnout ze zápisníku rovnou do tabulky")
-        sm = pole("mer", 110, tip="Měřený vodorovný směr [gon]")
-        dl = pole("mer", 110, tip="Délka [m] – vodorovná, se zenitovým úhlem šikmá (nepovinné)")
-        zen = pole("vys", 110, tip="Zenitový úhel [gon] (nepovinné – pak se spočte i výška stanoviska)")
-        vc = pole("vys", 110, tip="Výška signálu (cíle) [m]")
-        h = QHBoxLayout()
-        h.addWidget(ob, 1)
-        h.addWidget(formular([("Směr:", sm), ("Délka:", dl), ("Zenitový úhel:", zen), ("Výška signálu:", vc)]), 1)
-        vyp = _CB()
-        vyp.addItems(["Podobnostní transformace", "Shodnostní transformace", "Vyrovnání jako vázaná síť (MNČ)"])
-        vyp.setToolTip("Podobnostní = s měřítkem (volné), shodnostní = bez změny měřítka, vázaná síť = vyrovnání "
-                       "MNČ podle středních chyb směrů a délek (Nastavení → Teodolit)")
-        self.inputs["vypocet"] = vyp
-        bp, bo = QPushButton("Přidat"), QPushButton("Odebrat")
-        tab = TabulkaRadku(["Bod", "Směr [g]", "Délka [m]", "Zenit [g]", "Výška sig.", "V or. [g]", "V délky [m]",
-                            "V přev. [m]"], 5)
-        self.inputs["mereni"] = tab
-        r = radek_poli(("Výpočet:", vyp), ("", bp), ("", bo), roztahnout=False)
-        self.form.addWidget(self._sekce("Orientace:", h, r, tab, natahnout=True), 1)
-
-        def pridej():
-            c = ob.cislo.text().strip()
-            if not c or not sm.text().strip():
-                self.chyba.setText("<span style='color:#B45309'>Vyplňte číslo orientace a směr.</span>")
-                return
-            rb = ob.rucni_bod()
-            if rb is not None:
-                self._rucni[rb.cislo] = rb
-            tab.pridej([c, sm.text().strip(), dl.text().strip(), zen.text().strip(), vc.text().strip()])
-            ob.vymaz()
-            for w in (sm, dl, zen, vc):
-                w.clear()
-        bp.clicked.connect(pridej)
-        bo.clicked.connect(tab.odeber)
-
-        def drop(md):
-            from .groma_formulare import body_z_mime, mereni_z_mime
-            sth, mer = mereni_z_mime(md)
-            if sth is not None:
-                if not self.inputs["nove"].text().strip():
-                    self.inputs["nove"].setText(sth[0])
-                self.inputs["vp"].setText(f"{sth[1]:.3f}")
-            for m in mer:
-                tab.pridej([m["bod"], f"{m['hz']:.4f}", f"{m['sd']:.3f}", f"{m['z']:.4f}", f"{m['vc']:.3f}"])
-            for c, *_r in ([] if mer else body_z_mime(md)):
-                tab.pridej([c, "", "", "", ""])
-            return True
-        tab.pri_pretazeni = drop
-        nove = self._pole("nove", "cislo", 120, "Číslo volného stanoviska")
-        vp = self._pole("vp", "vys", 90, "Výška stroje [m] – pro výšku stanoviska ze zenitových úhlů")
-        kod = self._pole("kod", "kod", 90)
-        vw, vpole = self._vypoctene(False)
-        self.form.addWidget(self._sekce("Vypočtené souřadnice:",
-                                        radek_poli(("Číslo:", nove), ("Výška stroje:", vp), ("Kód:", kod)), vw))
-
-        def po(v):
-            if v:
-                tab.nastav_vysledky(v.data.get("opravy", {}))
-            self._vypln(vpole, v.data.get("bod") if v else None)
-        self._po_vypoctu = po
-
-    # --- Transformace souřadnic (G17)
-    def _transformace(self):
-        from .groma_formulare import Prepinac, TabulkaRadku, Volba, formular, nadpis, radek_poli
-        cil = self._bodbox("", z=False)
-        mis = self._bodbox("", z=False)
-        lv = QWidget()
-        ll = QVBoxLayout(lv)
-        ll.setContentsMargins(0, 0, 0, 0)
-        ll.addWidget(nadpis("Cílové souřadnice:"))
-        ll.addWidget(cil)
-        ll.addWidget(nadpis("Místní souřadnice:"))
-        ll.addWidget(mis)
-        tab = TabulkaRadku(["Bod", "Y cíl", "X cíl", "dY [m]", "dX [m]", "dP [m]"], 3)
-        self.inputs["identicke"] = tab
-        bp, bo = QPushButton("Přidat"), QPushButton("Odebrat")
-        pv = QWidget()
-        pl = QVBoxLayout(pv)
-        pl.setContentsMargins(0, 0, 0, 0)
-        pl.addWidget(tab, 1)
-        pl.addWidget(radek_poli(("", bp), ("", bo)))
-        h = QHBoxLayout()
-        h.addWidget(lv, 2)
-        h.addWidget(pv, 3)
-        self.form.addWidget(self._sekce("Identické body:", h, natahnout=True), 1)
-
-        def pridej():
-            c = mis.cislo.text().strip()
-            sc = cil.souradnice()
-            if not c or sc is None:
-                self.chyba.setText("<span style='color:#B45309'>Vyplňte místní bod (číslo) a cílové souřadnice Y, X."
-                                   "</span>")
-                return
-            rb = mis.rucni_bod()
-            if rb is not None:
-                self._rucni[rb.cislo] = rb
-            tab.pridej([c, f"{sc[0]:.3f}", f"{sc[1]:.3f}"])
-            cil.vymaz()
-            mis.vymaz()
-        bp.clicked.connect(pridej)
-        bo.clicked.connect(tab.odeber)
-        typ = Volba(["Shodnostní", "Podobnostní", "Afinní"], "Podobnostní")
-        self.inputs["druh"] = typ
-        jung = Prepinac("Jungova dotransformace")
-        jung.setToolTip("Rozdělí opravy z identických bodů na transformované body (váhy 1/d²)")
-        self.inputs["jung"] = jung
-        pre = self._pole("predpona", "cislo", 70, "Předpona čísel transformovaných bodů")
-        pre.setText("T")
-        g = QHBoxLayout()
-        g.addWidget(self._sekce("Typ transformace:", typ))
-        g.addWidget(self._sekce("Volby:", jung, formular([("Předpona čísel:", pre)])), 1)
-        w = QWidget()
-        w.setLayout(g)
-        g.setContentsMargins(0, 0, 0, 0)
-        self.form.addWidget(w)
-        tr = _Radky()
-        tr.setPlaceholderText("Čísla bodů k transformaci – přetáhněte je ze seznamu souřadnic")
-        tr.setMinimumHeight(70)
-        self.inputs["transformovat"] = tr
-        bv = QPushButton("Všechny body seznamu")
-        bv.clicked.connect(lambda: tr.setPlainText("\n".join(
-            b.cislo for b in self.page.seznam.body if b.cislo not in {r[0] for r in tab.radky()})))
-        self.form.addWidget(self._sekce("Transformovat body:", tr, radek_poli(("", bv), roztahnout=False)))
-
-        def po(v):
-            if v:
-                tab.nastav_vysledky(v.data.get("opravy", {}))
-        self._po_vypoctu = po
 
     # --- ostatní úlohy: přehledný formulář (popisek | pole), dlouhé popisky jen v nápovědě
     def _obecny(self, pole):
@@ -725,7 +518,8 @@ class UlohyPanel(QWidget):
             g.addWidget(w, r, 1)
             self.inputs[p.key] = vstup
         g.setColumnStretch(1, 1)
-        self.form.addWidget(self._sekce("Zadání:", box))
+        from .groma_ulohy import Stavitel
+        self.form.addWidget(Stavitel(self).oddil("Zadání:", box))
         self.form.addStretch(1)
 
     # ------------------------------------------------------------ přetažení měření do okna
@@ -771,7 +565,8 @@ class UlohyPanel(QWidget):
 
     def vypocitej(self, protokolovat: bool = True) -> Vysledek | None:
         i = self.lst.currentRow()
-        nazev, _p, _pole, fn = ULOHY[i]
+        nazev, _p, _pole, fn = OKNA_ULOH[i]
+        fn = self._vlastni_vypocet or fn
         if self._pred_vypoctem:
             self._pred_vypoctem()
         rucni = list(self._rucni.values()) + [r for bb in self._bodboxy.values()
@@ -792,7 +587,16 @@ class UlohyPanel(QWidget):
             self.vysledek = None
             return None
         self.chyba.clear()
+        from dataclasses import replace as _repl
+        kv = self._kvalita_nove.currentText() if self._kvalita_nove is not None else ""
+        kod = self.inputs["kod"].text().strip() if "kod" in self.inputs and hasattr(self.inputs["kod"], "text") \
+            else ""
+        if kv or kod:
+            self.vysledek.nove = [_repl(b, kvalita=b.kvalita or (int(kv) if kv else None), kod=b.kod or kod)
+                                  for b in self.vysledek.nove]
         self.vystup.setPlainText("\n".join(self.vysledek.protokol))
+        for t in self._tlacitka_ulozit:
+            t.setEnabled(bool(self.vysledek.nove or self.vysledek.vysky))
         self.b_add.setEnabled(bool(self.vysledek.nove or self.vysledek.vysky))
         self.b_cad.setEnabled(bool(self.vysledek.nove))
         if self._po_vypoctu:
@@ -816,7 +620,7 @@ class UlohyPanel(QWidget):
                         body[i] = Bod(**d)
                 return len(vy)
 
-            n = self.page.seznam.zmen(f"{ULOHY[self.lst.currentRow()][0]}: výšky", fn, len(vy))
+            n = self.page.seznam.zmen(f"{OKNA_ULOH[self.lst.currentRow()][0]}: výšky", fn, len(vy))
             self.page.model.refresh()
             self.page._after_change()
             self.chyba.setText(f"<span style='color:#16A34A'>✓ Výšky zapsány u {n} bodů.</span>")
@@ -830,7 +634,7 @@ class UlohyPanel(QWidget):
         d = aktualni().desetiny
         nove = [replace(b, y=round(b.y, d), x=round(b.x, d), z=None if b.z is None else round(b.z, max(d, 3)))
                 for b in self.vysledek.nove]
-        n, konf = self.page.seznam.pridej(nove, f"{ULOHY[self.lst.currentRow()][0]}: nové body")
+        n, konf = self.page.seznam.pridej(nove, f"{OKNA_ULOH[self.lst.currentRow()][0]}: nové body")
         self.page.model.refresh()
         self.page._after_change()
         if konf:

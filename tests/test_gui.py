@@ -288,10 +288,10 @@ def test_tmavy_rezim_a_aktualizace(window, monkeypatch):
     from kontrola.ui import theme
     w = window
     w.a_dark.setChecked(True)
-    assert theme.is_dark() and "#0E141B" in QApplication.instance().styleSheet()
+    assert theme.is_dark() and "#1E252E" in QApplication.instance().styleSheet()
     assert w.settings.value("zobrazeni/vzhled") == "tmavy"
     w.a_dark.setChecked(False)
-    assert not theme.is_dark() and "#0E141B" not in QApplication.instance().styleSheet()
+    assert not theme.is_dark() and "#1E252E" not in QApplication.instance().styleSheet()
     # nová verze → okno s odkazem ke stažení (síť se v testu nepoužije)
     shown = []
     monkeypatch.setattr(aktualizace, "BUILD", 5)
@@ -1286,7 +1286,7 @@ def test_vypocty_ulohy(window):
     u.vypocitej()
     assert "výměra P = 4000.00 m²" in u.vystup.toPlainText()
     # protokol v projektu
-    assert "VÝMĚRA A OBVOD" in (w.project.root / "vypocty" / "protokol.txt").read_text(encoding="utf-8")
+    assert "VÝPOČET VÝMĚR" in (w.project.root / "vypocty" / "protokol.txt").read_text(encoding="utf-8")
     # každá úloha s prázdným formulářem jen ohlásí, co chybí
     for i in range(u.lst.count()):
         u.lst.setCurrentRow(i)
@@ -3453,8 +3453,8 @@ def test_vypocty_rozvrzeni_jako_groma(window):
     v = window.vypocty
     titulky = [v.menu.karty.tabText(i) for i in range(v.menu.karty.count())]
     assert titulky == ["Soubor", "Protokol", "Výpočty"] and v.menu.karty.currentIndex() == 2
-    from kontrola.geodezie.ulohy import ULOHY
-    assert v.menu.ulohy_v_pasu == {n for n, *_x in ULOHY}
+    from kontrola.ui.ulohy import OKNA_ULOH
+    assert v.menu.ulohy_v_pasu == {n for n, *_x in OKNA_ULOH}
     v.seznam.body[:] = [Bod("1", 1000.0, 2000.0), Bod("25", 1100.0, 2000.0)]
     v._refresh()
     v.menu.akce["Výpočty/Podrobné/Polární"].trigger()
@@ -3709,7 +3709,7 @@ def test_groma_okna_uloh_a_meritko(window):
     md = v.model.mimeData([v.model.index(1, 0)])
     assert md.hasFormat(MIME_BODY) and body_z_mime(md)[0][:3] == ("2", 595100.0, 1158000.0)
     # Polární metoda: dvě orientace, posun vážený délkami, opravy v tabulce, vypočtené souřadnice
-    otevri_ulohu(v, jm.index("Rajón (polární bod)"))
+    u = otevri_ulohu(v, jm.index("Rajón (polární bod)"))
     assert u.isWindow() and u.windowTitle() == "Polární metoda" and u.lst.isHidden()
     s12 = V.smernik(V.P(595000, 1158000), V.P(595100, 1158000))
     s13 = V.smernik(V.P(595000, 1158000), V.P(595000, 1158100))
@@ -3726,7 +3726,12 @@ def test_groma_okna_uloh_a_meritko(window):
     md.setData(MIME_MERENI, b"#st 1 1.5\n11 100 30 100 1.5\n12 150 20 100 1.5")
     assert u._polarni_drop(md) and [b.cislo for b in u.vysledek.nove] == ["11", "12"]
     # Volné stanovisko: výpočet podobnostní / shodnostní transformací
-    otevri_ulohu(v, jm.index("Volné stanovisko"))
+    polar = u
+    u = otevri_ulohu(v, jm.index("Volné stanovisko"))
+    assert u is not polar and polar.isVisible() and u.isVisible()  # víc výpočtů najednou
+    u2 = otevri_ulohu(v, jm.index("Rajón (polární bod)"))
+    assert u2.windowTitle() == "Polární metoda - [2]"
+    u2.close()
     st = V.P(595020.0, 1158030.0)
     for c in ("1", "2", "3"):
         b = v.seznam.najdi(c)
@@ -3736,7 +3741,7 @@ def test_groma_okna_uloh_a_meritko(window):
     assert r and abs(r.nove[0].y - st.y) < 1e-3 and "transformace" in r.protokol[0].lower()
     assert u.inputs["mereni"].item(0, 5).text() != ""
     # Transformace: typ přepínačem
-    otevri_ulohu(v, jm.index("Transformace"))
+    u = otevri_ulohu(v, jm.index("Transformace"))
     assert u.windowTitle() == "Transformace souřadnic"
     for c, y, x in (("1", 10.0, 20.0), ("2", 110.0, 20.0), ("3", 10.0, 120.0)):
         u.inputs["identicke"].pridej([c, str(y), str(x)])
@@ -3755,4 +3760,50 @@ def test_groma_okna_uloh_a_meritko(window):
     d.close()
     n = N.aktualni()
     n.nastav_koeficient(1.0)
+    for o in v.okna_uloh:
+        o.close()
+
+
+def test_groma_vsechna_okna_uloh(window):
+    """Každá úloha z pásu Výpočty se otevře ve vlastním okně (bez chyby) a základní úlohy spočítají výsledky do polí."""
+    from kontrola.geodezie.body import Bod
+    from kontrola.ui.groma_okna import otevri_ulohu
+    from kontrola.ui.ulohy import OKNA_ULOH
+    v = window.vypocty
+    v.seznam.body[:] = [Bod("610844000130001", 1000.0, 2000.0, 300.0), Bod("610844000130002", 1100.0, 2000.0, 310.0),
+                        Bod("610844000130003", 1100.0, 2100.0), Bod("610844000130004", 1000.0, 2100.0)]
+    v._refresh()
+    jm = [u[0] for u in OKNA_ULOH]
+    for i, n in enumerate(jm):
+        u = otevri_ulohu(v, i)
+        assert u.isVisible() and u.windowTitle()
+        u.close()
+    # Směrník a délka: Předč./Číslo rozdělené, výsledky v polích, prostorová délka a spád
+    u = otevri_ulohu(v, jm.index("Směrník a délka"))
+    u.nastav(a="610844000130001", b="610844000130002")
+    assert u.inputs["a"].predc.text() == "61084400013" and u.inputs["a"].cislo.text() == "0001"
+    r = u.vypocitej()
+    assert r and abs(r.data["delka"] - 100) < 1e-9 and abs(r.data["spad"] - 10) < 1e-9
+    # předčíslí z lišty: stačí psát číslo bez předčíslí
+    v.lista.predcisli.setCurrentText("61084400013")
+    u.inputs["b"].predc.clear()
+    u.inputs["b"].cislo.setText("0003")
+    u.inputs["b"]._dopln()
+    assert u.inputs["b"].y.text() == "1100.000"
+    v.lista.predcisli.setCurrentText("")
+    u.close()
+    # Výpočet výměr přes tabulku lomových bodů
+    u = otevri_ulohu(v, jm.index("Výměra a obvod"))
+    u.nastav(body="610844000130001 610844000130002 610844000130003 610844000130004")
+    r = u.vypocitej()
+    assert r and abs(r.data["vymera"] - 10000) < 1e-6 and u.windowTitle() == "Výpočet výměr"
+    u.close()
+    # Výška stanoviska: výška se zapíše do seznamu (✓)
+    u = otevri_ulohu(v, jm.index("Výška stanoviska"))
+    u.inputs["orientace"].pridej(["610844000130002", "", "", "8.5", "1.5"])
+    u.nastav(nove="610844000130004", vp="1.5")
+    r = u.vypocitej()
+    assert r and abs(r.vysky["610844000130004"] - 301.5) < 1e-9
+    assert u._tlacitka_ulozit[0].isEnabled() and u.pridej() == 1
+    assert abs(v.seznam.najdi("610844000130004").z - 301.5) < 1e-9
     u.close()

@@ -72,8 +72,8 @@ def _tint(nazev: str) -> str:
     """Barevné podbarvení polí jako v Gromě (žlutá, zelená, modrá, fialová) – v tmavém vzhledu tlumené."""
     from .theme import is_dark
     sv = {"zluta": "#FFF6CC", "zelena": "#D7F5D0", "modra": "#E6F0FB", "fialova": "#EFE3FB"}
-    tm = {"zluta": "#3A3214", "zelena": "#18351E", "modra": "#16283D", "fialova": "#2C2140"}
-    return f"background: {(tm if is_dark() else sv)[nazev]};"
+    tm = {"zluta": "#F6EBB5", "zelena": "#CDEEC4", "modra": "#D3E3F7", "fialova": "#E3D6F5"}
+    return f"background: {(tm if is_dark() else sv)[nazev]}; color: #111827;"
 
 
 

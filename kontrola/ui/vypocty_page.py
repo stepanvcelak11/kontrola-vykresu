@@ -438,6 +438,7 @@ class VypoctyPage(QWidget):
         self.grafika.vybrano.connect(self._vyber_z_grafiky)
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)  # samostatné okno úlohy jako v Gromě (ne uvnitř plochy oken)
+        self.okna_uloh = [self.ulohy]  # víc výpočetních oken najednou (otevri_ulohu)
         self.tabs.vychozi = (seznam_w, self.zapisnik, self.protokol)
         self.menu = postav_menu(self)
         outer.insertWidget(0, self.menu)
@@ -458,8 +459,8 @@ class VypoctyPage(QWidget):
         self.lista.hledej.connect(self._najdi_bod)
         self.lista.uloha.connect(self.prepni_ulohu)
         self.lista.vypocet_meritka.connect(lambda: self.zkresleni_dialog())
-        self.tabs.currentChanged.connect(lambda i: self.ulohy._completer_model.setStringList(
-            [b.cislo for b in self.seznam.body]))
+        self.tabs.currentChanged.connect(lambda i: [o._completer_model.setStringList(
+            [b.cislo for b in self.seznam.body]) for o in self.okna_uloh])
         lay = outer
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
