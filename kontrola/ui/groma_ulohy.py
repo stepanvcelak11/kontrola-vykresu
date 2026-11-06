@@ -735,12 +735,13 @@ def konstrukcni(s: Stavitel):
 def polygon(s: Stavitel):
     """G16 Polygonový pořad: Počáteční bod, Koncový bod, Měřená data, Výsledky, Nastavení."""
     stranky = []
+    tab_or = {}
     for kl_st, kl_or, titul in (("a", "ora", "Počáteční bod"), ("b", "orb", "Koncový bod")):
         st = s.bod(kl_st)
-        tab, orient = s.tabulka(kl_or, ["Bod", "Směr", "Délka", "V or.", "V délky"], 3,
+        tab_or[kl_or], orient = s.tabulka(kl_or, ["Bod", "Směr", "Délka", "V or.", "V délky"], 3,
                                 [("Směr:", "mer", "Měřený směr na orientaci [gon]"),
                                  ("Délka:", "mer", "Délka na orientaci [m] (nepovinné)")], mereni=_mereni_orient)
-        tab.pri_stanovisku = lambda sth, st=st: st.nastav_hodnotu(sth[0]) if not st.hodnota() else None
+        tab_or[kl_or].pri_stanovisku = lambda sth, st=st: st.nastav_hodnotu(sth[0]) if not st.hodnota() else None
         stranky.append((titul, s.stranka(s.oddil("Stanovisko:", st),
                                          (s.oddil("Orientace:", orient, natahnout=True), 1))))
     # měřená data
@@ -800,13 +801,13 @@ def polygon(s: Stavitel):
         typ.setText(v.data.get("typ", ""))
         for b in v.nove:
             vt.pridej([b.cislo, f"{b.y:.3f}", f"{b.x:.3f}", "" if b.z is None else f"{b.z:.3f}"])
-        import re
-        txt = "\n".join(v.protokol)
-        m = re.search(r"úhlová odchylka (-?\d+) cc", txt)
-        uz["uhl"].setText(f"{m.group(1)} cc" if m else "")
-        m = re.search(r"dY = (-?[\d.]+) m, dX = (-?[\d.]+) m, polohová ([\d.]+)", txt)
-        uz["xy"].setText(f"{m.group(2)} / {m.group(1)}" if m else "")
-        uz["pol"].setText(m.group(3) if m else "")
+        for k in ("ora", "orb"):
+            if k in v.data:
+                tab_or[k].nastav_vysledky({c: list(x) for c, x in v.data[k].items()})
+        d = v.data
+        uz["uhl"].setText(f"{d['uhlova']:.4f} g" if "uhlova" in d else "")
+        uz["xy"].setText(f"{d['dx']:.3f} / {d['dy']:.3f}" if "dy" in d else "")
+        uz["pol"].setText(f"{d['polohova']:.3f}" if "polohova" in d else "")
         s.p.zalozky.setCurrentIndex(3)
     s.po(po)
 

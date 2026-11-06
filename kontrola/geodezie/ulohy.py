@@ -160,14 +160,58 @@ def _orientace_osnovy(s, h, st: Bod, k: float) -> tuple[float, list[tuple]]:
     for b, _sm, _d in radky:
         _ruzne(st, b)
     posuny = [V.norm_gon(V.smernik(st, b) - sm) for b, sm, _d in radky]
-    vahy = [math.hypot(b.y - st.y, b.x - st.x) for b, _sm, _d in radky]
+    # váhy jako v Gromě: délka [km], orientace bez měřené délky má váhu 1
+    vahy = [math.hypot(b.y - st.y, b.x - st.x) / 1000.0 if d is not None else 1.0 for b, _sm, d in radky]
     ref = posuny[0]
     posun = V.norm_gon(ref + sum(w * (((p - ref + 200) % 400) - 200) for p, w in zip(posuny, vahy)) / sum(vahy))
     out = []
     for (b, sm, dl), p, w in zip(radky, posuny, vahy):
+        dsour = math.hypot(b.y - st.y, b.x - st.x)
         out.append((b, sm, V.smernik(st, b), ((p - posun + 200) % 400) - 200, w, dl,
-                    None if dl is None else w - dl * k))
+                    None if dl is None else dsour - dl * k))
     return posun, out
+
+
+def _mez_orient_delky(d: float) -> float:
+    """Mezní oprava orientační délky v testu polární metody (Groma, katastr): 0,10 + 0,012·√d [m]."""
+    return 0.10 + 0.012 * math.sqrt(d)
+
+
+def _prot_orientace_groma(st: Bod, orient: list, posun: float) -> list[str]:
+    """Blok „Orientace osnovy na bodě …“ přesně ve tvaru protokolu Gromy (tabulky, posun, m0, test)."""
+    t = f"Orientace osnovy na bodě {st.cislo}"
+    hl = "            Bod            Y            X  Kv.  Popis               "
+    out = [t, "-" * len(t), hl, "-" * 68,
+           f"{st.cislo:>15}{st.y:>13.3f}{st.x:>13.3f}" + (f"  {st.kvalita}" if st.kvalita else ""), "-" * 68,
+           "Orientace:", "----------", hl, "-" * 68]
+    for b, *_r in orient:
+        out.append(f"{b.cislo:>15}{b.y:>13.3f}{b.x:>13.3f}" + (f"  {b.kvalita}" if b.kvalita else ""))
+    out += ["-" * 68, "            Bod        Hz     Váha   Směrník     V or.      Délka    V délky   m0 Red.   ",
+            "-" * 89]
+    for b, sm, smk, v, w, dl, vd in orient:
+        out.append(f"{b.cislo:>15}{sm:>10.4f}{round(w, 1):>9g}{smk:>10.4f}{v:>10.4f}"
+                   + (f"{dl:>11.3f}{vd:>11.3f}" if dl is not None else ""))
+    vv = [o[3] for o in orient]
+    n = len(vv)
+    out += ["-" * 89, f"Orientační posun      [g]: {posun:>8.4f}  (Směrník nulového směru)"]
+    if n > 1:
+        m0 = math.sqrt(sum(v * v for v in vv) / (n - 1))
+        out += [f"m0 = SQRT([vv]/(n-1)) [g]: {m0:>8.4f}  (Střední chyba jednoho orientačního směru)",
+                f"SQRT([vv]/(n*(n-1)))  [g]: {m0 / math.sqrt(n):>8.4f}  (Střední chyba orientačního posunu)"]
+    out += ["", "Test polární metody:", "--------------------"]
+    ok = True
+    for b, _sm, _smk, _v, _w, dl, vd in orient:
+        if dl is not None:
+            mez = _mez_orient_delky(dl)
+            ok &= abs(vd) <= mez
+            out.append(f"Oprava orientační délky na bod {b.cislo:>15} [m]: Skutečná hodnota: {vd:>9.3f}, "
+                       f"Mezní hodnota: {mez:>9.3f}")
+    vmax = max(vv, key=abs)
+    ok &= abs(vmax) <= 0.08
+    out.append(f"Oprava orientace {'':29}[g]: Skutečná hodnota: {vmax:>8.4f}, Mezní hodnota: {0.08:>8.4f}")
+    out.append("Mezní odchylky stanovené pro práci v katastru nemovitostí byly dodrženy." if ok else
+               "Mezní odchylky stanovené pro práci v katastru nemovitostí byly PŘEKROČENY.")
+    return out
 
 
 def u_rajon(s, h):
@@ -187,48 +231,48 @@ def u_rajon(s, h):
         zg = _cislo(h, "zenit", "zenitový úhel")
         vc = _cislo(h, "vc", "výšku cíle") if (h.get("vc") or "").strip() else 0.0
         _hh, dh_trig = V.trigonometricka_vyska(0.0, d, zg, vp, vc)
+        d_sikma = d
         d = d * math.sin(V.gon2rad(zg))
+        if d <= 1e-9:
+            raise ChybaVstupu("Zenitový úhel dává nulovou vodorovnou délku – zkontrolujte ho (100 gon = vodorovně).")
     k, kor = _korekce([st])
     d_m, d = d, d * k
-    prot = _hlavicka("Rajón (polární bod)")
-    prot.append(f"stanovisko {st.cislo}:  Y = {_f(st.y)}   X = {_f(st.x)}"
-                + (f"   Z = {_f(st.z)}" if st.z is not None else "") + (f", výška stroje {_f(vp)} m" if vp else ""))
-    prot += kor
+    prot = ["POLÁRNÍ METODA", "=============="] + kor
     data: dict = {}
     if ze_smerniku:
         posun, orient = 0.0, []
         sig = V.norm_gon(sm)
-        prot.append("výpočet ze směrníků: zadaný směr je přímo směrník (bez orientace osnovy)")
+        prot.append(f"Stanovisko {st.cislo}: výpočet ze směrníků (zadaný směr je přímo směrník, bez orientace)")
     else:
         posun, orient = _orientace_osnovy(s, h, st, k)
-        prot += ["", "orientace osnovy:",
-                 f"  {'bod':<18} {'směr':>9} {'směrník':>9} {'V or.':>8} {'délka':>9} {'V délky':>8}"]
-        for b, smer, smk, v, _w, dl, vd in orient:
-            prot.append(f"  {b.cislo:<18} {smer:>9.4f} {smk:>9.4f} {v:>8.4f} "
-                        + (f"{dl:>9.3f} {vd:>8.3f}" if dl is not None else f"{'':>9} {'':>8}"))
-        prot.append(f"orientační posun {_f(posun, 4)} gon (vážený délkami)")
+        prot += _prot_orientace_groma(st, orient, posun)
         data["orientace"] = {b.cislo: (v, vd) for b, _sm, _smk, v, _w, _dl, vd in orient}
         sig = V.norm_gon(sm + posun)
     p = V.rajon(st, sig, d)
     if pro_pole and len(orient) > 1:
         body = []
-        prot += ["", f"výpočet pro bodové pole – bod {n} z každé orientace zvlášť:"]
+        prot += ["", f"Výpočet pro bodové pole – bod {n} s každým orientačním směrem zvlášť:"]
         for b, smer, smk, _v, _w, _dl, _vd in orient:
             pi = V.rajon(st, V.norm_gon(sm + V.norm_gon(smk - smer)), d)
             body.append(pi)
-            prot.append(f"  orientace {b.cislo:<14} Y = {_f(pi.y)}   X = {_f(pi.x)}")
+            prot.append(f"  orientace {b.cislo:>15}{pi.y:>13.3f}{pi.x:>13.3f}")
         p = V.P(sum(q.y for q in body) / len(body), sum(q.x for q in body) / len(body))
-        prot.append(f"  průměr: rozdíly do {max(math.hypot(q.y - p.y, q.x - p.x) for q in body) * 1000:.0f} mm")
+        prot.append(f"  průměr – největší rozdíl {max(math.hypot(q.y - p.y, q.x - p.x) for q in body) * 1000:.0f} mm")
     z = None
     if st.z is not None and dh_trig is not None:
         z = st.z + dh_trig
     elif st.z is not None and (h.get("dh") or "").strip():
         z = st.z + _cislo(h, "dh", "převýšení")
-    prot += ["", f"bod {n}: směr {_f(sm, 4)} gon → směrník {_f(sig, 4)} gon, délka {_f(d_m)} m"
-             + (f" → {_f(d)} m" if kor else "") + (" (vodorovná ze šikmé a zenitu)" if zen else ""),
-             *([f"  převýšení terén–terén {_f(dh_trig)} m (zakřivení a refrakce k = 0,13)"] if dh_trig is not None
-               else []),
-             f"  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None else "")]
+    kod_ = (h.get("kod") or "").strip()
+    prot += ["", "            Bod        Hz      Délka            Y            X" + ("            Z" if z is not None else "")
+             + "  Popis               ", "-" * (84 + (13 if z is not None else 0)),
+             f"{n:>15}{sm:>10.4f}{d:>11.3f}{p.y:>13.3f}{p.x:>13.3f}" + (f"{z:>13.3f}" if z is not None else "")
+             + f"  {kod_}"]
+    if zen:
+        prot.append(f"  (vodorovná délka ze šikmé {d_sikma:.3f} m a zenitu"
+                    + (f", převýšení terén–terén {dh_trig:.3f} m, zakřivení a refrakce k = 0,13)" if dh_trig is not None
+                       else ")"))
+    prot.append(f"  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None else ""))
     kod = (h.get("kod") or "").strip()
     data["bod"] = (n, p.y, p.x, z)
     return Vysledek(prot, [Bod(n, p.y, p.x, z, kod, poznamka="rajón")], data=data)
@@ -271,9 +315,9 @@ def _orientace(s, h, key: str, st: Bod, nazev: str) -> tuple[float, list[str]]:
         except ValueError:
             raise ChybaVstupu(f"Směr „{r[1]}“ na bod {r[0]} není číslo.") from None
         posuny.append((b.cislo, V.norm_gon(V.smernik(st, b) - smer), V.delka(st, b)))
-    # průměr posunů vážený délkami (jako Groma), přes 0/400 gon
+    # průměr posunů: orientace bez měřené délky mají v Gromě stejnou váhu (1), přes 0/400 gon
     ref = posuny[0][1]
-    vazeny = sum(((o - ref + 200) % 400 - 200) * d for _c, o, d in posuny) / sum(d for *_x, d in posuny)
+    vazeny = sum(((o - ref + 200) % 400 - 200) for _c, o, _d in posuny) / len(posuny)
     prumer = V.norm_gon(ref + vazeny)
     for c, o, d in posuny:
         prot.append(f"  {nazev}: orientace na {c}: posun {_f(o, 4)} gon, délka {_f(d)} m, oprava "
@@ -2490,6 +2534,8 @@ def u_polygon_groma(s, h):
             f"{c} {u}" for c, u in [(a.cislo, ua)] + list(zip(cisla, uhly_n)) + [(a.cislo, ub)]))
         r = u_polygon_uzavreny(s, d)
     elif or_a and or_b:
+        return _polygon_groma_oboustranny(s, h, a, b, st, cisla, strany, uhly_n, k)
+    elif False:
         typ = "oboustranně připojený a orientovaný"
         o, ua = uhel_orient(a, "ora", st[0][3], True)
         ob, ub = uhel_orient(b, "orb", st[-1][1], False)
@@ -2511,6 +2557,84 @@ def u_polygon_groma(s, h):
     r.protokol.insert(3, f"typ pořadu: {typ}")
     r.data["typ"] = typ
     return r
+
+
+def _polygon_groma_oboustranny(s, h, a, b, st, cisla, strany, uhly_n, k):
+    """Vetknutý oboustranně orientovaný pořad – výpočet a protokol ve tvaru Gromy (Naměřené hodnoty,
+    Parametry polygonového pořadu, Vypočtené body, Test polygonového pořadu)."""
+    posun_a, or_a = _orientace_osnovy(s, {"orientace": h.get("ora")}, a, k)
+    posun_b, or_b = _orientace_osnovy(s, {"orientace": h.get("orb")}, b, k)
+    sv_a, sz_b = st[0][3], st[-1][1]
+    if sv_a is None or sz_b is None:
+        raise ChybaVstupu("Na počátečním bodě zadejte směr vpřed a na koncovém směr zpět.")
+    oa, ob = or_a[0][0], or_b[0][0]
+    ua = V.norm_gon(sv_a + posun_a - V.smernik(a, oa))
+    ub = V.norm_gon(V.smernik(b, ob) - (sz_b + posun_b))
+    delky = [d * k for d in strany]
+    try:
+        r = V.polygonovy_porad(a, oa, b, ob, [ua] + uhly_n + [ub], delky, cisla)
+    except ValueError as e:
+        raise ChybaVstupu(str(e)) from None
+    from .nastaveni import aktualni
+    nast = aktualni()
+    mez_u, mez_p = nast.mez_polygonu(len(cisla), r.delka)
+    n_v = len(cisla) + 2
+    opr = -r.uhlova_odchylka / n_v
+    prot = ["POLYGONOVÝ POŘAD", "================"]
+    prot += _prot_orientace_groma(a, or_a, posun_a) + [""]
+    prot += _prot_orientace_groma(b, or_b, posun_b) + [""]
+    prot += ["Naměřené hodnoty:", "-----------------",
+             "            Bod     S zpět    S vpřed       Úhel     V úhlu",
+             "                   Směrník    D vpřed     D zpět          D    Dp - Dz", "-" * 70,
+             f"{'':15}{posun_a:>11.4f}"]
+    body = [a.cislo] + cisla + [b.cislo]
+    for i, c in enumerate(body):
+        sz, dz, sv, dv = st[i][1], st[i][2], st[i][3], st[i][4]
+        uhel = "" if i in (0, len(body) - 1) else f"{V.norm_gon(sv - sz):>11.4f}"
+        prot.append(f"{c:>15}{'' if i == 0 or sz is None else f'{sz:.4f}':>11}"
+                    f"{'' if sv is None or i == len(body) - 1 else f'{sv:.4f}':>11}{uhel:>11}{opr:>11.4f}")
+        if i < len(r.smerniky):
+            dvp = st[i][4]
+            dzp = st[i + 1][2]
+            dd = [x for x in (dvp, dzp) if x is not None]
+            prot.append(f"{'':15}{r.smerniky[i]:>11.4f}{'' if dvp is None else f'{dvp:.3f}':>11}"
+                        f"{'' if dzp is None else f'{dzp:.3f}':>11}{sum(dd) / len(dd):>11.3f}"
+                        + (f"{dvp - dzp:>11.3f}" if dvp is not None and dzp is not None else ""))
+        else:
+            prot.append(f"{'':15}{posun_b:>11.4f}")
+        prot.append("")
+    prot[-1] = "-" * 70
+    vrch = [ua] + uhly_n + [ub]
+    min_u = min(min(u, 400 - u) for u in uhly_n) if uhly_n else None
+    sous = max(max(x, y) / min(x, y) for x, y in zip(strany, strany[1:])) if len(strany) > 1 else 1.0
+    _ = vrch
+    prot += ["", "Parametry polygonového pořadu:", "------------------------------",
+             "Typ pořadu                            : Vetknutý, oboustranně orientovaný",
+             f"Délka pořadu                       [m]: {r.delka:>9.3f}",
+             f"Úhlová odchylka                    [g]: {-r.uhlova_odchylka:>9.4f}",
+             f"Odchylka Y/X                       [m]: {-r.dy:>9.3f} / {-r.dx:>9.3f}",
+             f"Polohová odchylka                  [m]: {r.polohova:>9.3f}",
+             f"Největší / nejmenší délka v pořadu [m]: {max(strany):>9.3f} / {min(strany):>9.3f}",
+             f"Poměr největší / nejmenší délka       : 1 : {max(strany) / min(strany):.2f}",
+             f"Největší poměr sousedních délek       : 1 : {sous:.2f}"]
+    if min_u is not None:
+        prot.append(f"Nejmenší vrcholový úhel            [g]: {min_u:>9.4f}")
+    prot += ["", "Vypočtené body:", "---------------", "            Bod            Y            X  Kv.  Popis               ",
+             "-" * 68]
+    nove = []
+    for c, p in r.body:
+        prot.append(f"{c:>15}{p.y:>13.3f}{p.x:>13.3f}")
+        nove.append(Bod(c, p.y, p.x, poznamka="polygonový pořad"))
+    ok_u, ok_p = abs(r.uhlova_odchylka) <= mez_u, r.polohova <= mez_p
+    prot += ["-" * 68, "", "Test polygonového pořadu:", "-------------------------",
+             f"Úhlová odchylka               [g]: Skutečná hodnota: {-r.uhlova_odchylka:>8.4f}, Mezní hodnota: "
+             f"{mez_u:>8.4f}", f"Polohová odchylka             [m]: Skutečná hodnota: {r.polohova:>9.3f}, Mezní hodnota: "
+             f"{mez_p:>9.3f}", f"(mezní odchylky pro třídu {nast.polygon_trida} – Nastavení výpočtů) → "
+             + ("pořad VYHOVUJE" if ok_u and ok_p else "pořad NEVYHOVUJE")]
+    return Vysledek(prot, nove, data={"typ": "Vetknutý, oboustranně orientovaný", "uhlova": -r.uhlova_odchylka,
+                                       "dy": -r.dy, "dx": -r.dx, "polohova": r.polohova,
+                                       "ora": {b_.cislo: (v, vd) for b_, _s, _k, v, _w, _d, vd in or_a},
+                                       "orb": {b_.cislo: (v, vd) for b_, _s, _k, v, _w, _d, vd in or_b}})
 
 
 def u_vyskovy_porad(s, h):

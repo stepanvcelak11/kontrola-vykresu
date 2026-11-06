@@ -415,3 +415,35 @@ def test_treningova_mapa_jako_vzor_gromy():
         assert math.hypot(b.y - abs(g.a), b.x - abs(g.b)) <= 0.0071, b.bod
         assert b.z is None or not g.z or abs(b.z - g.z) <= 0.0071, b.bod
     assert n >= 55
+
+
+def test_polygon_okno_gromy_ze_smeru():
+    """Okno Polygonový pořad (Groma): orientace na obou koncích (váha = délka v km, bez délky 1) a směry
+    zpět / vpřed ze školního protokolu 02 – posuny, odchylky a vypočtené body jako Groma."""
+    from kontrola.geodezie import ulohy as U
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    s = SeznamBodu()
+    s.pridej([Bod("658154000004008", 584714.530, 1146428.040), Bod("658154000004014", 584717.860, 1147020.670),
+              Bod("658154000004005", 584624.520, 1146508.560), Bod("934200160", 584854.560, 1145852.080),
+              Bod("934202060", 585587.410, 1144159.690), Bod("934202020", 585565.740, 1145181.360)])
+    r = U.u_polygon_groma(s, {
+        "a": "658154000004008", "b": "934200160",
+        "ora": "658154000004014 200.3600 592.661\n658154000004005 146.4806 120.747",
+        "orb": "934202060 377.6525 1844.303\n934202020 351.8094",
+        "mereni": "658154000004008 - - 337.8310 121.987\n"
+                  "658154000025001 137.8314 121.987 382.8027 103.266\n"
+                  "658154000025002 182.7995 103.266 380.9251 182.208\n"
+                  "658154000025003 180.9215 182.208 8.8131 111.645\n"
+                  "658154000025004 208.8132 111.645 13.5688 126.289\n"
+                  "934200160 217.2825 126.289 - -"})
+    t = "\n".join(r.protokol)
+    assert "Orientační posun      [g]: 199.9948" in t and "Orientační posun      [g]: 196.3304" in t
+    # Groma počítá z nezaokrouhlených směrů zápisníku, protokol má 4 desetinná místa → rozdíl do 0,2 mgon / 2 mm
+    assert abs(r.data["uhlova"] - 0.0431) <= 0.0002 and abs(r.data["polohova"] - 0.083) <= 0.002
+    assert abs(r.data["dy"] - -0.072) <= 0.002 and abs(r.data["dx"] - -0.041) <= 0.002
+    assert "Nejmenší vrcholový úhel            [g]:  155.0287" in t and "Váha" in t
+    groma = {"658154000025001": (584815.570, 1146359.733), "658154000025002": (584843.105, 1146260.201),
+             "658154000025003": (584896.817, 1146086.082), "658154000025004": (584881.354, 1145975.504)}
+    for b in r.nove:
+        gy, gx = groma[b.cislo]
+        assert abs(b.y - gy) <= 0.0015 and abs(b.x - gx) <= 0.0015, b.cislo

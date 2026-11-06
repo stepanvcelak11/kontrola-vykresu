@@ -1274,7 +1274,7 @@ def test_vypocty_ulohy(window):
     u.lst.setCurrentRow(names.index("Rajón (polární bod)"))
     u.nastav(st="1", o="2", so="0", sm="100", d="50", nove="10")
     r = u.vypocitej()
-    assert r and "Y =" in u.vystup.toPlainText()
+    assert r and "POLÁRNÍ METODA" in u.vystup.toPlainText() and "Y =" in u.vystup.toPlainText()
     exp = V.rajon(V.P(595000, 1158000), V.norm_gon(V.smernik(V.P(595000, 1158000), V.P(595100, 1158000)) + 100), 50)
     assert u.pridej() == 1 and abs(p.seznam.najdi("10").y - exp.y) < 1e-9
     # chybný vstup – srozumitelná hláška, žádný pád
