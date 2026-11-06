@@ -2958,11 +2958,25 @@ def test_okno_se_vejde_na_maly_notebook(window):
                              for x in w if x is not None][:5]))
         return sorted(out, key=lambda t: -t[0])[:8]
 
+    def retez():
+        """Cesta od okna k nejširšímu potomkovi – co přesně určuje minimální šířku."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QWidget
+        out, w = [], window
+        for _ in range(16):
+            kids = [k for k in w.findChildren(QWidget, options=Qt.FindDirectChildrenOnly) if not k.isWindow()]
+            if not kids:
+                break
+            kids.sort(key=lambda k: -k.minimumSizeHint().width())
+            out.append([(type(k).__name__, k.objectName(), k.minimumSizeHint().width()) for k in kids[:3]])
+            w = kids[0]
+        return out
+
     fm = window.fontMetrics().averageCharWidth()
     for p in ("uvod", "vykres", "zadani", "vypocty", "cad"):
         window.show_page(p)
         sirka = window.minimumSizeHint().width()
-        assert sirka <= max(1100, 150 * fm), (p, sirka, fm, nejsirsi())
+        assert sirka <= max(1100, 150 * fm), (p, sirka, fm, retez())
 
 
 def test_technicka_zprava_kostra(window, tmp_path):
