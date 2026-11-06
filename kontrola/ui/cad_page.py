@@ -433,6 +433,9 @@ class CadPage(QWidget):
     """Stránka CAD: výkres DXF, příkazový řádek, kreslení, úpravy a stav (souřadnice, úchyty, ortho…)."""
 
     PRIKAZY = {
+        "ořež k prvku": "oříznout / prodloužit úsečky k řeznému prvku (Trim to Element)",
+        "roh": "prodloužit 2 prvky k průsečíku – ostrý roh (Extend 2 Elements to Intersection)",
+        "prodluž o délku": "prodloužit / zkrátit úsečku o zadanou délku (Extend Line by Distance)",
         "kopíruj do schránky": "zkopírovat výběr do schránky (Ctrl+C) – i do jiného výkresu",
         "kolmice": "kolmice z bodu na prvek (Construct Perpendicular) – pata na čáře, oblouku i kružnici",
         "osa úhlu": "osa úhlu dvou čar (Construct Bisector)",
@@ -553,7 +556,8 @@ class CadPage(QWidget):
         "m": "posun", "move": "posun", "cp": "kopie", "copy": "kopie", "ro": "otoč", "rotate": "otoč",
         "otoc": "otoč", "sc": "měřítko", "scale": "měřítko", "meritko": "měřítko", "mi": "zrcadli",
         "mirror": "zrcadli", "of": "rovnoběžka", "offset": "rovnoběžka", "rovnobezka": "rovnoběžka",
-        "tr": "ořež", "trim": "ořež", "orez": "ořež", "ex": "prodluž", "extend": "prodluž",
+        "tr": "ořež", "ork": "ořež k prvku", "trim to element": "ořež k prvku", "orez k prvku": "ořež k prvku",
+        "roh": "roh", "corner": "roh", "prodluz o delku": "prodluž o délku", "exd": "prodluž o délku", "trim": "ořež", "orez": "ořež", "ex": "prodluž", "extend": "prodluž",
         "prodluz": "prodluž", "f": "zaobli", "fillet": "zaobli", "cha": "zkos", "chamfer": "zkos", "note": "popisek", "le": "popisek", "leader": "popisek", "ar": "pole", "array": "pole",
         "zkoseni": "zkos", "zkosení": "zkos", "iv": "vlož vrchol", "insert vertex": "vlož vrchol",
         "vloz vrchol": "vlož vrchol", "dv": "smaž vrchol", "delete vertex": "smaž vrchol",
@@ -750,7 +754,7 @@ class CadPage(QWidget):
         self.modely_w = skupina(QLabel("Model:"), self.modely)
         self._predvolby: list = []
         # ---- střed: paleta nástrojů | výkres | hladiny a vlastnosti
-        from PySide6.QtWidgets import QSplitter, QTabWidget
+        from PySide6.QtWidgets import QTabWidget
 
         from .cad_panely import PaletaNastroju, PanelHladin, PanelVlastnosti
         from .theme import accent, is_dark
@@ -796,18 +800,49 @@ class CadPage(QWidget):
         self.panel_hladin.zobrazeni.connect(self._hladina_zobrazeni_panel)
         self.panel_hladin.aktivni.connect(self._hladina_aktivni_panel)
         self.panel_vlastnosti = PanelVlastnosti()
-        self.panel.addTab(self.panel_vlastnosti, "Vlastnosti")
-        self.panel.addTab(self.panel_hladin, "Hladiny")
-        self.panel.setMinimumWidth(220)
-        stred = QSplitter(Qt.Horizontal)
-        stred.addWidget(self.paleta)
-        stred.addWidget(self.view)
-        stred.addWidget(self.panel)
-        stred.setStretchFactor(1, 1)
-        stred.setCollapsible(1, False)
-        stred.setSizes([210, 1000, 260])
-        self.stred = stred
-        lay.addWidget(stred, 1)
+        from .cad_panely import obal_hladin, obal_vlastnosti
+        self.panel.addTab(obal_vlastnosti(self.panel_vlastnosti, self), "Vlastnosti")
+        self.panel.addTab(obal_hladin(self.panel_hladin, self), "Hladiny")
+        self.panel.setMinimumWidth(200)
+        # okna jako v MicroStationu: Úlohy a Průzkumník jdou přesunout k jinému okraji, odpojit, zavřít
+        # (Pohled → Okna je zase zapne)
+        from PySide6.QtWidgets import QDockWidget, QMainWindow
+        self.okno = QMainWindow()
+        self.okno.setWindowFlags(Qt.Widget)
+        self.okno.setObjectName("cad_okno")
+        self.okno.setDockOptions(QMainWindow.AnimatedDocks | QMainWindow.AllowTabbedDocks)
+        self.okno.setCentralWidget(self.view)
+        self.doky: dict[str, QDockWidget] = {}
+        for jm, w, kde, tip in (("Úlohy", self.paleta, Qt.LeftDockWidgetArea,
+                                 "Nástroje po skupinách (MicroStation: Tasks)"),
+                                ("Průzkumník", self.panel, Qt.RightDockWidgetArea,
+                                 "Vlastnosti vybraného prvku a hladiny (MicroStation: Explorer / Properties)")):
+            d = QDockWidget(jm, self.okno)
+            d.setObjectName("dok_" + _ascii(jm))
+            d.setWidget(w)
+            d.setToolTip(tip + " – přetažením za titulek přesunete k jinému okraji nebo odpojíte jako okno")
+            d.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
+                          | QDockWidget.DockWidgetClosable)
+            self.okno.addDockWidget(kde, d)
+            self.doky[jm] = d
+        self.okno.resizeDocks(list(self.doky.values()), [210, 250], Qt.Horizontal)
+        self.stred = self.okno
+        lay.addWidget(self.okno, 1)
+        self._obnov_doky()
+        from PySide6.QtGui import QAction
+        okna = []
+        for jm, d in self.doky.items():
+            a = d.toggleViewAction()
+            a.setText(jm)
+            a.setToolTip(f"Zobrazit / skrýt okno {jm} (lze ho přetáhnout k jinému okraji nebo odpojit)")
+            okna.append(a)
+        a = QAction("Výchozí rozvržení", self)
+        a.setToolTip("Úlohy vlevo, Průzkumník vpravo")
+        a.triggered.connect(self.vychozi_okna)
+        okna.append(a)
+        self.ribbon.pridej_akce("Pohled", "Okna", okna)
+        self.start = None
+        self.view.installEventFilter(self)
         self.historie = QPlainTextEdit()
         self.historie.setReadOnly(True)
         self.historie.setMaximumHeight(64)
@@ -817,6 +852,12 @@ class CadPage(QWidget):
         crow.setContentsMargins(8, 4, 8, 5)
         self.vyzva = QLabel("Příkaz:")
         self.vyzva.setObjectName("cad_vyzva")
+        # dlouhá výzva nástroje nesmí roztáhnout okno – zalomí se a celá je v bublině
+        from PySide6.QtWidgets import QSizePolicy as _SP
+        self.vyzva.setWordWrap(True)
+        self.vyzva.setSizePolicy(_SP.Preferred, _SP.Preferred)
+        self.vyzva.setMaximumWidth(340)
+        self.vyzva.setMinimumWidth(50)  # explicitní minimum – dlouhá výzva nesmí zvětšit minimum okna
         crow.addWidget(self.vyzva)
         self.prikaz = QLineEdit()
         self.prikaz.setObjectName("cad_prikaz")
@@ -824,11 +865,17 @@ class CadPage(QWidget):
                                        "„@délka<směrník“ – Enter")
         crow.addWidget(self.prikaz, 1)
         self.b_uchyty = QPushButton("Úchyty")
-        self.b_ortho = QPushButton("Ortho")
-        self.b_polar = QPushButton("Polární")
-        for b, tip in ((self.b_uchyty, "Úchyty: koncový bod, střed, průsečík, kolmice, tečna (F3)"),
-                       (self.b_ortho, "Jen vodorovně / svisle od posledního bodu (F8)"),
-                       (self.b_polar, "Směr po násobcích úhlu (F10)")):
+        self.b_ortho = QPushButton("Pravoúhle")
+        self.b_polar = QPushButton("Úhlový krok")
+        for b, tip in ((self.b_uchyty, "<b>Úchyty (F3)</b><br>Kurzor se přichytí ke koncovému bodu, středu, "
+                                       "průsečíku, kolmici… (MicroStation: AccuSnap)"),
+                       (self.b_ortho, "<b>Pravoúhle (F8)</b> – v AutoCADu „Ortho“<br>Další bod jen vodorovně nebo "
+                                      "svisle od posledního bodu – rovné čáry rovnoběžné s osami obrazovky. "
+                                      "(MicroStation: AccuDraw, klávesa O / zámek osy)"),
+                       (self.b_polar, "<b>Úhlový krok (F10)</b> – v AutoCADu „Polární trasování“<br>Směr čáry se "
+                                      "přichytává po násobcích úhlu vpravo (např. 50 g = po 45°). Hodí se na "
+                                      "kreslení pod pravým nebo půlpravým úhlem k libovolné čáře. "
+                                      "(MicroStation: AccuDraw – zámek úhlu)")):
             b.setCheckable(True)
             b.setToolTip(tip)
             crow.addWidget(b)
@@ -870,6 +917,20 @@ class CadPage(QWidget):
         self.krok.setSuffix(" g")
         self.krok.setToolTip("Krok polárního režimu v gonech")
         crow.addWidget(self.krok)
+        self.anotace_cb = QComboBox()
+        self.anotace_cb.addItem("Anot. vyp.", 0)
+        for m in (200, 250, 500, 1000, 2000, 2880, 5000, 10000):
+            self.anotace_cb.addItem(f"A 1:{m}", m)
+        self.anotace_cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.anotace_cb.setMinimumContentsLength(8)
+        self.anotace_cb.setToolTip(
+            "<b>Měřítko anotací</b> (MicroStation: Annotation Scale – typické pro MultiScale)<br>"
+            "Texty a buňky (značky) se kreslí ve velikosti na papíře × měřítko: výška 2,5 při 1:1000 = 2,5 m, "
+            "při 1:500 = 1,25 m. Po změně měřítka se už nakreslené texty a značky samy přepočítají. "
+            "Vyp. = výška textu se zadává přímo v metrech.")
+        self.anotace_cb.activated.connect(lambda i: self.nastav_anotace(self.anotace_cb.itemData(i) or None))
+        self.ribbon.vpravo.insertWidget(0, self.anotace_cb)  # jako Annotation Scale nahoře
+        self.anotace: int | None = None
         self.aktivni = QLabel("")
         self.aktivni.setObjectName("cad_aktivni")
         self.aktivni.setToolTip("Aktivní atributy pro nové prvky (jako v MicroStationu)")
@@ -934,7 +995,195 @@ class CadPage(QWidget):
         self.prikaz.installEventFilter(self)
         self.pouzij_zkratky()
         self._aktualizuj_tlacitka()
+        self._ukaz_start()
         self.vypis("CAD – otevřete DXF nebo začněte nový výkres. Příkazy: „?“")
+
+    def _obnov_doky(self) -> None:
+        from PySide6.QtCore import QSettings
+        st = QSettings("KontrolaVykresu", "KontrolaVykresu").value("cad/okna_stav", None)
+        if st is not None:
+            try:
+                self.okno.restoreState(st)
+            except Exception:  # noqa: BLE001 – poškozený stav = výchozí rozvržení
+                pass
+        for d in self.doky.values():
+            d.dockLocationChanged.connect(lambda *_a: self._uloz_doky())
+            d.topLevelChanged.connect(lambda *_a: self._uloz_doky())
+            d.visibilityChanged.connect(lambda *_a: self._uloz_doky())
+
+    def _uloz_doky(self) -> None:
+        if not self.isVisible():
+            return  # při přepnutí stránky se okna skrývají – to není volba uživatele
+        from PySide6.QtCore import QSettings
+        QSettings("KontrolaVykresu", "KontrolaVykresu").setValue("cad/okna_stav", self.okno.saveState())
+
+    def vychozi_okna(self) -> None:
+        """Pohled → Výchozí rozvržení oken: Úlohy vlevo, Průzkumník vpravo."""
+        for jm, kde in (("Úlohy", Qt.LeftDockWidgetArea), ("Průzkumník", Qt.RightDockWidgetArea)):
+            d = self.doky[jm]
+            d.setFloating(False)
+            self.okno.addDockWidget(kde, d)
+            d.show()
+        self.okno.resizeDocks(list(self.doky.values()), [210, 250], Qt.Horizontal)
+        self._uloz_doky()
+
+    def hideEvent(self, e):  # noqa: N802
+        # odpojená okna (Úlohy, Průzkumník) nemají zůstat nad jinou stránkou aplikace
+        self._skryte_plovouci = [d for d in self.doky.values() if d.isFloating() and d.isVisible()]
+        for d in self._skryte_plovouci:
+            d.hide()
+        super().hideEvent(e)
+
+    def _ukaz_start(self) -> None:
+        """Bez výkresu je uprostřed úvod (nový / otevřít / nedávné), s výkresem zmizí."""
+        if self.dok is not None:
+            if self.start is not None:
+                self.start.hide()
+                self.start.deleteLater()
+                self.start = None
+            return
+        if self.start is None:
+            from .cad_panely import StartVykresu
+            self.start = StartVykresu(self, self.view)
+        self._umisti_start()
+        self.start.show()
+        self.start.raise_()
+
+    def _umisti_start(self) -> None:
+        if self.start is not None:
+            self.start.adjustSize()
+            self.start.move(max(8, (self.view.width() - self.start.width()) // 2),
+                            max(8, (self.view.height() - self.start.height()) // 2))
+
+    def novy_um(self) -> None:
+        """Nový výkres v pracovní sadě MultiScale se stylem kreslení Účelová mapa."""
+        self.novy_v_sade("MultiScale/MultiScale")
+
+    # ------------------------------------------------------------ měřítko anotací (MultiScale)
+    ANOTACE_APP = "KV_ANOTACE"
+
+    def _je_anotace(self, e) -> bool:
+        t = e.dxftype()
+        if t in ("TEXT", "MTEXT"):
+            return True
+        if t == "INSERT":
+            return e.dxf.name not in {r.nazev for r in getattr(self, "reference", [])}
+        return False
+
+    def _meritko_prvku(self, e) -> int | None:
+        try:
+            if e.has_xdata(self.ANOTACE_APP):
+                return int(e.get_xdata(self.ANOTACE_APP)[0].value)
+        except (ValueError, IndexError, TypeError, AttributeError):
+            return None
+        return None
+
+    def _skaluj(self, e, f: float) -> None:
+        t = e.dxftype()
+        if t == "TEXT":
+            e.dxf.height = e.dxf.height * f
+        elif t == "MTEXT":
+            e.dxf.char_height = e.dxf.char_height * f
+        elif t == "INSERT":
+            e.dxf.xscale = e.dxf.get("xscale", 1.0) * f
+            e.dxf.yscale = e.dxf.get("yscale", 1.0) * f
+
+    def _anotuj(self, ents) -> None:
+        """Nové texty a buňky: velikost na papíře × měřítko anotací (prvek si měřítko zapamatuje)."""
+        m = self.anotace
+        doc = self.dok.doc if self.dok is not None else None
+        if not m or doc is None:
+            return
+        if self.ANOTACE_APP not in doc.appids:
+            doc.appids.add(self.ANOTACE_APP)
+        f = m / 1000.0
+        for e in ents:
+            if not self._je_anotace(e) or self._meritko_prvku(e) is not None:
+                continue  # kopie už anotovaného prvku si měřítko nese
+            if abs(f - 1.0) > 1e-12:
+                self._skaluj(e, f)
+            e.set_xdata(self.ANOTACE_APP, [(1071, int(m))])
+
+    def nastav_anotace(self, m: int | None, prepocitat: bool = True) -> int:
+        """Změní měřítko anotací; už anotované texty a značky se přepočítají (jeden krok Zpět)."""
+        m = int(m) if m else None
+        stare = self.anotace
+        self.anotace = m
+        i = self.anotace_cb.findData(m or 0)
+        if i < 0 and m:
+            self.anotace_cb.addItem(f"A 1:{m}", m)
+            i = self.anotace_cb.count() - 1
+        self.anotace_cb.setCurrentIndex(max(0, i))
+        if self.dok is not None:
+            try:
+                hv = self.dok.doc.header.custom_vars
+                if hv.has_tag("KV_MERITKO_ANOTACI"):
+                    hv.replace("KV_MERITKO_ANOTACI", str(m or 0))
+                else:
+                    hv.append("KV_MERITKO_ANOTACI", str(m or 0))
+            except Exception:  # noqa: BLE001
+                pass
+        if not prepocitat or not m or self.dok is None or m == stare:
+            return 0
+        from ..cad.upravy import _kopie
+        stare_e, nove = [], []
+        for e in list(self.prostor):
+            mp = self._meritko_prvku(e)
+            if mp is None or mp == m:
+                continue
+            c = _kopie(e)
+            self._skaluj(c, m / mp)
+            c.set_xdata(self.ANOTACE_APP, [(1071, int(m))])
+            self.prostor.add_entity(c)
+            stare_e.append(e)
+            nove.append(c)
+        if nove:
+            self.historie_zmen.proved(f"Měřítko anotací 1:{m}", nove, stare_e)
+            self._po_zmene(nove, stare_e)
+        self.vypis(f"Měřítko anotací 1:{m}" + (f" – přepočítáno {len(nove)} textů a značek." if nove else "."))
+        return len(nove)
+
+    def _anotace_z_vykresu(self) -> None:
+        """Po otevření / založení: měřítko anotací uložené ve výkresu, jinak podle pracovní sady."""
+        m = None
+        try:
+            v = self.dok.doc.header.custom_vars.get("KV_MERITKO_ANOTACI")
+            m = int(v) if v is not None else None
+        except (ValueError, TypeError, AttributeError):
+            m = None
+        if m is None:
+            from ..cad import pracovni_sady as PS
+            sada = PS.aktivni()
+            m = 1000 if sada is not None and "multiscale" in sada.nazev.lower() else 0
+        self.nastav_anotace(m or None, prepocitat=False)
+
+    def novy_v_sade(self, klic: str | None, seed: str | Path | None = None) -> None:
+        """Nový výkres v pracovní sadě (jako ve škole: MultiScale, Pasport, TM, nebo bez sady) – seed,
+        hladiny, buňky, styly čar a pásy karet podle sady; MultiScale s Účelovou mapou a anotacemi 1:1000."""
+        from ..cad import pracovni_sady as PS
+        sada = next((x for x in PS.vsechny() if x.klic == klic), None) if klic else None
+        PS.nastav_aktivni(sada)
+        self.obnov_styly_kresleni()
+        if seed is None:
+            seed = PS.posledni_seed(sada) if sada is not None else None
+            seed = seed or (sada.seed if sada is not None else None)
+        self.novy(seed=str(seed) if seed else "")
+        self.po_zmene_knihoven()
+        self._styl_sady(sada)
+
+    def _styl_sady(self, sada) -> None:
+        """Karty a anotace podle pracovní sady: MultiScale = Účelová mapa a 1:1000, jiná sada vlastní pásy."""
+        r = self.ribbon
+        styl = 0
+        for i, p in enumerate(r._pasy, 1):
+            if p.soubor.stem.lower() == "um_ribbon":
+                styl = i
+                break
+        r.nastav_styl(styl)
+        self.nastav_anotace(1000 if sada is not None and "multiscale" in sada.nazev.lower() else None,
+                            prepocitat=False)
+        self.vypis("Pracovní sada: " + (sada.nazev if sada is not None else "bez pracovní sady")
+                   + (f", měřítko anotací 1:{self.anotace}" if self.anotace else ""))
 
     def _schranka_klavesa(self, prikaz: str):
         """Ctrl+C / Ctrl+V: v textovém poli se kopíruje text, jinak prvky výkresu."""
@@ -1012,6 +1261,11 @@ class CadPage(QWidget):
         return m
 
     def eventFilter(self, obj, ev):  # noqa: N802
+        if obj is getattr(self, "view", None):
+            from PySide6.QtCore import QEvent
+            if ev.type() == QEvent.Resize:
+                self._umisti_start()
+            return False
         from PySide6.QtCore import QEvent
         if obj is getattr(self, "prikaz", None) and ev.type() == QEvent.KeyPress and \
                 ev.key() in (Qt.Key_Up, Qt.Key_Down) and not ev.modifiers():
@@ -1072,6 +1326,8 @@ class CadPage(QWidget):
             e["dok"].path is None and e["historie"] is not None and e["historie"].zmena == 0)]
         self._otevrene.append(self._stav())
         self._obnov_seznam_vykresu()
+        self._ukaz_start()
+        self._anotace_z_vykresu()
 
     # ------------------------------------------------------------ více rozpracovaných výkresů
     def _stav(self) -> dict:
@@ -1132,6 +1388,7 @@ class CadPage(QWidget):
         self._aktualizuj_tlacitka()
         self.aktivni_atributy()
         self._obnov_seznam_vykresu()
+        self._ukaz_start()
         self.vypis(f"Výkres: {self._nazev_vykresu(e)}")
 
     def zavri_vykres(self) -> bool:
@@ -1149,6 +1406,7 @@ class CadPage(QWidget):
             self.dok, self.historie_zmen, self.kresleni = None, None, None
             self.vyber = []
             self._vykresli()
+            self._ukaz_start()
             self._titulek()
             self._aktualizuj_tlacitka()
             self._obnov_seznam_vykresu()
@@ -1190,6 +1448,9 @@ class CadPage(QWidget):
 
     def showEvent(self, e):  # noqa: N802
         super().showEvent(e)
+        for d in getattr(self, "_skryte_plovouci", []):
+            d.show()
+        self._skryte_plovouci = []
         self.obnov_predvolby()
         if not self._nabidnuta_obnova:
             self._nabidnuta_obnova = True
@@ -2204,8 +2465,10 @@ class CadPage(QWidget):
         self._napln_vrstvy()
         self._titulek()
 
-    def _po_zmene(self, pridano=(), odebrano=()):
+    def _po_zmene(self, pridano=(), odebrano=(), anotovat: bool = True):
         """Překreslí jen změněné prvky a obnoví úchyty a index výběru."""
+        if anotovat and self.anotace and pridano:
+            self._anotuj(pridano)
         xref = {r.nazev for r in getattr(self, "reference", [])}
         zmenene = list(pridano) + list(odebrano)
         if any(e.dxftype() in ("VIEWPORT", "IMAGE") for e in zmenene) or (
@@ -2289,8 +2552,11 @@ class CadPage(QWidget):
 
     def zaloz(self, d) -> None:
         """Založí výkres podle okna Nový: pracovní sada (buňky, styly, hladiny), seed a soubor na disku."""
+        from ..cad import pracovni_sady as PS
+        self.obnov_styly_kresleni()
         self.novy(seed=d.seed())
         self.po_zmene_knihoven()
+        self._styl_sady(PS.aktivni())
         cil = d.soubor()
         if cil is not None:
             if cil.exists():
@@ -2374,7 +2640,7 @@ class CadPage(QWidget):
         if op is None:
             self.vypis("Není co vrátit.")
             return
-        self._po_zmene(op.odebrano, op.pridano)
+        self._po_zmene(op.odebrano, op.pridano, anotovat=False)
         self.vypis(f"Zpět: {op.nazev}")
 
     def redo(self):
@@ -2384,7 +2650,7 @@ class CadPage(QWidget):
         if op is None:
             self.vypis("Není co provést znovu.")
             return
-        self._po_zmene(op.pridano, op.odebrano)
+        self._po_zmene(op.pridano, op.odebrano, anotovat=False)
         self.vypis(f"Vpřed: {op.nazev}")
 
     # ------------------------------------------------------------ výběr
@@ -2770,6 +3036,7 @@ class CadPage(QWidget):
             self._req = r
             self.view.nahled = r.nahled
             self.vyzva.setText(r.vyzva)
+            self.vyzva.setToolTip(r.vyzva)
             self.vypis(r.vyzva)
             self.view.vyber_oknem = r.typ == "vyber"
             if r.ref is not None:
@@ -2880,7 +3147,7 @@ class CadPage(QWidget):
                 f"{k} {v}" for k, v in sorted(self.vlastni_zkratky.items())[:14])
                 + ". Mezerník ve výkresu = naposledy použité příkazy, ↑ ↓ v příkazovém řádku = historie.")
             self.vypis("Souřadnice: „Y X“ (S-JTSK), „x=… y=…“, „@dx,dy“, „@délka<směrník[g]“. "
-                       "Úchyty F3, Ortho F8, Polární F10, Esc zruší příkaz / výběr. Kolečko = zoom, "
+                       "Úchyty F3, Pravoúhle F8, Úhlový krok F10, Esc zruší příkaz / výběr. Kolečko = zoom, "
                        "prostřední/pravé tlačítko = posun. Výběr: klik, okno zleva doprava (celé prvky), "
                        "zprava doleva (i protnuté).")
         elif cmd == "vzdálenost":
@@ -3252,7 +3519,7 @@ class CadPage(QWidget):
         if h.zpet and h.zpet[-1].nazev == nazev:
             op = h.krok_zpet()
             h.vpred.clear()
-            self._po_zmene(op.odebrano, op.pridano)
+            self._po_zmene(op.odebrano, op.pridano, anotovat=False)
 
     def n_polylinie(self):
         """Lomená čára (SmartLine): úseky rovné i obloukové – „o“ = další úsek obloukem přes bod na oblouku."""
@@ -4044,6 +4311,30 @@ class CadPage(QWidget):
             e, k = yield Pozadavek("prvek", "Prodloužení – klikněte na úsečku u konce, který prodloužit (Esc = konec):")
             try:
                 U.prodluz(self.prostor, self.historie_zmen, e, k, list(self.prostor))
+            except ValueError as ex:
+                self.vypis(f"⚠ {ex}")
+
+    def n_orez_k_prvku(self):
+        rez, _k = yield Pozadavek("prvek", "Oříznout k prvku – klikněte na řezný prvek (hranici):")
+        while True:
+            e, k = yield Pozadavek("prvek", "Klikněte na úsečku – část na straně kliknutí za hranicí se odstraní, "
+                                            "krátká se k hranici prodlouží (Esc = konec):")
+            try:
+                U.k_prvku(self.prostor, self.historie_zmen, e, k, rez)
+            except ValueError as ex:
+                self.vypis(f"⚠ {ex}")
+
+    def n_roh(self):
+        e1, k1 = yield Pozadavek("prvek", "Prodloužit 2 prvky k průsečíku – první úsečka (část, která zůstane):")
+        e2, k2 = yield Pozadavek("prvek", "Druhá úsečka:")
+        U.zaobli(self.prostor, self.historie_zmen, e1, k1, e2, k2, 0.0)
+
+    def n_prodluz_o_delku(self):
+        d = yield Pozadavek("cislo", "Prodloužit o délku [m, záporná = zkrátit]:", vychozi=1.0)
+        while True:
+            e, k = yield Pozadavek("prvek", "Klikněte na úsečku u konce, který prodloužit (Esc = konec):")
+            try:
+                U.prodluz_o(self.prostor, self.historie_zmen, e, k, d)
             except ValueError as ex:
                 self.vypis(f"⚠ {ex}")
 

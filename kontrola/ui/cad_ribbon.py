@@ -36,8 +36,11 @@ NAZVY = {
     "rovnoběžka": ("Rovnoběžka", "Move Parallel / Copy Parallel"),
     "zarovnej": ("Zarovnat podle hrany", "Align Elements by Edge"),
     "posuň vrchol": ("Upravit prvek", "Modify Element"), "vlož vrchol": ("Vložit vrchol", "Insert Vertex"),
-    "smaž vrchol": ("Smazat vrchol", "Delete Vertex"), "ořež": ("Oříznout", "Trim Elements"),
-    "prodluž": ("Prodloužit", "Extend Element"), "zaobli": ("Zaoblit", "Construct Circular Fillet"),
+    "smaž vrchol": ("Smazat vrchol", "Delete Vertex"), "ořež": ("Oříznout více prvků", "Trim Multiple"),
+    "prodluž": ("Prodloužit k prvku", "Extend Element to Intersection"),
+    "ořež k prvku": ("Oříznout k prvku", "Trim to Element"),
+    "roh": ("Prodloužit 2 prvky k průsečíku", "Extend 2 Elements to Intersection"),
+    "prodluž o délku": ("Prodloužit o délku", "Extend Line by Distance"), "zaobli": ("Zaoblit", "Construct Circular Fillet"),
     "zkos": ("Zkosit", "Construct Chamfer"), "rozděl": ("Rozdělit", "Break Element"),
     "smaž část": ("Smazat část", "Delete Part of Element"), "natáhni": ("Natáhnout", "Fence Stretch"),
     "spoj": ("Spojit do řetězce", "Create Complex Chain"), "rozpoj": ("Rozpojit", "Drop Element"),
@@ -101,8 +104,8 @@ ULOHY = [
     ("Kótování", ["kóta", "kóta úhlu", "kóta poloměru"]),
     ("Ohrada", ["ohrada", "ořež ohradou", "natáhni"]),
     ("Manipulace", ["kopie", "posun", "otoč", "měřítko", "zrcadli", "pole", "zarovnej"]),
-    ("Úpravy", ["posuň vrchol", "vlož vrchol", "smaž vrchol", "ořež", "prodluž", "zaobli", "zkos", "rozděl",
-                "smaž část", "spoj", "rozpoj"]),
+    ("Úpravy", ["posuň vrchol", "vlož vrchol", "smaž vrchol", "ořež k prvku", "ořež", "prodluž", "roh",
+                "prodluž o délku", "zaobli", "zkos", "rozděl", "smaž část", "spoj", "rozpoj"]),
     ("Mazání", ["smaž"]),
     ("Skupiny", ["skupina", "zruš skupinu", "zámek skupin"]),
     ("Změna atributů", ["změň atributy", "převezmi atributy", "vyber", "podobné"]),
@@ -119,15 +122,15 @@ KARTY = [
         ("Výběr", ["vše", "ohrada", "vyber"]),
         ("Umístění", ["úsečka", "polylinie", "kružnice", "oblouk", "text", "vlož"]),
         ("Manipulace", ["kopie", "posun", "otoč", "měřítko", "zrcadli", "pole"]),
-        ("Úpravy", ["posuň vrchol", "ořež", "prodluž", "zaobli", "rozděl", "smaž"]),
+        ("Úpravy", ["posuň vrchol", "ořež k prvku", "ořež", "prodluž", "roh", "zaobli", "rozděl", "smaž"]),
     ]),
     ("Kreslení", [
         ("Umístění", ["úsečka", "polylinie", "obdélník", "mnohoúhelník", "kružnice", "oblouk", "elipsa", "křivka",
                       "bod", "čára pod úhlem"]),
         ("Konstrukce", ["kolmice", "osa úhlu", "rovnoběžka", "body po prvku"]),
         ("Manipulace", ["kopie", "posun", "otoč", "měřítko", "zrcadli", "pole", "zarovnej"]),
-        ("Úpravy", ["posuň vrchol", "vlož vrchol", "smaž vrchol", "ořež", "prodluž", "zaobli", "zkos", "rozděl",
-                    "smaž část", "natáhni", "spoj", "rozpoj", "ořež ohradou", "smaž"]),
+        ("Úpravy", ["posuň vrchol", "vlož vrchol", "smaž vrchol", "ořež k prvku", "ořež", "prodluž", "roh",
+                    "prodluž o délku", "zaobli", "zkos", "rozděl", "smaž část", "natáhni", "spoj", "rozpoj", "ořež ohradou", "smaž"]),
         ("Šrafování", ["šrafa", "vzorek"]),
     ]),
     ("Popisy", [
@@ -306,7 +309,7 @@ class PasKaret(QWidget):
         for p in self._pasy:
             self.styl_kresleni.addItem(f"Styl: {p.nazev}")
         self.styl_kresleni.blockSignals(False)
-        self.styl_kresleni.setVisible(bool(self._pasy))
+        self.styl_kresleni.setVisible(True)
         ul = str(QSettings("KontrolaVykresu", "KontrolaVykresu").value("cad/styl_kresleni", "") or "")
         i = next((k + 1 for k, p in enumerate(self._pasy) if p.nazev == ul), 0)
         self.nastav_styl(i, prepnout=False)
@@ -384,7 +387,9 @@ class PasKaret(QWidget):
             h.addWidget(sep)
         h.addStretch(1)
         sc.setWidget(w)
-        sc.setFixedHeight(max(self.stack.height(), w.sizeHint().height() + 14))
+        # stejná výška jako standardní karty (stack.height() je před zobrazením 480 px → obří pás)
+        std = max((x.height() for x in self._stranky.values()), default=0)
+        sc.setFixedHeight(max(std, w.sizeHint().height() + 14))
         return sc
 
     def ukaz_kartu(self, titul: str):
@@ -392,6 +397,34 @@ class PasKaret(QWidget):
         if i >= 0:
             self.karty.setTabVisible(i, True)
             self.karty.setCurrentIndex(i)
+
+    def pridej_akce(self, karta: str, titul: str, akce: list) -> None:
+        """Skupina zaškrtávacích akcí na kartě (např. Pohled → Okna: Úlohy, Průzkumník)."""
+        sc = self._stranky.get(karta)
+        if sc is None:
+            return
+        h = sc.widget().layout()
+        box = QWidget()
+        v = QVBoxLayout(box)
+        v.setContentsMargins(2, 0, 2, 0)
+        v.setSpacing(0)
+        g = QGridLayout()
+        g.setSpacing(0)
+        for i, a in enumerate(akce):
+            b = QToolButton()
+            b.setDefaultAction(a)
+            b.setAutoRaise(True)
+            b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            g.addWidget(b, i % 3, i // 3)
+        v.addLayout(g)
+        v.addStretch(1)
+        lbl = QLabel(titul)
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setObjectName("pas_skupina")
+        bs = barva_skupiny(titul)
+        lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {bs}; border-top: 2px solid {bs}; }}")
+        v.addWidget(lbl)
+        h.insertWidget(h.count() - 1, box)
 
     def _skupina(self, titul, polozky, popisy, stranka, barva, zvyr) -> QWidget:
         zvyr = barva_skupiny(titul)  # barevné části ikon podle skupiny (jako barevné ikony MicroStationu)

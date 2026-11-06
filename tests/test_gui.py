@@ -3878,3 +3878,81 @@ def test_tolerance_vzorce_a_uzivatelska_transformace():
     v = u_transformace(s, {"druh": "uživatelská", "rovnice_y": "Y' = Y + 10", "rovnice_x": "2*X",
                            "transformovat": "1", "predpona": "T"})
     assert v.nove[0].cislo == "T1" and v.nove[0].y == 110.0 and v.nove[0].x == 400.0
+
+
+def test_cad_kolo4_okna_start_orez_k_prvku(window):
+    """CAD jako MicroStation: přesouvatelná okna Úlohy a Průzkumník, úvod bez výkresu, Účelová mapa vestavěná,
+    oříznout / prodloužit k prvku, roh, prodloužit o délku, Shift+B vybrat podobné."""
+    import ezdxf
+
+    from kontrola.cad import upravy as U
+    from kontrola.cad import zkratky as Z
+    c = window.cad
+    window.show_page("cad")
+    assert set(c.doky) == {"Úlohy", "Průzkumník"}
+    assert c.doky["Úlohy"].widget() is c.paleta
+    if c.dok is None:
+        assert c.start is not None and c.start.isVisibleTo(c)
+    c.novy_um()
+    assert c.start is None
+    assert any(p.soubor.stem.lower() == "um_ribbon" for p in c.ribbon._pasy)
+    assert c.ribbon.styl_kresleni.currentText().startswith("Styl: Účelová")
+    assert c.ribbon.height() < 260  # karty stylu nesmí roztáhnout pás
+    c.ribbon.nastav_styl(0)
+    # odpojení okna a výchozí rozvržení
+    c.doky["Průzkumník"].setFloating(True)
+    c.vychozi_okna()
+    assert not c.doky["Průzkumník"].isFloating()
+    # geometrie: oříznout k prvku, prodloužit k prvku, roh, o délku
+    doc = ezdxf.new()
+    msp = doc.modelspace()
+    h = U.Historie(msp)
+    rez = msp.add_line((10, -5), (10, 5))
+    a = msp.add_line((0, 0), (20, 0))
+    n = U.k_prvku(msp, h, a, (15, 0), rez)  # přechází přes hranici → odstraní se strana kliknutí
+    assert abs(n.dxf.end.x - 10) < 1e-9 and abs(n.dxf.start.x) < 1e-9
+    b = msp.add_line((0, 2), (5, 2))
+    n = U.k_prvku(msp, h, b, (4, 2), rez)  # krátká → prodlouží se k hranici
+    assert abs(n.dxf.end.x - 10) < 1e-9
+    n = U.prodluz_o(msp, h, n, (9, 2), 2.5)
+    assert abs(n.dxf.end.x - 12.5) < 1e-9
+    e1 = msp.add_line((0, 10), (4, 10))
+    e2 = msp.add_line((6, 12), (6, 20))
+    U.zaobli(msp, h, e1, (1, 10), e2, (6, 18), 0.0)
+    assert any(abs(e.dxf.end.x - 6) < 1e-9 and abs(e.dxf.end.y - 10) < 1e-9 for e in msp.query("LINE"))
+    assert Z.nacti_zkratky(None).get("Shift+B") == "podobné"
+    assert "ořež k prvku" in c.PRIKAZY and "roh" in c.PRIKAZY and "prodluž o délku" in c.PRIKAZY
+    c.proved("ořež k prvku")
+    c.zrus(tise=True)
+
+
+def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
+    """Nový výkres v pracovní sadě jako ve škole (MultiScale / Pasport / TM jsou v aplikaci) a měřítko anotací
+    MultiScale: texty a značky ve velikosti na papíře × měřítko, při změně měřítka se přepočítají."""
+    from kontrola.cad import pracovni_sady as PS
+    klice = {s.klic for s in PS.vsechny()}
+    assert {"MultiScale/MultiScale", "MultiScale/Pasport", "MultiScale/TM"} <= klice
+    c = window.cad
+    window.show_page("cad")
+    try:
+        c.novy_v_sade("MultiScale/Pasport")
+        assert PS.aktivni().nazev == "Pasport" and c.anotace is None
+        hl_pasport = {ly.dxf.name for ly in c.dok.doc.layers}
+        assert c.ribbon.styl_kresleni.currentIndex() == 0
+        c.novy_um()
+        assert PS.aktivni().nazev == "MultiScale" and c.anotace == 1000
+        assert c.ribbon.styl_kresleni.currentText().startswith("Styl: Účelová")
+        assert {ly.dxf.name for ly in c.dok.doc.layers} != hl_pasport
+        c.nastav_anotace(500, prepocitat=False)
+        c.kresleni.text((0, 0), "12", 2.5)
+        c._po_zmene(c.historie_zmen.zpet[-1].pridano)
+        t = [e for e in c.prostor if e.dxftype() == "TEXT"][-1]
+        assert abs(t.dxf.height - 1.25) < 1e-9
+        assert c.nastav_anotace(1000) == 1
+        t = [e for e in c.prostor if e.dxftype() == "TEXT"][-1]
+        assert abs(t.dxf.height - 2.5) < 1e-9
+        c.undo()
+        t = [e for e in c.prostor if e.dxftype() == "TEXT"][-1]
+        assert abs(t.dxf.height - 1.25) < 1e-9
+    finally:
+        PS.nastav_aktivni(None)

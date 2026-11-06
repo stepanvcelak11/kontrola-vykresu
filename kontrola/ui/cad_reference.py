@@ -23,7 +23,9 @@ class ReferenceDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel("Reference je jiný výkres DXF zobrazený pod vaším výkresem – jen pro čtení. Dá se na "
                              "něj přichytávat a kopírovat z něj prvky. Ve výkresu se uloží jako XREF (cesta "
-                             "k souboru), obsah reference se do vašeho výkresu nekopíruje."))
+                             "k souboru), obsah reference se do vašeho výkresu nekopíruje.\n"
+                             "Připojuje se „Shodně – svět“ (Coincident World) jako ve škole: reference leží na svých "
+                             "skutečných souřadnicích S-JTSK. Posun, měřítko a natočení jdou změnit v tabulce."))
         self.tab = QTableWidget(0, len(SL))
         self.tab.setHorizontalHeaderLabels(SL)
         self.tab.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -120,7 +122,8 @@ class ReferenceDialog(QDialog):
 
     def pripojit(self, cesta: str | None = None):
         if cesta is None:
-            cesta, _ = QFileDialog.getOpenFileName(self, "Připojit referenci", "", "DXF (*.dxf)")
+            cesta, _ = QFileDialog.getOpenFileName(self, "Připojit referenci", "",
+                                                   "Výkresy (*.dxf *.dgn);;DXF (*.dxf);;DGN (*.dgn)")
             if not cesta:
                 return None
         try:

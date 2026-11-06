@@ -55,6 +55,7 @@ LEVA_RUKA: dict[str, str] = {
     "Shift+G": "prodluž",
     "Shift+T": "text",
     "Shift+Z": "předchozí pohled",
+    "Shift+B": "podobné",  # vybrat podobné (stejný typ a hladina jako vybraný prvek)
 }
 
 VYCHOZI_ALIASY: dict[str, str] = {}

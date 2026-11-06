@@ -50,6 +50,14 @@ class Reference:
 
     def nacti(self) -> bool:
         try:
+            if str(self.cesta).lower().endswith(".dgn"):  # DGN ze školy (V7 / V8) jako podklad
+                from .dokument import CadDokument
+                try:
+                    self.doc = CadDokument.otevri(Path(self.cesta)).doc
+                except ValueError as e:
+                    raise OSError(str(e)) from e
+                self.chyba = ""
+                return True
             try:
                 self.doc = ezdxf.readfile(self.cesta)
             except ezdxf.DXFStructureError:

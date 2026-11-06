@@ -143,6 +143,8 @@ class PanelHladin(QListWidget):
                     it.setText(f"▶ {jm}   ({pocty.get(jm, 0)})")
                 self.addItem(it)
         self._plneni = False
+        if callable(getattr(self, "filtr", None)):
+            self.filtr()
 
     def _zmena(self, it):
         if not self._plneni:
@@ -178,3 +180,126 @@ class PanelVlastnosti(QTextBrowser):
         r.append("<br><br><span style='color:#9CA3AF'>Změna hladiny, barvy, stylu nebo tloušťky v liště nahoře "
                  "se použije na všechny vybrané prvky.</span>")
         self.setHtml("".join(r))
+
+
+def _maly(text: str, tip: str, fn) -> QPushButton:
+    b = QPushButton(text)
+    b.setToolTip(tip)
+    b.clicked.connect(lambda: fn())
+    return b
+
+
+def obal_vlastnosti(panel: PanelVlastnosti, stranka) -> QWidget:
+    """Karta Vlastnosti Průzkumníku: popis vybraných prvků a kopírování atributů (jako MicroStation)."""
+    from .flow import RadekTlacitek
+    w = QWidget()
+    w.setProperty("kompaktni", True)
+    v = QVBoxLayout(w)
+    v.setContentsMargins(4, 4, 4, 4)
+    v.setSpacing(4)
+    r = RadekTlacitek()
+    r.addWidget(_maly("Převzít atributy", "<b>Převzít atributy</b> (MicroStation: Match Element Attributes)<br>"
+                      "Klikněte na vzorový prvek – jeho hladina, barva, styl a tloušťka se stanou aktivními "
+                      "(lišta Atributy nahoře). Pak kreslete, nebo je dejte jiným prvkům.",
+                      lambda: stranka.proved("převezmi atributy")))
+    r.addWidget(_maly("Dát na prvky", "<b>Změnit atributy</b> (MicroStation: Change Element Attributes)<br>"
+                      "Aktivní atributy se nastaví vybraným prvkům, nebo prvkům, na které kliknete.",
+                      lambda: stranka.proved("změň atributy")))
+    r.addWidget(_maly("Vybrat podobné", "Vybere všechny prvky stejného typu ve stejné hladině jako vybraný "
+                      "(Shift+B)", lambda: stranka.proved("podobné")))
+    v.addLayout(r)
+    v.addWidget(panel, 1)
+    return w
+
+
+def obal_hladin(panel: PanelHladin, stranka) -> QWidget:
+    """Karta Hladiny Průzkumníku: hledání, zapnout / vypnout vše, správce hladin."""
+    from PySide6.QtWidgets import QLineEdit
+    from .flow import RadekTlacitek
+    w = QWidget()
+    w.setProperty("kompaktni", True)
+    v = QVBoxLayout(w)
+    v.setContentsMargins(4, 4, 4, 4)
+    v.setSpacing(4)
+    hledat = QLineEdit()
+    hledat.setPlaceholderText("🔍 hledat hladinu")
+    hledat.setClearButtonEnabled(True)
+
+    def filtr(t: str):
+        t = t.strip().lower()
+        for i in range(panel.count()):
+            it = panel.item(i)
+            it.setHidden(bool(t) and t not in str(it.data(Qt.UserRole)).lower())
+    hledat.textChanged.connect(filtr)
+    panel.filtr = lambda: filtr(hledat.text())
+    v.addWidget(hledat)
+    r = RadekTlacitek()
+    r.addWidget(_maly("Zapnout vše", "Zobrazit všechny hladiny", lambda: stranka.hladiny_zobrazeni("vše", True)))
+    r.addWidget(_maly("Jen aktivní", "Vypnout všechny hladiny kromě aktivní",
+                      lambda: stranka.hladiny_zobrazeni("vše", False)))
+    r.addWidget(_maly("Správce…", "Správce hladin: barva, styl, zámek, nová, přejmenovat, smazat",
+                      lambda: stranka.spravce_vrstev()))
+    v.addLayout(r)
+    v.addWidget(panel, 1)
+    tip = QLabel("☑ = zobrazená · dvojklik = aktivní hladina")
+    tip.setObjectName("poznamka")
+    v.addWidget(tip)
+    return w
+
+
+class StartVykresu(QWidget):
+    """Úvod CAD bez otevřeného výkresu (jako úvodní obrazovka MicroStationu): nový, otevřít, nedávné soubory."""
+
+    def __init__(self, stranka, parent=None):
+        super().__init__(parent)
+        from pathlib import Path
+
+        from PySide6.QtCore import QSettings
+        self.setObjectName("cad_start")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("QWidget#cad_start{background:#F8FAFC;border:1px solid #CBD5E1;border-radius:10px}"
+                           "QWidget#cad_start QLabel{color:#1E293B;background:transparent}"
+                           "QWidget#cad_start QPushButton{text-align:left;padding:4px 10px}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(18, 12, 18, 12)
+        v.setSpacing(4)
+        t = QLabel("<span style='font-size:15pt;font-weight:700'>Začněte výkres</span>")
+        v.addWidget(t)
+        pozn = QLabel("Souřadnice S-JTSK jako školní seed. Sada určuje hladiny, buňky a styly čar – výkres "
+                      "z MultiScale a z Pasportu jsou odlišné soubory.")
+        pozn.setWordWrap(True)
+        v.addWidget(pozn)
+        v.addWidget(QLabel("<b>Nový výkres v pracovní sadě</b> (jako ve škole)"))
+        for text, tip, fn in (
+                ("✚  MultiScale – Účelová mapa", "Seed, hladiny, buňky a styly čar sady MultiScale, karty Účelové "
+                 "mapy (prvek jedním kliknutím) a měřítko anotací 1:1000", stranka.novy_um),
+                ("✚  Pasport (pasportizace staveb)", "Seed, buňky a styly čar sady Pasport – jiné hladiny i značky "
+                 "než MultiScale", lambda: stranka.novy_v_sade("MultiScale/Pasport")),
+                ("✚  TM (technická mapa)", "Seed, buňky TM25 a styly čar sady TM",
+                 lambda: stranka.novy_v_sade("MultiScale/TM")),
+                ("✚  Bez pracovní sady", "Prázdný výkres jen s nastavením aplikace",
+                 lambda: stranka.novy_v_sade(None)),
+                ("📄  Nový – vybrat sadu, seed a název…", "Okno Nový jako v MicroStationu: pracovní sada, "
+                 "seed (2D, výkres, list, 3D… nebo vlastní soubor přes Procházet), název a složka souboru",
+                 lambda: stranka.novy_soubor()),
+                ("📋  Nový podle zadání", "Hladiny, styly, písma a buňky podle pravidel ze zadání",
+                 lambda: stranka.novy_podle_zadani()),
+                ("📂  Otevřít DXF / DGN…", "Otevřít existující výkres", lambda: stranka.otevri())):
+            b = QPushButton(text)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _c=False, f=fn: f())
+            v.addWidget(b)
+        items = QSettings("KontrolaVykresu", "KontrolaVykresu").value("cesty/posledni_vykresy", []) or []
+        items = [items] if isinstance(items, str) else list(items)
+        items = [p for p in items if Path(p).suffix.lower() in (".dxf", ".dgn") and Path(p).is_file()][:5]
+        if items:
+            v.addSpacing(4)
+            v.addWidget(QLabel("<b>Nedávné soubory</b>"))
+            for p in items[:3]:
+                b = QPushButton(Path(p).name)
+                b.setToolTip(p)
+                b.setFlat(True)
+                b.clicked.connect(lambda _c=False, p=p: stranka.otevri(p))
+                v.addWidget(b)
+        self.setFixedWidth(400)
+        self.adjustSize()

@@ -725,6 +725,57 @@ def prodluz(msp, h, e, klik, hranice_ents):
     return c
 
 
+def k_prvku(msp, h, e, klik, rezny):
+    """Oříznout / prodloužit k prvku (MicroStation: Trim to Element). Úsečka se zkrátí nebo prodlouží
+    k průsečíku s řezným prvkem; když přes něj přechází, odstraní se část na straně kliknutí."""
+    if e.dxftype() != "LINE":
+        raise ValueError("K prvku jde oříznout / prodloužit úsečka (polylinii nejdřív rozpojte).")
+    if e is rezny:
+        raise ValueError("Řezný prvek a upravovaný prvek musí být různé.")
+    ts = _parametry_na_primce(e, _prim_hranic([rezny], e))
+    if not ts:
+        raise ValueError("Úsečka (ani její prodloužení) řezný prvek neprotíná.")
+    s, k = e.dxf.start, e.dxf.end
+    kx, ky = _xy(klik)
+    dx, dy = k.x - s.x, k.y - s.y
+    tp = ((kx - s.x) * dx + (ky - s.y) * dy) / (dx * dx + dy * dy or 1.0)
+    t = min(ts, key=lambda x: abs(x - tp))
+    c = _kopie(e)
+    p = (s.x + t * dx, s.y + t * dy, s.z)
+    if 1e-9 < t < 1 - 1e-9:  # přes řezný prvek: odstranit stranu kliknutí
+        if tp > t:
+            c.dxf.end = p
+        else:
+            c.dxf.start = p
+    elif t >= 1 - 1e-9:  # prodloužit konec
+        c.dxf.end = p
+    else:
+        c.dxf.start = p
+    msp.add_entity(c)
+    h.proved("Oříznutí k prvku", [c], [e])
+    return c
+
+
+def prodluz_o(msp, h, e, klik, delka: float):
+    """Prodloužit úsečku o délku (záporná = zkrátit) na konci bližším kliknutí (Extend Line by Distance)."""
+    if e.dxftype() != "LINE":
+        raise ValueError("Prodloužit o délku jde úsečka.")
+    s, k = e.dxf.start, e.dxf.end
+    d = math.hypot(k.x - s.x, k.y - s.y)
+    if d < EPS or d + delka <= EPS:
+        raise ValueError("Úsečka by měla nulovou nebo zápornou délku.")
+    ux, uy = (k.x - s.x) / d, (k.y - s.y) / d
+    kx, ky = _xy(klik)
+    c = _kopie(e)
+    if math.hypot(kx - k.x, ky - k.y) <= math.hypot(kx - s.x, ky - s.y):
+        c.dxf.end = (k.x + ux * delka, k.y + uy * delka, k.z)
+    else:
+        c.dxf.start = (s.x - ux * delka, s.y - uy * delka, s.z)
+    msp.add_entity(c)
+    h.proved("Prodloužení o délku", [c], [e])
+    return c
+
+
 # ------------------------------------------------------------------ zaoblení (a roh)
 def zaobli(msp, h, e1, klik1, e2, klik2, r: float):
     """Zaoblí dvě úsečky obloukem o poloměru r (r = 0 → ostrý roh). Ponechají se části, na které se klikl."""

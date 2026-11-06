@@ -129,9 +129,15 @@ def odeber_slozku(slozka: str | Path) -> None:
     _qs().setValue(KLIC_SLOZKY, [x for x in slozky() if x != str(slozka)])
 
 
+def vestavena_slozka() -> Path:
+    """Školní pracovní sady MicroStationu CONNECT (MultiScale, Pasport, TM) jsou součástí aplikace."""
+    from ..resources import resource_path
+    return resource_path("microstation", "skola")
+
+
 def vsechny() -> list[Sada]:
     out, videne = [], set()
-    for s in slozky():
+    for s in slozky() + [str(vestavena_slozka())]:  # vlastní nastavení má přednost
         for sada in najdi(s):
             if sada.klic not in videne:
                 videne.add(sada.klic)
@@ -164,7 +170,15 @@ def styly_kresleni(sada: Sada | None) -> list:
     """Pásy karet (styly kreslení) aktivní sady – jen ty, které mají tlačítka s key-iny."""
     from .ms_pas import nacti_pas
     out = []
-    for p in (sada.pasy if sada is not None else []):
+    pasy = list(sada.pasy if sada is not None else [])
+    # bez pracovní sady se nabízí Účelová mapa (UM_ribbon.dgnlib vestavěné sady MultiScale); jiná sada
+    # (Pasport, TM) má jen své vlastní pásy – výkresy se liší
+    if sada is None:
+        vest = (vestavena_slozka() / "WorkSpaces" / "MultiScale" / "WorkSets" / "MultiScale" / "Standards"
+                / "Dgnlib" / "GUI" / "UM_ribbon.dgnlib")
+        if vest.exists():
+            pasy.append(vest)
+    for p in pasy:
         try:
             k = (str(p), p.stat().st_mtime)
         except OSError:
