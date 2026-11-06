@@ -229,12 +229,16 @@ class PasKaret(QWidget):
         horni.addWidget(self.b_soubor)
         self.pracovni_postup = QComboBox()
         self.pracovni_postup.setToolTip("Pracovní postup (Workflow): které karty jsou vidět")
+        # šířka podle pevného počtu znaků, ne podle nejdelší položky – dlouhý název stylu nerozšíří okno
+        self.pracovni_postup.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.pracovni_postup.setMinimumContentsLength(7)
         horni.addWidget(self.pracovni_postup)
         self.styl_kresleni = QComboBox()
         self.styl_kresleni.setToolTip("Styl kreslení (jako v MultiScale): např. Účelová mapa (ÚM) přidá karty "
                                       "s přednastavenými prvky – hladina, barva, styl, tloušťka a nástroj jedním "
                                       "kliknutím. Nabízí pásy z aktivní pracovní sady (Dgnlib/GUI).")
-        self.styl_kresleni.setMinimumWidth(170)
+        self.styl_kresleni.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.styl_kresleni.setMinimumContentsLength(12)
         horni.addWidget(self.styl_kresleni)
         self._pasy: list = []
         self._dynamicke: list[QWidget] = []

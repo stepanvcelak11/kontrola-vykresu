@@ -776,7 +776,7 @@ class CadPage(QWidget):
         self.vykresy_cb.setToolTip("Rozpracované výkresy – přepnutí na jiný (každý má svou historii Zpět a pohled)."
                                    " Zavřít výkres: Soubor → Zavřít výkres.")
         self.vykresy_cb.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.vykresy_cb.setMinimumWidth(140)
+        self.vykresy_cb.setMinimumWidth(90)
         self.vykresy_cb.setMaximumWidth(220)
         self.vykresy_cb.setVisible(False)
         self.vykresy_cb.activated.connect(self.prepni_vykres)
@@ -922,7 +922,7 @@ class CadPage(QWidget):
         for m in (200, 250, 500, 1000, 2000, 2880, 5000, 10000):
             self.anotace_cb.addItem(f"A 1:{m}", m)
         self.anotace_cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.anotace_cb.setMinimumContentsLength(8)
+        self.anotace_cb.setMinimumContentsLength(7)
         self.anotace_cb.setToolTip(
             "<b>Měřítko anotací</b> (MicroStation: Annotation Scale – typické pro MultiScale)<br>"
             "Texty a buňky (značky) se kreslí ve velikosti na papíře × měřítko: výška 2,5 při 1:1000 = 2,5 m, "
