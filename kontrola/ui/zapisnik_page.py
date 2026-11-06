@@ -16,6 +16,41 @@ from ..vypocet import Obs, Station
 SL = ("Bod", "Šikmá délka [m]", "Výška cíle [m]", "Hz [g]", "Z [g]", "Část")
 
 
+class _TabZameru(QTableWidget):
+    """Záměry stanoviska – označené řádky jdou přetáhnout do výpočetních oken (Polární, Volné stanovisko)."""
+
+    def __init__(self, panel):
+        super().__init__(0, len(SL))
+        self.panel = panel
+        from PySide6.QtWidgets import QAbstractItemView
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragOnly)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+    def mimeTypes(self):  # noqa: N802
+        from .groma_formulare import MIME_MERENI
+        return [MIME_MERENI, "text/plain"]
+
+    def mimeData(self, items):  # noqa: N802
+        from PySide6.QtCore import QMimeData
+
+        from .groma_formulare import MIME_MERENI
+        radky = []
+        st = self.panel._st()
+        if st is not None:
+            radky.append(f"#st {st.bod} {st.vp!r}")
+        for r in sorted({it.row() for it in items}):
+            v = [self.item(r, c).text() if self.item(r, c) else "" for c in range(5)]
+            if v[0]:
+                bod, sd, vc, hz, z = v
+                radky.append(f"{bod} {hz} {sd} {z} {vc}")
+        md = QMimeData()
+        t = "\n".join(radky)
+        md.setData(MIME_MERENI, t.encode("utf-8"))
+        md.setText(t)
+        return md
+
+
 class ZapisnikPanel(QWidget):
     def __init__(self, page, parent=None):
         super().__init__(parent)
@@ -79,7 +114,7 @@ class ZapisnikPanel(QWidget):
         nad = QLabel("Záměry vybraného stanoviska")
         nad.setObjectName("nadpis_sekce")
         zl.addWidget(nad)
-        self.tab = QTableWidget(0, len(SL))
+        self.tab = _TabZameru(self)
         self.tab.setHorizontalHeaderLabels(SL)
         self.tab.verticalHeader().setVisible(False)
         self.tab.horizontalHeader().setStretchLastSection(True)
@@ -265,8 +300,9 @@ class ZapisnikPanel(QWidget):
             return None
         st = Z.pro_vypocet(self.stanoviska)
         from ..geodezie.nastaveni import aktualni
-        nast, koef = aktualni(), None
-        if nast.korekce_zapnuta:  # Nastavení výpočtů má přednost (jinak Křovák + výška automaticky)
+        nast = aktualni()
+        koef = nast.koeficient()  # měřítko z lišty nastavení (jako v Gromě – jedno pro všechny délky)
+        if koef is None or nast.vyska_rezim != "bez redukce" or abs(nast.ppm_fyzikalni) > 0:
             zn = {b.cislo: b for b in self.page.seznam.body}
             sb = [zn[s_.bod] for s_ in st if s_.bod in zn]
             if sb:

@@ -81,6 +81,24 @@ class NastaveniVypoctu:
             popis.append(f"měřítko zobrazení m = {m:.8f} ({(m - 1) * 1e6:+.1f} ppm)")
         return k, popis
 
+    def koeficient(self) -> float | None:
+        """Měřítkový koeficient z lišty nastavení (Groma: jedno číslo pro všechny délky);
+        None = počítat z bodů (režim „Křovák ze souřadnic“)."""
+        if self.meritko_rezim == "ručně":
+            return self.meritko_rucne
+        if self.meritko_rezim == "bez korekce":
+            return 1.0
+        return None
+
+    def nastav_koeficient(self, k: float) -> None:
+        """Jako tlačítko Nastavit v modulu Zkreslení v Křovákově zobrazení: jeden koeficient, v němž je
+        zkreslení i nadmořská výška (redukce z výšky se už zvlášť nepočítá)."""
+        if abs(k - 1.0) < 1e-12:
+            self.meritko_rezim, self.meritko_rucne = "bez korekce", 1.0
+        else:
+            self.meritko_rezim, self.meritko_rucne = "ručně", k
+        self.vyska_rezim = "bez redukce"
+
     def popis_korekce(self, k: float, popis: list[str]) -> str:
         if not popis:
             return "Délky bez korekcí (nastavení výpočtů)."
@@ -134,6 +152,13 @@ class NastaveniVypoctu:
              f"Přístroj: {self.pristroj} (σ směru {self.sigma_smer_mgon:g} mgon, σ délky "
              f"{self.sigma_delka_mm:g} mm + {self.sigma_delka_ppm:g} ppm)"]
         return r
+
+
+def zkresleni(y: float, x: float, h: float | None = None) -> tuple[float, float | None]:
+    """(měřítko Křovákova zobrazení v bodě, oprava z nadmořské výšky R/(R+H) nebo None bez výšky)."""
+    from .sjtsk import meritko_zobrazeni
+    m = meritko_zobrazeni(abs(y), abs(x))
+    return m, (None if h is None else R_ZEME / (R_ZEME + h))
 
 
 _AKTUALNI = NastaveniVypoctu()

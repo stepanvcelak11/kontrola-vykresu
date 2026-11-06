@@ -1267,7 +1267,7 @@ def test_vypocty_ulohy(window):
     p.seznam.pridej([Bod("1", 595000.0, 1158000.0, 250.0), Bod("2", 595100.0, 1158000.0, 251.0),
                      Bod("3", 595050.0, 1158080.0), Bod("4", 595000.0, 1158100.0)])
     p.model.refresh()
-    p.tabs.setCurrentWidget(p.ulohy)
+    p.ulohy.otevri()
     u = p.ulohy
     names = [u.lst.item(i).text() for i in range(u.lst.count())]
     # rajón
@@ -3458,15 +3458,18 @@ def test_vypocty_rozvrzeni_jako_groma(window):
     v.seznam.body[:] = [Bod("1", 1000.0, 2000.0), Bod("25", 1100.0, 2000.0)]
     v._refresh()
     v.menu.akce["Výpočty/Podrobné/Polární"].trigger()
-    assert v.tabs.currentWidget() is v.ulohy and not v.tabs.okno(v.ulohy).isHidden()
+    assert v.ulohy.isVisible() and v.ulohy.isWindow() and v.ulohy.windowTitle() == "Polární metoda"
     assert v.ulohy.lst.currentItem().text() == "Rajón (polární bod)"
     v.lista.najit.setText("25")
     assert [b.cislo for b in v.selected()] == ["25"]
     v.lista.kod_kvality.setCurrentIndex(v.lista.kod_kvality.findData(5))
     from kontrola.geodezie import nastaveni as N
     assert N.aktualni().kod_kvality == 5
-    v.tabs.okno(v.ulohy).close()  # křížek okno jen schová
-    assert not not v.tabs.okno(v.ulohy).isHidden()
+    v.ulohy.close()  # samostatné okno úlohy jako v Gromě – křížek ho zavře, pás ho otevře znovu
+    assert not v.ulohy.isVisible()
+    v.menu.akce["Výpočty/Podrobné/Polární"].trigger()
+    assert v.ulohy.isVisible()
+    v.ulohy.close()
     v.tabs.setCurrentWidget(v.zapisnik)
     assert not v.tabs.okno(v.zapisnik).isHidden()
 
@@ -3684,3 +3687,72 @@ def test_cad_styl_kresleni_um(window, tmp_path):
     finally:
         PS.nastav_aktivni(None)
         PS.odeber_slozku(str(tmp_path / "WS"))
+
+
+def test_groma_okna_uloh_a_meritko(window):
+    """Výpočetní okna jako v Gromě: samostatné okno, Polární se záložkami a více orientacemi, Volné stanovisko
+    s volbou výpočtu, Transformace s typem; měřítko ze Zkreslení v Křovákově zobrazení na liště nastavení."""
+    from PySide6.QtCore import QMimeData
+    from kontrola.geodezie import nastaveni as N
+    from kontrola.geodezie import vypocty as V
+    from kontrola.geodezie.body import Bod
+    from kontrola.geodezie.ulohy import ULOHY
+    from kontrola.ui.groma_formulare import MIME_BODY, MIME_MERENI, body_z_mime
+    from kontrola.ui.groma_okna import otevri_ulohu
+    v = window.vypocty
+    v.seznam.body[:] = [Bod("1", 595000.0, 1158000.0, 250.0), Bod("2", 595100.0, 1158000.0, 251.0),
+                        Bod("3", 595000.0, 1158100.0, 252.0), Bod("4", 594900.0, 1157950.0)]
+    v._refresh()
+    jm = [u[0] for u in ULOHY]
+    u = v.ulohy
+    # přetažení bodů ze seznamu: MIME s čísly a souřadnicemi
+    md = v.model.mimeData([v.model.index(1, 0)])
+    assert md.hasFormat(MIME_BODY) and body_z_mime(md)[0][:3] == ("2", 595100.0, 1158000.0)
+    # Polární metoda: dvě orientace, posun vážený délkami, opravy v tabulce, vypočtené souřadnice
+    otevri_ulohu(v, jm.index("Rajón (polární bod)"))
+    assert u.isWindow() and u.windowTitle() == "Polární metoda" and u.lst.isHidden()
+    s12 = V.smernik(V.P(595000, 1158000), V.P(595100, 1158000))
+    s13 = V.smernik(V.P(595000, 1158000), V.P(595000, 1158100))
+    u.nastav(st="1", vp="1.5", o="2", so="0")
+    u.inputs["orientace"].pridej(["3", f"{(s13 - s12) % 400:.4f}", ""])
+    u.nastav(nove="10", kod="plot", sm="100", d="50")
+    r = u.vypocitej()
+    assert r and r.nove[0].kod == "plot" and u.inputs["orientace"].rowCount() == 2
+    exp = V.rajon(V.P(595000, 1158000), V.norm_gon(s12 + 100), 50)
+    assert abs(r.nove[0].y - exp.y) < 1e-6 and abs(r.nove[0].x - exp.x) < 1e-6
+    assert abs(float(u.inputs["orientace"].item(0, 3).text())) < 1e-3
+    # záměry přetažené ze zápisníku do okna se hned spočtou
+    md = QMimeData()
+    md.setData(MIME_MERENI, b"#st 1 1.5\n11 100 30 100 1.5\n12 150 20 100 1.5")
+    assert u._polarni_drop(md) and [b.cislo for b in u.vysledek.nove] == ["11", "12"]
+    # Volné stanovisko: výpočet podobnostní / shodnostní transformací
+    otevri_ulohu(v, jm.index("Volné stanovisko"))
+    st = V.P(595020.0, 1158030.0)
+    for c in ("1", "2", "3"):
+        b = v.seznam.najdi(c)
+        u.inputs["mereni"].pridej([c, f"{V.smernik(st, b):.6f}", f"{b.vzdalenost(Bod('x', st.y, st.x)):.4f}", "", ""])
+    u.nastav(nove="S1", vypocet="Shodnostní transformace")
+    r = u.vypocitej()
+    assert r and abs(r.nove[0].y - st.y) < 1e-3 and "transformace" in r.protokol[0].lower()
+    assert u.inputs["mereni"].item(0, 5).text() != ""
+    # Transformace: typ přepínačem
+    otevri_ulohu(v, jm.index("Transformace"))
+    assert u.windowTitle() == "Transformace souřadnic"
+    for c, y, x in (("1", 10.0, 20.0), ("2", 110.0, 20.0), ("3", 10.0, 120.0)):
+        u.inputs["identicke"].pridej([c, str(y), str(x)])
+    u.nastav(druh="shodnostní", transformovat="4")
+    r = u.vypocitej()
+    assert r and "SHODNOSTNÍ" in r.protokol[0].upper() and r.nove[0].cislo == "T4"
+    # Zkreslení v Křovákově zobrazení → koeficient na liště, výpočty ho použijí
+    d = v.zkresleni_dialog()
+    d.bod.nastav("1", 595000.0, 1158000.0, 250.0)
+    k = d.vypocet()
+    m, mh = N.zkresleni(595000.0, 1158000.0, 250.0)
+    assert abs(k - m * mh) < 1e-12
+    assert abs(d.nastavit() - k) < 1e-12
+    assert abs(v.lista.meritko.value() - k) < 1e-11 and abs(N.aktualni().koeficient() - k) < 1e-11
+    assert "ZKRESLENÍ V KŘOVÁKOVĚ ZOBRAZENÍ" in v.protokol.toPlainText()
+    d.close()
+    n = N.aktualni()
+    n.nastav_koeficient(1.0)
+    u.close()

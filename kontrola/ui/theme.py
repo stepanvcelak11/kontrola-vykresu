@@ -414,6 +414,11 @@ QLabel#stranka_info {{ background: {HEADER}; border: 1px solid {BORDER}; border-
     border-radius: 6px; padding: 7px 10px; color: #374151; }}
 QLabel#nadpis_sekce {{ font-weight: 700; color: {ACCENT_HOVER}; padding: 6px 0 2px 0; }}
 QLabel#poznamka {{ color: {MUTED}; }}
+QFrame#oddil_ulohy {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 6px; }}
+QFrame#oddil_ulohy QLabel {{ background: transparent; }}
+QLabel#nadpis_uloha {{ font-weight: 700; color: {TEXT}; padding: 0 0 2px 0; }}
+QWidget#vypocetni_okno {{ background: {BG}; }}
+QWidget#zadani_ulohy {{ background: {BG}; }}
 QLabel#prazdny_stav {{ color: {MUTED}; font-size: 10pt; background: transparent; padding: 12px; }}
 QFrame#karta_obsah {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; }}
 
@@ -508,7 +513,8 @@ QCheckBox::indicator:checked:disabled {{ background: {BORDER_STRONG}; border-col
 QRadioButton::indicator {{ width: 14px; height: 14px; border: 1.5px solid {BORDER_STRONG}; border-radius: 8px;
     background: {PANEL}; }}
 QRadioButton::indicator:hover {{ border-color: {ACCENT}; }}
-QRadioButton::indicator:checked {{ border: 4.5px solid {ACCENT}; background: {PANEL}; }}
+QRadioButton::indicator:checked {{ width: 6px; height: 6px; border: 5px solid {ACCENT}; border-radius: 8px;
+    background: {PANEL}; }}
 """
 
 

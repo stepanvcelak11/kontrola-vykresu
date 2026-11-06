@@ -200,7 +200,7 @@ class FeaturesDialog(QDialog):
             "_vypocty": lambda: w.show_page("vypocty"),
             "_zapisnik": lambda: (w.show_page("vypocty"), w.vypocty.tabs.setCurrentWidget(w.vypocty.zapisnik)),
             "_qtrig": lambda: (w.show_page("vypocty"), w.vypocty.qtrig_dialog()),
-            "_ulohy": lambda: (w.show_page("vypocty"), w.vypocty.tabs.setCurrentWidget(w.vypocty.ulohy)),
+            "_ulohy": lambda: (w.show_page("vypocty"), w.vypocty.ulohy.otevri()),
             "_cad": lambda: w.show_page("cad"),
             "_vzor": lambda: (w.tabs.setCurrentWidget(w.zadani),
                               w.zadani.tabs.setCurrentWidget(w.zadani.template_page)),

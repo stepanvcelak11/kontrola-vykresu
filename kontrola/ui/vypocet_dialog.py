@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
+from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDoubleSpinBox, QFileDialog, QFormLayout,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QTableWidget,
                                QTableWidgetItem, QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
@@ -44,19 +44,15 @@ class VypocetDialog(QDialog):
         self.seznam = self._file_row(form, "Váš seznam souřadnic:", default_seznam,
                                      "Seznam (*.txt *.crd *.csv);;Vše (*)")
         krow = QHBoxLayout()
-        self.k_auto = QCheckBox("spočítat (Křovák + nadmořská výška)")
-        self.k_auto.setChecked(meta.get("koeficient") in (None, ""))
-        self.k = QDoubleSpinBox()
-        self.k.setDecimals(10)
-        self.k.setRange(0.99, 1.01)
-        self.k.setSingleStep(0.000001)
-        self.k.setValue(float(meta.get("koeficient") or 0.9999))
-        self.k.setEnabled(not self.k_auto.isChecked())
-        self.k_auto.toggled.connect(lambda on: self.k.setEnabled(not on))
-        krow.addWidget(self.k_auto)
-        krow.addWidget(self.k)
-        krow.addWidget(QLabel("(nebo opište z protokolu Gromy – „Měřítkový koeficient“)"))
+        self.k_info = QLabel()
+        self.b_k = QPushButton("Změnit…")
+        self.b_k.setToolTip("Zkreslení v Křovákově zobrazení: koeficient ze souřadnic vztažného bodu (jako „⋮“ "
+                            "u Měřítka na liště Výpočtů)")
+        self.b_k.clicked.connect(self._zmen_meritko)
+        krow.addWidget(self.k_info)
+        krow.addWidget(self.b_k)
         krow.addStretch(1)
+        self._ukaz_meritko()
         form.addRow("Měřítkový koeficient:", krow)
         trow = QHBoxLayout()
         self.tol_xy = QDoubleSpinBox()
@@ -177,6 +173,33 @@ class VypocetDialog(QDialog):
                             for st in stations] + var[:10]
         return stations
 
+    @staticmethod
+    def _koeficient() -> float | None:
+        """Měřítkový koeficient z lišty nastavení Výpočtů (Groma ho nastavuje před importem měření)."""
+        from ..geodezie.nastaveni import aktualni
+        return aktualni().koeficient()
+
+    def _ukaz_meritko(self):
+        k = self._koeficient()
+        if k is None:
+            self.k_info.setText("počítá se z bodů (Křovák + nadmořská výška – Nastavení výpočtů)")
+        elif abs(k - 1.0) < 1e-12:
+            self.k_info.setText("<b>1.000000000000</b> <span style='color:#B45309'>– délky se neopraví o zkreslení "
+                                "a nadmořskou výšku; nastavte měřítko tlačítkem Změnit…</span>")
+        else:
+            self.k_info.setText(f"<b>{k:.12f}</b> (z lišty nastavení)")
+
+    def _zmen_meritko(self):
+        w = self.parent()
+        v = getattr(w, "vypocty", None)
+        if v is None:
+            return
+        from .krovak_dialog import ZkresleniDialog
+        d = ZkresleniDialog(v, self)
+        d.b_nastavit.clicked.connect(self._ukaz_meritko)
+        d.exec()
+        self._ukaz_meritko()
+
     def run(self):
         zap = self.zap.text().strip()
         dane = [s.strip() for s in self.dane.text().split(";") if s.strip()]
@@ -196,7 +219,7 @@ class VypocetDialog(QDialog):
             QMessageBox.warning(self, "Kontrola výpočtu", "V zápisníku nejsou žádná stanoviska "
                                 "(očekává se formát Gromy: „1 <stanovisko> <výška přístroje> *“).")
             return
-        k = None if self.k_auto.isChecked() else self.k.value()
+        k = self._koeficient()
         res = compute(stations, known, k)
         bad, rows = (compare(res, student, self.tol_xy.value(), self.tol_z.value(), known=known) if student
                      else ([], []))

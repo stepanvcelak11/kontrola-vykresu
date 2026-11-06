@@ -87,7 +87,8 @@ IKONY = {
                                     '<path d="M12 16h2.5v3"/>',
     "Rozložení oblouku": '<path d="M4 18a10 10 0 0 1 16 0"/>' + _bod(4, 18) + _bod(12, 10) + _bod(20, 18),
     "Centrace": '<circle cx="12" cy="12" r="7"/><path d="M12 8v8M8 12h8"/>' + _bod(17, 7),
-    "Křovák (WGS84)": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>'
+    "Křovák": '<path d="M3 20L21 4"/><path d="M5 9l3-5 3 5"/><path d="M13 20l3-5 3 5"/>' + _bod(12, 12),
+    "S-JTSK ↔ WGS84": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>'
                       '<path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>',
     "Převod úhlů": '<circle cx="12" cy="12" r="8"/><path d="M12 12V4"/><path d="M12 12l6 4"/>',
     "Testování přesnosti": '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/>' + _bod(12, 12),

@@ -75,7 +75,25 @@ class BodyModel(QAbstractTableModel):
         return None
 
     def flags(self, idx):
-        return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+        return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsDragEnabled
+
+    MIME = "application/x-kontrola-body"
+
+    def mimeTypes(self):  # noqa: N802
+        return [self.MIME, "text/plain"]
+
+    def mimeData(self, indexes):  # noqa: N802
+        """Přetažení bodů do výpočetních oken (jako v Gromě): řádky „číslo Y X [Z]“."""
+        from PySide6.QtCore import QMimeData
+        radky = []
+        for r in sorted({i.row() for i in indexes}):
+            b = self.seznam.body[r]
+            radky.append(" ".join([b.cislo, repr(b.y), repr(b.x)] + ([repr(b.z)] if b.z is not None else [])))
+        md = QMimeData()
+        t = "\n".join(radky)
+        md.setData(self.MIME, t.encode("utf-8"))
+        md.setText(t)
+        return md
 
     def setData(self, idx, value, role=Qt.EditRole):  # noqa: N802
         if role != Qt.EditRole:
@@ -394,6 +412,8 @@ class VypoctyPage(QWidget):
         self.table.sortByColumn(-1, Qt.AscendingOrder)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setAlternatingRowColors(True)
+        self.table.setDragEnabled(True)
+        self.table.setDragDropMode(QAbstractItemView.DragOnly)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.verticalHeader().setDefaultSectionSize(26)
@@ -417,8 +437,7 @@ class VypoctyPage(QWidget):
         self.tabs.addTab(self.grafika, "Grafika", viditelne=False)
         self.grafika.vybrano.connect(self._vyber_z_grafiky)
         from .ulohy import UlohyPanel
-        self.ulohy = UlohyPanel(self)
-        self.tabs.addTab(self.ulohy, "Výpočetní okno", viditelne=False)
+        self.ulohy = UlohyPanel(self)  # samostatné okno úlohy jako v Gromě (ne uvnitř plochy oken)
         self.tabs.vychozi = (seznam_w, self.zapisnik, self.protokol)
         self.menu = postav_menu(self)
         outer.insertWidget(0, self.menu)
@@ -438,6 +457,7 @@ class VypoctyPage(QWidget):
         outer.addWidget(stav_w)
         self.lista.hledej.connect(self._najdi_bod)
         self.lista.uloha.connect(self.prepni_ulohu)
+        self.lista.vypocet_meritka.connect(lambda: self.zkresleni_dialog())
         self.tabs.currentChanged.connect(lambda i: self.ulohy._completer_model.setStringList(
             [b.cislo for b in self.seznam.body]))
         lay = outer
@@ -768,7 +788,7 @@ class VypoctyPage(QWidget):
         prot.append(f"překročena mezní odchylka: {spatne} bodů" if spatne else "všechny společné body vyhovují")
         self.protokol_append(prot)
         self.ulohy.vystup.setPlainText("\n".join(prot))
-        self.tabs.setCurrentWidget(self.ulohy)
+        self.tabs.setCurrentWidget(self.protokol)
         self.message(f"Porovnáno {len(rozdily)} společných bodů, nevyhovuje {spatne}.", bool(spatne))
         return rozdily
 
@@ -778,6 +798,24 @@ class VypoctyPage(QWidget):
         d = TrimbleDialog(self, self)
         if modal:
             d.exec()
+        return d
+
+    def zkresleni_dialog(self, modal: bool = False):
+        """Zkreslení v Křovákově zobrazení: měřítkový koeficient ze souřadnic vztažného bodu (Groma)."""
+        from .krovak_dialog import ZkresleniDialog
+        d = getattr(self, "_zkresleni", None)
+        if d is None:
+            d = self._zkresleni = ZkresleniDialog(self)
+        vyb = self.selected()
+        if vyb and not d.bod.cislo.text().strip():
+            b = vyb[0]
+            d.bod.nastav(b.cislo, b.y, b.x, b.z)
+        d._ukaz_aktualni()
+        if modal:
+            d.exec()
+        else:
+            d.show()
+            d.raise_()
         return d
 
     def qtrig_dialog(self, klient=None):

@@ -26,6 +26,7 @@ class Vysledek:
     protokol: list[str]
     nove: list[Bod] = field(default_factory=list)
     vysky: dict[str, float] = field(default_factory=dict)  # výšky existujících bodů (nivelace) → Z v seznamu
+    data: dict = field(default_factory=dict)  # opravy apod. pro tabulky ve výpočetním okně (jako v Gromě)
 
 
 @dataclass
@@ -124,41 +125,105 @@ def u_smernik(s, h):
     return Vysledek(p)
 
 
+def _orientace_osnovy(s, h, st: Bod, k: float) -> tuple[float, list[tuple]]:
+    """Orientace osnovy na stanovisku jako v Gromě: řádky „bod směr [délka]“ (a pole o/so/od),
+    posun = průměr (směrník − směr) vážený délkami, opravy V or. [g] a V délky [m]."""
+    radky: list[tuple[Bod, float, float | None]] = []
+    if (h.get("o") or "").strip():
+        o = _bod(s, h, "o", "orientaci")
+        od = _cislo(h, "od", "délku na orientaci") if (h.get("od") or "").strip() else None
+        radky.append((o, _cislo(h, "so", "směr na orientaci"), od))
+    for i, line in enumerate((h.get("orientace") or "").splitlines(), 1):
+        p = line.replace(",", ".").split()
+        if not p:
+            continue
+        b = s.najdi(p[0])
+        if b is None:
+            raise ChybaVstupu(f"Orientace, řádek {i}: bod {p[0]} v seznamu souřadnic není.")
+        try:
+            smer = float(p[1])
+            dl = float(p[2]) if len(p) > 2 and p[2] not in ("-", "") else None
+        except (IndexError, ValueError):
+            raise ChybaVstupu(f"Orientace, řádek {i}: zadejte „bod směr [délka]“ (čísla).") from None
+        if all(b.cislo != r[0].cislo for r in radky):
+            radky.append((b, smer, dl))
+    if not radky:
+        raise ChybaVstupu("Zadejte orientaci: číslo orientačního bodu a měřený směr (nebo ho přetáhněte).")
+    for b, _sm, _d in radky:
+        _ruzne(st, b)
+    posuny = [V.norm_gon(V.smernik(st, b) - sm) for b, sm, _d in radky]
+    vahy = [math.hypot(b.y - st.y, b.x - st.x) for b, _sm, _d in radky]
+    ref = posuny[0]
+    posun = V.norm_gon(ref + sum(w * (((p - ref + 200) % 400) - 200) for p, w in zip(posuny, vahy)) / sum(vahy))
+    out = []
+    for (b, sm, dl), p, w in zip(radky, posuny, vahy):
+        out.append((b, sm, V.smernik(st, b), ((p - posun + 200) % 400) - 200, w, dl,
+                    None if dl is None else w - dl * k))
+    return posun, out
+
+
 def u_rajon(s, h):
-    st, o = _bod(s, h, "st", "stanovisko"), _bod(s, h, "o", "orientaci")
-    _ruzne(st, o)
-    so, sm, d = _cislo(h, "so", "směr na orientaci"), _cislo(h, "sm", "měřený směr"), _cislo(h, "d", "délku")
+    """Polární metoda (Groma): stanovisko, orientace (jedna i více, posun vážený délkami), určovaný bod.
+    Volby: výpočet ze směrníků (bez orientace), výpočet pro bodové pole (bod z každé orientace zvlášť)."""
+    st = _bod(s, h, "st", "stanovisko")
+    ze_smerniku = str(h.get("ze_smerniku") or "").startswith("ano")
+    pro_pole = str(h.get("bodove_pole") or "").startswith("ano")
+    sm, d = _cislo(h, "sm", "měřený směr"), _cislo(h, "d", "délku")
     if d <= 0:
         raise ChybaVstupu("Délka musí být kladná.")
     n = _nove_cislo(s, h)
     zen = (h.get("zenit") or "").strip()
     dh_trig = None
+    vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
     if zen:  # prostorová polární metoda: d je šikmá délka
         zg = _cislo(h, "zenit", "zenitový úhel")
-        vp = _cislo(h, "vp", "výšku přístroje") if (h.get("vp") or "").strip() else 0.0
         vc = _cislo(h, "vc", "výšku cíle") if (h.get("vc") or "").strip() else 0.0
         _hh, dh_trig = V.trigonometricka_vyska(0.0, d, zg, vp, vc)
         d = d * math.sin(V.gon2rad(zg))
     k, kor = _korekce([st])
     d_m, d = d, d * k
-    posun = V.norm_gon(V.smernik(st, o) - so)
-    sig = V.norm_gon(sm + posun)
+    prot = _hlavicka("Rajón (polární bod)")
+    prot.append(f"stanovisko {st.cislo}:  Y = {_f(st.y)}   X = {_f(st.x)}"
+                + (f"   Z = {_f(st.z)}" if st.z is not None else "") + (f", výška stroje {_f(vp)} m" if vp else ""))
+    prot += kor
+    data: dict = {}
+    if ze_smerniku:
+        posun, orient = 0.0, []
+        sig = V.norm_gon(sm)
+        prot.append("výpočet ze směrníků: zadaný směr je přímo směrník (bez orientace osnovy)")
+    else:
+        posun, orient = _orientace_osnovy(s, h, st, k)
+        prot += ["", "orientace osnovy:",
+                 f"  {'bod':<18} {'směr':>9} {'směrník':>9} {'V or.':>8} {'délka':>9} {'V délky':>8}"]
+        for b, smer, smk, v, _w, dl, vd in orient:
+            prot.append(f"  {b.cislo:<18} {smer:>9.4f} {smk:>9.4f} {v:>8.4f} "
+                        + (f"{dl:>9.3f} {vd:>8.3f}" if dl is not None else f"{'':>9} {'':>8}"))
+        prot.append(f"orientační posun {_f(posun, 4)} gon (vážený délkami)")
+        data["orientace"] = {b.cislo: (v, vd) for b, _sm, _smk, v, _w, _dl, vd in orient}
+        sig = V.norm_gon(sm + posun)
     p = V.rajon(st, sig, d)
+    if pro_pole and len(orient) > 1:
+        body = []
+        prot += ["", f"výpočet pro bodové pole – bod {n} z každé orientace zvlášť:"]
+        for b, smer, smk, _v, _w, _dl, _vd in orient:
+            pi = V.rajon(st, V.norm_gon(sm + V.norm_gon(smk - smer)), d)
+            body.append(pi)
+            prot.append(f"  orientace {b.cislo:<14} Y = {_f(pi.y)}   X = {_f(pi.x)}")
+        p = V.P(sum(q.y for q in body) / len(body), sum(q.x for q in body) / len(body))
+        prot.append(f"  průměr: rozdíly do {max(math.hypot(q.y - p.y, q.x - p.x) for q in body) * 1000:.0f} mm")
     z = None
     if st.z is not None and dh_trig is not None:
         z = st.z + dh_trig
     elif st.z is not None and (h.get("dh") or "").strip():
         z = st.z + _cislo(h, "dh", "převýšení")
-    prot = _hlavicka("Rajón (polární bod)")
-    prot += [f"stanovisko {st.cislo}, orientace na {o.cislo}: směrník {_f(V.smernik(st, o), 4)} gon, "
-             f"směr {_f(so, 4)} gon → posun {_f(posun, 4)} gon",
-             *kor,
-             f"bod {n}: směr {_f(sm, 4)} gon → směrník {_f(sig, 4)} gon, délka {_f(d_m)} m"
+    prot += ["", f"bod {n}: směr {_f(sm, 4)} gon → směrník {_f(sig, 4)} gon, délka {_f(d_m)} m"
              + (f" → {_f(d)} m" if kor else "") + (" (vodorovná ze šikmé a zenitu)" if zen else ""),
              *([f"  převýšení terén–terén {_f(dh_trig)} m (zakřivení a refrakce k = 0,13)"] if dh_trig is not None
                else []),
              f"  Y = {_f(p.y)}   X = {_f(p.x)}" + (f"   Z = {_f(z)}" if z is not None else "")]
-    return Vysledek(prot, [Bod(n, p.y, p.x, z, poznamka="rajón")])
+    kod = (h.get("kod") or "").strip()
+    data["bod"] = (n, p.y, p.x, z)
+    return Vysledek(prot, [Bod(n, p.y, p.x, z, kod, poznamka="rajón")], data=data)
 
 
 def u_vpred_uhly(s, h):
@@ -306,6 +371,10 @@ def u_volne(s, h):
     n = _nove_cislo(s, h)
     k, kor = _korekce([m[1] for m in mer] + [b for b, _s in jen_smery])
     mer = [(c, b, sm_, d_ * k) for c, b, sm_, d_ in mer]
+    vyp = str(h.get("vypocet") or "")
+    if vyp:  # Groma: Výpočet = podobnostní / shodnostní transformace, nebo vyrovnání jako vázaná síť
+        h = dict(h, metoda="MNČ" if "síť" in vyp or "MNČ" in vyp else "transformace",
+                 meritko="volné" if vyp.lower().startswith("podobnost") else "pevné (1)")
     mnc = bool(jen_smery) or str(h.get("metoda") or "").startswith("MNČ")
     if mnc:
         st_yx, posun, prot_mnc = _volne_mnc(n, mer, jen_smery)
@@ -341,7 +410,20 @@ def u_volne(s, h):
         z_st = sum(hs) / len(hs)
         rozp = max(hs) - min(hs)
         prot.append(f"  průměr H = {_f(z_st)} m, rozpětí {rozp * 1000:.0f} mm")
-    return Vysledek(prot, [Bod(n, vs_st.y, vs_st.x, z_st, poznamka="volné stanovisko")])
+    opravy = {}
+    if mer:
+        rows = [(c, hz, V.smernik(vs_st, b), math.hypot(b.y - vs_st.y, b.x - vs_st.x) - d_) for c, b, hz, d_ in mer]
+        ref = (rows[0][2] - rows[0][1]) % 400
+        posun_o = (ref + sum(((sm_ - hz - ref + 200) % 400) - 200 for _c, hz, sm_, _v in rows) / len(rows)) % 400
+        for c, hz, sm_, vd in rows:
+            opravy[c] = [((sm_ - hz - posun_o + 200) % 400) - 200, vd, None]
+    if z_st is not None:
+        for b, d_, z, vc in s_vyskou:
+            _h, dh = V.trigonometricka_vyska(0.0, d_, z, vp, vc)
+            opravy.setdefault(b.cislo, [None, None, None])[2] = (b.z - dh) - z_st
+    kod = (h.get("kod") or "").strip()
+    return Vysledek(prot, [Bod(n, vs_st.y, vs_st.x, z_st, kod, poznamka="volné stanovisko")],
+                    data={"opravy": opravy, "bod": (n, vs_st.y, vs_st.x, z_st)})
 
 
 def _orientace_volneho(n: str, st, mer: list) -> list[str]:
@@ -442,8 +524,10 @@ def u_transformace(s, h):
              f"měřítko {t.meritko:.8f}, otočení {_f(V.norm_gon(V.rad2gon(t.rotace)), 5)} gon, "
              f"posun Y {_f(t.t[0])} X {_f(t.t[1])}", "", "opravy na identických bodech:",
              "  bod                  vY [m]    vX [m]    vp [m]"]
+    opravy = {}
     for (b, _), (vy, vx) in zip(pary, t.opravy):
         prot.append(f"  {b.cislo:<18} {vy:>9.3f} {vx:>9.3f} {math.hypot(vy, vx):>9.3f}")
+        opravy[b.cislo] = (vy, vx, math.hypot(vy, vx))
     nove = []
     pre = (h.get("predpona") or "").strip()
     cil = _radky_bodu(s, h.get("transformovat") or "")
@@ -455,7 +539,7 @@ def u_transformace(s, h):
             y, x = t.preved_jung(b, zdroj) if jung else t.preved(b)
             nove.append(Bod(pre + b.cislo, y, x, b.z, b.kod, b.kvalita, "transformace"))
             prot.append(f"  {pre + b.cislo:<14} Y = {_f(y)}   X = {_f(x)}")
-    return Vysledek(prot, nove)
+    return Vysledek(prot, nove, data={"opravy": opravy})
 
 
 def u_vymera(s, h):
@@ -1607,12 +1691,17 @@ def u_prevod_uhlu(s, h):
 ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Směrník a délka", "Směrník, délka a souřadnicové rozdíly mezi dvěma body.",
      [Pole("a", "Bod A"), Pole("b", "Bod B")], u_smernik),
-    ("Rajón (polární bod)", "Nový bod ze stanoviska: orientace na známý bod, měřený směr a délka.",
-     [Pole("st", "Stanovisko"), Pole("o", "Orientace (bod)"), Pole("so", "Směr na orientaci [gon]", "gon"),
-      Pole("sm", "Měřený směr [gon]", "gon"), Pole("d", "Délka [m] (vodorovná; se zenitem šikmá)", "m"),
-      Pole("zenit", "Zenitový úhel [gon] (nepovinné – prostorová polární metoda)", "gon"),
-      Pole("vp", "Výška přístroje [m]", "m"), Pole("vc", "Výška cíle [m]", "m"),
-      Pole("dh", "Převýšení [m] (nepovinné, bez zenitu)", "m"), Pole("nove", "Číslo nového bodu", "text")], u_rajon),
+    ("Rajón (polární bod)", "Polární metoda: stanovisko, orientace osnovy (jeden i více bodů) a určovaný bod.",
+     [Pole("st", "Stanovisko"), Pole("vp", "Výška stroje [m]", "m"),
+      Pole("o", "Orientace (bod)"), Pole("so", "Směr na orientaci [gon]", "gon"),
+      Pole("od", "Délka na orientaci [m]", "m"),
+      Pole("orientace", "Další orientace (řádek: bod směr [délka])", "radky"),
+      Pole("nove", "Číslo určovaného bodu", "text"), Pole("kod", "Kód", "text"),
+      Pole("sm", "Směr [gon]", "gon"), Pole("d", "Délka [m] (vodorovná; se zenitem šikmá)", "m"),
+      Pole("dh", "Převýšení [m]", "m"), Pole("zenit", "Zenitový úhel [gon]", "gon"),
+      Pole("vc", "Výška signálu [m]", "m"),
+      Pole("ze_smerniku", "Výpočet ze směrníků", "volba", "ne", ("ne", "ano")),
+      Pole("bodove_pole", "Výpočet pro bodové pole", "volba", "ne", ("ne", "ano"))], u_rajon),
     ("Protínání vpřed z úhlů", "Bod z úhlů α (v A) a β (v B) měřených od základny A–B.",
      [Pole("a", "Bod A"), Pole("b", "Bod B"), Pole("alfa", "Úhel α [gon]", "gon"), Pole("beta", "Úhel β [gon]", "gon"),
       Pole("nove", "Číslo nového bodu", "text")], u_vpred_uhly),
@@ -1633,10 +1722,10 @@ ULOHY: list[tuple[str, str, list[Pole], object]] = [
     ("Volné stanovisko", "Stanovisko a orientace z ≥ 2 známých bodů (směr + délka), vyrovnání MNČ s opravami.",
      [Pole("mereni", "Měření (řádek: bod směr[gon] délka[m], nebo bod směr šikmá zenit [výška cíle])",
            "radky"),
-      Pole("meritko", "Měřítko", "volba", "pevné (1)", ("pevné (1)", "volné")),
-      Pole("metoda", "Výpočet", "volba", "transformace", ("transformace", "MNČ – směry a délky s váhami")),
-      Pole("vp", "Výška přístroje [m] (jen se zenity)", "m"),
-      Pole("nove", "Číslo stanoviska", "text")], u_volne),
+      Pole("vypocet", "Výpočet", "volba", "Podobnostní transformace",
+           ("Podobnostní transformace", "Shodnostní transformace", "Vyrovnání jako vázaná síť (MNČ)")),
+      Pole("vp", "Výška stroje [m]", "m"),
+      Pole("nove", "Číslo stanoviska", "text"), Pole("kod", "Kód", "text")], u_volne),
     ("Transformace", "Transformační klíč z identických bodů (shodnostní / podobnostní / afinní) s opravami; "
      "transformace dalších bodů.",
      [Pole("druh", "Druh", "volba", "podobnostní", ("shodnostní", "podobnostní", "afinní")),

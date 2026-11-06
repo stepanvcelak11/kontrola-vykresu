@@ -383,6 +383,7 @@ class ListaNastaveni(QWidget):
 
     hledej = Signal(str)
     uloha = Signal(str)  # přepnout / založit úlohu
+    vypocet_meritka = Signal()  # „⋮“ u měřítka: Zkreslení v Křovákově zobrazení
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -405,9 +406,11 @@ class ListaNastaveni(QWidget):
         self.kod_kvality.setToolTip("Kód kvality – podle něj se počítají mezní odchylky (bez platného kódu Groma "
                                     "předpokládá 3)")
         self.meritko = QDoubleSpinBox()
-        self.meritko.setDecimals(6)
+        self.meritko.setDecimals(12)
         self.meritko.setRange(0.99, 1.01)
         self.meritko.setSingleStep(0.00001)
+        self.meritko.setButtonSymbols(QDoubleSpinBox.NoButtons)
+        self.meritko.setMinimumWidth(130)
         self.meritko.setToolTip("Měřítkový koeficient – násobí měřené délky (zkreslení Křovákova zobrazení "
                                 "a nadmořská výška). 1,000000 = bez korekce.")
         self.najit = QLineEdit()
@@ -415,10 +418,18 @@ class ListaNastaveni(QWidget):
         self.najit.setMaximumWidth(120)
         self.najit.setClearButtonEnabled(True)
         self.najit.setToolTip("Najít bod v seznamu souřadnic podle čísla (vyhledává průběžně při psaní)")
+        from PySide6.QtWidgets import QToolButton
+        self.b_meritko = QToolButton()
+        self.b_meritko.setText("⋮")
+        self.b_meritko.setToolTip("Výpočet měřítka ze souřadnic: zkreslení v Křovákově zobrazení a oprava "
+                                  "z nadmořské výšky (jako v Gromě)")
+        self.b_meritko.clicked.connect(self.vypocet_meritka)
         for t, w in (("Kód kvality:", self.kod_kvality), ("Měřítko:", self.meritko), ("Najít bod:", self.najit)):
             lay.addSpacing(10)
             lay.addWidget(QLabel(t))
             lay.addWidget(w)
+            if w is self.meritko:
+                lay.addWidget(self.b_meritko)
         lay.addStretch(1)
         self.nacti()
         self.kod_kvality.currentIndexChanged.connect(self._uloz)
@@ -453,7 +464,7 @@ class ListaNastaveni(QWidget):
         for w in (self.kod_kvality, self.meritko):
             w.blockSignals(True)
         self.kod_kvality.setCurrentIndex(max(0, self.kod_kvality.findData(n.kod_kvality)))
-        self.meritko.setValue(n.meritko_rucne if n.meritko_rezim == "ručně" else 1.0)
+        self.meritko.setValue(n.koeficient() or 1.0)
         for w in (self.kod_kvality, self.meritko):
             w.blockSignals(False)
 
@@ -462,7 +473,7 @@ class ListaNastaveni(QWidget):
         from .nastaveni_vypoctu import uloz
         n = N.aktualni()
         n.kod_kvality = int(self.kod_kvality.currentData() or 3)
-        m = round(self.meritko.value(), 6)
+        m = round(self.meritko.value(), 12)
         if abs(m - 1.0) < 1e-9:
             if n.meritko_rezim == "ručně":
                 n.meritko_rezim = "bez korekce"
@@ -512,7 +523,8 @@ KARTY_GROMA = [
         ("Vytyčovací prvky", [("Polární", "Vytyčovací prvky"),
                               ("Ortogonální", ["Staničení a kolmice", "Bod ze staničení a kolmice"])]),
         ("Speciální", [("Rozložení oblouku", "Kružnicový oblouk"), ("Centrace", "Centrace směrů"),
-                       ("Křovák (WGS84)", "Převod S-JTSK ↔ WGS84"), ("Převod úhlů", "Převod úhlů"),
+                       ("Křovák", "@zkresleni_dialog"), ("S-JTSK ↔ WGS84", "Převod S-JTSK ↔ WGS84"),
+                       ("Převod úhlů", "Převod úhlů"),
                        ("Testování přesnosti", ["Kontrola dvou určení", "Testování přesnosti ÚM – body",
                                                 "Testování přesnosti ÚM – délky"])]),
     ]),
@@ -635,8 +647,9 @@ class PasGromy(QWidget):
         from PySide6.QtGui import QCursor
         m = QMenu(self)
         for w, t in ((p.seznam_okno, "Seznam souřadnic"), (p.zapisnik, "Seznam měření"), (p.grafika, "Grafika"),
-                     (p.protokol, "Protokol"), (p.ulohy, "Výpočetní okno")):
+                     (p.protokol, "Protokol")):
             m.addAction(t).triggered.connect(lambda _c=False, w=w: o.otevri(w))
+        m.addAction("Výpočetní okno").triggered.connect(p.ulohy.otevri)
         m.addSeparator()
         m.addAction("Srovnání ikon").triggered.connect(o.srovnej_ikony)
         m.addAction("Zavři aktivní okno").triggered.connect(o.zavri_aktivni)
@@ -662,5 +675,8 @@ def otevri_ulohu(page, i: int) -> None:
     ul = page.ulohy
     if ul.hledat.text():
         ul.hledat.clear()
+    if ul.lst.currentRow() == i and ul.isVisible():
+        ul.otevri()
+        return
     ul.lst.setCurrentRow(i)
-    page.tabs.otevri(ul)
+    ul.otevri()

@@ -341,9 +341,8 @@ class KokesPage(QWidget):
         if i is None:
             return False
         self.win.show_page("vypocty")
-        v.tabs.setCurrentWidget(v.ulohy)
-        v.ulohy.hledat.clear()
-        v.ulohy.lst.setCurrentRow(i)
+        from .groma_okna import otevri_ulohu
+        otevri_ulohu(v, i)
         return True
 
     def otevri_vfk(self, path: str | None = None):
