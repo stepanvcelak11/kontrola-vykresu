@@ -22,7 +22,7 @@ def test_nacteni_a_ulozeni():
     assert Z.nacti_zkratky(None)["F2"] == "úsečka"
     assert Z.nacti_zkratky("{rozbité")["F4"] == "polylinie"
     m = Z.nacti_zkratky(Z.uloz({"ctrl+f2": "prvek budovy", "F3": "", "": "x"}))
-    assert m == {"Ctrl+F2": "prvek budovy"}
+    assert {k: v for k, v in m.items() if k not in Z.LEVA_RUKA} == {"Ctrl+F2": "prvek budovy"}
     assert Z.nacti_aliasy(Z.uloz({"BU": "prvek budovy"})) == {"bu": "prvek budovy"}
 
 
@@ -64,7 +64,7 @@ def test_zkratky_v_cad(qapp, tmp_path, monkeypatch):
     c.novy()
     assert c.vlastni_zkratky["F2"] == "úsečka"
     keys = {sc.key().toString(QKeySequence.PortableText) for sc in c._zkratky_sc}
-    assert {"F2", "F4", "Ctrl+1"} <= keys and "F3" not in keys
+    assert {"F2", "F4", "Ctrl+1", "Shift+D", "Shift+A"} <= keys and "F3" not in keys
     c.zkratka("úsečka")
     assert c._prikaz == "úsečka" or c._gen is not None
     c.zrus()
@@ -98,3 +98,14 @@ def test_zkratky_v_cad(qapp, tmp_path, monkeypatch):
     c.proved("předvolba 3")
     assert "Předvolba 3 není" in c.historie.toPlainText()
     c.close()
+
+
+def test_leva_ruka_shift_pismena():
+    from kontrola.cad import zkratky as Z
+    m = Z.nacti_zkratky(None)
+    assert m["Shift+D"] == "smaž" and m["Shift+A"] == "úsečka" and m["F2"] == "úsečka"
+    # uložené vlastní zkratky levou ruku nepřebijí, jen doplní
+    m2 = Z.nacti_zkratky('{"Shift+D": "kopie"}')
+    assert m2["Shift+D"] == "kopie" and m2["Shift+Q"] == "zpět"
+    assert Z.je_pismeno_se_shiftem("shift+d") and not Z.je_pismeno_se_shiftem("Shift+F2")
+    assert Z.konflikty(Z.LEVA_RUKA) == []

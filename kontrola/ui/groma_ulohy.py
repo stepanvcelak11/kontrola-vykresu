@@ -403,13 +403,24 @@ def transformace(s: Stavitel):
     levy = s.pod(nadpis("Cílové souřadnice:"), cil, nadpis("Místní souřadnice:"), mis, None)
     prava = s.pod(tab, s.vedle(s.tlacitko("Přidat", pridat), s.tlacitko("Odebrat", tab.odeber)))
     s.pridej(s.oddil("Identické body:", s.vedle(levy, prava, natahnout=(2, 3)), natahnout=True), 1)
-    typ = Volba(["Shodnostní", "Podobnostní", "Afinní"], "Podobnostní")
+    typ = Volba(["Shodnostní", "Podobnostní", "Afinní", "Uživatelská"], "Podobnostní")
     s.p.inputs["druh"] = typ
+    ry = s.pole("rovnice_y", "sour", 200, "Rovnice pro Y' (proměnné Y, X), např. 0.99998*Y + 125.3")
+    rx = s.pole("rovnice_x", "sour", 200, "Rovnice pro X' (proměnné Y, X)")
+    rov = formular([("Y' =", ry), ("X' =", rx)], nahoru=False)
+    rov_w = s.pod(rov)
+    for b in typ.sk.buttons():
+        b.toggled.connect(lambda _c: rov_w.setVisible(typ.hodnota() == "uživatelská"))
+    rov_w.setVisible(False)
     pre = s.pole("predpona", "cislo", 60, "Předpona čísel transformovaných bodů", "T")
     volby = s.pod(s.prepinac("jung", "Jungova dotransformace", "Rozdělí opravy z identických bodů na transformované "
                                                                 "body (váhy 1/d²)"),
+                  s.prepinac("i_identicke", "Transformovat i identické body",
+                             "Transformované souřadnice i pro identické body (kontrola oprav)"),
+                  s.prepinac("inverzni", "Inverzní (zpětná) transformace",
+                             "Klíč z cílových do místních souřadnic – převod zpět"),
                   formular([("Předpona čísel:", pre)], nahoru=False))
-    s.pridej(s.vedle(s.oddil("Typ transformace:", typ), s.oddil("Volby:", volby), natahnout=(1, 2)))
+    s.pridej(s.vedle(s.oddil("Typ transformace:", typ, rov_w), s.oddil("Volby:", volby), natahnout=(1, 2)))
     from .ulohy import _Radky
     tr = _Radky()
     tr.setPlaceholderText("Čísla bodů k transformaci – přetáhněte je ze seznamu souřadnic")

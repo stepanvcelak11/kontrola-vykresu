@@ -3807,3 +3807,74 @@ def test_groma_vsechna_okna_uloh(window):
     assert u._tlacitka_ulozit[0].isEnabled() and u.pridej() == 1
     assert abs(v.seznam.najdi("610844000130004").z - 301.5) < 1e-9
     u.close()
+
+
+def test_dalsi_seznam_a_zpracovani_zapisniku(window):
+    """Víc seznamů souřadnic najednou (přetahování, hledání ve všech) a volby zpracování zápisníku."""
+    from kontrola.geodezie import nastaveni as N
+    from kontrola.geodezie.body import Bod
+    v = window.vypocty
+    v.seznam.pridej([Bod("1", 1000.0, 2000.0), Bod("2", 1100.0, 2000.0)], "test")
+    w = v.dalsi_seznam("Druhý")
+    assert w is not None and w in v.dalsi_seznamy and v.dalsi_seznam("Druhý") is w
+    w.seznam.pridej([Bod("77", 1050.0, 2050.0, 300.0)], "test")
+    w.obnov()
+    assert v.najdi_vsude("77").z == 300.0 and v.seznam.najdi("77") is None
+    # výpočet najde bod z dalšího seznamu
+    from kontrola.ui.groma_okna import otevri_ulohu
+    from kontrola.ui.ulohy import OKNA_ULOH
+    u = otevri_ulohu(v, [n for n, *_ in OKNA_ULOH].index("Směrník a délka"))
+    u.nastav(a="1", b="77")
+    r = u.vypocitej()
+    assert r is not None and "70.71" in "\n".join(r.protokol)
+    assert w.do_aktivniho() == 1 and v.seznam.najdi("77") is not None
+    w.table.selectRow(0)
+    # rozvržení se dvěma seznamy
+    assert v.dva_seznamy() is w
+    # návod a náčrt v okně úlohy
+    assert "Směrník" in u.navod.toPlainText()
+    u.show()
+    u.obnov_nacrt()
+    assert len(u.nacrt.body) == 2 and u.nacrt.cary
+    u.close()
+    # zpracování zápisníku: dialog uloží volby do nastavení
+    d = v.zpracovani_dialog(modal=False)
+    d.ch_refrakce.setChecked(False)
+    d.ch_polohy.setChecked(False)
+    d.uloz()
+    n = N.aktualni()
+    assert not n.zp_refrakce and not n.zp_polohy
+    zp = n.zpracovani()
+    assert not zp.refrakce and "jen I. poloha" in "; ".join(zp.popis())
+    n.zp_refrakce = n.zp_polohy = True
+
+
+def test_zpracovani_zapisniku_vypocet():
+    """Volby zpracování mění výpočet: bez refrakce a zakřivení jiné převýšení, vodorovné délky bez redukce."""
+    from kontrola.vypocet import Obs, Zpracovani, _dh, _merge_faces
+    o = Obs("5", 300.0, 1.5, 100.0, 98.0)
+    d1, h1 = _dh(o, 1.6, 1.0)
+    d2, h2 = _dh(o, 1.6, 1.0, Zpracovani(refrakce=False, zakriveni=False))
+    assert abs(d1 - d2) < 1e-12 and abs((h1 - h2) - d1 * d1 * 0.87 / (2 * 6380703.6105)) < 1e-9
+    d3, _ = _dh(o, 1.6, 1.0, Zpracovani(sikme=False))
+    assert d3 == 300.0
+    ob = [Obs("7", 50.0, 1.5, 10.0, 99.0), Obs("7", 50.02, 1.5, 210.004, 301.0)]
+    prumer = _merge_faces([Obs(**{k: getattr(x, k) for k in ("bod", "sd", "vc", "hz", "z")}) for x in ob])
+    jen1 = _merge_faces([Obs(**{k: getattr(x, k) for k in ("bod", "sd", "vc", "hz", "z")}) for x in ob], False)
+    assert len(prumer) == len(jen1) == 1
+    assert abs(prumer[0].hz - 10.002) < 1e-9 and jen1[0].hz == 10.0 and jen1[0].d_hz is not None
+
+
+def test_tolerance_vzorce_a_uzivatelska_transformace():
+    from kontrola.geodezie import nastaveni as N
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    from kontrola.geodezie.ulohy import u_transformace
+    assert N.vzorec("0.002*SQRT(s) + 0.04", s=100) == 0.06
+    assert N.vzorec("open('x')") is None
+    n = N.NastaveniVypoctu(tol_orient="0.02", tol_uhlovy="100*SQRT(n)")
+    assert n.mez_orientace() == 0.02 and abs(n.mez_polygonu(4, 500)[0] - 0.02) < 1e-12
+    s = SeznamBodu()
+    s.pridej([Bod("1", 100.0, 200.0)], "t")
+    v = u_transformace(s, {"druh": "uživatelská", "rovnice_y": "Y' = Y + 10", "rovnice_x": "2*X",
+                           "transformovat": "1", "predpona": "T"})
+    assert v.nove[0].cislo == "T1" and v.nove[0].y == 110.0 and v.nove[0].x == 400.0

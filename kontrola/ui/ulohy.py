@@ -19,12 +19,19 @@ globals().update({k: v for k, v in vars(_U).items() if k.startswith("_") and not
 class _SeznamSRucnimi:
     """Seznam souřadnic + body s ručně zapsanými souřadnicemi ve výpočetním okně (do seznamu se neukládají)."""
 
-    def __init__(self, seznam, extra):
+    def __init__(self, seznam, extra, dalsi=()):
         self._s = seznam
         self._e = {b.cislo: b for b in extra}
+        self._d = list(dalsi)  # další otevřené seznamy (hledání ve všech otevřených souborech jako v Gromě)
 
     def najdi(self, c):
-        return self._e.get(c) or self._s.najdi(c)
+        b = self._e.get(c) or self._s.najdi(c)
+        if b is None:
+            for d in self._d:
+                b = d.najdi(c)
+                if b is not None:
+                    break
+        return b
 
     @property
     def body(self):
@@ -234,7 +241,29 @@ class UlohyPanel(QWidget):
         self.split.setStretchFactor(1, 1)
         self.split.setChildrenCollapsible(True)
         self.split.setCollapsible(0, False)
-        lay.addWidget(self.split, 1)
+        # vpravo návod (ⓘ) a náčrt bodů úlohy (jako kontrolní kresba Gromy)
+        from .nacrt_ulohy import Nacrt
+        self.prava = QWidget()
+        pl = QVBoxLayout(self.prava)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(6)
+        self.navod = QTextBrowser()
+        self.navod.setObjectName("navod_ulohy")
+        self.navod.setOpenExternalLinks(False)
+        self.nacrt = Nacrt()
+        self.psplit = QSplitter(Qt.Vertical)
+        self.psplit.addWidget(self.navod)
+        self.psplit.addWidget(self.nacrt)
+        self.psplit.setChildrenCollapsible(False)
+        self.psplit.setSizes([300, 360])
+        pl.addWidget(self.psplit)
+        self.hsplit = QSplitter(Qt.Horizontal)
+        self.hsplit.addWidget(self.split)
+        self.hsplit.addWidget(self.prava)
+        self.hsplit.setStretchFactor(0, 3)
+        self.hsplit.setStretchFactor(1, 2)
+        self.hsplit.setChildrenCollapsible(False)
+        lay.addWidget(self.hsplit, 1)
         self.chyba = QLabel()
         self.chyba.setWordWrap(True)
         lay.addWidget(self.chyba)
@@ -270,6 +299,19 @@ class UlohyPanel(QWidget):
         row.addWidget(self.b_novy)
         row.addWidget(self.b_add)
         row.addStretch(1)
+        from PySide6.QtCore import QSettings
+        self.b_navod = QPushButton("ⓘ Návod")
+        self.b_navod.setCheckable(True)
+        self.b_navod.setToolTip("Krátký návod: co úloha počítá, co kam vyplnit a co znamenají pole")
+        self.b_nacrt = QPushButton("Náčrt")
+        self.b_nacrt.setCheckable(True)
+        self.b_nacrt.setToolTip("Náčrt bodů úlohy – modře dané body, červeně vypočtené (sever nahoře)")
+        self.b_navod.setChecked(QSettings().value("vypocty/navod", True, type=bool))
+        self.b_nacrt.setChecked(QSettings().value("vypocty/nacrt", True, type=bool))
+        self.b_navod.toggled.connect(lambda c: (QSettings().setValue("vypocty/navod", c), self._prava()))
+        self.b_nacrt.toggled.connect(lambda c: (QSettings().setValue("vypocty/nacrt", c), self._prava()))
+        row.addWidget(self.b_navod)
+        row.addWidget(self.b_nacrt)
         for w in (self.b_dalsi, self.b_prot, self.b_calc):
             row.addWidget(w)
         lay.addLayout(row)
@@ -290,7 +332,13 @@ class UlohyPanel(QWidget):
         self.b_prot.clicked.connect(self._ukaz_protokol)
         from .nastaveni_vypoctu import nacti
         nacti()
-        self.resize(720, 700)
+        from PySide6.QtCore import QTimer
+        self._nacrt_podpis = None
+        self._nacrt_timer = QTimer(self)
+        self._nacrt_timer.setInterval(600)
+        self._nacrt_timer.timeout.connect(self.obnov_nacrt)
+        self.resize(1040, 700)
+        self._prava()
         self.lst.setCurrentRow(0)
 
     # ------------------------------------------------------------ okno
@@ -319,6 +367,7 @@ class UlohyPanel(QWidget):
     def hideEvent(self, e):  # noqa: N802
         from PySide6.QtCore import QSettings
         QSettings().setValue(self.KLIC_GEOM, self.saveGeometry())
+        self._nacrt_timer.stop()
         super().hideEvent(e)
 
     def _ukaz_protokol(self):
@@ -340,9 +389,11 @@ class UlohyPanel(QWidget):
                            "(už vložené se nevkládají znovu).</span>")
         return v
 
-    def nastaveni_vypoctu(self, modal: bool = True):
-        from .nastaveni_vypoctu import NastaveniVypoctuDialog
+    def nastaveni_vypoctu(self, modal: bool = True, stranka: str | None = None):
+        from .nastaveni_vypoctu import STRANKY, NastaveniVypoctuDialog
         d = NastaveniVypoctuDialog(self)
+        if stranka in STRANKY:
+            d.zalozky.setCurrentRow(STRANKY.index(stranka))
         if modal and d.exec():
             self.chyba.setText("Nastavení výpočtů uloženo – použije se při dalším výpočtu.")
         return d
@@ -427,17 +478,67 @@ class UlohyPanel(QWidget):
             t.setEnabled(False)
         self.chyba.clear()
         self.vystup.clear()
+        from .napoveda_uloh import html as _navod
+        self.navod.setHtml(_navod(nazev, popis, pole))
+        self._nacrt_podpis = None
         self._rozdel()
+
+    def _prava(self):
+        """Pravý sloupec: návod a/nebo náčrt (tlačítka ⓘ Návod a Náčrt dole)."""
+        nv, nc = self.b_navod.isChecked(), self.b_nacrt.isChecked()
+        self.navod.setVisible(nv)
+        self.nacrt.setVisible(nc)
+        self.prava.setVisible(nv or nc)
+        if nc:
+            self._nacrt_podpis = None
+            self.obnov_nacrt()
+
+    def _cisla_zadani(self) -> list[str]:
+        """Čísla bodů v zadání (v pořadí polí): první slovo každého řádku každého pole."""
+        out = []
+        for v in self.hodnoty().values():
+            for r in str(v).splitlines():
+                t = r.replace(",", " ").replace(";", " ").split()
+                if t:
+                    out.append(t[0])
+        return out
+
+    def obnov_nacrt(self):
+        if not self.isVisible() or not self.nacrt.isVisible():
+            return
+        from .napoveda_uloh import NACRT
+        from .nacrt_ulohy import sestav
+        i = self.lst.currentRow()
+        nazev = OKNA_ULOH[i][0] if i >= 0 else ""
+        try:
+            cisla = self._cisla_zadani()
+        except Exception:  # noqa: BLE001 – náčrt nesmí rozbít okno
+            return
+        nove = list(self.vysledek.nove) if self.vysledek else []
+        podpis = (nazev, tuple(cisla), tuple((b.cislo, round(b.y, 3), round(b.x, 3)) for b in nove),
+                  len(self.page.seznam.body))
+        if podpis == self._nacrt_podpis:
+            return
+        self._nacrt_podpis = podpis
+        rucni = {b.cislo: b for bb in self._bodboxy.values() if (b := bb.rucni_bod()) is not None}
+        rucni.update(self._rucni)
+
+        def najdi(c):
+            return rucni.get(c) or self.page.seznam.najdi(c)
+        body, cary = sestav(cisla, najdi, nove, NACRT.get(nazev, "body"))
+        self.nacrt.nastav(body, cary)
+
+    def showEvent(self, e):  # noqa: N802
+        super().showEvent(e)
+        self._rozdel()
+        self._nacrt_timer.start()
+        self.obnov_nacrt()
 
     def _rozdel(self):
         """Zadání nahoře zabere většinu okna, výsledek dole je malý (celý protokol je v okně Protokol)."""
         t = max(self.split.height(), self.height() - 110, 300)
         dole = 140 if self.a_vystup.isChecked() else 0
         self.split.setSizes([t - dole, dole])
-
-    def showEvent(self, e):  # noqa: N802
-        super().showEvent(e)
-        self._rozdel()
 
     def _polarni_drop(self, md) -> bool:
         """Záměry ze zápisníku do Určovaného bodu: každá se hned spočte (jako přetažení v Gromě)."""
@@ -571,7 +672,8 @@ class UlohyPanel(QWidget):
             self._pred_vypoctem()
         rucni = list(self._rucni.values()) + [r for bb in self._bodboxy.values()
                                                if (r := bb.rucni_bod()) is not None]
-        seznam = _SeznamSRucnimi(self.page.seznam, rucni) if rucni else self.page.seznam
+        dalsi = [w.seznam for w in getattr(self.page, "dalsi_seznamy", [])]
+        seznam = _SeznamSRucnimi(self.page.seznam, rucni, dalsi) if (rucni or dalsi) else self.page.seznam
         try:
             self.vysledek = fn(seznam, self.hodnoty())
         except ChybaVstupu as e:
@@ -603,6 +705,7 @@ class UlohyPanel(QWidget):
             self._po_vypoctu(self.vysledek)
         if protokolovat:
             self.page.protokol_append(self.vysledek.protokol)
+        self.obnov_nacrt()
         return self.vysledek
 
     def pridej(self) -> int:

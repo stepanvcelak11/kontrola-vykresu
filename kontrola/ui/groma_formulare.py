@@ -8,7 +8,7 @@ zenit, výška cíle) – stejně jako v Gromě."""
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QCheckBox, QGridLayout, QHBoxLayout, QHeaderView,
+from PySide6.QtWidgets import (QStyledItemDelegate, QAbstractItemView, QButtonGroup, QCheckBox, QGridLayout, QHBoxLayout, QHeaderView,
                                QLabel, QLineEdit, QRadioButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 MIME_BODY = "application/x-kontrola-body"
@@ -217,7 +217,8 @@ class BodBox(QWidget):
 
     def _dopln(self):
         c = self.hodnota()
-        b = self.page.seznam.najdi(c) if c else None
+        najdi = getattr(self.page, "najdi_vsude", None) or self.page.seznam.najdi
+        b = najdi(c) if c else None
         if b is not None:
             self.nastav(b.cislo, b.y, b.x, b.z, b.kvalita)
             self._ze_seznamu = True
@@ -281,6 +282,14 @@ class BodBox(QWidget):
             e.acceptProposedAction()
 
 
+class _ElideVlevo(QStyledItemDelegate):
+    """Dlouhé číslo bodu: vidět je konec (číslo bez předčíslí); čísla v ostatních sloupcích se zkracují vpravo."""
+
+    def initStyleOption(self, opt, idx):  # noqa: N802
+        super().initStyleOption(opt, idx)
+        opt.textElideMode = Qt.ElideLeft
+
+
 class TabulkaRadku(QTableWidget):
     """Tabulka řádků zadání (orientace, měření, identické body). Prvních ``vstup`` sloupců je zadání,
     zbylé sloupce jsou výsledky (opravy) – vyplní je výpočet. Hodnota pro výpočet = řádky textu."""
@@ -292,13 +301,13 @@ class TabulkaRadku(QTableWidget):
         self.verticalHeader().setVisible(False)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setAlternatingRowColors(True)
-        self.setTextElideMode(Qt.ElideLeft)  # dlouhá čísla bodů: vidět je konec (číslo bodu bez předčíslí)
+        self.setTextElideMode(Qt.ElideRight)
+        self.setItemDelegateForColumn(0, _ElideVlevo(self))  # číslo bodu: vidět je konec bez předčíslí
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DropOnly)
         h = self.horizontalHeader()
-        h.setSectionResizeMode(QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(0, QHeaderView.Stretch)
-        h.setMinimumSectionSize(60)
+        h.setSectionResizeMode(QHeaderView.Stretch)  # všechny sloupce se vejdou i do úzkého okna
+        h.setMinimumSectionSize(44)
         self.setMinimumHeight(110)
         self.pri_pretazeni = None  # callback(mime) → True, když přetažení zpracoval
 

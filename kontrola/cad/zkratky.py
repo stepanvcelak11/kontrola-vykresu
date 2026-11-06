@@ -38,6 +38,25 @@ VYCHOZI: dict[str, str] = {
     **{f"Ctrl+{i}": f"předvolba {i}" for i in range(1, 10)},
 }
 
+# levá ruka (jako WASD ve hrách): Shift + písmena kolem W A S D – ruka zůstane na klávesnici, pravá na myši.
+# V textovém poli (příkazový řádek, popis) Shift + písmeno píše dál velké písmeno.
+LEVA_RUKA: dict[str, str] = {
+    "Shift+D": "smaž",  # D = Delete
+    "Shift+Q": "zpět",
+    "Shift+E": "vpřed",
+    "Shift+W": "celý",
+    "Shift+A": "úsečka",
+    "Shift+S": "polylinie",
+    "Shift+C": "kopie",
+    "Shift+V": "posun",
+    "Shift+R": "otoč",
+    "Shift+F": "rovnoběžka",
+    "Shift+X": "ořež",
+    "Shift+G": "prodluž",
+    "Shift+T": "text",
+    "Shift+Z": "předchozí pohled",
+}
+
 VYCHOZI_ALIASY: dict[str, str] = {}
 
 
@@ -74,7 +93,17 @@ def uloz(mapa: dict[str, str]) -> str:
 
 
 def nacti_zkratky(text: str | None) -> dict[str, str]:
-    return {normalizuj_klavesu(k): v for k, v in nacti(text, VYCHOZI).items() if normalizuj_klavesu(k)}
+    """Uložené zkratky (nebo výchozí) doplněné o zkratky pro levou ruku, pokud je uživatel nepřepsal."""
+    mapa = {normalizuj_klavesu(k): v for k, v in nacti(text, VYCHOZI).items() if normalizuj_klavesu(k)}
+    for k, v in LEVA_RUKA.items():
+        mapa.setdefault(normalizuj_klavesu(k), v)
+    return mapa
+
+
+def je_pismeno_se_shiftem(klavesa: str) -> bool:
+    """Shift + písmeno: v textovém poli má psát velké písmeno, ne spouštět příkaz."""
+    k = normalizuj_klavesu(klavesa)
+    return k.startswith("Shift+") and len(k) == 7 and k[-1].isalpha()
 
 
 def nacti_aliasy(text: str | None) -> dict[str, str]:

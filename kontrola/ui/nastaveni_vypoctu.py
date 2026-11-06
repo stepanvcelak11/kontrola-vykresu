@@ -42,6 +42,8 @@ FORMATY_MERENI = {
     "S předčíslím": "<NUM:10> <HZ:10> <D:10> <DH:10> <SIG:8>",
     "Sdílený s předčíslím": "<NUM:12> <HZ:10> <D:10> <DH:10> <SIG:8>",
 }
+TOL_KLICE = ("min_uhel", "orient", "orient_delka", "orient_prev", "dvakrat_delka", "uhlovy", "polohova", "tr_m0",
+             "tr_meritko")
 TOLERANCE = {  # uživatelské tolerance Gromy (min. úhel, orientace, polygon, transformace)
     "1 - Velmi přesné měření": ("30.0000", "0.0100", "0.001*SQRT(s) + 0.02", "0.00*SQRT(s) + 0.05",
                                 "0.000*SQRT(s) + 0.030", "40.00*SQRT(n + 0.00)", "", "0.07", ""),
@@ -381,6 +383,9 @@ class NastaveniVypoctuDialog(QDialog):
         lv.addLayout(b)
         u.addLayout(lv, 0, 0)
         self.tol_pole = [QLineEdit() for _ in range(9)]
+        for e in self.tol_pole:
+            e.setToolTip("Vzorec jako v Gromě: s = délka [m], n = počet vrcholů, např. 0.002*SQRT(s) + 0.04. "
+                         "Platí, když není zaškrtnuto testování podle předpisů pro katastr.")
         pv = QVBoxLayout()
         pv.addWidget(_skupina("Jednotlivé výpočty:", _formular(
             ("Minimální úhel protnutí\nu průsečíku a protínání:", self.tol_pole[0]))))
@@ -402,6 +407,15 @@ class NastaveniVypoctuDialog(QDialog):
         self.tol_seznam.currentTextChanged.connect(self._vyber_toleranci)
         i = self.tol_seznam.findItems(self.tol_nazev.text(), Qt.MatchExactly)
         self.tol_seznam.setCurrentItem(i[0] if i else self.tol_seznam.item(2))
+        ulozene = [getattr(self._n, "tol_" + k) for k in TOL_KLICE]
+        if any(ulozene):  # naposledy uložené hodnoty (i ručně upravené)
+            for e, t in zip(self.tol_pole, ulozene):
+                e.setText(t)
+        pozn = QLabel("Je-li zaškrtnuto testování podle předpisů pro katastr, platí mezní odchylky z vyhlášky "
+                      "(kód kvality). Jinak se použijí tyto uživatelské tolerance – prázdné pole = předpis.")
+        pozn.setWordWrap(True)
+        pozn.setObjectName("stranka_info")
+        v.addWidget(pozn)
 
     def _vyber_toleranci(self, nazev: str):
         if nazev in TOLERANCE:
@@ -473,8 +487,16 @@ class NastaveniVypoctuDialog(QDialog):
         g.addWidget(_skupina("Teodolit:", QLabel("Název:"), self.pristroj, sez, b), 0, 0, 2, 1, Qt.AlignTop)
         modra, fial = _tint("modra"), _tint("fialova")
 
+        self.teo: dict[str, QLineEdit] = {}
+
         def pole(k, d, styl):
-            e = self._ed(k, d, 70)
+            if hasattr(self._n, k):  # hodnoty, které používá výpočet (podezřelé / chybné měření)
+                e = QLineEdit(f"{getattr(self._n, k):.4f}" if k.startswith(("kol", "idx")) else
+                              f"{getattr(self._n, k):.3f}")
+                e.setFixedWidth(70)
+                self.teo[k] = e
+            else:
+                e = self._ed(k, d, 70)
             e.setAlignment(Qt.AlignRight)
             e.setStyleSheet(styl)
             return e
@@ -639,7 +661,26 @@ class NastaveniVypoctuDialog(QDialog):
             sigma_smer_mgon=self.s_smer.value(), sigma_delka_mm=self.s_a.value(), sigma_delka_ppm=self.s_b.value(),
             meritko_rezim=self.m_rezim.currentText(), meritko_rucne=self.m_rucne.value(),
             vyska_rezim=self.v_rezim.currentText(), vyska=self.vyska.value(), ppm_fyzikalni=self.ppm.value(),
-            polygon_trida=self.p_trida.currentIndex() + 1, desetiny=self.desetiny.value())
+            polygon_trida=self.p_trida.currentIndex() + 1, desetiny=self.desetiny.value(),
+            **self._zpracovani(), **self._teodolit_hodnoty(), **self._tolerance_hodnoty())
+
+    def _zpracovani(self) -> dict:
+        from dataclasses import fields as _f
+        return {f.name: getattr(self._n, f.name) for f in _f(self._n)
+                if f.name.startswith(("zp_", "k_refrakce", "prumer_max"))}
+
+    def _teodolit_hodnoty(self) -> dict:
+        out = {}
+        for k, e in self.teo.items():
+            try:
+                out[k] = abs(float(e.text().replace(",", ".")))
+            except ValueError:
+                out[k] = getattr(self._n, k)
+        return out
+
+    def _tolerance_hodnoty(self) -> dict:
+        kat = self.ucel.isChecked()
+        return {"tol_" + k: ("" if kat else e.text().strip()) for k, e in zip(TOL_KLICE, self.tol_pole)}
 
     def parametry(self) -> dict:
         d = dict(self._ulozene)

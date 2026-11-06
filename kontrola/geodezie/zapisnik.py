@@ -45,13 +45,14 @@ def zapis_zap(stations: list[Station], zakazka: str = "") -> str:
     return "\n".join(r) + "\n"
 
 
-def pro_vypocet(stations: list[Station]) -> list[Station]:
-    """Kopie stanovisek se zprůměrovanými polohami dalekohledu (vstup výpočtu polární metody)."""
+def pro_vypocet(stations: list[Station], prumer: bool = True) -> list[Station]:
+    """Kopie stanovisek se zprůměrovanými polohami dalekohledu (vstup výpočtu polární metody);
+    ``prumer=False`` – jen I. poloha (rozdíly poloh se přesto zkontrolují)."""
     out = []
     for st in stations:
         c = Station(st.bod, st.vp)
-        c.orient = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z) for o in st.orient])
-        c.detail = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z) for o in st.detail])
+        c.orient = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z) for o in st.orient], prumer)
+        c.detail = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z) for o in st.detail], prumer)
         out.append(c)
     return out
 

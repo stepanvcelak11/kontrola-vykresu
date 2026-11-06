@@ -85,14 +85,51 @@ class Result:
     prumery: list[dict] = field(default_factory=list)  # body určené dvakrát a uložené jako průměr (jako Groma)
 
 
+@dataclass
+class Zpracovani:
+    """Volby zpracování zápisníku (Groma: Měření → Zpracování zápisníku, Nastavení → Teodolit)."""
+    polohy: bool = True  # zprůměrovat I. a II. polohu dalekohledu (jinak se použije I. poloha)
+    sikme: bool = True  # délky jsou šikmé → redukce na vodorovné; False = stanice už uložila vodorovné
+    refrakce: bool = True
+    zakriveni: bool = True
+    k_refrakce: float = 0.13
+    obousmerne: bool = True  # obousměrně měřené délky → průměr tam a zpět
+    vahy: str = "délka"  # váhy orientací: „délka“ nebo „1“
+    prumer_kontrolnich: bool = True
+    prumer_max_xy: float = 0.350
+    prumer_max_z: float = 0.350
+    kol_p: float = 0.0100  # kolimační chyba: podezřelá / chybná [g]
+    kol_ch: float = 0.0400
+    idx_p: float = 0.0200  # indexová chyba [g]
+    idx_ch: float = 0.0500
+    md_p: float = 0.020  # oprava délky ze dvou poloh [m]
+    md_ch: float = 0.030
+
+    def popis(self) -> list[str]:
+        r = ["měření v I. a II. poloze " + ("zprůměrována" if self.polohy else "nezprůměrována (jen I. poloha)"),
+             "délky " + ("šikmé → redukce na vodorovné" if self.sikme else "vodorovné (redukované stanicí)")]
+        opr = [t for t, z in (("zakřivení Země", self.zakriveni), (f"refrakce k = {self.k_refrakce:.2f}",
+                                                                    self.refrakce)) if z]
+        r.append("převýšení opravena o " + " a ".join(opr) if opr else "převýšení bez opravy ze zakřivení a refrakce")
+        if not self.obousmerne:
+            r.append("obousměrně měřené délky se neprůměrují")
+        if self.vahy != "délka":
+            r.append("orientace se stejnou vahou")
+        return r
+
+
+VYCHOZI_ZPRACOVANI = Zpracovani()
+
+
 # Groma (Nastavení → Výpočty, školní Groma.ini PntAverage_maxVXY / maxVZ): bod se stejným číslem se uloží
 # jako průměr, pokud se obě určení neliší víc než o tuto mez [m]
 PRUMER_MAX_VXY = 0.350
 PRUMER_MAX_VZ = 0.350
 
 
-def _merge_faces(obs: list[Obs]) -> list[Obs]:
-    """Měření stejného bodu ve dvou polohách dalekohledu (za sebou) se zprůměrují."""
+def _merge_faces(obs: list[Obs], prumer: bool = True) -> list[Obs]:
+    """Měření stejného bodu ve dvou polohách dalekohledu (za sebou) se zprůměrují; ``prumer=False`` ponechá
+    první (I.) polohu a rozdíly poloh jen zaznamená (kontrola)."""
     out: list[Obs] = []
     for o in obs:
         prev = out[-1] if out else None
@@ -106,6 +143,8 @@ def _merge_faces(obs: list[Obs]) -> list[Obs]:
                 prev.index_z = (o.z + prev._z_raw - 400.0) / 2.0 if o.z > 200 >= prev._z_raw else None
                 prev.d_sd = o.sd - prev.sd
             n = prev.n
+            if not prumer:
+                continue
             prev.hz = (prev.hz + d / (n + 1)) % 400.0
             prev.z = (prev.z * n + z2) / (n + 1)
             prev.sd = (prev.sd * n + o.sd) / (n + 1)
@@ -181,15 +220,24 @@ def _find(known: dict[str, ListPoint], name: str) -> ListPoint | None:
     return None
 
 
-def _dh(o: Obs, vp: float, m: float) -> tuple[float, float]:
+def _dh(o: Obs, vp: float, m: float, zp: Zpracovani | None = None) -> tuple[float, float]:
     """(vodorovná délka v zobrazení, převýšení terén–terén)."""
-    d = o.sd * math.sin(o.z * GON)
-    dh = o.sd * math.cos(o.z * GON) + vp - o.vc
-    dh += d * d * (1.0 - K_REFR) / (2.0 * R_EARTH)
+    zp = zp or VYCHOZI_ZPRACOVANI
+    if zp.sikme:
+        d = o.sd * math.sin(o.z * GON)
+        dh = o.sd * math.cos(o.z * GON) + vp - o.vc
+    else:  # stanice uložila vodorovnou délku: převýšení = d·cotg z
+        d = o.sd
+        sz = math.sin(o.z * GON)
+        dh = (d * math.cos(o.z * GON) / sz if abs(sz) > 1e-12 else 0.0) + vp - o.vc
+    k = (1.0 if zp.zakriveni else 0.0) - (zp.k_refrakce if zp.refrakce else 0.0)
+    dh += d * d * k / (2.0 * R_EARTH)
     return d * m, dh
 
 
-def compute(stations: list[Station], known_points: list[ListPoint], koeficient: float | None = None) -> Result:
+def compute(stations: list[Station], known_points: list[ListPoint], koeficient: float | None = None,
+            zp: Zpracovani | None = None) -> Result:
+    zp = zp or VYCHOZI_ZPRACOVANI
     known = {p.cislo: p for p in known_points}
     msgs: list[str] = []
     st_pts: dict[str, Point] = {}
@@ -221,7 +269,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         for o in st.orient + st.detail:
             kp = known.get(o.bod) or (_find(known, o.bod) if re.search(r"[A-Za-z]", o.bod) else None)
             if kp is not None and kp.z and re.search(r"[A-Za-z]", o.bod):
-                _, dh = _dh(o, st.vp, 1.0)
+                _, dh = _dh(o, st.vp, 1.0, zp)
                 sp.z = kp.z - dh
                 msgs.append(f"Výška stanoviska {st.bod} z nivelačního bodu {o.bod}: "
                             f"{kp.z:.3f} − ({dh:.3f}) = {sp.z:.3f} m")
@@ -240,9 +288,9 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             zpet = next((o for o in st.orient + st.detail if short_numbers(o.bod) & short_numbers(other.bod)), None)
             vals = []
             if tam is not None:
-                vals.append(_dh(tam, other.vp, 1.0)[1])
+                vals.append(_dh(tam, other.vp, 1.0, zp)[1])
             if zpet is not None:
-                vals.append(-_dh(zpet, st.vp, 1.0)[1])
+                vals.append(-_dh(zpet, st.vp, 1.0, zp)[1])
             if vals:
                 sp.z = op.z + sum(vals) / len(vals)
                 msgs.append(f"Výška stanoviska {st.bod} z {other.bod} (převýšení "
@@ -257,10 +305,10 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         for b in stations[i + 1:]:
             tam = next((o for o in a.orient + a.detail if short_numbers(o.bod) & short_numbers(b.bod)), None)
             zpet = next((o for o in b.orient + b.detail if short_numbers(o.bod) & short_numbers(a.bod)), None)
-            if tam is None or zpet is None or tam.sd <= 0 or zpet.sd <= 0:
+            if tam is None or zpet is None or tam.sd <= 0 or zpet.sd <= 0 or not zp.obousmerne:
                 continue
-            d1, h1 = _dh(tam, a.vp, m)
-            d2, h2 = _dh(zpet, b.vp, m)
+            d1, h1 = _dh(tam, a.vp, m, zp)
+            d2, h2 = _dh(zpet, b.vp, m, zp)
             rec = {"a": a.bod, "b": b.bod, "d_tam": d1, "d_zpet": d2, "d_rozdil": d1 - d2, "d": (d1 + d2) / 2,
                    "dh_tam": h1, "dh_zpet": h2, "dh_rozdil": h1 + h2, "dh": (h1 - h2) / 2}
             obousmerne.append(rec)
@@ -291,15 +339,16 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             smer = (math.atan2(dy, dx) / GON) % 400.0
             posun = (smer - o.hz) % 400.0
             w = math.hypot(dy, dx)
-            rows.append((o.bod, posun, w))
+            rows.append((o.bod, posun, w if zp.vahy == "délka" else 1.0))
             # výška orientačního bodu: u jiného stanoviska jeho vypočtená výška (z nivelace), jinak daná
             zst = next((p.z for p in st_pts.values() if p.stanovisko == "niv"
                         and short_numbers(p.bod) & short_numbers(o.bod)), None)
             orow = {"bod": o.bod, "hz": o.hz, "smernik": smer, "delka": w, "kp": kp, "v_delky": None,
                     "v_prev": None, "obs": o, "z": zst if zst is not None else kp.z}
             orient_rows.append(orow)
+            w = orow["delka"]
             if o.sd > 0.5:  # délka na orientaci ověří, že jde opravdu o daný bod
-                dm, dh_o = _dh(o, st.vp, m)
+                dm, dh_o = _dh(o, st.vp, m, zp)
                 ob = next((v for k, v in prumer_d.items() if k[0] == st.bod
                            and short_numbers(k[1]) & short_numbers(o.bod)), None)
                 if ob is not None:
@@ -324,31 +373,36 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             den += w
         posun = (ref + num / den) % 400.0
         posuny[st.bod] = posun
-        for b, p_, w in rows:
+        for (b, p_, _w), orw in zip(rows, orient_rows):
             v = ((p_ - posun + 200) % 400) - 200
-            lin = abs(v) * GON * w
+            lin = abs(v) * GON * orw["delka"]
             kontroly.append(Kontrola("Oprava orientace", st.bod, b, f"{v * 10000:+.0f} cc ({lin * 1000:.0f} mm)",
                                      lin <= 0.03, "oprava směru na orientaci vůči průměrnému posunu; "
                                      "velká oprava = chybná orientace nebo souřadnice orientačního bodu"))
         for o in st.orient + st.detail:
-            if o.d_hz is not None and abs(o.d_hz) > 0.01:
+            # Groma (Teodolit): oprava = polovina rozdílu poloh; nad „podezřelé“ = ?, nad „chybné“ = x
+            if o.d_hz is not None and abs(o.d_hz) / 2 > zp.kol_p:
+                ch = abs(o.d_hz) / 2 > zp.kol_ch
                 kontroly.append(Kontrola("Dvě polohy – Hz", st.bod, o.bod, f"{o.d_hz * 10000:+.0f} cc", False,
-                                         "rozdíl směru v I. a II. poloze je velký (> 100 cc) – špatně zacílený "
-                                         "bod nebo chyba v zápisníku"))
-            if o.d_sd is not None and abs(o.d_sd) > 0.01:
+                                         f"{'chybné' if ch else 'podezřelé'} měření: oprava kolimační chyby "
+                                         f"{abs(o.d_hz) / 2:.4f} g > {zp.kol_ch if ch else zp.kol_p:.4f} g "
+                                         "(Nastavení → Teodolit) – špatně zacílený bod nebo chyba v zápisníku"))
+            if o.d_sd is not None and abs(o.d_sd) / 2 > zp.md_p:
+                ch = abs(o.d_sd) / 2 > zp.md_ch
                 kontroly.append(Kontrola("Dvě polohy – délka", st.bod, o.bod, f"{o.d_sd * 1000:+.0f} mm", False,
-                                         "délky v I. a II. poloze se liší o víc než 1 cm"))
+                                         f"{'chybné' if ch else 'podezřelé'} měření: oprava délky "
+                                         f"{abs(o.d_sd) / 2:.3f} m > {zp.md_ch if ch else zp.md_p:.3f} m"))
         idx = [o.index_z for o in st.orient + st.detail if o.index_z is not None]
         if idx:
             mi = sum(idx) / len(idx)
-            kontroly.append(Kontrola("Indexová chyba z", st.bod, "", f"{mi * 10000:+.0f} cc", abs(mi) < 0.01,
+            kontroly.append(Kontrola("Indexová chyba z", st.bod, "", f"{mi * 10000:+.0f} cc", abs(mi) < zp.idx_p,
                                      f"průměr z {len(idx)} měření ve dvou polohách; zprůměrováním poloh se "
                                      "vyloučí"))
         vv = [((p_ - posun + 200) % 400) - 200 for _b, p_, _w in rows]
         nn = len(vv)
-        for orow, v in zip(orient_rows, vv):
+        for orow, v, r_ in zip(orient_rows, vv, rows):
             orow["v_or"] = v
-            orow["vaha"] = orow["delka"] / den if den else 0.0
+            orow["vaha"] = r_[2] / den if den else 0.0
         st_rec = {"stanovisko": st.bod, "y": sp.y, "x": sp.x, "z": sp.z, "vp": st.vp, "posun": posun,
                   "m0": math.sqrt(sum(v * v for v in vv) / (nn - 1)) if nn > 1 else None,
                   "m_posun": math.sqrt(sum(v * v for v in vv) / (nn * (nn - 1))) if nn > 1 else None,
@@ -357,7 +411,7 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         msgs.append(f"Stanovisko {st.bod}: orientační posun {posun:.4f} g ("
                     + ", ".join(f"{b} v={(((p_ - posun + 200) % 400) - 200):+.4f} g" for b, p_, _ in rows) + ")")
         for o in st.detail:
-            d, dh = _dh(o, st.vp, m)
+            d, dh = _dh(o, st.vp, m, zp)
             sigma = (posun + o.hz) % 400.0
             y = sp.y + d * math.sin(sigma * GON)
             x = sp.x + d * math.cos(sigma * GON)
@@ -383,7 +437,8 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             continue
         dxy = math.hypot(b.y - prev.y, b.x - prev.x)
         dz = (b.z - prev.z) if (b.z is not None and prev.z is not None) else None
-        ok = dxy <= PRUMER_MAX_VXY and (dz is None or abs(dz) <= PRUMER_MAX_VZ)
+        ok = (zp.prumer_kontrolnich and dxy <= zp.prumer_max_xy
+              and (dz is None or abs(dz) <= zp.prumer_max_z))
         zaznam = {"bod": b.bod, "stary": (prev.y, prev.x, prev.z), "novy": (b.y, b.x, b.z),
                   "stanovisko": b.stanovisko, "dxy": dxy, "dz": dz, "prumer": ok}
         if ok:  # jako Groma: uloží se průměr obou určení
@@ -395,8 +450,9 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         kontroly.append(Kontrola("Kontrolní určení", f"{prev.stanovisko} / {b.stanovisko}", b.bod,
                                  f"{dxy * 1000:.0f} mm" + (f", výška {dz * 1000:+.0f} mm" if dz is not None else ""),
                                  ok, "rozdíl dvou určení téhož bodu z různých stanovisek; "
-                                 + (f"uložen průměr (do {PRUMER_MAX_VXY:.2f} m jako v Gromě)" if ok else
-                                    f"víc než {PRUMER_MAX_VXY:.2f} m – průměr se neukládá, zkontrolujte číslo bodu")))
+                                 + (f"uložen průměr (do {zp.prumer_max_xy:.2f} m jako v Gromě)" if ok else
+                                    "průměrování vypnuto (Zpracování zápisníku)" if not zp.prumer_kontrolnich else
+                                    f"víc než {zp.prumer_max_xy:.2f} m – průměr se neukládá, zkontrolujte číslo bodu")))
     return Result(body, st_pts, m, msgs, kontroly, posuny, protokol, obousmerne, prumery)
 
 

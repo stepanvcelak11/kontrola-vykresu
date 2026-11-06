@@ -59,27 +59,33 @@ class ZapisnikPanel(QWidget):
         self.soubor: Path | None = None
         self.vysledek = None
         self._plneni = False
+        self.setProperty("kompaktni", True)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setSpacing(4)
         from .flow import RadekTlacitek
         bar = RadekTlacitek()  # v úzkém okně se zalomí
         self.b_nacist = QPushButton("Načíst…")
         self.b_nacist.setToolTip("Zápisník Gromy (.zap) nebo Leica GSI")
-        self.b_ulozit = QPushButton("Uložit .zap…")
+        self.b_ulozit = QPushButton("Uložit…")
         self.b_st = QPushButton("+ Stanovisko")
         self.b_zam = QPushButton("+ Záměra")
         self.b_smaz = QPushButton("Smazat")
-        self.b_vyp = QPushButton("Vypočítat (polární metoda)")
+        self.b_vyp = QPushButton("Vypočítat polární")
         self.b_vyp.setProperty("primarni", True)
-        self.b_vyr = QPushButton("Vyrovnat síť (MNČ)…")
+        self.b_vyp.setToolTip("Vypočítat body zápisníku polární metodou (orientace ze seznamu souřadnic)")
+        self.b_vyr = QPushButton("Síť MNČ…")
         self.b_vyr.setToolTip("Vyrovnání sítě ze všech směrů a délek zápisníku; pevné body ze seznamu souřadnic")
-        self.b_do = QPushButton("Do seznamu bodů")
+        self.b_zprac = QPushButton("Zpracování…")
+        self.b_zprac.setToolTip("Jak zpracovat měření: průměr I. a II. polohy, šikmé / vodorovné délky, zakřivení "
+                                "Země a refrakce, obousměrné délky, tolerance podezřelých a chybných měření")
+        self.b_do = QPushButton("Do seznamu")
         self.b_do.setEnabled(False)
         # skupiny: soubor | úpravy | výpočet (mezera mezi skupinami)
         for i, sk in enumerate(((self.b_nacist, self.b_ulozit), (self.b_st, self.b_zam, self.b_smaz),
-                                (self.b_vyp, self.b_vyr, self.b_do))):
+                                (self.b_zprac, self.b_vyp, self.b_vyr, self.b_do))):
             if i:
-                bar.addSpacing(14)
+                bar.addSpacing(8)
             for b in sk:
                 bar.addWidget(b)
         bar.addStretch(1)
@@ -138,6 +144,7 @@ class ZapisnikPanel(QWidget):
         self.b_st.clicked.connect(self.pridej_stanovisko)
         self.b_zam.clicked.connect(lambda: self.pridej_zameru())
         self.b_smaz.clicked.connect(self.smaz)
+        self.b_zprac.clicked.connect(lambda: self.page.zpracovani_dialog())
         self.b_vyp.clicked.connect(self.vypocitej)
         self.b_do.clicked.connect(self.do_seznamu)
         self.b_vyr.clicked.connect(lambda: self.vyrovnat())
@@ -298,9 +305,10 @@ class ZapisnikPanel(QWidget):
         if not dane:
             self.info.setText("⚠ V seznamu souřadnic nejsou dané body – importujte je na záložce Seznam souřadnic.")
             return None
-        st = Z.pro_vypocet(self.stanoviska)
         from ..geodezie.nastaveni import aktualni
         nast = aktualni()
+        zp = nast.zpracovani()  # volby Zpracování zápisníku (polohy, refrakce, zakřivení, šikmé délky …)
+        st = Z.pro_vypocet(self.stanoviska, zp.polohy)
         koef = nast.koeficient()  # měřítko z lišty nastavení (jako v Gromě – jedno pro všechny délky)
         if koef is None or nast.vyska_rezim != "bez redukce" or abs(nast.ppm_fyzikalni) > 0:
             zn = {b.cislo: b for b in self.page.seznam.body}
@@ -310,11 +318,13 @@ class ZapisnikPanel(QWidget):
                 koef, _ = nast.faktor_delky(sum(b.y for b in sb) / len(sb), sum(b.x for b in sb) / len(sb),
                                             sum(zz) / len(zz) if zz else None)
         try:
-            self.vysledek = compute(st, dane, koeficient=koef)
+            self.vysledek = compute(st, dane, koeficient=koef, zp=zp)
         except Exception as e:  # noqa: BLE001 – výpočet nesmí shodit aplikaci
             self.info.setText(f"⚠ Výpočet se nepovedl: {e}")
             return None
         text = protokol_polarni(self.vysledek, st, dane, soubor_mereni=self.soubor.name if self.soubor else "")
+        if zp != type(zp)():  # nestandardní zpracování → poznamenat do protokolu
+            text = "Zpracování zápisníku: " + "; ".join(zp.popis()) + "\n" + text
         self.vystup.setPlainText(text)
         self.page.protokol_append(text.splitlines())
         nove = [b for b in self.vysledek.body if not b.kontrolni]

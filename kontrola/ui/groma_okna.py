@@ -383,19 +383,32 @@ class ListaNastaveni(QWidget):
 
     hledej = Signal(str)
     uloha = Signal(str)  # přepnout / založit úlohu
-    vypocet_meritka = Signal()  # „⋮“ u měřítka: Zkreslení v Křovákově zobrazení
+    vypocet_meritka = Signal()  # tlačítko u měřítka: Zkreslení v Křovákově zobrazení
+    nastaveni = Signal()  # ozubené kolo: Nastavení parametrů (jako v Gromě)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("lista_nastaveni")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        lay = QHBoxLayout(self)
+        from .flow import RadekTlacitek
+        lay = RadekTlacitek(self)  # v úzkém okně (notebook 150 %) se lišta zalomí do dvou řádků
         lay.setContentsMargins(10, 5, 10, 5)
         lay.setSpacing(6)
+        from PySide6.QtWidgets import QToolButton
+        self.b_nastaveni = QToolButton()
+        self.b_nastaveni.setText("⚙ Nastavení")
+        self.b_nastaveni.setObjectName("lista_tlacitko")
+        self.b_nastaveni.setToolTip("Nastavení parametrů výpočtů: zpracování zápisníku, tolerance (mezní odchylky), "
+                                    "přístroj, redukce délek, desetinná místa …")
+        self.b_nastaveni.clicked.connect(self.nastaveni)
+        lay.addWidget(self.b_nastaveni)
+        lay.addSpacing(6)
         self.ulohy = QComboBox()
         self.ulohy.setToolTip("Rozpracovaná úloha – každá má svůj seznam souřadnic, zápisník a protokol "
                               "(jako soubory v Gromě). Poslední položka založí novou.")
-        self.ulohy.setMinimumWidth(150)
+        self.ulohy.setMinimumWidth(110)
+        self.ulohy.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.ulohy.setMinimumContentsLength(9)
         self.ulohy.activated.connect(self._vyber_ulohy)
         lay.addWidget(QLabel("Úloha:"))
         lay.addWidget(self.ulohy)
@@ -403,13 +416,15 @@ class ListaNastaveni(QWidget):
         from PySide6.QtCore import QSettings
         self.predcisli = QComboBox()
         self.predcisli.setEditable(True)
-        self.predcisli.setMinimumWidth(120)
+        self.predcisli.setMinimumWidth(90)
+        self.predcisli.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.predcisli.setMinimumContentsLength(6)  # dlouhá hodnota nesmí roztáhnout lištu
         self.predcisli.setToolTip("Předčíslí (k.ú. + ZPMZ) – doplní se k číslům bodů zadaným bez předčíslí a "
                                   "předvyplní se u nových bodů ve výpočetních oknech (jako v Gromě)")
         self.predcisli.addItem(str(QSettings().value("vypocty/predcisli", "") or ""))
         self.predcisli.currentTextChanged.connect(
             lambda t: QSettings().setValue("vypocty/predcisli", t.strip()))
-        lay.addSpacing(10)
+        lay.addSpacing(6)
         lay.addWidget(QLabel("Předčíslí:"))
         lay.addWidget(self.predcisli)
         self.kod_kvality = QComboBox()
@@ -422,23 +437,24 @@ class ListaNastaveni(QWidget):
         self.meritko.setRange(0.99, 1.01)
         self.meritko.setSingleStep(0.00001)
         self.meritko.setButtonSymbols(QDoubleSpinBox.NoButtons)
-        self.meritko.setMinimumWidth(130)
+        self.meritko.setMinimumWidth(118)
         self.meritko.setToolTip("Měřítkový koeficient – násobí měřené délky (zkreslení Křovákova zobrazení "
                                 "a nadmořská výška). 1,000000 = bez korekce.")
         self.najit = QLineEdit()
-        self.najit.setPlaceholderText("číslo bodu")
-        self.najit.setMaximumWidth(120)
+        self.najit.setPlaceholderText("🔍 najít bod")
+        self.najit.setMaximumWidth(105)
         self.najit.setClearButtonEnabled(True)
         self.najit.setToolTip("Najít bod v seznamu souřadnic podle čísla (vyhledává průběžně při psaní)")
-        from PySide6.QtWidgets import QToolButton
         self.b_meritko = QToolButton()
-        self.b_meritko.setText("⋮")
+        self.b_meritko.setText("Z bodů…")
+        self.b_meritko.setObjectName("lista_tlacitko")
         self.b_meritko.setToolTip("Výpočet měřítka ze souřadnic: zkreslení v Křovákově zobrazení a oprava "
                                   "z nadmořské výšky (jako v Gromě)")
         self.b_meritko.clicked.connect(self.vypocet_meritka)
-        for t, w in (("Kód kvality:", self.kod_kvality), ("Měřítko:", self.meritko), ("Najít bod:", self.najit)):
-            lay.addSpacing(10)
-            lay.addWidget(QLabel(t))
+        for t, w in (("Kvalita:", self.kod_kvality), ("Měřítko:", self.meritko), ("", self.najit)):
+            lay.addSpacing(6)
+            if t:
+                lay.addWidget(QLabel(t))
             lay.addWidget(w)
             if w is self.meritko:
                 lay.addWidget(self.b_meritko)
@@ -502,11 +518,11 @@ KARTY_GROMA = [
                     ("Načíst z QTrig…", "@qtrig_dialog")]),
         ("Import", [("Trimble (File and Report)…", "@trimble_dialog")]),
         ("Editace", [("Krok zpět", "@undo"), ("Krok vpřed", "@redo"), ("Odstranit", "@delete_selected")]),
-        ("Seznam", [("Přidej bod…", "@add_point"), ("Hromadné změny…", "@bulk_dialog"),
+        ("Seznam", [("Další seznam souřadnic…", "@dalsi_seznam"), ("Přidej bod…", "@add_point"), ("Hromadné změny…", "@bulk_dialog"),
                     ("Porovnání souřadnic…", "@porovnat_seznam"), ("Identické body…", "@duplicates_dialog")]),
         ("Kódování", [("Kresba z kódů…", "@kresba_z_kodu"), ("Kódovací tabulka…", "@otevri_kodovnik")]),
-        ("Nastavení", [("Nastavení…", "@_nastaveni")]),
-        ("Pohledy", [("Výchozí rozvržení", "@_vychozi"), ("Okna / záložky", "@_rezim"), ("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
+        ("Nastavení", [("Nastavení…", "@_nastaveni"), ("Tolerance…", "@_tolerance"), ("Teodolit…", "@_teodolit")]),
+        ("Pohledy", [("Výchozí rozvržení", "@_vychozi"), ("Dva seznamy", "@dva_seznamy"), ("Okna / záložky", "@_rezim"), ("Mozaika horizontálně", "@_mozaika_h"), ("Mozaika vertikálně", "@_mozaika_v"),
                      ("Kaskáda", "@_kaskada"), ("Okna", "@okna")]),
     ]),
     ("Protokol", [
@@ -644,7 +660,9 @@ class PasGromy(QWidget):
             "@_vychozi": o.vychozi_rozvrzeni, "@_rezim": o.prepni_rezim, "@_mozaika_h": o.mozaika_vodorovne, "@_mozaika_v": o.mozaika_svisle, "@_kaskada": o.cascadeSubWindows,
             "@okna": lambda: self._menu_oken(), "@_protokol": lambda: o.otevri(p.protokol),
             "@_protokol_pdf": p.ulohy.protokol_pdf, "@_zapisnik": lambda: o.otevri(p.zapisnik),
-            "@_zpracovani": lambda: getattr(p.win, "show_vypocet", lambda: None)(),
+            "@_zpracovani": lambda: p.zpracovani_dialog(),
+            "@_tolerance": lambda: (p.ulohy.nastaveni_vypoctu(stranka="Tolerance"), p.lista.nacti()),
+            "@_teodolit": lambda: (p.ulohy.nastaveni_vypoctu(stranka="Teodolit"), p.lista.nacti()),
         }
         return vlastni.get(cil) or getattr(p, cil[1:], None)
 
@@ -655,6 +673,8 @@ class PasGromy(QWidget):
         for w, t in ((p.seznam_okno, "Seznam souřadnic"), (p.zapisnik, "Seznam měření"), (p.grafika, "Grafika"),
                      (p.protokol, "Protokol")):
             m.addAction(t).triggered.connect(lambda _c=False, w=w: o.otevri(w))
+        for w in getattr(p, "dalsi_seznamy", []):
+            m.addAction(f"Seznam souřadnic – {w.nazev}").triggered.connect(lambda _c=False, w=w: o.otevri(w))
         m.addAction("Výpočetní okno").triggered.connect(p.ulohy.otevri)
         m.addSeparator()
         m.addAction("Srovnání ikon").triggered.connect(o.srovnej_ikony)

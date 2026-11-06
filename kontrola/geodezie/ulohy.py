@@ -173,8 +173,10 @@ def _orientace_osnovy(s, h, st: Bod, k: float) -> tuple[float, list[tuple]]:
 
 
 def _mez_orient_delky(d: float) -> float:
-    """Mezní oprava orientační délky v testu polární metody (Groma, katastr): 0,10 + 0,012·√d [m]."""
-    return 0.10 + 0.012 * math.sqrt(d)
+    """Mezní oprava orientační délky v testu polární metody (Groma, katastr): 0,10 + 0,012·√d [m]; uživatelská
+    tolerance z Nastavení → Tolerance má přednost."""
+    from .nastaveni import aktualni
+    return aktualni().mez_orient_delky(d)
 
 
 def _prot_orientace_groma(st: Bod, orient: list, posun: float) -> list[str]:
@@ -207,8 +209,10 @@ def _prot_orientace_groma(st: Bod, orient: list, posun: float) -> list[str]:
             out.append(f"Oprava orientační délky na bod {b.cislo:>15} [m]: Skutečná hodnota: {vd:>9.3f}, "
                        f"Mezní hodnota: {mez:>9.3f}")
     vmax = max(vv, key=abs)
-    ok &= abs(vmax) <= 0.08
-    out.append(f"Oprava orientace {'':29}[g]: Skutečná hodnota: {vmax:>8.4f}, Mezní hodnota: {0.08:>8.4f}")
+    from .nastaveni import aktualni
+    mez_o = aktualni().mez_orientace()
+    ok &= abs(vmax) <= mez_o
+    out.append(f"Oprava orientace {'':29}[g]: Skutečná hodnota: {vmax:>8.4f}, Mezní hodnota: {mez_o:>8.4f}")
     out.append("Mezní odchylky stanovené pro práci v katastru nemovitostí byly dodrženy." if ok else
                "Mezní odchylky stanovené pro práci v katastru nemovitostí byly PŘEKROČENY.")
     return out
@@ -572,10 +576,17 @@ def u_transformace(s, h):
             pary.append((b, (yy, xx)))
         except ValueError:
             raise ChybaVstupu(f"Řádek {i}: souřadnice musí být čísla.") from None
-    druh = {"shodnostní": "shodnostni", "podobnostní": "podobnostni", "afinní": "afinni"}.get(
-        h.get("druh") or "podobnostní")
+    druh = {"shodnostní": "shodnostni", "podobnostní": "podobnostni", "afinní": "afinni",
+            "uživatelská": "uzivatelska"}.get((h.get("druh") or "podobnostní").lower())
     if druh is None:
-        raise ChybaVstupu("Zvolte druh transformace: shodnostní, podobnostní nebo afinní.")
+        raise ChybaVstupu("Zvolte druh transformace: shodnostní, podobnostní, afinní nebo uživatelská.")
+    if druh == "uzivatelska":
+        return _transformace_uzivatelska(s, h)
+    if (h.get("inverzni") or "").startswith("ano"):  # zpětná: klíč z cílových do místních
+        inv = []
+        for b, (yy, xx) in pary:
+            inv.append((Bod(b.cislo, yy, xx, b.z), (b.y, b.x)))
+        pary = inv
     try:
         t = V.transformace([b for b, _ in pary], [c for _, c in pary], druh)
     except ValueError as e:
@@ -585,6 +596,15 @@ def u_transformace(s, h):
              f"měřítko {t.meritko:.8f}, otočení {_f(V.norm_gon(V.rad2gon(t.rotace)), 5)} gon, "
              f"posun Y {_f(t.t[0])} X {_f(t.t[1])}", "", "opravy na identických bodech:",
              "  bod                  vY [m]    vX [m]    vp [m]"]
+    from .nastaveni import aktualni
+    _n = aktualni()
+    tm0, tmer = _n.tolerance("tr_m0"), _n.tolerance("tr_meritko")
+    if tm0 is not None:
+        prot.append(f"test: střední chyba klíče {_f(t.m0)} m, mezní {_f(tm0)} m"
+                    + ("" if t.m0 <= tm0 else "  ← PŘEKROČENA"))
+    if tmer is not None and druh != "shodnostni":
+        prot.append(f"test: změna měřítka {abs(t.meritko - 1):.6f}, mezní ±{tmer:g}"
+                    + ("" if abs(t.meritko - 1) <= tmer else "  ← PŘEKROČENA"))
     opravy = {}
     for (b, _), (vy, vx) in zip(pary, t.opravy):
         prot.append(f"  {b.cislo:<18} {vy:>9.3f} {vx:>9.3f} {math.hypot(vy, vx):>9.3f}")
@@ -592,6 +612,9 @@ def u_transformace(s, h):
     nove = []
     pre = (h.get("predpona") or "").strip()
     cil = _radky_bodu(s, h.get("transformovat") or "")
+    if (h.get("i_identicke") or "").startswith("ano"):
+        mam = {b.cislo for b in cil}
+        cil = [b for b, _c in pary if b.cislo not in mam] + cil
     jung = (h.get("jung") or "").startswith("ano")
     if cil:
         prot += ["", "transformované body" + (" (s Jungovou dotransformací, váhy 1/d²):" if jung else ":")]
@@ -601,6 +624,29 @@ def u_transformace(s, h):
             nove.append(Bod(pre + b.cislo, y, x, b.z, b.kod, b.kvalita, "transformace"))
             prot.append(f"  {pre + b.cislo:<14} Y = {_f(y)}   X = {_f(x)}")
     return Vysledek(prot, nove, data={"opravy": opravy})
+
+
+def _transformace_uzivatelska(s, h):
+    """Uživatelská transformace (Groma): rovnice Y' = f(Y, X), X' = g(Y, X) bez identických bodů."""
+    from .nastaveni import vzorec
+    ry = (h.get("rovnice_y") or "").split("=")[-1].strip()
+    rx = (h.get("rovnice_x") or "").split("=")[-1].strip()
+    if not ry or not rx:
+        raise ChybaVstupu("Uživatelská transformace: zapište rovnice Y' = … a X' = … (proměnné Y, X; "
+                          "např. 0.99998*Y + 125.3).")
+    cil = _radky_bodu(s, h.get("transformovat") or "")
+    if not cil:
+        raise ChybaVstupu("Zadejte body k transformaci.")
+    pre = (h.get("predpona") or "").strip()
+    prot = _hlavicka("Transformace uživatelská") + [f"Y' = {ry}", f"X' = {rx}", "", "transformované body:"]
+    nove = []
+    for b in cil:
+        y, x = vzorec(ry, y=b.y, x=b.x), vzorec(rx, y=b.y, x=b.x)
+        if y is None or x is None:
+            raise ChybaVstupu("Rovnice nejdou vyhodnotit – použijte čísla, Y, X, + − * / a SQRT().")
+        nove.append(Bod(pre + b.cislo, y, x, b.z, b.kod, b.kvalita, "transformace"))
+        prot.append(f"  {pre + b.cislo:<14} Y = {_f(y)}   X = {_f(x)}")
+    return Vysledek(prot, nove, data={"opravy": {}})
 
 
 def u_vymera(s, h):

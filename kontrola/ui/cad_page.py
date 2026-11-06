@@ -967,11 +967,24 @@ class CadPage(QWidget):
                 continue
             sc = QShortcut(QKeySequence(k), self)
             sc.setContext(Qt.WidgetWithChildrenShortcut)
-            sc.activated.connect(lambda p=prikaz: self.zkratka(p))
+            sc.activated.connect(lambda p=prikaz, k=k: self.zkratka(p, k))
             self._zkratky_sc.append(sc)
 
-    def zkratka(self, prikaz: str) -> None:
-        """Klávesová zkratka: spustí příkaz (běžící nástroj se ukončí jako v MicroStationu)."""
+    def zkratka(self, prikaz: str, klavesa: str = "") -> None:
+        """Klávesová zkratka: spustí příkaz (běžící nástroj se ukončí jako v MicroStationu).
+        Shift + písmeno v textovém poli (příkazový řádek, popis) napíše velké písmeno."""
+        from ..cad import zkratky as Z
+        if klavesa and Z.je_pismeno_se_shiftem(klavesa):
+            from PySide6.QtWidgets import QAbstractSpinBox, QApplication, QLineEdit, QPlainTextEdit, QTextEdit
+            f = QApplication.focusWidget()
+            if isinstance(f, QAbstractSpinBox):
+                f = f.findChild(QLineEdit)
+            if isinstance(f, QLineEdit) and not f.isReadOnly():
+                f.insert(klavesa[-1].upper())
+                return
+            if isinstance(f, (QPlainTextEdit, QTextEdit)) and not f.isReadOnly():
+                f.insertPlainText(klavesa[-1].upper())
+                return
         if self.dok is None and not prikaz.lower().startswith(("otevři", "o ", "zkratky")):
             self.vypis("Nejdřív otevřete výkres nebo začněte nový.")
             return

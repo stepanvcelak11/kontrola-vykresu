@@ -349,8 +349,10 @@ class VypoctyPage(QWidget):
         lay.addWidget(self.tabs, 1)
         seznam_w = QWidget()
         outer = lay
+        seznam_w.setProperty("kompaktni", True)  # malá tlačítka – vejde se i na notebook se zvětšením 150 %
         lay = QVBoxLayout(seznam_w)
-        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setContentsMargins(6, 4, 6, 4)
+        lay.setSpacing(4)
         from .flow import RadekTlacitek
         bar = RadekTlacitek()  # v úzkém okně (notebook, zvětšení 150 %) se zalomí
         self.b_import = QPushButton("Import…")
@@ -380,25 +382,30 @@ class VypoctyPage(QWidget):
         for b in (self.b_import, self.b_export, self.b_porovnat, self.b_qtrig, self.b_add, self.b_del, self.b_bulk, self.b_dup, self.b_undo,
                   self.b_redo, self.b_polar, self.b_kody, self.b_kodovnik):
             bar.addWidget(b)
-        bar.addStretch(1)
-        lay.addLayout(bar)
+        lay.addLayout(bar)  # skrytá tlačítka (jsou v menu) – řádek nezabírá místo
         for b in (self.b_import, self.b_export, self.b_porovnat, self.b_qtrig, self.b_bulk, self.b_dup,
                   self.b_polar, self.b_kody, self.b_kodovnik):
             b.hide()  # jsou v menu (Soubor, Souřadnice, Měření) jako v Gromě
-        frow = QHBoxLayout()
+        frow = RadekTlacitek()  # v úzkém okně (dva seznamy vedle sebe) se zalomí
         self.search = QLineEdit()
         self.search.setPlaceholderText("Hledat číslo, kód, poznámku…")
         self.search.setClearButtonEnabled(True)
         self.kody = QComboBox()
         self.kody.setToolTip("Jen body s tímto kódem")
+        self.kody.setMaximumWidth(140)
+        self.search.setMinimumWidth(110)
         self.des = QSpinBox()
         self.des.setRange(0, 6)
-        self.des.setPrefix("desetinná místa: ")
+        self.des.setPrefix("des. ")
+        self.des.setFixedWidth(92)
         self.des.setToolTip("Jen zobrazení a export – výpočty počítají s plnou přesností")
         self.count = QLabel()
+        for b in (self.b_add, self.b_del, self.b_undo, self.b_redo):
+            frow.addWidget(b)  # jeden řádek: tlačítka + hledání (víc místa pro tabulku)
+        frow.addSpacing(6)
         for w in (self.search, self.kody, self.des, self.count):
             frow.addWidget(w)
-        frow.setStretch(0, 1)
+        self.search.setMinimumWidth(150)
         lay.addLayout(frow)
         self.model = BodyModel(self.seznam, self)
         self.proxy = BodyFilter(self)
@@ -423,6 +430,7 @@ class VypoctyPage(QWidget):
         lay.addWidget(self.table, 1)
         self.msg = QLabel()
         self.msg.setWordWrap(True)
+        self.msg.setMaximumHeight(36)  # dlouhé hlášky zkrácené (celé v bublině a v protokolu)
         lay.addWidget(self.msg)
         # jako v Gromě: protokol, souřadnice a měření pod sebou; grafika a výpočetní okno na vyžádání
         self.protokol = OknoProtokolu()
@@ -439,6 +447,7 @@ class VypoctyPage(QWidget):
         from .ulohy import UlohyPanel
         self.ulohy = UlohyPanel(self)  # samostatné okno úlohy jako v Gromě (ne uvnitř plochy oken)
         self.okna_uloh = [self.ulohy]  # víc výpočetních oken najednou (otevri_ulohu)
+        self.dalsi_seznamy: list = []  # další otevřené seznamy souřadnic (dalsi_seznam.py)
         self.tabs.vychozi = (seznam_w, self.zapisnik, self.protokol)
         self.menu = postav_menu(self)
         outer.insertWidget(0, self.menu)
@@ -459,6 +468,7 @@ class VypoctyPage(QWidget):
         self.lista.hledej.connect(self._najdi_bod)
         self.lista.uloha.connect(self.prepni_ulohu)
         self.lista.vypocet_meritka.connect(lambda: self.zkresleni_dialog())
+        self.lista.nastaveni.connect(lambda: (self.ulohy.nastaveni_vypoctu(), self.lista.nacti()))
         self.tabs.currentChanged.connect(lambda i: [o._completer_model.setStringList(
             [b.cislo for b in self.seznam.body]) for o in self.okna_uloh])
         lay = outer
@@ -543,6 +553,12 @@ class VypoctyPage(QWidget):
 
     def set_project(self, project) -> None:
         self._save_timer.stop()
+        for w in getattr(self, "dalsi_seznamy", []):  # další seznamy patří ke starému projektu
+            sub = self.tabs.okno(w)
+            if sub is not None:
+                sub.hide()
+        if hasattr(self, "dalsi_seznamy"):
+            self.dalsi_seznamy.clear()
         self._root = Path(project.root) if project is not None else None
         self.uloha = ""
         self._nacti_slozku(self._root / "vypocty" if self._root is not None else None)
@@ -664,9 +680,57 @@ class VypoctyPage(QWidget):
         self.model.des_xy = self.model.des_z = d
         self.model.layoutChanged.emit()
 
+    def najdi_vsude(self, cislo: str):
+        """Bod v aktivním seznamu, jinak v dalších otevřených seznamech (jako Groma „Hledat ve všech“)."""
+        b = self.seznam.najdi(cislo)
+        if b is None:
+            for w in self.dalsi_seznamy:
+                b = w.seznam.najdi(cislo)
+                if b is not None:
+                    break
+        return b
+
+    def dalsi_seznam(self, nazev: str | None = None):
+        """Otevře další seznam souřadnic vedle aktivního (nový nebo uložený v projektu)."""
+        from .dalsi_seznam import otevri_dalsi
+        return otevri_dalsi(self, nazev)
+
+    def dva_seznamy(self):
+        """Rozvržení se dvěma seznamy: aktivní vlevo, další vpravo, zápisník a protokol pod nimi."""
+        w = self.dalsi_seznamy[0] if self.dalsi_seznamy else self.dalsi_seznam("Seznam 2")
+        if w is None:
+            return None
+        t = self.tabs
+        from PySide6.QtWidgets import QMdiArea
+        if t.viewMode() != QMdiArea.SubWindowView:
+            t.nastav_rezim("okna")
+        r = t.viewport().rect()
+        g, sl, rh = 4, r.width() // 2, int(r.height() * 0.6)
+        for obsah, geo in ((self.seznam_okno, (g, g, sl - 2 * g, rh - g)),
+                           (w, (sl, g, r.width() - sl - g, rh - g)),
+                           (self.zapisnik, (g, rh + g, sl - 2 * g, r.height() - rh - 2 * g)),
+                           (self.protokol, (sl, rh + g, r.width() - sl - g, r.height() - rh - 2 * g))):
+            sub = t.okno(obsah)
+            if sub is not None:
+                sub.show()
+                sub.showNormal()
+                sub.setGeometry(*geo)
+        return w
+
+    def zpracovani_dialog(self, modal: bool = True):
+        """Zpracování zápisníku (jako Groma Měření → Zpracování zápisníku): polohy, refrakce, zakřivení …"""
+        from .zpracovani_dialog import ZpracovaniDialog
+        z = self.zapisnik
+        d = ZpracovaniDialog(self, prepocitat=(lambda: z.vypocitej()) if z.stanoviska else None)
+        if modal:
+            d.exec()
+        return d
+
     def message(self, text: str, warn: bool = False):
         col = "#B45309" if warn else "gray"
-        self.msg.setText(f"<span style='color:{col}'>{text}</span>")
+        kratky = text if len(text) <= 160 else text[:157].rsplit(" ", 1)[0] + " …"
+        self.msg.setText(f"<span style='color:{col}'>{kratky}</span>")
+        self.msg.setToolTip(text if kratky != text else "")
 
     def _vyber_z_grafiky(self, cisla: list[str]):
         """Body vybrané v grafice → vybrat i v tabulce."""

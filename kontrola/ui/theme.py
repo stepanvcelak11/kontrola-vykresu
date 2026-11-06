@@ -250,6 +250,14 @@ QPushButton[primarni="true"] {{ background: qlineargradient(x1:0, y1:0, x2:0, y2
     color: white; border-color: {ACCENT_HOVER}; font-weight: 700; }}
 QPushButton[primarni="true"]:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[primarni="true"]:disabled {{ background: #93C5FD; border-color: #93C5FD; color: white; }}
+QWidget[kompaktni="true"] QPushButton {{ padding: 2px 9px; min-height: 18px; border-radius: 6px; }}
+QWidget[kompaktni="true"] QLineEdit, QWidget[kompaktni="true"] QComboBox, QWidget[kompaktni="true"] QSpinBox,
+QWidget[kompaktni="true"] QDoubleSpinBox {{ padding-top: 2px; padding-bottom: 2px; min-height: 18px; }}
+QToolButton#lista_tlacitko {{ padding: 3px 8px; border: 1px solid {BORDER_STRONG}; border-radius: 6px;
+    background: {PANEL}; color: {TEXT}; font-weight: 600; }}
+QToolButton#lista_tlacitko:hover {{ background: {ACCENT_SOFT}; border-color: {ACCENT}; }}
+QTextBrowser#navod_ulohy {{ background: #FFFBEB; color: #1C1917; border: 1px solid #F2C94C; border-radius: 6px;
+    padding: 4px; }}
 QPushButton[uspech="true"] {{ background: #16A34A; color: white; border-color: #15803D; font-weight: 700; }}
 QPushButton[uspech="true"]:hover {{ background: #15803D; }}
 QFrame#dlazdice {{ border: 1px solid {BORDER}; border-radius: 10px; background: {PANEL}; }}

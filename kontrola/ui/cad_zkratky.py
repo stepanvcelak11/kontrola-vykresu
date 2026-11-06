@@ -47,7 +47,9 @@ class ZkratkyDialog(QDialog):
         uvod = QLabel("Klávesa spustí libovolný řádek příkazu – nástroj („úsečka“), příkaz s parametrem "
                       "(„zhasni vše kromě 58“, „vyber barva 3“, „prvek budovy“) nebo „předvolba 3“ = třetí druh "
                       "prvku v poli <i>Kreslím</i>. Mezerník ve výkresu ukáže naposledy použité příkazy, "
-                      "šipky ↑ ↓ v příkazovém řádku listují historií.")
+                      "šipky ↑ ↓ v příkazovém řádku listují historií. Pro levou ruku (jako WASD ve hrách) jsou připravené "
+                      "<b>Shift + písmeno</b>: D smaž, Q zpět, E vpřed, W celý, A úsečka, S polylinie, C kopie, "
+                      "V posun, R otoč, F rovnoběžka, X ořež, G prodluž, T text, Z předchozí pohled.")
         uvod.setWordWrap(True)
         lay.addWidget(uvod)
         self.tabs = QTabWidget()
