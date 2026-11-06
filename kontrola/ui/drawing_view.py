@@ -576,6 +576,15 @@ class DrawingView(QGraphicsView):
         painter.save()
         painter.resetTransform()
         vr = QRectF(self.viewport().rect())
+        rez = getattr(self, "rezerva_vpravo", None)
+        if callable(rez):  # panel chyb a lišta nástrojů leží přes výkres – nápověda do volné části
+            try:
+                r = float(rez())
+            except Exception:  # noqa: BLE001
+                r = 0.0
+            if vr.width() - r - 70 > 320:
+                vr.setRight(vr.right() - r)
+                vr.setLeft(vr.left() + 70)
         col = QColor(90, 90, 100) if self.light_bg else QColor(150, 155, 170)
         box = QRectF(0, 0, min(460.0, vr.width() - 40), 150)
         box.moveCenter(vr.center())
@@ -589,7 +598,7 @@ class DrawingView(QGraphicsView):
         f.setBold(True)
         painter.setFont(f)
         painter.drawText(box.adjusted(10, 22, -10, -70), Qt.AlignHCenter | Qt.AlignTop,
-                         "Přetáhněte sem výkres (DXF)")
+                         "Přetáhněte sem výkres (DXF, DGN)")
         f.setPointSizeF(self.font().pointSizeF())
         f.setBold(False)
         painter.setFont(f)

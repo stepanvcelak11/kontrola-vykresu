@@ -300,8 +300,13 @@ class HomePage(QScrollArea):
                     continue
             hist = meta.get("historie") or []
             last = hist[-1] if hist else None
+            prazdny = not (meta.get("vykres_zdroj") or meta.get("vykres") or hist or meta.get("odevzdani"))
+            if prazdny and not (cur is not None and Path(cur.root).resolve() == r):
+                continue  # prázdné projekty bez výkresu a kontroly jen zahlcují seznam
             rows.append((meta.get("ulozeno", ""), r, meta, last))
         rows.sort(key=lambda t: str(t[0]), reverse=True)
+        from collections import Counter
+        jmena = Counter(meta.get("nazev") or r.name for _s, r, meta, _l in rows)
         self.projects.setRowCount(len(rows))
         for i, (saved, r, meta, last) in enumerate(rows):
             try:
@@ -310,7 +315,10 @@ class HomePage(QScrollArea):
                 when = str(saved)
             src = meta.get("vykres_zdroj") or meta.get("vykres") or ""
             kon = (f"{last.get('chyby', 0)} chyb, {last.get('varovani', 0)} var." if last else "–")
-            vals = [meta.get("nazev") or r.name, Path(src).name if src else "–", when, kon,
+            jm = meta.get("nazev") or r.name
+            if jmena[jm] > 1 and r.name != jm:
+                jm = f"{jm} ({r.name})"  # stejné názvy rozliší složka
+            vals = [jm, Path(src).name if src else "–", when, kon,
                     f"{len(meta.get('odevzdani') or [])}×"]
             for c, v in enumerate(vals):
                 it = QTableWidgetItem(v)
@@ -353,8 +361,8 @@ class HomePage(QScrollArea):
             self.c_vyk.status.setText(f"<span style='color:#16A34A'>✓ {name}</span><br>{len(d.features)} prvků, "
                                       f"{sum(1 for li in d.layers.values() if li.count)} vrstev")
         else:
-            self.c_vyk.status.setText("Zatím není otevřený žádný výkres.<br>Uložte v MicroStationu DXF a otevřete "
-                                      "ho.")
+            self.c_vyk.status.setText("Zatím není otevřený žádný výkres.<br>Otevřete DGN nebo DXF z MicroStationu, "
+                                      "nebo ho nakreslete na stránce CAD.")
         self.c_vyk.set_state(True if d is not None else (False if n_rules else None))
         issues = getattr(win, "issues", []) or []
         checked = bool(getattr(win, "_checked_once", False)) and d is not None

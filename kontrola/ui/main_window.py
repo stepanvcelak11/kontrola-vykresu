@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         from .canvas import Canvas
         # výkres přes celou plochu, seznam chyb jako plovoucí (sbalitelná) karta vpravo
         self.split = Canvas(self.view, self.issue_panel)
+        self.view.rezerva_vpravo = lambda: (self.issue_panel.width() + 16) if self.issue_panel.isVisible() else 0
 
         self.zadani = ZadaniTab(lambda: self.drawing)
         self.zadani.rulesChanged.connect(self._rules_changed)
