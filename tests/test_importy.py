@@ -64,3 +64,60 @@ def test_binarni_seznam_srozumitelna_chyba(tmp_path):
     f.write_bytes(b"GEPRO\x00\x01\x02" * 50)
     with pytest.raises(ValueError, match="binární"):
         read_point_list(f)
+
+
+def test_vfk_jako_reference_a_ortofoto(tmp_path):
+    """Katastr (VFK) jako reference pod výkresem a stažení ortofota ČÚZK (služba podstrčená)."""
+    import ezdxf
+
+    from kontrola.cad import ortofoto as OF
+    from kontrola.cad import reference as R
+
+    f = tmp_path / "katastr.vfk"
+    f.write_bytes(VFK.encode("cp1250"))
+    doc = ezdxf.new("R2018")
+    r = R.pripoj(doc, None, f)
+    msp = list(r.doc.modelspace())
+    assert {e.dxf.layer for e in msp} >= {"KN-hranice parcel", "KN-body", "KN-čísla parcel"}
+    assert any(e.dxftype() == "TEXT" and e.dxf.text == "1234/5" for e in msp)
+    hp = next(e for e in msp if e.dxftype() == "LWPOLYLINE")
+    assert tuple(hp.get_points("xy")[0]) == (-743100.0, -1043400.0)  # souřadnice výkresu −Y, −X
+    with pytest.raises(ValueError):
+        R.pripoj(doc, None, tmp_path / "nic.txt")
+
+    dotazy = []
+
+    class Odp:
+        headers = {"Content-Type": "image/jpeg"}
+
+        def __init__(self, data):
+            self.data = data
+
+        def read(self):
+            return self.data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def otevri(u):
+        dotazy.append(u)
+        return Odp(b"\xff\xd8\xff\xe0JPEG")
+
+    bbox = (-743200.0, -1043500.0, -743000.0, -1043400.0)
+    p = OF.stahni(bbox, tmp_path / "podklady", otevri=otevri)
+    assert p.exists() and p.suffix == ".jpg" and "SRS=EPSG%3A5514" in dotazy[0] and "VERSION=1.1.1" in dotazy[0]
+    assert "WIDTH=2000" in dotazy[0] and "HEIGHT=1000" in dotazy[0]  # 0,1 m/px
+    wf = [float(v) for v in p.with_suffix(".jgw").read_text().split()]
+    assert wf[0] == pytest.approx(0.1) and wf[3] == pytest.approx(-0.1)
+    assert wf[4] == pytest.approx(-743200 + 0.05) and wf[5] == pytest.approx(-1043400 - 0.05)
+    assert OF.stahni(bbox, tmp_path / "podklady", otevri=otevri) == p and len(dotazy) == 1  # z mezipaměti
+    with pytest.raises(OF.ChybaOrtofota):
+        OF.stahni((100.0, 100.0, 200.0, 200.0), tmp_path, otevri=otevri)  # není S-JTSK
+    with pytest.raises(OF.ChybaOrtofota):  # služba vrátila chybu XML
+        OF.stahni((-743300.0, -1043500.0, -743000.0, -1043400.0), tmp_path,
+                  otevri=lambda u: Odp(b"<ServiceExceptionReport>chyba</ServiceExceptionReport>"))
+    w, h, px = OF.rozmery(5000, 2500)
+    assert w == 4000 and h == 2000 and px == pytest.approx(1.25)

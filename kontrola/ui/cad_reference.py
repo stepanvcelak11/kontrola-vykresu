@@ -123,7 +123,7 @@ class ReferenceDialog(QDialog):
     def pripojit(self, cesta: str | None = None):
         if cesta is None:
             cesta, _ = QFileDialog.getOpenFileName(self, "Připojit referenci", "",
-                                                   "Výkresy (*.dxf *.dgn);;DXF (*.dxf);;DGN (*.dgn)")
+                                                   "Výkresy a katastr (*.dxf *.dgn *.vfk);;DXF (*.dxf);;DGN (*.dgn);;Katastr – VFK (*.vfk)")
             if not cesta:
                 return None
         try:

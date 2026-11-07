@@ -4026,3 +4026,54 @@ def test_rozcestnik_prejmenovat_a_skryt(window, tmp_path, monkeypatch):
     assert not any(r.projekty.item(i).data(0x0100) == cesta for i in range(r.projekty.count()))
     from PySide6.QtCore import QSettings
     QSettings("KontrolaVykresu", "KontrolaVykresu").remove("start/skryte")
+
+
+def test_cad_podklad_ortofoto_a_katastr(window, tmp_path):
+    """Ortofoto ČÚZK pro výřez pohledu (služba podstrčená) a katastr z VFK jako reference pod výkresem."""
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    from PySide6.QtGui import QColor, QImage
+
+    from test_importy import VFK
+
+    c = window.cad
+    window.show_page("cad")
+    c.novy(seed="")
+    c.prostor.add_line((-743200, -1043500), (-743000, -1043400))
+    c._po_zmene()
+    from PySide6.QtCore import QRectF
+    c.view.zoom_all(QRectF(-743200, -1043500, 200, 100))
+    img = QImage(8, 8, QImage.Format_RGB32)
+    img.fill(QColor("#4a7"))
+    ba = QByteArray()
+    buf = QBuffer(ba)
+    buf.open(QIODevice.WriteOnly)
+    img.save(buf, "JPG")
+    dotazy = []
+
+    class Odp:
+        headers = {"Content-Type": "image/jpeg"}
+
+        def read(self):
+            return bytes(ba)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    c.dok.path = tmp_path / "mapa.dxf"
+    im = c.ortofoto(otevri=lambda u: dotazy.append(u) or Odp())
+    assert im is not None and dotazy and "EPSG%3A5514" in dotazy[0], (dotazy, c.historie.toPlainText()[-400:])
+    assert (tmp_path / "podklady").is_dir() and any(c.prostor.query("IMAGE"))
+    assert c._rastry  # obrázek se kreslí pod výkresem
+    # mimo S-JTSK se nic nestáhne
+    c.novy(seed="")
+    c.prostor.add_line((0, 0), (10, 10))
+    c._po_zmene()
+    c.view.zoom_all(QRectF(0, 0, 10, 10))
+    assert c.ortofoto(otevri=lambda u: dotazy.append(u) or Odp()) is None and len(dotazy) == 1
+    f = tmp_path / "katastr.vfk"
+    f.write_bytes(VFK.encode("cp1250"))
+    r = c.katastr_vfk(str(f))
+    assert r is not None and r in c.reference and len(r.doc.modelspace()) > 3

@@ -508,7 +508,7 @@ class CadPage(QWidget):
         "georeference": "transformace rastru podle identických bodů s opravami a m0, uložení world filu",
         "kódy": "kresba z kódů bodů seznamu souřadnic – linie, plochy a značky podle kódovníku a zadání",
         "kódovník": "kódovník: kód bodu → linie / plocha / značka, hladina a vzhled podle zadání",
-        "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
+        "body": "body ze seznamu souřadnic do výkresu", "rastr": "připojit rastr (ortofoto, sken) s georeferencí", "ortofoto": "ortofoto ČÚZK pod výkres – stáhne výřez pohledu (S-JTSK), „ortofoto celý“ = celý výkres", "katastr": "katastrální mapa z VFK jako reference pod výkresem (hranice parcel, budovy, čísla parcel)", "tisk": "tisk do PDF", "razítko": "rámeček a razítko na list", "vrstvy": "správce vrstev", "atributy": "atributy ze zadání – kontrola a úprava", "prvek": "druh prvku ze zadání (např. „prvek budovy“)", "blok": "vytvořit blok (buňku) z výběru", "vlož": "vložit blok",
     }
     ALIASY = {
         "klávesy": "zkratky", "klavesy": "zkratky", "shortcuts": "zkratky", "funkcni klavesy": "zkratky",
@@ -1671,6 +1671,80 @@ class CadPage(QWidget):
             return im
         self._spust(self._n_rastr_rucne(cesta, zaklad))
         return None
+
+    def _slozka_podkladu(self) -> Path:
+        """Kam ukládat stažené podklady: vedle výkresu, jinak do projektu, jinak do mezipaměti aplikace."""
+        if self.dok is not None and self.dok.path:
+            return Path(self.dok.path).parent / "podklady"
+        pr = getattr(self.win, "project", None) if getattr(self, "win", None) is not None else None
+        if pr is not None and getattr(pr, "root", None):
+            return Path(pr.root) / "podklady"
+        from PySide6.QtCore import QStandardPaths
+        return Path(QStandardPaths.writableLocation(QStandardPaths.CacheLocation)) / "podklady"
+
+    def ortofoto(self, cely: bool = False, otevri=None):
+        """Ortofoto ČÚZK pod výkres: výřez aktuálního pohledu (nebo celého výkresu) z WMS v S-JTSK."""
+        from PySide6.QtGui import QGuiApplication
+        from ..cad import ortofoto as OF
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete nebo založte výkres.")
+            return None
+        if not self._je_model():
+            self.nastav_model("Model")
+        if cely:
+            try:
+                from ezdxf import bbox as _bbox
+                ext = _bbox.extents(e for e in self.prostor if e.dxftype() != "IMAGE")
+                r = (ext.extmin.x, ext.extmin.y, ext.extmax.x, ext.extmax.y) if ext.has_data else None
+            except Exception:  # noqa: BLE001 – rozsah jen pro výřez, při chybě se vezme pohled
+                r = None
+        else:
+            r = None
+        if r is None:
+            v = self.view.mapToScene(self.view.viewport().rect()).boundingRect()
+            r = (v.left(), v.top(), v.right(), v.bottom())
+        x0, x1 = sorted((r[0], r[2]))
+        y0, y1 = sorted((r[1], r[3]))
+        okraj = 0.05 * max(x1 - x0, y1 - y0) if cely else 0.0
+        bbox = OF.zaokrouhli_vyrez(x0 - okraj, y0 - okraj, x1 + okraj, y1 + okraj)
+        if (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) > 25e6:  # víc než 5 × 5 km
+            self.vypis("⚠ Výřez je moc velký (víc než 5 × 5 km) – přibližte se na místo, kde kreslíte.")
+            return None
+        self.vypis("Stahuji ortofoto ČÚZK pro výřez…")
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            cesta = OF.stahni(bbox, self._slozka_podkladu(), otevri=otevri)
+        except OF.ChybaOrtofota as e:
+            self.vypis(f"⚠ {e}")
+            return None
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+        pohled = self.view.transform(), self.view.mapToScene(self.view.viewport().rect().center())
+        im = self.pripoj_rastr(str(cesta))
+        if im is not None:
+            # pohled zůstane, kde byl (pripoj_rastr přiblíží na celý výkres)
+            self.view.setTransform(pohled[0])
+            self.view.centerOn(pohled[1])
+            px = (bbox[2] - bbox[0]) / im.dxf.image_size.x
+            self.vypis(f"Ortofoto ČÚZK připojeno pod výkres ({OF.popis_rozliseni(px)}, soubor {cesta.name}). "
+                       "Průhlednost a odpojení: Rastr.")
+        return im
+
+    def katastr_vfk(self, cesta: str | None = None):
+        """Katastrální mapa z VFK jako reference pod výkresem (jen pro čtení, jde se na ni přichytávat)."""
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete nebo založte výkres.")
+            return None
+        if cesta is None:
+            cesta, _ = QFileDialog.getOpenFileName(self, "Katastr – připojit VFK", str(self._slozka_podkladu()),
+                                                   "Výměnný formát katastru (*.vfk)")
+            if not cesta:
+                return None
+        try:
+            return self.pripoj_referenci(cesta)
+        except ValueError as e:
+            self.vypis(f"⚠ {e}")
+            return None
 
     def _n_rastr_rucne(self, cesta, zaklad):
         from ..cad import rastr as RA
@@ -3187,6 +3261,10 @@ class CadPage(QWidget):
             self.knihovna_bunek()
         elif cmd == "rastr":
             self.pripoj_rastr()
+        elif cmd == "ortofoto":
+            self.ortofoto(cely=arg.strip().lower().startswith("cel") if arg else False)
+        elif cmd == "katastr":
+            self.katastr_vfk()
         elif cmd == "mračno":
             self.nacti_mracno()
         elif cmd == "vlastnosti":

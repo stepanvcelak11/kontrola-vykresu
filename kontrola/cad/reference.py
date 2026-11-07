@@ -50,6 +50,10 @@ class Reference:
 
     def nacti(self) -> bool:
         try:
+            if str(self.cesta).lower().endswith(".vfk"):  # katastr (VFK) jako podklad: hranice, budovy, čísla
+                self.doc = doc_z_vfk(self.cesta)
+                self.chyba = ""
+                return True
             if str(self.cesta).lower().endswith(".dgn"):  # DGN ze školy (V7 / V8) jako podklad
                 from .dokument import CadDokument
                 try:
@@ -127,10 +131,10 @@ def najdi(doc, zaklad: Path | None) -> list[Reference]:
 
 def pripoj(doc, h, cesta: str | Path, zaklad: Path | None = None, vlozeni=(0.0, 0.0), meritko: float = 1.0,
            natoceni: float = 0.0, nazev: str | None = None) -> Reference:
-    """Připojí DXF jako referenci (zápis XREF do výkresu, vložení jde vrátit Zpět)."""
+    """Připojí DXF / DGN / VFK jako referenci (zápis XREF do výkresu, vložení jde vrátit Zpět)."""
     p = Path(cesta).resolve()
-    if p.suffix.lower() != ".dxf":
-        raise ValueError("Referenci jde připojit jen jako výkres DXF.")
+    if p.suffix.lower() not in (".dxf", ".dgn", ".vfk"):
+        raise ValueError("Referenci jde připojit jako výkres DXF, DGN nebo katastr VFK.")
     if not p.exists():
         raise ValueError(f"Soubor {p.name} neexistuje.")
     if meritko <= 0:
@@ -200,3 +204,30 @@ def kopiruj(msp, h, r: Reference, prvky=None) -> list:
     if h is not None and nove:
         h.proved(f"Kopie z reference {r.cesta.name}", nove)
     return nove
+
+
+def doc_z_vfk(cesta) -> "ezdxf.document.Drawing":
+    """VFK (výměnný formát katastru) → výkres ezdxf v souřadnicích výkresu (−Y, −X): hranice parcel, budovy,
+    vnitřní kresba, body a čísla parcel na hladinách KN-…, barvy jako v katastrální mapě."""
+    from ..io.dxf_loader import DrawingLoadError
+    from ..io.vfk import LAYERS, read_vfk
+    try:
+        d = read_vfk(cesta)
+    except DrawingLoadError as e:
+        raise OSError(str(e)) from e
+    doc = ezdxf.new("R2018", setup=True)
+    for nazev, aci, _rgb in LAYERS.values():
+        if nazev not in doc.layers:
+            doc.layers.add(nazev, color=aci)
+    msp = doc.modelspace()
+    for f in d.features:
+        a = {"layer": f.layer}
+        if f.dxftype == "LWPOLYLINE":
+            msp.add_lwpolyline(f.vertices, dxfattribs=a)
+        elif f.dxftype == "POINT":
+            msp.add_point(f.vertices[0], dxfattribs=a)
+        elif f.dxftype == "TEXT" and f.text:
+            t = msp.add_text(f.text, height=f.text_height or 1.5, dxfattribs=a)
+            t.set_placement(f.vertices[0], align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+    return doc
+

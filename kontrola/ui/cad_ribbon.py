@@ -63,6 +63,7 @@ NAZVY = {
     "knihovny": ("Knihovny od učitele", "Standards / Cell Library + Line Styles"),
     "pracovní sada": ("Pracovní sada", "WorkSet"),
     "reference": ("Reference", "References"), "rastr": ("Rastr", "Raster Manager"),
+    "ortofoto": ("Ortofoto ČÚZK", "Bing / WMS Map"), "katastr": ("Katastr (VFK)", "Attach Cadastre"),
     "georeference": ("Georeference rastru", "Raster Warp"),
     "model": ("Modely", "Models"), "list": ("Nový list", "Sheet Model"), "výřez": ("Výřez na list", "Place Named Boundary"),
     "razítko": ("Rámeček a razítko", "Title Block"), "arch": ("Arch (papír)", "Print Boundary"),
@@ -144,8 +145,8 @@ KARTY = [
         ("Listy", ["model", "list", "výřez", "razítko"]),
     ]),
     ("Připojit", [
-        ("Reference", ["reference"]),
-        ("Rastr", ["rastr", "georeference"]),
+        ("Reference", ["reference", "katastr"]),
+        ("Rastr", ["ortofoto", "rastr", "georeference"]),
         ("Knihovny", ["pracovní sada", "knihovny", "knihovna buněk", "styly čar"]),
     ]),
     ("Nástroje", [
