@@ -50,8 +50,8 @@ class BodyDialog(QDialog):
         vrstvy = sorted(ly.dxf.name for ly in page.dok.doc.layers) if page.dok is not None else ["0"]
         self.cb, self.ch, self.hl, self.barvy, self.vel = {}, {}, {}, {}, {}
         odhad = odhad_vysky_textu(self._vsechny_body())
-        radky = (("znacka", "Značka bodu", ("bod", None), vych.znacka, "body", 0.3),
-                 ("cislo", "Číslo bodu", ("text",), vych.cislo, "čísla bodů", odhad),
+        radky = (("znacka", "Značka", ("bod", None), vych.znacka, "body", 0.3),
+                 ("cislo", "Číslo", ("text",), vych.cislo, "čísla bodů", odhad),
                  ("vyska", "Výška", ("text",), vych.vyska, "výšky bodů", odhad * 0.8),
                  ("kod", "Kód", ("text",), None, "kódy bodů", odhad * 0.8))
         for r, (klic, popis, typy, hodnota, vrstva, velikost) in enumerate(radky, start=1):
@@ -66,7 +66,7 @@ class BodyDialog(QDialog):
             if hodnota is not None:
                 cb.setCurrentIndex(max(0, cb.findText(f"zadání: {hodnota.nazev}")))
             cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-            cb.setMinimumContentsLength(8)
+            cb.setMinimumContentsLength(4)
             cb.setToolTip("Vlastní atributy, nebo druh prvku ze zadání (hladina, barva i velikost podle Směrnice)")
             hl = QComboBox()
             hl.setEditable(True)
@@ -74,7 +74,7 @@ class BodyDialog(QDialog):
             hl.setCurrentText(str(self._nast.value(f"cad/body/{klic}/hladina", vrstva)))
             hl.setToolTip("Hladina – vyberte, nebo napište novou (založí se)")
             hl.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-            hl.setMinimumContentsLength(7)
+            hl.setMinimumContentsLength(5)
             bv = QPushButton()
             bv.setToolTip("Barva z tabulky MicroStationu (0–255), nebo dle hladiny")
             bv.setMaximumWidth(90)
@@ -112,12 +112,14 @@ class BodyDialog(QDialog):
         self.tvar.setCurrentIndex(max(0, self.tvar.findText(str(self._nast.value("cad/body/tvar", "křížek ×")))))
         self.tvar.activated.connect(self._tvar_vybran)
         self.tvar.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.tvar.setMinimumContentsLength(8)
+        self.tvar.setMinimumContentsLength(4)
         self.tvar.setToolTip("Tvar značky bodu (pro celý výkres, jako PDMODE), nebo buňka")
-        g.addWidget(QLabel("Tvar značky:"), len(radky) + 1, 0)
+        g.addWidget(QLabel("Tvar:"), len(radky) + 1, 0)
         g.addWidget(self.tvar, len(radky) + 1, 1)
         tip = QLabel(f"Výška textu {odhad:.2f} m je odhad podle hustoty bodů (čísla se nepřekrývají).")
         tip.setWordWrap(True)
+        from PySide6.QtWidgets import QSizePolicy
+        tip.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)  # zalomený popisek okno nerozšiřuje
         tip.setStyleSheet("color: gray;")
         g.addWidget(tip, len(radky) + 2, 0, 1, 5)
         lay.addWidget(grp)
@@ -131,17 +133,17 @@ class BodyDialog(QDialog):
                 self.cb_spoj.addItem(p.nazev, p)
         self.cb_spoj.setToolTip("Spojnice nakreslené v grafice Výpočtů (mezi vkládanými body) jako úsečky")
         f.addRow("Spojnice z grafiky:", self.cb_spoj)
-        self.podle_kodu = QCheckBox("Kód buňky (9.12) → vložit buňku")
+        self.podle_kodu = QCheckBox("Kód 9.12 → buňka")
         self.podle_kodu.setToolTip("Bod s kódem buňky (např. 9.12) se vloží jako buňka")
         self.podle_kodu.setChecked(True)
-        self.preskocit = QCheckBox("Přeskočit body, které už ve výkresu jsou")
+        self.preskocit = QCheckBox("Přeskočit body už ve výkresu")
         self.preskocit.setChecked(True)
         self.v3d = QCheckBox("Ve 3D (ve výšce bodu Z)")
         self.v3d.setToolTip("Značky a spojnice ve výšce bodu (Z) – pro 3D výkres a model terénu")
         # dlouhé názvy předvoleb nesmí okno roztáhnout (celý název je v rozbalení)
         for c in (self.zdroj, self.cb_spoj):
             c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-            c.setMinimumContentsLength(18)
+            c.setMinimumContentsLength(14)
         f.addRow(self.podle_kodu)
         f.addRow(self.preskocit)
         f.addRow(self.v3d)
