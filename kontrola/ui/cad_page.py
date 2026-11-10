@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QTransform
 from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QGraphicsScene, QGraphicsView, QGridLayout, QHBoxLayout, QLabel,
                                QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QSpinBox, QToolButton,
                                QVBoxLayout, QWidget)
@@ -83,6 +83,7 @@ class CadView(QGraphicsView):
         # vykreslený výkres se drží v mezipaměti: pohyb myši (kurzor, úchyty, gumička) překreslí jen popředí
         self._mezipamet = None
         self._klic_mezipameti = None
+        self._transform_mezipameti = None
         self._verze_sceny = 0
         self._bez_popredi = False
         self.scene().changed.connect(self._scena_zmenena)
@@ -116,6 +117,13 @@ class CadView(QGraphicsView):
         self._okno_px = None
         self._pohledy: list = []  # předchozí pohledy (View Previous)
         self._posledni_ulozeni = 0.0
+        # při posunu a zoomu se jen posune / zvětší hotový obrázek, celé překreslení až po chvíli klidu
+        from PySide6.QtCore import QTimer
+        self._rychle = False
+        self._klid = QTimer(self)
+        self._klid.setSingleShot(True)
+        self._klid.setInterval(160)
+        self._klid.timeout.connect(self._po_klidu)
 
     # ------------------------------------------------------------ zoom a posun
     def zapamatuj_pohled(self, vynutit: bool = True):
@@ -176,8 +184,21 @@ class CadView(QGraphicsView):
         self.centerOn(novy)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
 
+    def _interakce(self):
+        """Probíhá posun / zoom – kreslit z mezipaměti, plné překreslení až po zastavení."""
+        self._rychle = True
+        self._klid.start()
+
+    def _po_klidu(self):
+        if self._pan is not None:  # tlačítko pořád drží – počkat
+            self._klid.start()
+            return
+        self._rychle = False
+        self.viewport().update()
+
     def wheelEvent(self, e):  # noqa: N802
         self.zapamatuj_pohled(vynutit=False)
+        self._interakce()
         self.priblizeni(1.0015 ** e.angleDelta().y(), e.position())
 
     def otoc_pohled(self, uhel_deg: float) -> None:
@@ -266,6 +287,7 @@ class CadView(QGraphicsView):
         if self._pan is not None:
             d = e.position() - self._pan
             self._pan = e.position()
+            self._interakce()
             self._rozsir_scenu()
             self.horizontalScrollBar().setValue(int(self.horizontalScrollBar().value() - d.x()))
             self.verticalScrollBar().setValue(int(self.verticalScrollBar().value() - d.y()))
@@ -312,6 +334,23 @@ class CadView(QGraphicsView):
             bg = self.backgroundBrush().color().rgba()
             klic = (t.m11(), t.m12(), t.m21(), t.m22(), t.dx(), t.dy(), vp.width(), vp.height(), dpr,
                     self._verze_sceny, bg, self.renderHints().value)
+            stary = self._klic_mezipameti if self._mezipamet is not None else None
+            if (self._rychle and stary is not None and stary != klic and stary[6:] == klic[6:]
+                    and self._transform_mezipameti is not None):
+                # posun / zoom: starý obrázek přepočtený na nový pohled (okraje doplní plné kreslení po zastavení)
+                inv, ok = self._transform_mezipameti.inverted()
+                if ok:
+                    p = QPainter(vp)
+                    p.fillRect(vp.rect(), self.backgroundBrush().color())
+                    p.setRenderHint(QPainter.SmoothPixmapTransform, False)
+                    p.setTransform(inv * t)
+                    p.drawPixmap(0, 0, self._mezipamet)
+                    p.resetTransform()
+                    p.setRenderHints(self.renderHints())
+                    p.setTransform(t)
+                    self.drawForeground(p, self.mapToScene(vp.rect()).boundingRect())
+                    p.end()
+                    return
             if self._mezipamet is None or self._klic_mezipameti != klic:
                 pm = QPixmap(max(1, round(vp.width() * dpr)), max(1, round(vp.height() * dpr)))
                 pm.setDevicePixelRatio(dpr)
@@ -325,6 +364,7 @@ class CadView(QGraphicsView):
                     self._bez_popredi = False
                     qp.end()
                 self._mezipamet, self._klic_mezipameti = pm, klic
+                self._transform_mezipameti = QTransform(t)
             p = QPainter(vp)
             p.drawPixmap(0, 0, self._mezipamet)
             p.setRenderHints(self.renderHints())
@@ -565,7 +605,7 @@ class CadPage(QWidget):
         "j": "spoj", "join": "spoj", "la": "vrstva", "layer": "vrstva", "col": "barva", "color": "barva", "co": "barva", "lc": "styl", "wt": "tloušťka",
         "tloustka": "tloušťka", "lv": "vrstva",
         "vse": "vše", "all": "vše", "undo": "zpět", "zpet": "zpět", "redo": "vpřed", "vpred": "vpřed",
-        "li": "info", "list": "info", "lm": "vrstvy", "layers": "vrstvy", "knihovna": "knihovna buněk", "rc": "knihovna buněk",
+        "li": "info", "lm": "vrstvy", "layers": "vrstvy", "knihovna": "knihovna buněk", "rc": "knihovna buněk",
         "knihovna bunek": "knihovna buněk", "cells": "knihovna buněk", "ma": "převezmi atributy", "match": "převezmi atributy",
         "prevezmi atributy": "převezmi atributy",
         "group": "skupina", "gg": "skupina", "add to graphic group": "skupina", "zrus skupinu": "zruš skupinu",
@@ -765,6 +805,7 @@ class CadPage(QWidget):
         self.ribbon = PasKaret(self.PRIKAZY, self, _barva_ik, accent())
         self.ribbon.nastroj.connect(self._z_palety)
         self.ribbon.keyin.connect(self.ms_keyin)
+        self.ribbon.nahled_bunky = self._ikona_bunky
         self.obnov_styly_kresleni()
         self.ribbon.b_soubor.setMenu(menu_soubor(self))
         from PySide6.QtWidgets import QSizePolicy
@@ -942,6 +983,9 @@ class CadPage(QWidget):
         self.coords = QLabel("Y –  X –")
         self.coords.setObjectName("cad_souradnice")
         self.coords.setMinimumWidth(130)  # malý notebook: celé okno ≤ 1100 px (CI má užší písmo)
+        # text se mění s každým pohybem myši – šířka podle něj by pokaždé přepočítala rozvržení celého okna
+        from PySide6.QtWidgets import QSizePolicy as _SP
+        self.coords.setSizePolicy(_SP.Ignored, _SP.Preferred)
         crow.addWidget(self.coords)
         lay.addLayout(crow)
         self.b_barva.clicked.connect(self._vyber_barvy)
@@ -2320,7 +2364,60 @@ class CadPage(QWidget):
         self.vypis(f"Model: {lay.name}" + ("" if self._je_model() else " (list – souřadnice v mm na papíře)"))
         return True
 
-    def novy_list(self, nazev: str | None = None) -> str | None:
+    def okno_modely(self):
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete nebo založte výkres.")
+            return None
+        from .cad_listy import ModelyDialog
+        d = ModelyDialog(self)
+        d.exec()
+        return d
+
+    def okno_novy_list(self, modal: bool = True):
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete nebo založte výkres.")
+            return None
+        from .cad_listy import NovyListDialog
+        d = NovyListDialog(self)
+        if modal:
+            d.exec()
+        return d
+
+    def _nabidni_list(self, co: str) -> bool:
+        """Výřez a razítko patří na list – v modelu nabídne nový list (nebo přepne na existující)."""
+        listy = [n for n in self.dok.doc.layout_names_in_taborder() if n != "Model"]
+        prazdne = [n for n in listy if not len(self.dok.doc.layouts.get(n))]
+        if prazdne:
+            self.nastav_model(prazdne[0])
+            self._napln_modely()
+            self.vypis(f"{co} patří na list – přepnuto na list {prazdne[0]}.")
+            return True
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(self, co, f"{co} se vkládá na list (papír pro tisk). Vytvořit nový list?") \
+                != QMessageBox.Yes:
+            return False
+        d = self.okno_novy_list()
+        return d is not None and d.vysledek is not None
+
+    def vyrez_celeho_vykresu(self, meritko: float, ext, papir_mm, razitko: bool = True):
+        """Výřez celé kresby z modelu na aktuální list (uprostřed papíru, nad razítkem)."""
+        pw, ph = papir_mm
+        okraj = 15.0
+        dole = 50.0 if razitko else okraj  # místo pro razítko
+        w, h = pw - 2 * okraj, ph - okraj - dole
+        stred_m = ((ext[0] + ext[2]) / 2, (ext[1] + ext[3]) / 2)
+        (lx0, ly0), (_lx1, _ly1) = self.prostor.get_paper_limits()
+        stred = (float(lx0) + okraj + w / 2, float(ly0) + dole + h / 2)
+        vp = self.prostor.add_viewport(center=stred, size=(w, h), view_center_point=stred_m,
+                                       view_height=h * meritko / 1000.0, dxfattribs={"layer": "VYREZY"})
+        if "VYREZY" not in self.dok.doc.layers:
+            self.dok.doc.layers.add("VYREZY", color=8)
+        self.historie_zmen.proved("Výřez", [vp])
+        self._po_zmene([vp], [])
+        self.vypis(f"Výřez celé kresby v měřítku 1:{meritko:g}.")
+        return vp
+
+    def novy_list(self, nazev: str | None = None, papir_mm=(420.0, 297.0)) -> str | None:
         if self.dok is None:
             return None
         nazev = (nazev or "").strip() or f"List {len(self.dok.doc.layout_names()) }"
@@ -2329,7 +2426,7 @@ class CadPage(QWidget):
             return None
         lay = self.dok.doc.layouts.new(nazev)
         try:
-            lay.page_setup(size=(420, 297), margins=(10, 10, 10, 10), units="mm")  # A3 na šířku
+            lay.page_setup(size=tuple(papir_mm), margins=(10, 10, 10, 10), units="mm")
         except Exception:  # noqa: BLE001
             pass
         if self.historie_zmen is not None:
@@ -2753,11 +2850,43 @@ class CadPage(QWidget):
                 continue
         return out
 
+    def uprav_vyber(self, _typy=None, **dxf) -> list:
+        """Změna vlastností vybraných prvků z Průzkumníku (hladina, text, výška…) – jedno Zpět."""
+        ents = [e for e in self.vyber if _typy is None or e.dxftype() in _typy]
+        if not ents or self.dok is None:
+            return []
+        text = dxf.pop("text", None)
+        nove = U.zmen_vlastnosti(self.prostor, self.historie_zmen, ents, **dxf) if dxf else list(ents)
+        if text is not None:
+            for e in nove:
+                if e.dxftype() == "TEXT":
+                    e.dxf.text = text
+                elif e.dxftype() == "MTEXT":
+                    e.text = text
+        zbytek = [e for e in self.vyber if e not in ents]
+        self._po_zmene(nove, ents)
+        self.vyber = zbytek + nove
+        self._zvyrazni()
+        self.vypis(f"Upraveno {len(nove)} prvků.")
+        return nove
+
+    def posun_vyber(self, dx: float, dy: float) -> list:
+        ents = list(self.vyber)
+        if not ents:
+            return []
+        nove = U.posun(self.prostor, self.historie_zmen, ents, dx, dy)
+        self._po_zmene(nove, ents)
+        self.vyber = list(nove)
+        self._zvyrazni()
+        return nove
+
     def _zvyrazni(self):
         if getattr(self, "view", None) is not None:
             self.view.uchopy = [b for _e, b, _v in self._uchopy()]
         if getattr(self, "panel_vlastnosti", None) is not None:
             self.panel_vlastnosti.ukaz(self.vyber, self._popis_vlastnosti)
+        if getattr(self, "panel_upravy", None) is not None:
+            self.panel_upravy.nastav(self.vyber)
         if self.index is None:
             self.view.zvyraznene = []
         else:
@@ -3330,11 +3459,14 @@ class CadPage(QWidget):
             self.spravce_referenci()
         elif cmd == "model":
             if not arg:
-                self.vypis("Modely: " + ", ".join(self.dok.doc.layout_names_in_taborder()))
+                self.okno_modely()
             else:
                 self.nastav_model(arg.strip())
         elif cmd == "list":
-            self.novy_list(arg)
+            if arg.strip():
+                self.novy_list(arg)
+            else:
+                self.okno_novy_list()
         elif cmd == "atributy":
             self.atributy_zadani()
         elif cmd == "pohled":
@@ -3357,6 +3489,12 @@ class CadPage(QWidget):
             self._pismo(arg)
         elif cmd == "arch":
             self._posledni_prikaz = cmd
+            if not arg.strip() and self._je_model():
+                from .cad_listy import ArchDialog
+                d = ArchDialog(self)
+                if not d.exec() or not d.prikaz:
+                    return
+                arg = d.prikaz
             self._spust(self.n_arch(arg))
         elif cmd == "zkratky":
             self.nastav_zkratky()
@@ -3749,8 +3887,67 @@ class CadPage(QWidget):
             return
         if cmd == "text" and self.dok is not None:
             self.text_dialog()
+        elif cmd == "vlož" and self.dok is not None:
+            self.okno_bunek()
         else:
             self.proved(cmd)
+
+    def _ikona_bunky(self, jmeno: str):
+        """Náhled buňky jako ikona tlačítka pásu (Účelová mapa: značky, stromy…)."""
+        if self.dok is None:
+            return None
+        doc = self.dok.doc
+        if jmeno not in doc.blocks:
+            from ..rules import block_matches
+            jmeno = next((b.name for b in doc.blocks if block_matches(jmeno, b.name)), None)
+            if jmeno is None:
+                return None
+        cache = self.__dict__.setdefault("_ikony_bunek", {})
+        klic = (id(doc), jmeno)
+        if klic not in cache:
+            from .cad_bunky import nahled
+            from .theme import is_dark
+            pm = nahled(doc, jmeno, 20, "#E5E7EB" if is_dark() else "#1F2937")
+            cache[klic] = QIcon(pm)
+        return cache[klic]
+
+    def okno_bunek(self, modal: bool = True):
+        """Knihovna buněk (Cell Library): výběr buňky s náhledem, pak umístění klikem."""
+        from .cad_bunky import BunkyDialog
+        d = BunkyDialog(self)
+        if modal:
+            d.exec()
+            self.umisti_bunku(d.vysledek)
+        return d
+
+    def umisti_bunku(self, vyber):
+        if not vyber:
+            return
+        nazev, m, u = vyber
+        self._aktivni_bunka = nazev
+        self._posledni_prikaz = "vlož"
+        self._spust(self.n_umisti_bunku(nazev, m, u))
+
+    def n_umisti_bunku(self, nazev, m, u):
+        from shapely.geometry import LineString
+        from .cad_bunky import _cary_bloku
+        attrs = self.kresleni._attr()
+        if not self._je_model():
+            self.nastav_model("Model")
+        c, si = math.cos(math.radians(u)) * m, math.sin(math.radians(u)) * m
+        cary = [c_ for c_ in _cary_bloku(self.dok.doc, nazev) if len(c_) >= 2][:400]
+
+        def nahled(x, y):  # obrys buňky pod kurzorem
+            return [LineString([(x + c * px - si * py, y + si * px + c * py) for px, py in cara]) for cara in cary]
+        while True:
+            b = yield self._bod_req(f"Buňka {nazev} – vkládací bod (Enter / pravé tlačítko = konec):", volitelne=True,
+                                    nahled=nahled)
+            if b is None:
+                return
+            ins = U.vloz_blok(self.dok.doc, self.prostor, self.historie_zmen, nazev, b, m, u, self.kresleni.vrstva,
+                              attrs=attrs)
+            if self.kresleni.ms_barva is not None and attrs.get("color", 256) != 256:
+                self.kresleni.ms_barvy_prvku[ins.dxf.handle] = self.kresleni.ms_barva
 
     def text_dialog(self, modal: bool = True):
         """Okno pro text (jako Text Editor v MicroStationu): text na více řádků, výška, natočení, zarovnání;
@@ -4640,8 +4837,10 @@ class CadPage(QWidget):
 
     # ------------------------------------------------------------ výřez na listu
     def n_vyrez(self):
+        if self._je_model() and not self._nabidni_list("Výřez"):
+            return
         if self._je_model():
-            raise ValueError("Výřez se vkládá na list – přepněte model na list (nebo „list“ vytvoří nový).")
+            return
         a = yield self._bod_req("Výřez – první roh na listu [mm]:")
         b = yield self._bod_req("Protější roh:", a)
         rs = self._pravidla()
@@ -4693,7 +4892,7 @@ class CadPage(QWidget):
     def razitko(self, udaje: dict | None = None):
         from ..cad import tisk as T
         if self._je_model():
-            self.vypis("Razítko se dává na list – přepněte Model na list nebo vytvořte nový příkazem „list“.")
+            self._nabidni_list("Razítko")  # nový list se může rovnou vytvořit i s razítkem
             return []
         rs = self._pravidla()
         u = {"Název": self.dok.path.stem if self.dok.path else "",

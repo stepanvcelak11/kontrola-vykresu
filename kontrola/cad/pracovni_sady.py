@@ -171,13 +171,8 @@ def styly_kresleni(sada: Sada | None) -> list:
     from .ms_pas import nacti_pas
     out = []
     pasy = list(sada.pasy if sada is not None else [])
-    # bez pracovní sady se nabízí Účelová mapa (UM_ribbon.dgnlib vestavěné sady MultiScale); jiná sada
-    # (Pasport, TM) má jen své vlastní pásy – výkresy se liší
-    if sada is None:
-        vest = (vestavena_slozka() / "WorkSpaces" / "MultiScale" / "WorkSets" / "MultiScale" / "Standards"
-                / "Dgnlib" / "GUI" / "UM_ribbon.dgnlib")
-        if vest.exists():
-            pasy.append(vest)
+    # bez pracovní sady jen standardní nástroje; každá sada (MultiScale, Pasport, TM) má své vlastní pásy –
+    # styly kreslení se mezi sadami nemíchají
     for p in pasy:
         try:
             k = (str(p), p.stat().st_mtime)

@@ -325,6 +325,12 @@ class PasKaret(QWidget):
             self.styl_kresleni.addItem(f"Styl: {p.nazev}")
         self.styl_kresleni.blockSignals(False)
         self.styl_kresleni.setVisible(True)
+        self.styl_kresleni.setEnabled(bool(self._pasy))
+        self.styl_kresleni.setToolTip(
+            "Styl kreslení (jako v MultiScale): karty s přednastavenými prvky – hladina, barva, styl, tloušťka "
+            "a nástroj jedním kliknutím." if self._pasy else
+            "Bez pracovní sady jsou jen standardní nástroje. Styly kreslení (Účelová mapa, Pasport, TM) mají "
+            "pracovní sady – výkres v sadě založíte přes Soubor → Nový (nebo úvodní nabídku CAD).")
         ul = str(QSettings("KontrolaVykresu", "KontrolaVykresu").value("cad/styl_kresleni", "") or "")
         i = next((k + 1 for k, p in enumerate(self._pasy) if p.nazev == ul), 0)
         self.nastav_styl(i, prepnout=False)
@@ -349,12 +355,68 @@ class PasKaret(QWidget):
         for n, (titul, skupiny) in enumerate(pas.karty):
             sc = self._karta_stylu(skupiny)
             self.stack.insertWidget(1 + n, sc)
-            self.karty.insertTab(1 + n, titul)
+            self.karty.insertTab(1 + n, _hezky_titul(titul))
             self._dynamicke.append(sc)
         if prepnout and pas.karty:  # otevřít kartu s nejvíc nástroji (Pasport nezačne na kartě s jedním tlačítkem)
             n = max(range(len(pas.karty)), key=lambda k: (sum(len(t) for _s, t in pas.karty[k][1]), -k))
             self.karty.setCurrentIndex(1 + n)
             self.stack.setCurrentIndex(1 + n)
+
+    nahled_bunky = None  # funkce název buňky → QIcon (nastaví stránka CAD z buněk výkresu)
+
+    def _ikona_nastroje(self, t):
+        """Ikona nástroje pásu stylu podle toho, co kreslí: náhled buňky, čára v barvě a stylu, text, plocha."""
+        import re
+        from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
+        k = t.keyin
+        druh = t.druh
+        if druh == "bunka":
+            m = re.search(r"active cell\s+\"?([^;\"]+)", k, re.I)
+            if m and self.nahled_bunky is not None:
+                try:
+                    ic = self.nahled_bunky(m.group(1).strip())
+                except Exception:  # noqa: BLE001
+                    ic = None
+                if ic is not None and not ic.isNull():
+                    return ic
+        if druh not in ("cara", "text", "plocha"):
+            return None
+        from ..cad import symbologie as SY
+        mc = re.search(r"active color\s+(\d+)", k, re.I)
+        ms = int(mc.group(1)) if mc else 0
+        r, g, b = SY.vychozi_tabulka().get(ms, (200, 200, 200))
+        if r + g + b > 700 or (ms == 0 and not mc):  # bílá (0) na světlém pásu → šedá
+            r, g, b = (156, 163, 175)
+        barva = QColor(r, g, b)
+        ms_ = re.search(r"active style\s+\"?([^;\"]+)", k, re.I)
+        styl = (ms_.group(1).strip() if ms_ else "0")
+        mw = re.search(r"active weight\s+(\d+)", k, re.I)
+        w = 1.2 + min(3, int(mw.group(1)) if mw else 0) * 0.6
+        pm = QPixmap(20, 20)
+        pm.fill(Qt.transparent)
+        qp = QPainter(pm)
+        qp.setRenderHint(QPainter.Antialiasing, True)
+        if druh == "text":
+            f = QFont()
+            f.setPixelSize(15)
+            f.setBold(True)
+            qp.setFont(f)
+            qp.setPen(barva)
+            qp.drawText(pm.rect(), Qt.AlignCenter, "A")
+        elif druh == "plocha":
+            c2 = QColor(barva)
+            c2.setAlpha(110)
+            qp.setPen(QPen(barva, 1.2))
+            qp.setBrush(c2)
+            qp.drawRect(3, 4, 14, 12)
+        else:
+            pen = QPen(barva, w)
+            if styl not in ("0", "", "0.0"):
+                pen.setDashPattern([3, 2] if not styl.startswith(("2", "4")) else [4, 1.5, 1, 1.5])
+            qp.setPen(pen)
+            qp.drawLine(2, 15, 18, 5)
+        qp.end()
+        return QIcon(pm)
 
     def _karta_stylu(self, skupiny) -> QWidget:
         from .cad_ikony import ikona as cad_ikona
@@ -382,8 +444,10 @@ class PasKaret(QWidget):
                 b.setText(t.popisek)
                 b.setAutoRaise(True)
                 b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-                b.setIconSize(QSize(16, 16))
-                ik = cad_ikona(druh_ikona.get(t.druh, ""), "#9CA3AF", zvyr)
+                b.setIconSize(QSize(20, 20))
+                ik = self._ikona_nastroje(t)
+                if ik is None:
+                    ik = cad_ikona(druh_ikona.get(t.druh, ""), "#9CA3AF", zvyr)
                 if not ik.isNull():
                     b.setIcon(ik)
                 tip = t.popis or t.popisek
@@ -392,7 +456,7 @@ class PasKaret(QWidget):
                 g.addWidget(b, k % 3, k // 3)
             v.addLayout(g)
             v.addStretch(1)
-            lbl = QLabel(gtit)
+            lbl = QLabel(_hezky_titul(gtit))
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setObjectName("pas_skupina")
             lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {zvyr}; border-top: 2px solid {zvyr}; }}")
@@ -647,3 +711,14 @@ def menu_soubor(stranka) -> QMenu:
     z.triggered.connect(lambda: stranka.zavri_vykres())
     m.aboutToShow.connect(lambda: [a.setEnabled(a.data().isEnabled()) for a in m.actions() if a.data()])
     return m
+
+
+def _hezky_titul(t: str) -> str:
+    """Názvy karet a skupin z knihoven MicroStationu čitelně: „10. Popis“ → „Popis“, „Nová karta“ → „Ostatní“."""
+    import re
+    t = (t or "").strip()
+    t = re.sub(r"^\d+\.?\s+", "", t)
+    if t.lower() in ("nová karta", "nová skupina", "...", "…", ""):
+        return "Ostatní"
+    return t[:1].upper() + t[1:]
+

@@ -182,6 +182,217 @@ class PanelVlastnosti(QTextBrowser):
         self.setHtml("".join(r))
 
 
+class PanelUpravy(QWidget):
+    """Úprava vybraných prvků přímo v Průzkumníku (jako Vlastnosti v MicroStationu): hladina, barva, styl,
+    tloušťka; u textu obsah, výška a natočení; u bodu, buňky a textu poloha. Každá změna = jedno Zpět."""
+
+    def __init__(self, stranka, parent=None):
+        from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QFormLayout, QLineEdit
+        super().__init__(parent)
+        self.s = stranka
+        self._plneni = False
+        f = QFormLayout(self)
+        f.setContentsMargins(0, 0, 0, 0)
+        f.setSpacing(3)
+        self.hladina = QComboBox()
+        self.hladina.setEditable(True)
+        self.hladina.setInsertPolicy(QComboBox.NoInsert)
+        self.hladina.setToolTip("Přesunout vybrané prvky do hladiny (napsaná nová hladina se založí)")
+        self.hladina.activated.connect(lambda _i: self._zmen_hladinu())
+        self.hladina.lineEdit().editingFinished.connect(self._zmen_hladinu)
+        self.barva = QPushButton()
+        self.barva.setToolTip("Barva prvku (tabulka MicroStationu 0–255), nebo dle hladiny – každý prvek může mít "
+                              "jinou barvu než jeho hladina")
+        self.barva.clicked.connect(self._zmen_barvu)
+        self.styl = QComboBox()
+        self.styl.activated.connect(lambda i: self._styl_tl("styl", self.styl.itemData(i)))
+        self.tl = QComboBox()
+        self.tl.activated.connect(lambda i: self._styl_tl("tloušťka", self.tl.itemData(i)))
+        self.text = QLineEdit()
+        self.text.editingFinished.connect(self._zmen_text)
+        self.vyska = QDoubleSpinBox()
+        self.vyska.setRange(0.01, 1000)
+        self.vyska.setDecimals(2)
+        self.vyska.setSuffix(" m")
+        self.vyska.editingFinished.connect(lambda: self._dxf("height", self.vyska.value(), ("TEXT",)))
+        self.uhel = QDoubleSpinBox()
+        self.uhel.setRange(-360, 360)
+        self.uhel.setDecimals(2)
+        self.uhel.setSuffix(" °")
+        self.uhel.editingFinished.connect(lambda: self._dxf("rotation", self.uhel.value(), ("TEXT", "INSERT")))
+        self.y = QLineEdit()
+        self.x = QLineEdit()
+        for w in (self.y, self.x):
+            w.editingFinished.connect(self._zmen_polohu)
+        self.meritko = QDoubleSpinBox()
+        self.meritko.setRange(0.001, 10000)
+        self.meritko.setDecimals(3)
+        self.meritko.editingFinished.connect(self._zmen_meritko)
+        self.radky = {}
+        for jm, w in (("Hladina", self.hladina), ("Barva", self.barva), ("Styl", self.styl), ("Tloušťka", self.tl),
+                      ("Text", self.text), ("Výška textu", self.vyska), ("Natočení", self.uhel),
+                      ("Y", self.y), ("X", self.x), ("Měřítko", self.meritko)):
+            lb = QLabel(jm + ":")
+            f.addRow(lb, w)
+            self.radky[jm] = (lb, w)
+        self.nastav([])
+
+    def _ukaz(self, jm: str, on: bool):
+        for w in self.radky[jm]:
+            w.setVisible(on)
+
+    def nastav(self, vyber: list) -> None:
+        self._plneni = True
+        try:
+            self.setVisible(bool(vyber))
+            if not vyber:
+                return
+            s = self.s
+            typy = {e.dxftype() for e in vyber}
+            jeden = vyber[0] if len(vyber) == 1 else None
+            self.hladina.clear()
+            if s.dok is not None:
+                self.hladina.addItems(sorted((ly.dxf.name for ly in s.dok.doc.layers), key=_klic))
+            hl = {e.dxf.get("layer", "0") for e in vyber}
+            self.hladina.setCurrentText(hl.pop() if len(hl) == 1 else "")
+            barvy = {e.dxf.get("color", 256) for e in vyber}
+            self._ukaz_barvu(barvy.pop() if len(barvy) == 1 else None, jeden)
+            for cil, zdroj in ((self.styl, s.styl_cb), (self.tl, s.tl_cb)):
+                cil.clear()
+                for i in range(zdroj.count()):
+                    if zdroj.itemData(i) is not None:
+                        cil.addItem(zdroj.itemText(i), zdroj.itemData(i))
+                cil.insertItem(0, "(beze změny)", None)
+                cil.setCurrentIndex(0)
+            carove = not typy <= {"TEXT", "MTEXT", "INSERT", "POINT"}
+            self._ukaz("Styl", carove)
+            self._ukaz("Tloušťka", carove)
+            je_text = jeden is not None and jeden.dxftype() == "TEXT"
+            self._ukaz("Text", je_text or (jeden is not None and jeden.dxftype() == "MTEXT"))
+            if self.text.isVisible() or je_text or (jeden is not None and jeden.dxftype() == "MTEXT"):
+                self.text.setText(jeden.dxf.text if je_text else jeden.text)
+            vsechny_texty = typy == {"TEXT"}
+            self._ukaz("Výška textu", vsechny_texty)
+            if vsechny_texty:
+                self.vyska.setValue(vyber[0].dxf.height)
+            self._ukaz("Natočení", jeden is not None and jeden.dxftype() in ("TEXT", "INSERT"))
+            if jeden is not None and jeden.dxftype() in ("TEXT", "INSERT"):
+                self.uhel.setValue(jeden.dxf.get("rotation", 0.0))
+            poloha = jeden is not None and jeden.dxftype() in ("POINT", "INSERT", "TEXT")
+            self._ukaz("Y", poloha)
+            self._ukaz("X", poloha)
+            if poloha:
+                px, py = self._bod(jeden)
+                sj = getattr(s, "sjtsk", False) or (px < 0 and py < 0)
+                self.radky["Y"][0].setText("Y:" if sj else "x:")
+                self.radky["X"][0].setText("X:" if sj else "y:")
+                self.y.setText(f"{-px if sj else px:.3f}")
+                self.x.setText(f"{-py if sj else py:.3f}")
+            self._ukaz("Měřítko", jeden is not None and jeden.dxftype() == "INSERT")
+            if jeden is not None and jeden.dxftype() == "INSERT":
+                self.meritko.setValue(jeden.dxf.get("xscale", 1.0))
+        finally:
+            self._plneni = False
+
+    @staticmethod
+    def _bod(e):
+        if e.dxftype() == "POINT":
+            p = e.dxf.location
+        elif e.dxftype() == "TEXT" and e.dxf.get("halign", 0) + e.dxf.get("valign", 0) > 0 and e.dxf.hasattr(
+                "align_point"):
+            p = e.dxf.align_point
+        else:
+            p = e.dxf.insert
+        return p.x, p.y
+
+    def _ukaz_barvu(self, aci, e):
+        from ..cad import symbologie as SY
+        b = self.barva
+        if aci is None:
+            b.setText("(různé)")
+            b.setStyleSheet("")
+            return
+        if aci == 256:
+            b.setText("dle hladiny")
+            b.setStyleSheet("")
+            return
+        ms = None
+        if e is not None and self.s.kresleni is not None:
+            ms = self.s.kresleni.ms_barvy_prvku.get(e.dxf.handle)
+        if ms is None:
+            ms = SY.aci_na_ms(aci, self.s._pravidla())
+        r, g, bl = SY.tabulka(self.s._pravidla()).get(ms, (128, 128, 128))
+        b.setText(str(ms))
+        b.setStyleSheet(f"background: rgb({r},{g},{bl}); color: {'black' if r * .3 + g * .59 + bl * .11 > 140 else 'white'};")
+
+    # --------------------------------------------------------------- změny
+    def _zmen_hladinu(self):
+        jm = self.hladina.currentText().strip()
+        if self._plneni or not jm or not self.s.vyber:
+            return
+        if all(e.dxf.get("layer", "0") == jm for e in self.s.vyber):
+            return
+        if jm not in self.s.dok.doc.layers:
+            self.s.dok.doc.layers.add(jm)
+        self.s.uprav_vyber(layer=jm)
+
+    def _zmen_barvu(self):
+        from ..cad import symbologie as SY
+        akt = None
+        if len(self.s.vyber) == 1 and self.s.kresleni is not None:
+            akt = self.s.kresleni.ms_barvy_prvku.get(self.s.vyber[0].dxf.handle)
+        d = BarvaDialog(SY.tabulka(self.s._pravidla()), akt, self)
+        if d.exec() and d.vysledek is not None and self.s.vyber:
+            self.s._barva("dle" if d.vysledek == 256 else str(d.vysledek))
+            self.s._zvyrazni()
+
+    def _styl_tl(self, co: str, v):
+        if self._plneni or v is None or not self.s.vyber:
+            return
+        self.s._styl_tloustka(co, v)
+        self.s._zvyrazni()
+
+    def _dxf(self, klic: str, hodnota, typy):
+        if self._plneni or not self.s.vyber:
+            return
+        if all(abs(float(e.dxf.get(klic, 0.0)) - hodnota) < 1e-9 for e in self.s.vyber if e.dxftype() in typy):
+            return
+        self.s.uprav_vyber(_typy=typy, **{klic: hodnota})
+
+    def _zmen_text(self):
+        if self._plneni or len(self.s.vyber) != 1:
+            return
+        e = self.s.vyber[0]
+        t = self.text.text()
+        if not t or (e.dxftype() == "TEXT" and t == e.dxf.text) or (e.dxftype() == "MTEXT" and t == e.text):
+            return
+        self.s.uprav_vyber(text=t)
+
+    def _zmen_polohu(self):
+        if self._plneni or len(self.s.vyber) != 1:
+            return
+        e = self.s.vyber[0]
+        try:
+            a, b = float(self.y.text().replace(",", ".").replace(" ", "")), float(
+                self.x.text().replace(",", ".").replace(" ", ""))
+        except ValueError:
+            return
+        px, py = self._bod(e)
+        sj = self.radky["Y"][0].text().startswith("Y")
+        nx, ny = (-a, -b) if sj else (a, b)
+        if abs(nx - px) < 1e-6 and abs(ny - py) < 1e-6:
+            return
+        self.s.posun_vyber(nx - px, ny - py)
+
+    def _zmen_meritko(self):
+        if self._plneni or len(self.s.vyber) != 1:
+            return
+        m = self.meritko.value()
+        e = self.s.vyber[0]
+        if e.dxftype() == "INSERT" and abs(e.dxf.get("xscale", 1.0) - m) > 1e-9:
+            self.s.uprav_vyber(_typy=("INSERT",), xscale=m, yscale=m)
+
+
 def _maly(text: str, tip: str, fn) -> QPushButton:
     b = QPushButton(text)
     b.setToolTip(tip)
@@ -208,6 +419,8 @@ def obal_vlastnosti(panel: PanelVlastnosti, stranka) -> QWidget:
     r.addWidget(_maly("Vybrat podobné", "Vybere všechny prvky stejného typu ve stejné hladině jako vybraný "
                       "(Shift+B)", lambda: stranka.proved("podobné")))
     v.addLayout(r)
+    stranka.panel_upravy = PanelUpravy(stranka)
+    v.addWidget(stranka.panel_upravy)
     v.addWidget(panel, 1)
     return w
 

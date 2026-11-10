@@ -3693,7 +3693,8 @@ def test_cad_styl_kresleni_um(window, tmp_path):
         pocet = r.karty.count()
         r.nastav_styl(1)
         nejvic = max(p.karty, key=lambda k: sum(len(t) for _s, t in k[1]))[0]  # karta s nejvíc nástroji
-        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == nejvic
+        from kontrola.ui.cad_ribbon import _hezky_titul
+        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == _hezky_titul(nejvic)
         c.ms_keyin('active level "GS02-hranice-plochy zpevněné"; active color 3; active weight 2; active style 0; '
                    'place line constrained')
         assert c.vrstvy.currentText() == "GS02-hranice-plochy zpevněné"
@@ -4077,3 +4078,129 @@ def test_cad_podklad_ortofoto_a_katastr(window, tmp_path):
     f.write_bytes(VFK.encode("cp1250"))
     r = c.katastr_vfk(str(f))
     assert r is not None and r in c.reference and len(r.doc.modelspace()) > 3
+
+
+def test_cad_body_s_atributy_a_uprava_vlastnosti(window):
+    """Body bez zadání s vlastní hladinou, barvou a velikostí (jako import v MicroStationu); úprava vybraného
+    prvku v Průzkumníku – hladina, text, výška, poloha; barva prvku jiná než hladiny."""
+    from kontrola.geodezie.body import Bod
+    c = window.cad
+    window.show_page("cad")
+    c.novy(seed="")
+    body = [Bod(str(100 + i), 743100.0 + 2 * i, 1043400.0 + (i % 3), 250.0) for i in range(12)]
+    d = c.body_ze_seznamu(modal=False)
+    d.nastav_body(body)
+    d.ch["vyska"].setChecked(True)
+    d.hl["cislo"].setCurrentText("CISLA")
+    d._nastav_barvu("cislo", 3)
+    d.vel["cislo"].setValue(0.5)
+    d.tvar.setCurrentIndex(d.tvar.findText("kroužek"))
+    d.vlozit()
+    texty = list(c.prostor.query("TEXT"))
+    cisla = [t for t in texty if t.dxf.layer == "CISLA"]
+    assert len(cisla) == 12 and all(abs(t.dxf.height - 0.5) < 1e-9 for t in cisla)
+    assert all(t.dxf.color != 256 for t in cisla) and "CISLA" in c.dok.doc.layers
+    assert any(t.dxf.layer == "výšky bodů" for t in texty)
+    assert c.dok.doc.header["$PDMODE"] == 32 and len(c.prostor.query("POINT")) == 12
+    # úprava jednoho čísla v Průzkumníku
+    t = cisla[0]
+    c.vyber = [t]
+    c._zvyrazni()
+    pu = c.panel_upravy
+    assert pu.isVisibleTo(c) and pu.text.text() == t.dxf.text
+    pu.text.setText("A1")
+    pu._zmen_text()
+    t2 = c.vyber[0]
+    assert t2.dxf.text == "A1" and t2.dxf.layer == "CISLA"
+    pu.vyska.setValue(1.25)
+    pu._dxf("height", 1.25, ("TEXT",))
+    assert abs(c.vyber[0].dxf.height - 1.25) < 1e-9
+    pu.hladina.setCurrentText("POPISY")
+    pu._zmen_hladinu()
+    assert c.vyber[0].dxf.layer == "POPISY" and "POPISY" in c.dok.doc.layers
+    y0 = float(pu.y.text())
+    pu.y.setText(f"{y0 + 1:.3f}")
+    pu._zmen_polohu()
+    assert abs(float(c.panel_upravy.y.text()) - (y0 + 1)) < 1e-6
+    c.undo()
+    c.undo()
+    assert c.prostor.query("TEXT").first is not None
+
+
+def test_cad_listy_modely_a_arch(window, monkeypatch):
+    """Výkres a tisk: nový list s výřezem a razítkem, okno Modely (přepnout, přejmenovat, smazat), arch,
+    výřez / razítko v modelu nabídne list; „list“ už není zkratka pro Informace o prvku."""
+    from PySide6.QtWidgets import QMessageBox
+    from kontrola.ui.cad_listy import ArchDialog, ModelyDialog, NovyListDialog
+    c = window.cad
+    window.show_page("cad")
+    c.novy(seed="")
+    c.prostor.add_line((-743200, -1043500), (-743000, -1043400))
+    c._po_zmene()
+    d = NovyListDialog(c)
+    d.nazev.setText("Výkres A3")
+    d.p.papir.setCurrentText("A3")
+    d.p.meritko.setValue(500)
+    d.vytvor()
+    assert d.vysledek == "Výkres A3" and c.prostor.name == "Výkres A3"
+    typy = [e.dxftype() for e in c.prostor]
+    assert typy.count("VIEWPORT") >= 1 and "LWPOLYLINE" in typy and "TEXT" in typy  # výřez, rámeček, razítko
+    vp = next(e for e in c.prostor if e.dxftype() == "VIEWPORT" and e.dxf.id > 1)
+    assert abs(vp.dxf.view_height - vp.dxf.height * 500 / 1000) < 1e-6
+    m = ModelyDialog(c)
+    assert m.seznam.count() >= 3
+    m.seznam.setCurrentRow(0)
+    m.prepnout()
+    assert c._je_model()
+    monkeypatch.setattr("kontrola.ui.cad_listy.QInputDialog.getText", lambda *a, **k: ("Situace", True))
+    m.seznam.setCurrentRow(next(i for i in range(m.seznam.count()) if m.seznam.item(i).text().endswith("Výkres A3")))
+    m.prejmenovat()
+    assert "Situace" in c.dok.doc.layout_names()
+    a = ArchDialog(c)
+    a.p.papir.setCurrentText("A4")
+    a.p.sirka.setChecked(False)
+    a.p.meritko.setValue(250)
+    assert a.text() == "A4 na výšku 1:250"
+    # razítko v modelu: s prázdným listem přepne na něj
+    c.razitko()
+    assert not c._je_model() and not len(c.prostor)  # přepnuto na prázdný list
+    c.nastav_model("Model")
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.No))
+    for jm in c.dok.doc.layout_names():
+        if jm != "Model" and not len(c.dok.doc.layouts.get(jm)):
+            c.dok.doc.layouts.get(jm).add_line((0, 0), (1, 1))
+    c.proved("razítko")
+    assert c._je_model()
+    n0 = len(c.historie.toPlainText())
+    c.proved("list Další")
+    assert c.prostor.name == "Další" and "Vyberte prvek" not in c.historie.toPlainText()[n0:]
+
+
+def test_cad_knihovna_bunek_okno(window):
+    """Vložit buňku z pásu = okno knihovny buněk s náhledy, hledání, pak umístění klikem."""
+    from kontrola.ui.cad_bunky import BunkyDialog, nahled
+    c = window.cad
+    window.show_page("cad")
+    c.novy(seed="")
+    blk = c.dok.doc.blocks.new("STROM")
+    blk.add_circle((0, 0), 1)
+    blk.add_line((-1, 0), (1, 0))
+    c.dok.doc.blocks.new("LAMPA").add_line((0, 0), (0, 2))
+    assert not nahled(c.dok.doc, "STROM").isNull()
+    d = BunkyDialog(c)
+    jmena = [d.seznam.item(i).text() for i in range(d.seznam.count())]
+    assert {"STROM", "LAMPA"} <= set(jmena)
+    d.hledat.setText("strom")
+    viditelne = [d.seznam.item(i).text() for i in range(d.seznam.count()) if not d.seznam.item(i).isHidden()]
+    assert viditelne == ["STROM"]
+    d.seznam.setCurrentRow(jmena.index("STROM"))
+    d.meritko.setValue(2)
+    d._ok()
+    assert d.vysledek == ("STROM", 2.0, 0.0)
+    c.umisti_bunku(d.vysledek)
+    assert c.view.nahled is not None and c.view.nahled(5, 5)
+    c.zadej("x=10 y=10")
+    c.zadej("x=20 y=10")
+    c.zadej("")
+    ins = list(c.prostor.query("INSERT"))
+    assert len(ins) == 2 and all(i.dxf.name == "STROM" and i.dxf.xscale == 2 for i in ins)

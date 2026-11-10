@@ -26,6 +26,33 @@ class NastaveniBodu:
     spojnice: object | None = None  # Predvolba pro spojnice z grafiky (linie), None = nevkládat
     spojnice_aktivni: bool = False  # spojnice aktivními atributy (když předvolba není)
     v3d: bool = False  # značky bodů a spojnice ve 3D (souřadnice Z = výška bodu)
+    tvar: int | None = None  # tvar značky bodu ($PDMODE: 0 tečka, 2 +, 3 ×, 32 kroužek, 34 kroužek s +)
+    velikost_znacky: float | None = None  # m ($PDSIZE), None = beze změny
+    bunka: str | None = None  # značka bodu jako buňka (blok) – vlastní volba bez zadání
+    meritko_bunky: float = 1.0
+
+
+TVARY = {"tečka": 0, "křížek +": 2, "křížek ×": 3, "kroužek": 32, "kroužek s křížkem": 34}
+
+
+def odhad_vysky_textu(body) -> float:
+    """Výška čísel bodů podle hustoty bodů (čtvrtina typické vzdálenosti k nejbližšímu bodu), 0,2–2 m –
+    husté body z podrobného měření nesmí překrýt kresbu obřími čísly."""
+    import math
+    pts = [(b.y, b.x) for b in body if b.y is not None and b.x is not None][:400]
+    if len(pts) < 2:
+        return 1.0
+    nn = []
+    for i, (y, x) in enumerate(pts):
+        d = min(math.hypot(y - y2, x - x2) for j, (y2, x2) in enumerate(pts) if j != i)
+        if d > 1e-6:
+            nn.append(d)
+    if not nn:
+        return 1.0
+    nn.sort()
+    typ = nn[len(nn) // 2]
+    v = max(0.2, min(2.0, typ * 0.25))
+    return round(v * 10) / 10 if v >= 0.5 else round(v * 20) / 20
 
 
 def _hleda(pv, *slova, geometrie=None):
@@ -73,6 +100,14 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
         for t in msp.query("TEXT"):
             if t.dxf.layer == nast.cislo.vrstva:
                 existujici.add(t.dxf.text.strip())
+    for pv_ in (nast.znacka, nast.cislo, nast.vyska, nast.kod, nast.spojnice):  # hladiny, které ve výkresu nejsou
+        jm = getattr(pv_, "vrstva", None)
+        if jm and jm not in doc.layers:
+            doc.layers.add(jm)
+    if nast.tvar is not None:
+        doc.header["$PDMODE"] = int(nast.tvar)
+    if nast.velikost_znacky is not None:
+        doc.header["$PDSIZE"] = float(nast.velikost_znacky)
     pomocna = U.Historie(msp)  # jednotlivé kroky do pomocné historie, do hlavní jedna operace
     k.h = pomocna
     try:
@@ -87,6 +122,11 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                 k.nastav_predvolbu(pk)
                 ins = msp.add_blockref(blok, (x, y, z), dxfattribs=k._attr())
                 nove.append(ins)
+                bunky += 1
+            elif nast.znacka is not None and nast.bunka and nast.bunka in doc.blocks:
+                k.nastav_predvolbu(nast.znacka)
+                m = nast.meritko_bunky or 1.0
+                nove.append(msp.add_blockref(nast.bunka, (x, y, z), dxfattribs=k._attr(xscale=m, yscale=m)))
                 bunky += 1
             elif nast.znacka is not None:
                 k.nastav_predvolbu(nast.znacka)

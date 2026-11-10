@@ -7,7 +7,7 @@ import re
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QLabel,
                                QLineEdit, QMessageBox, QVBoxLayout)
 
-from ..cad.body_seznam import NastaveniBodu, vloz_body, vychozi_nastaveni
+from ..cad.body_seznam import TVARY, NastaveniBodu, odhad_vysky_textu, vloz_body, vychozi_nastaveni
 
 
 def _klic(c: str):
@@ -21,8 +21,10 @@ class BodyDialog(QDialog):
         self.setWindowTitle("Body ze seznamu souřadnic")
         self._soubor_body = None
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel("Body se umístí na své souřadnice (shodně se světem S-JTSK jako v MicroStationu). "
-                             "Značka, číslo a výška se zapíšou do hladin a s atributy podle zadání."))
+        uvod = QLabel("Body se umístí na své souřadnice (shodně se světem S-JTSK jako v MicroStationu). "
+                      "U značky, čísla, výšky a kódu zvolte hladinu, barvu a velikost – nebo druh prvku ze zadání.")
+        uvod.setWordWrap(True)
+        lay.addWidget(uvod)
         f = QFormLayout()
         self.zdroj = QComboBox()
         self.zdroj.addItems(["Seznam souřadnic projektu (Výpočty)", "Ze souboru…"])
@@ -33,26 +35,92 @@ class BodyDialog(QDialog):
         f.addRow("Body:", self.filtr)
         self._pv = page._predvolby
         vych = vychozi_nastaveni(self._pv)
-        self.cb = {}
-        for klic, popis, typy, hodnota in (("znacka", "Značka bodu", ("bod", None), vych.znacka),
-                                           ("cislo", "Číslo bodu", ("text",), vych.cislo),
-                                           ("vyska", "Výška", ("text",), vych.vyska),
-                                           ("kod", "Kód", ("text",), None)):
+        lay.addLayout(f)
+        f = QFormLayout()
+        # atributy jako při importu bodů do MicroStationu: co vložit, hladina, barva, velikost
+        from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QDoubleSpinBox, QGridLayout, QGroupBox, QPushButton
+        self._nast = QSettings("KontrolaVykresu", "KontrolaVykresu")
+        grp = QGroupBox("Co vložit a s jakými atributy")
+        g = QGridLayout(grp)
+        for c, t in enumerate(("", "Podle", "Hladina", "Barva", "Velikost [m]")):
+            if t:
+                lb = QLabel(f"<b>{t}</b>")
+                g.addWidget(lb, 0, c)
+        vrstvy = sorted(ly.dxf.name for ly in page.dok.doc.layers) if page.dok is not None else ["0"]
+        self.cb, self.ch, self.hl, self.barvy, self.vel = {}, {}, {}, {}, {}
+        odhad = odhad_vysky_textu(self._vsechny_body())
+        radky = (("znacka", "Značka bodu", ("bod", None), vych.znacka, "body", 0.3),
+                 ("cislo", "Číslo bodu", ("text",), vych.cislo, "čísla bodů", odhad),
+                 ("vyska", "Výška", ("text",), vych.vyska, "výšky bodů", odhad * 0.8),
+                 ("kod", "Kód", ("text",), None, "kódy bodů", odhad * 0.8))
+        for r, (klic, popis, typy, hodnota, vrstva, velikost) in enumerate(radky, start=1):
+            ch = QCheckBox(popis)
+            ch.setChecked(self._nast.value(f"cad/body/{klic}/ano", "true" if klic in ("znacka", "cislo") else
+                                           "false") in (True, "true"))
             cb = QComboBox()
-            cb.addItem("(nevkládat)", None)
+            cb.addItem("vlastní atributy", "vlastni")
             for p in self._pv:
                 if p.geometrie in typy or (klic == "znacka" and p.blok):
-                    cb.addItem(p.nazev, p)
-            if klic == "znacka":
-                cb.addItem("bod v aktivní hladině", "aktivni")
-            else:
-                cb.addItem("text v aktivní hladině", "aktivni")
+                    cb.addItem(f"zadání: {p.nazev}", p)
             if hodnota is not None:
-                cb.setCurrentIndex(max(0, cb.findText(hodnota.nazev)))
-            elif klic in ("znacka", "cislo") and not any(p.geometrie in typy for p in self._pv):
-                cb.setCurrentIndex(cb.findData("aktivni"))
-            self.cb[klic] = cb
-            f.addRow(popis + ":", cb)
+                cb.setCurrentIndex(max(0, cb.findText(f"zadání: {hodnota.nazev}")))
+            cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            cb.setMinimumContentsLength(10)
+            cb.setToolTip("Vlastní atributy, nebo druh prvku ze zadání (hladina, barva i velikost podle Směrnice)")
+            hl = QComboBox()
+            hl.setEditable(True)
+            hl.addItems(vrstvy)
+            hl.setCurrentText(str(self._nast.value(f"cad/body/{klic}/hladina", vrstva)))
+            hl.setToolTip("Hladina – vyberte, nebo napište novou (založí se)")
+            hl.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            hl.setMinimumContentsLength(9)
+            bv = QPushButton()
+            bv.setToolTip("Barva z tabulky MicroStationu (0–255), nebo dle hladiny")
+            bv.setMaximumWidth(90)
+            bv.clicked.connect(lambda _=False, k=klic: self._vyber_barvu(k))
+            sp = QDoubleSpinBox()
+            sp.setRange(0.01, 100.0)
+            sp.setDecimals(2)
+            sp.setSingleStep(0.1)
+            try:
+                sp.setValue(float(self._nast.value(f"cad/body/{klic}/velikost", round(velikost, 2))))
+            except (TypeError, ValueError):
+                sp.setValue(round(velikost, 2))
+            sp.setMaximumWidth(90)
+            sp.setToolTip("Výška textu v metrech výkresu" if klic != "znacka" else
+                          "Velikost značky (křížek, kroužek) v metrech; u buňky měřítko")
+            self.ch[klic], self.cb[klic], self.hl[klic], self.barvy[klic], self.vel[klic] = ch, cb, hl, bv, sp
+            try:
+                self._barva_ms = getattr(self, "_barva_ms", {})
+                b = int(self._nast.value(f"cad/body/{klic}/barva", 256))
+            except (TypeError, ValueError):
+                b = 256
+            self._nastav_barvu(klic, b)
+            for c, w in enumerate((ch, cb, hl, bv, sp)):
+                g.addWidget(w, r, c)
+            cb.currentIndexChanged.connect(lambda _i, k=klic: self._povol(k))
+            ch.toggled.connect(lambda _on, k=klic: self._povol(k))
+        self.tvar = QComboBox()
+        for t, kod in TVARY.items():
+            self.tvar.addItem(t, ("tvar", kod))
+        if page.dok is not None:
+            for b in sorted(b.name for b in page.dok.doc.blocks if not b.name.startswith(("*", "_"))
+                            and not b.is_any_layout and not getattr(b.block, "is_xref", False)):
+                self.tvar.addItem(f"buňka {b}", ("bunka", b))
+        self.tvar.addItem("buňka z knihovny…", ("knihovna", None))
+        self.tvar.setCurrentIndex(max(0, self.tvar.findText(str(self._nast.value("cad/body/tvar", "křížek ×")))))
+        self.tvar.activated.connect(self._tvar_vybran)
+        self.tvar.setToolTip("Tvar značky bodu (pro celý výkres, jako PDMODE), nebo buňka")
+        g.addWidget(QLabel("Tvar značky:"), len(radky) + 1, 0)
+        g.addWidget(self.tvar, len(radky) + 1, 1)
+        tip = QLabel(f"Výška textu {odhad:.2f} m je odhad podle hustoty bodů (čísla se nepřekrývají).")
+        tip.setWordWrap(True)
+        tip.setStyleSheet("color: gray;")
+        g.addWidget(tip, len(radky) + 2, 0, 1, 5)
+        lay.addWidget(grp)
+        for k in self.cb:
+            self._povol(k)
         self.cb_spoj = QComboBox()
         self.cb_spoj.addItem("(nevkládat)", None)
         self.cb_spoj.addItem("aktivní atributy", "aktivni")
@@ -68,7 +136,7 @@ class BodyDialog(QDialog):
         self.v3d = QCheckBox("Ve 3D (ve výšce bodu Z)")
         self.v3d.setToolTip("Značky a spojnice ve výšce bodu (Z) – pro 3D výkres a model terénu")
         # dlouhé názvy předvoleb nesmí okno roztáhnout (celý název je v rozbalení)
-        for c in (self.zdroj, *self.cb.values(), self.cb_spoj):
+        for c in (self.zdroj, self.cb_spoj):
             c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             c.setMinimumContentsLength(24)
         f.addRow(self.podle_kodu)
@@ -133,23 +201,88 @@ class BodyDialog(QDialog):
         self.info.setText(f"Vloží se {n} bodů." if n else "Ve zdroji nejsou žádné body.")
 
     def nastaveni(self) -> NastaveniBodu:
+        from ..cad import symbologie as SY
+        from ..cad.zadani import Predvolba
         n = NastaveniBodu(podle_kodu=self.podle_kodu.isChecked(), preskocit_existujici=self.preskocit.isChecked(),
                           v3d=self.v3d.isChecked())
-        for k, cb in self.cb.items():
+        rs = self.page._pravidla()
+        for klic, cb in self.cb.items():
+            if not self.ch[klic].isChecked():
+                setattr(n, klic, None)
+                continue
             d = cb.currentData()
-            setattr(n, k, None if d in (None, "aktivni") else d)
-        from ..cad.zadani import Predvolba
-        k = self.page.kresleni
-        for klic in ("znacka", "cislo", "vyska", "kod"):
-            if self.cb[klic].currentData() == "aktivni":
-                geom = "bod" if klic == "znacka" else "text"
-                setattr(n, klic, Predvolba(nazev="aktivní", geometrie=geom, nastroj=geom, vrstva=k.vrstva,
-                                           barva=k.barva))
-        n.vyska_textu = self.page.vyska_textu
+            if d != "vlastni":
+                setattr(n, klic, d)
+                continue
+            ms = self._barva_ms.get(klic, 256)
+            aci = 256 if ms == 256 else SY.ms_na_aci(ms, rs)
+            geom = "bod" if klic == "znacka" else "text"
+            vrstva = self.hl[klic].currentText().strip() or "0"
+            setattr(n, klic, Predvolba(nazev="vlastní", geometrie=geom, nastroj=geom, vrstva=vrstva, barva=aci,
+                                       vyska=None if klic == "znacka" else self.vel[klic].value(),
+                                       ms={} if ms == 256 else {"barva": ms}))
+        if n.znacka is not None and self.cb["znacka"].currentData() == "vlastni":
+            druh, hodnota = self.tvar.currentData() or ("tvar", 3)
+            if druh == "bunka":
+                n.bunka, n.meritko_bunky = hodnota, self.vel["znacka"].value()
+            else:
+                n.tvar, n.velikost_znacky = int(hodnota), self.vel["znacka"].value()
+        n.vyska_textu = self.vel["cislo"].value()
         d = self.cb_spoj.currentData()
         n.spojnice = d if d not in (None, "aktivni") else None
         n.spojnice_aktivni = d == "aktivni"
         return n
+
+    def _uloz_volby(self):
+        for k in self.cb:
+            self._nast.setValue(f"cad/body/{k}/ano", self.ch[k].isChecked())
+            self._nast.setValue(f"cad/body/{k}/hladina", self.hl[k].currentText())
+            self._nast.setValue(f"cad/body/{k}/barva", self._barva_ms.get(k, 256))
+            self._nast.setValue(f"cad/body/{k}/velikost", self.vel[k].value())
+        self._nast.setValue("cad/body/tvar", self.tvar.currentText())
+
+    def _povol(self, klic: str):
+        on = self.ch[klic].isChecked()
+        vlastni = self.cb[klic].currentData() == "vlastni"
+        self.cb[klic].setEnabled(on)
+        for w in (self.hl[klic], self.barvy[klic], self.vel[klic]):
+            w.setEnabled(on and vlastni)
+        if klic == "znacka":
+            self.tvar.setEnabled(on and vlastni)
+
+    def _nastav_barvu(self, klic: str, ms: int):
+        from ..cad import symbologie as SY
+        self._barva_ms[klic] = ms
+        b = self.barvy[klic]
+        if ms == 256:
+            b.setText("dle hl.")
+            b.setStyleSheet("")
+        else:
+            r, g_, bl = SY.tabulka(self.page._pravidla()).get(ms, (128, 128, 128))
+            svetla = r * 0.3 + g_ * 0.59 + bl * 0.11 > 140
+            b.setText(str(ms))
+            b.setStyleSheet(f"background: rgb({r},{g_},{bl}); color: {'black' if svetla else 'white'};")
+
+    def _vyber_barvu(self, klic: str):
+        from ..cad import symbologie as SY
+        from .cad_panely import BarvaDialog
+        d = BarvaDialog(SY.tabulka(self.page._pravidla()), self._barva_ms.get(klic), self)
+        if d.exec() and d.vysledek is not None:
+            self._nastav_barvu(klic, d.vysledek)
+
+    def _tvar_vybran(self, i: int):
+        druh, _h = self.tvar.itemData(i) or ("tvar", 0)
+        if druh != "knihovna":
+            return
+        jmena = self.page.knihovna_bunek() or []
+        for jm in jmena:
+            if self.tvar.findData(("bunka", jm)) < 0:
+                self.tvar.insertItem(self.tvar.count() - 1, f"buňka {jm}", ("bunka", jm))
+        self.tvar.setCurrentIndex(self.tvar.findData(("bunka", jmena[0])) if jmena else 0)
+
+    def _vsechny_body(self) -> list:
+        v = getattr(self.page.win, "vypocty", None) if self.page.win is not None else None
+        return list(v.seznam.body) if v is not None else []
 
     def spojnice(self) -> list:
         v = getattr(self.page.win, "vypocty", None) if self.page.win is not None else None
@@ -165,6 +298,7 @@ class BodyDialog(QDialog):
             return
         if not pg._je_model():
             pg.nastav_model("Model")
+        self._uloz_volby()
         self.vysledek = vloz_body(pg.prostor, pg.historie_zmen, body, self.nastaveni(), self._pv, pg.kresleni,
                                   self.spojnice())
         pg._po_zmene(self.vysledek["prvky"], [])

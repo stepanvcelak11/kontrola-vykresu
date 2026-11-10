@@ -148,6 +148,7 @@ class MainWindow(QMainWindow):
         sb = self.statusBar()
         self.coord_label = QLabel("X: –   Y: –")
         self.coord_label.setMinimumWidth(260)
+        self.coord_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)  # bez přepočtu rozvržení
         self.info_label = QLabel("")
         self.progress = QProgressBar()
         self.progress.setMaximumWidth(260)
