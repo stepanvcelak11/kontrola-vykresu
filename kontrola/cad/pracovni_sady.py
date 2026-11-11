@@ -225,6 +225,14 @@ def pravidla_sady(sada: Sada | None):
     if not pasy:
         return None
     rs = pravidla_pasu(pasy, textove_styly(sada))
+    # hladiny knihoven sady bez vlastního tlačítka (výšky sítí, KN, měřická síť…) jsou povolené
+    from .dokument import hladiny_v8
+    s_pravidlem = {r.hladina for r in rs.pravidla}
+    for p in [*sada.dgnlib, *([sada.seed] if sada.seed else [])]:
+        if p.suffix.lower() in (".dgnlib", ".dgn"):
+            for h in hladiny_v8(p):
+                if h not in s_pravidlem and h not in rs.povolene_hladiny:
+                    rs.povolene_hladiny.append(h)
     return rs if rs.pravidla else None
 
 

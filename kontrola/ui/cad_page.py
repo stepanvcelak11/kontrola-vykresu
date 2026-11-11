@@ -2857,7 +2857,7 @@ class CadPage(QWidget):
             sada = PS.aktivni()
             zs = getattr(self.win, "zadani", None)
             if sada is not None and zs is not None and PS.styly_kresleni(sada):
-                n = zs.table_page.ze_sady(sada.klic)
+                n = zs.table_page.ze_sady(sada.klic, self.anotace)
                 if n:
                     self.vypis(f"Zadání bylo prázdné – kontroluje se podle pracovní sady {sada.nazev} "
                                f"({n} druhů prvků z pásu karet). Tabulku od učitele přidáte v Zadání.")

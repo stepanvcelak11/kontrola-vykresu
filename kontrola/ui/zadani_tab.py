@@ -131,7 +131,7 @@ class TablePage(QWidget):
         lay.addWidget(nad)
         lay.addWidget(self.last)
 
-    def ze_sady(self, klic: str | None = None):
+    def ze_sady(self, klic: str | None = None, meritko: int | None = None):
         """Pravidla kontroly z pásů karet pracovní sady (Účelová mapa…): přidají se k pravidlům projektu."""
         from PySide6.QtWidgets import QInputDialog
 
@@ -152,6 +152,10 @@ class TablePage(QWidget):
         rs = PS.pravidla_sady(mozne.get(klic))
         if rs is None:
             return 0
+        if meritko is None:  # rozměry písma jsou v mm na papíře – měřítko podle měřítka anotací výkresu v CADu
+            cad = getattr(self.window(), "cad", None)
+            meritko = getattr(cad, "anotace", None)
+        rs.meritko = int(meritko or rs.meritko or 1000)
         pr = self.tab.project
         if not pr.rules.barevna_tabulka and rs.barevna_tabulka:
             pr.rules.barevna_tabulka = dict(rs.barevna_tabulka)
@@ -159,7 +163,7 @@ class TablePage(QWidget):
         self.tab.rules_changed()
         self.last.setHtml(f"<b>Zadání z pracovní sady {klic}</b>: {added} nových pravidel, {replaced} nahrazeno. "
                           "Každé pravidlo odpovídá jednomu nástroji pásu karet (hladina, barva, styl, tloušťka, "
-                          "buňka, výška a zarovnání písma). V CADu se podle nich nastaví druhy prvků a Kontrola "
+                          "buňka, výška a šířka písma). V CADu se podle nich nastaví druhy prvků a Kontrola "
                           "hlídá, že je výkres dodržuje.")
         return added + replaced
 

@@ -304,8 +304,9 @@ class TextovyStyl:
 def textove_styly(cesta: str | Path) -> dict[str, TextovyStyl]:
     """Textové styly (Text Styles) z .dgnlib / .dgn V8, klíč = název malými písmeny.
 
-    Záznam v proudu ``Dgn^Nm``: název (UTF-16 nebo 8bit), 10 nul, značka ``5f 00 40 44`` a 48 B za ní čtyři
-    čísla double – šířka, výška, sklon, řádkování; na +128 zarovnání (0 = LT … 14 = RB)."""
+    Záznam v proudu ``Dgn^Nm``: značka ``5f 00 40 44``, 48 B za ní čtyři čísla double – šířka, výška, sklon,
+    řádkování; na +128 zarovnání (0 = LT … 14 = RB) a na konci záznamu název (UTF-16 nebo 8bit). Ověřeno proti
+    tabulce „Atributy ÚM“ (výšky a šířky písma jednotlivých druhů textu)."""
     import struct
 
     import olefile
@@ -325,19 +326,22 @@ def textove_styly(cesta: str | Path) -> dict[str, TextovyStyl]:
                 d = _inflate(ole.openstream(s).read()) or b""
             except Exception:  # noqa: BLE001
                 continue
+            # záznam stylu = hlavička se značkou, rozměry, zarovnání … a NÁZEV až na konci (10 B před značkou
+            # dalšího záznamu) – hodnoty za značkou tedy patří k názvu, který po nich následuje
+            zaznamy = []  # (název před značkou, šířka, výška, zarovnání za značkou)
             for m in re.finditer(rb"\x5f\x00\x40\x44", d):
                 i = m.start()
-                j = i - 10
-                k = d.rfind(b"\xff\xfe", max(0, j - 400), j)
-                if k < 0 or len(d) < i + 132 or d[i + 12:i + 16] != b"\x03\x00\x00\x00":
+                if len(d) < i + 132 or d[i + 12:i + 16] != b"\x03\x00\x00\x00":
                     continue
+                k = d.rfind(b"\xff\xfe", max(0, i - 410), i - 10)
                 n = struct.unpack_from("<H", d, k - 2)[0] if k >= 2 else 0
-                nazev = _decode(d[k:k + n]) if n else ""
-                nazev = nazev.strip()
+                nazev = _decode(d[k:k + n]).strip() if n and k + n <= i else ""
                 sirka, vyska = struct.unpack_from("<2d", d, i + 48)
+                zaznamy.append((nazev, sirka, vyska, d[i + 128]))
+            for (_n, sirka, vyska, just), (nazev, *_zb) in zip(zaznamy, zaznamy[1:]):
                 if not nazev or not (1e-4 < vyska < 1000 and 1e-4 < sirka < 1000):
                     continue
-                hv = _JUST.get(d[i + 128])
+                hv = _JUST.get(just)
                 out.setdefault(nazev.lower(), TextovyStyl(nazev, round(vyska, 6), round(sirka, 6),
                                                           _ZAROVNANI.get(hv) if hv and hv != (0, 0) else None))
     finally:
@@ -397,13 +401,9 @@ def predvolby_pasu(pasy, styly: dict | None = None, rs=None) -> list:
     return out
 
 
-_ZAROVNANI_SLOVY = {"LEFT": "vlevo", "CENTER": "střed", "RIGHT": "vpravo", "TOP": "nahoře", "MIDDLE": "uprostřed",
-                    "BOTTOM": "dole"}
-
-
 def pravidla_pasu(pasy, styly: dict | None = None, hladiny=None):
     """Pravidla kontroly (``rules.RuleSet``) z nástrojů pásů karet pracovní sady – každé tlačítko je jeden druh
-    prvku: hladina, barva, styl a tloušťka čáry, buňka, u textu výška, šířka a zarovnání podle textového stylu.
+    prvku: hladina, barva, styl a tloušťka čáry, buňka, u textu výška a šířka písma podle textového stylu.
 
     ``hladiny`` = hladiny knihoven sady; nástroje se starými hladinami („Vrstva 8“), které v sadě nejsou,
     se vynechají. Rozměry písma jsou v mm na papíře v měřítku 1:1000 (měřítko anotací MultiScale)."""
@@ -418,13 +418,15 @@ def pravidla_pasu(pasy, styly: dict | None = None, hladiny=None):
         for karta, skupiny in pas.karty:
             for skupina, tl in skupiny:
                 for t in tl:
-                    if t.druh not in ("cara", "bunka", "text", "plocha"):
+                    if t.druh not in ("cara", "bunka", "text", "plocha", "nastaveni"):
                         continue
                     nast, prik = preloz(t.keyin)
                     d = dict(x.split("=", 1) for x in nast.split(";") if "=" in x)
                     lv = d.get("lv")
-                    if not lv or not prik or (zname is not None and lv.lower() not in zname):
+                    if not lv or (zname is not None and lv.lower() not in zname):
                         continue
+                    if not prik and not (t.druh == "nastaveni" and "co" in d and "lc" in d):
+                        continue  # tlačítko jen s atributy (inženýrské sítě) = druh linie; jiná bez nástroje ne
                     r = Rule(kod="", nazev=(t.popis or t.popisek or "").strip(), hladina=lv,
                              zdroj=f"{pas.nazev} → {_hezky_karta(karta)} → {skupina}")
                     try:
@@ -439,9 +441,9 @@ def pravidla_pasu(pasy, styly: dict | None = None, hladiny=None):
                         r.geometrie, zaklad = GeomType.TEXT, "T"
                         st = styly.get(d.get("ts", "").lower())
                         if st is not None:
+                            # zarovnání se nekontroluje: tabulky atributů ho nepředepisují, knihovny sady se
+                            # v něm rozcházejí a MicroStation ho do DXF převádí jinak (dole → účaří)
                             r.vyska_textu, r.sirka_textu = st.vyska, st.sirka
-                            if st.zarovnani:
-                                r.zarovnani = " ".join(_ZAROVNANI_SLOVY[c] for c in st.zarovnani.split("_")[::-1])
                         elif "th" in d:
                             try:
                                 r.vyska_textu = float(d["th"])

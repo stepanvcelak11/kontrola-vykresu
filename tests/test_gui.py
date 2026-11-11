@@ -3974,18 +3974,22 @@ def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
         assert {ly.dxf.name for ly in c.dok.doc.layers} != hl_pasport
         # textové styly školní knihovny: tlačítko „Kód p. b.“ nastaví výšku, šířku a zarovnání písma
         styly = PS.textove_styly(PS.aktivni())
-        assert styly["kód bodu"].vyska == 1.6 and styly["popis vodstva"].vyska == 3.0 and len(styly) >= 25
+        # hodnoty ověřené proti tabulce „Atributy ÚM“ od učitele (výška / šířka písma v mm)
+        assert (styly["kód bodu"].vyska, styly["kód bodu"].sirka) == (0.3, 0.3) and len(styly) >= 25
+        assert (styly["názvy ulic"].vyska, styly["názvy ulic"].sirka) == (3.0, 2.9)
+        assert (styly["popis vodstva"].vyska, styly["popis objektů"].vyska, styly["popis ploch"].vyska) == (2.3, 2.3, 1.6)
+        assert (styly["popis kn"].vyska, styly["legenda"].sirka) == (1.7, 2.3)
         c.ms_keyin('active level "GS01-body-kódy"; active color 2; active weight 0; active style 0; '
                    'textstyle active "Kód bodu"')
-        assert c.vyska_textu == 1.6 and c.kresleni.zarovnani == "BOTTOM_CENTER"
-        assert c.kresleni.sirka_faktor == pytest.approx(1.5 / 1.6, abs=1e-3)
+        assert c.vyska_textu == 0.3 and c.kresleni.zarovnani == "TOP_RIGHT"
+        assert c.kresleni.sirka_faktor == pytest.approx(1.0, abs=1e-3)
         d = c.text_dialog(modal=False)
-        assert d.vys.value() == pytest.approx(1.6) and d.zar.currentData() == "BOTTOM_CENTER"
+        assert d.vys.value() == pytest.approx(0.3) and d.zar.currentData() == "TOP_RIGHT"
         c.umisti_text("5.12", d.vys.value(), 0, d.zar.currentData())
         c.zadej("x=-743100 y=-1043430")
         c.zadej("")
         t = c.prostor.query("TEXT").last
-        assert t.dxf.layer == "GS01-body-kódy" and t.dxf.height == pytest.approx(1.6)
+        assert t.dxf.layer == "GS01-body-kódy" and t.dxf.height == pytest.approx(0.3)
         # vrstevnice z pásu ÚM se kreslí křivkou
         c.ms_keyin('active level "GS09-výškopis-vrstevnice základní"; active color 70; active weight 1; '
                    'active style 0; place curve icon')
@@ -4007,14 +4011,14 @@ def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
         cisla = [e for e in nove if e.dxftype() == "TEXT" and e.dxf.layer == "GS01-body-čísla"]
         vysky = [e for e in nove if e.dxftype() == "TEXT" and e.dxf.layer == "GS09-výškopis-body podrobné-výšky"]
         assert len(cisla) == 2 and cisla[0].dxf.height == pytest.approx(0.3)
-        assert len(vysky) == 2 and vysky[0].dxf.height == pytest.approx(1.9) and vysky[0].dxf.text == "250.12"
+        assert len(vysky) == 2 and vysky[0].dxf.height == pytest.approx(1.6) and vysky[0].dxf.text == "250.12"
         bunky = [e for e in nove if e.dxftype() == "INSERT"]
         assert len(bunky) == 1 and bunky[0].dxf.name == "1.02" and bunky[0].dxf.layer == "GS01-body-BP+PMS-buňky"
         # zadání z pracovní sady: pravidla kontroly z nástrojů pásu – výkres nakreslený nástroji ÚM jim vyhoví
         rs = PS.pravidla_sady(PS.aktivni())
         assert len(rs.pravidla) > 250 and rs.meritko == 1000 and len({r.kod for r in rs.pravidla}) == len(rs.pravidla)
         kod = next(r for r in rs.pravidla if r.nazev == "Kód podrobného bodu")
-        assert (kod.hladina, kod.barva, kod.vyska_textu, kod.zarovnani) == ("GS01-body-kódy", 2, 1.6, "střed dole")
+        assert (kod.hladina, kod.barva, kod.vyska_textu, kod.zarovnani) == ("GS01-body-kódy", 2, 0.3, None)
         from kontrola.config import Config
         from kontrola.io import load_drawing
         from kontrola.runner import run_checks
