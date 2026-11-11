@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLab
                                QStackedWidget, QTabBar, QToolButton, QVBoxLayout, QWidget)
 
 from .cad_ikony import ikona
+from .pas import PasScroll, popisek_skupiny
 
 # příkaz → (český název, název v MicroStationu)
 NAZVY = {
@@ -238,19 +239,15 @@ class PasKaret(QWidget):
         self.b_soubor.setObjectName("cad_soubor")
         self.b_soubor.setPopupMode(QToolButton.InstantPopup)
         self.b_soubor.setToolTip("Nový, otevřít, uložit, tisk (MicroStation: File)")
-        from .theme import accent
-        self.b_soubor.setStyleSheet(f"QToolButton#cad_soubor{{background:{accent()};color:white;padding:4px 16px;"
-                                    "border-radius:6px;font-weight:700;margin:3px 0} QToolButton#cad_soubor"
-                                    "::menu-indicator{image:none}")
         horni.addWidget(self.b_soubor)
         self.pracovni_postup = _PruzneCombo(70)
         self.pracovni_postup.setToolTip("Pracovní postup (Workflow): které karty jsou vidět")
-        horni.addWidget(self.pracovni_postup)
+        self.pracovni_postup.hide()  # volba je v nabídce Soubor → Karty pásu (horní řádek zůstane čistý)
         self.styl_kresleni = _PruzneCombo(110)
         self.styl_kresleni.setToolTip("Styl kreslení (jako v MultiScale): např. Účelová mapa (ÚM) přidá karty "
                                       "s přednastavenými prvky – hladina, barva, styl, tloušťka a nástroj jedním "
                                       "kliknutím. Nabízí pásy z aktivní pracovní sady (Dgnlib/GUI).")
-        horni.addWidget(self.styl_kresleni)
+        self.styl_kresleni.setObjectName("pas_volba")
         self._pasy: list = []
         self._dynamicke: list[QWidget] = []
         self.styl_kresleni.activated.connect(lambda i: self.nastav_styl(i))
@@ -259,7 +256,9 @@ class PasKaret(QWidget):
         self.karty.setExpanding(False)
         self.karty.setUsesScrollButtons(True)
         horni.addWidget(self.karty, 1)
+        horni.addWidget(self.styl_kresleni)
         self.vpravo = QHBoxLayout()
+        self.vpravo.setSpacing(4)
         horni.addLayout(self.vpravo)
         lay.addLayout(horni)
         self.stack = QStackedWidget()
@@ -267,10 +266,6 @@ class PasKaret(QWidget):
         lay.addWidget(self.stack)
         self._stranky: dict[str, QWidget] = {}
         for titul, skupiny in KARTY:
-            sc = QScrollArea()
-            sc.setFrameShape(QFrame.NoFrame)
-            sc.setWidgetResizable(True)
-            sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             w = QWidget()
             w.setObjectName("pas_obsah")
             h = QHBoxLayout(w)
@@ -282,8 +277,7 @@ class PasKaret(QWidget):
                 sep.setObjectName("pas_oddelovac")
                 h.addWidget(sep)
             h.addStretch(1)
-            sc.setWidget(w)
-            sc.setFixedHeight(w.sizeHint().height() + 14)
+            sc = PasScroll(w)
             self.stack.addWidget(sc)
             self.karty.addTab(titul)
             self._stranky[titul] = sc
@@ -423,10 +417,6 @@ class PasKaret(QWidget):
         from .cad_ikony import ikona as cad_ikona
         druh_ikona = {"cara": "polylinie", "bunka": "vlož", "text": "text", "atributy": "převod atributů", "plocha": "polylinie",
                       "nastaveni": "vrstvy"}
-        sc = QScrollArea()
-        sc.setFrameShape(QFrame.NoFrame)
-        sc.setWidgetResizable(True)
-        sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         w = QWidget()
         w.setObjectName("pas_obsah")
         h = QHBoxLayout(w)
@@ -457,20 +447,16 @@ class PasKaret(QWidget):
                 g.addWidget(b, k % 3, k // 3)
             v.addLayout(g)
             v.addStretch(1)
-            lbl = QLabel(_hezky_titul(gtit))
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setObjectName("pas_skupina")
-            lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {zvyr}; border-top: 2px solid {zvyr}; }}")
-            v.addWidget(lbl)
+            v.addWidget(popisek_skupiny(_hezky_titul(gtit)))
             h.addWidget(box)
             sep = QFrame()
             sep.setObjectName("pas_oddelovac")
             h.addWidget(sep)
         h.addStretch(1)
-        sc.setWidget(w)
+        sc = PasScroll(w)
         # stejná výška jako standardní karty (stack.height() je před zobrazením 480 px → obří pás)
         std = max((x.height() for x in self._stranky.values()), default=0)
-        sc.setFixedHeight(max(std, w.sizeHint().height() + 14))
+        sc.setFixedHeight(max(std, w.sizeHint().height() + 2))
         return sc
 
     def ukaz_kartu(self, titul: str):
@@ -499,12 +485,7 @@ class PasKaret(QWidget):
             g.addWidget(b, i % 3, i // 3)
         v.addLayout(g)
         v.addStretch(1)
-        lbl = QLabel(titul)
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setObjectName("pas_skupina")
-        bs = barva_skupiny(titul)
-        lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {bs}; border-top: 2px solid {bs}; }}")
-        v.addWidget(lbl)
+        v.addWidget(popisek_skupiny(titul))
         h.insertWidget(h.count() - 1, box)
 
     def _skupina(self, titul, polozky, popisy, stranka, barva, zvyr) -> QWidget:
@@ -546,13 +527,7 @@ class PasKaret(QWidget):
                 g.addWidget(b, i % 3, col + i // 3)
         v.addLayout(g)
         v.addStretch(1)
-        lbl = QLabel(titul)
-        lbl.setAlignment(Qt.AlignCenter)
-        lbl.setObjectName("pas_skupina")
-        # každá skupina má barevný proužek s názvem (rychlá orientace v pásu)
-        bs = barva_skupiny(titul)
-        lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {bs}; border-top: 2px solid {bs}; }}")
-        v.addWidget(lbl)
+        v.addWidget(popisek_skupiny(titul))
         return box
 
     def _pridej(self, cmd, popisy, barva, zvyr, velke) -> QToolButton:
@@ -574,11 +549,12 @@ class PanelUloh(QScrollArea):
         self.setFrameShape(QScrollArea.NoFrame)
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(2, 2, 2, 2)
+        lay.setContentsMargins(6, 4, 6, 4)
         lay.setSpacing(1)
         hl = QLabel("Úlohy – Kreslení")
         hl.setObjectName("nadpis_sekce")
         hl.setToolTip("MicroStation: Tasks → Drawing")
+        hl.hide()  # název už nese titulek okna Úlohy
         lay.addWidget(hl)
         self.tlacitka: dict[str, QToolButton] = {}
         self.vyber = QToolButton()
@@ -602,7 +578,6 @@ class PanelUloh(QScrollArea):
             hlav.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
             hlav.setSizePolicy(hlav.sizePolicy().horizontalPolicy().Expanding, hlav.sizePolicy().verticalPolicy())
             hlav.setObjectName("cad_skupina_uloh")
-            hlav.setStyleSheet(f"QToolButton#cad_skupina_uloh {{ border-left: 3px solid {zvyr}; }}")
             obsah = QWidget()
             ov = QVBoxLayout(obsah)
             ov.setContentsMargins(6, 0, 0, 2)
@@ -704,6 +679,17 @@ def menu_soubor(stranka) -> QMenu:
         a.triggered.connect(b.click)
         a.setData(b)
     m.addSeparator()
+    from PySide6.QtGui import QActionGroup
+    mk = m.addMenu("Karty pásu")
+    mk.setToolTip("Které karty pásu jsou vidět (MicroStation: Workflow)")
+    pas = stranka.ribbon
+    grp = QActionGroup(mk)
+    for jm in pas.POSTUPY:
+        a = mk.addAction(jm)
+        a.setCheckable(True)
+        a.setChecked(pas.pracovni_postup.currentText() == jm)
+        a.triggered.connect(lambda _c=False, j=jm: pas.pracovni_postup.setCurrentText(j))
+        grp.addAction(a)
     ps = m.addAction("Pracovní sada…")
     ps.setToolTip("Bez pracovní sady / MultiScale / Pasport / TM – seed, hladiny, buňky a styly čar")
     ps.triggered.connect(lambda: stranka.pracovni_sada())

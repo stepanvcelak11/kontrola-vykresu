@@ -942,8 +942,14 @@ class ZadaniTab(QWidget):
         self.get_drawing = get_drawing
         self.setAcceptDrops(True)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        from .theme import zahlavi_stranky
+        self.zahlavi = zahlavi_stranky("Zadání", "Podklady od učitele, podle kterých se výkres kontroluje: tabulka "
+                                       "atributů, pokyny, pravidla, náčrty a vzorový výkres.")
+        lay.addWidget(self.zahlavi)
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("zalozky_stranky")
         self.table_page = TablePage(self)
         self.rules_editor = RulesEditor()
         self.rules_editor.rulesChanged.connect(self._rules_edited)

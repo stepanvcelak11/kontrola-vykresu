@@ -19,6 +19,13 @@ SUBTLE = "#F8FAFC"
 TEXT = "#111827"
 MUTED = "#6B7280"
 ALT_ROW = "#F6F8FB"
+# levá navigační lišta je tmavá ve světlém i tmavém vzhledu (pevný rám aplikace)
+RAIL = "#18222D"
+RAIL_HOVER = "#263443"
+RAIL_AKT = "#2D3D4E"
+RAIL_LINE = "#34465A"
+RAIL_TEXT = "#C2CDD9"
+RAIL_OFF = "#7F8E9E"
 
 # čárové ikony 24×24 (styl „outline“), barva se doplní při vykreslení
 _ICONS = {
@@ -231,25 +238,25 @@ QMenu::icon {{ padding-left: 8px; }}
 
 QToolBar {{ background: {PANEL}; border: none; border-bottom: 1px solid {BORDER}; padding: 6px 10px; spacing: 4px; }}
 QToolBar::separator {{ width: 1px; background: {BORDER}; margin: 7px 8px; }}
-QToolButton {{ padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; color: #374151; }}
+QToolButton {{ padding: 5px 9px; border: 1px solid transparent; border-radius: 6px; color: #374151; }}
 QToolButton:hover {{ background: {HOVER}; border-color: {BORDER}; color: {TEXT}; }}
 QToolButton:pressed {{ background: #E5E7EB; }}
 QToolButton:checked {{ background: {ACCENT_SOFT}; border-color: #C7D2FE; color: {ACCENT_HOVER}; }}
-QToolButton#primarni {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 {ACCENT});
-    color: white; font-weight: 700; padding: 6px 16px; border: 1px solid {ACCENT_HOVER}; }}
+QToolButton#primarni {{ background: {ACCENT}; color: white; font-weight: 700; padding: 6px 16px;
+    border: 1px solid {ACCENT}; }}
 QToolButton#primarni:hover {{ background: {ACCENT_HOVER}; }}
 
-QPushButton {{ background: {PANEL}; border: 1px solid {BORDER_STRONG}; border-radius: 8px; padding: 6px 14px;
+QPushButton {{ background: {PANEL}; border: 1px solid {BORDER_STRONG}; border-radius: 6px; padding: 5px 13px;
     min-height: 18px; }}
 QPushButton:hover {{ background: {HOVER}; border-color: #9CA3AF; }}
 QPushButton:pressed {{ background: #E5E7EB; }}
 QPushButton:disabled {{ color: #9CA3AF; background: {SUBTLE}; border-color: {BORDER}; }}
+QPushButton:checked {{ background: {ACCENT_SOFT}; border-color: {ACCENT}; color: {TEXT}; font-weight: 600; }}
 QPushButton:flat {{ border: none; background: transparent; }}
 QDialogButtonBox QPushButton:default {{ background: {ACCENT}; color: white; border-color: {ACCENT};
     font-weight: 600; }}
 QDialogButtonBox QPushButton:default:hover {{ background: {ACCENT_HOVER}; }}
-QPushButton[primarni="true"] {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3B82F6, stop:1 {ACCENT});
-    color: white; border-color: {ACCENT_HOVER}; font-weight: 700; }}
+QPushButton[primarni="true"] {{ background: {ACCENT}; color: white; border-color: {ACCENT}; font-weight: 700; }}
 QPushButton[primarni="true"]:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton[primarni="true"]:disabled {{ background: #93C5FD; border-color: #93C5FD; color: white; }}
 QWidget[kompaktni="true"] QPushButton {{ padding: 2px 9px; min-height: 18px; border-radius: 6px; }}
@@ -276,30 +283,32 @@ QPushButton#nastroj {{ text-align: left; padding: 9px 12px; border-radius: 10px;
 QPushButton#nastroj:hover {{ background: {ACCENT_SOFT}; border-color: #C7D2FE; color: {ACCENT_HOVER}; }}
 
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QTextEdit, QTextBrowser {{
-    background: {PANEL}; border: 1px solid {BORDER_STRONG}; border-radius: 8px; padding: 5px 8px;
+    background: {PANEL}; border: 1px solid {BORDER_STRONG}; border-radius: 6px; padding: 4px 8px;
     selection-background-color: {ACCENT}; selection-color: white; }}
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: #9CA3AF; }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
     border: 1px solid {ACCENT}; }}
 QTextBrowser {{ padding: 8px 10px; }}
 
-QTabWidget::pane {{ border: none; background: {BG}; }}
+QTabWidget::pane {{ border: none; border-top: 1px solid {BORDER}; background: {BG}; }}
+QTabWidget#hlavni_zalozky::pane {{ border-top: none; }}
 QTabBar {{ qproperty-drawBase: 0; }}
-QTabBar::tab {{ background: transparent; padding: 8px 16px; margin: 4px 2px 4px 0; border: 1px solid transparent;
-    border-radius: 8px; color: {MUTED}; font-weight: 600; }}
-QTabBar::tab:selected {{ color: {ACCENT_HOVER}; background: {ACCENT_SOFT}; border-color: #C7D2FE; }}
+QTabBar::tab {{ background: transparent; padding: 8px 14px 6px 14px; margin: 0 2px 0 0; border: none;
+    border-bottom: 3px solid transparent; border-radius: 0; color: {MUTED}; font-weight: 600; }}
+QTabBar::tab:selected {{ color: {TEXT}; border-bottom: 3px solid {ACCENT}; }}
 QTabBar::tab:hover:!selected {{ color: {TEXT}; background: {HOVER}; }}
+QTabBar::tab:disabled {{ color: #9CA3AF; }}
 QTabWidget#hlavni_zalozky > QTabBar {{ background: {PANEL}; }}
-QTabWidget#hlavni_zalozky > QTabBar::tab {{ padding: 8px 18px; margin: 6px 4px 6px 0; font-size: 10.5pt; }}
+QTabWidget#zalozky_stranky::tab-bar {{ left: 12px; }}
 
-QGroupBox {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 10px; margin-top: 22px;
+QGroupBox {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; margin-top: 22px;
     padding: 12px 10px 10px 10px; font-weight: 700; }}
-QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 10px; top: 3px;
-    padding: 0 4px; color: {ACCENT_HOVER}; }}
+QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 4px; top: 3px;
+    padding: 0 4px; color: #374151; }}
 QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton {{ font-weight: normal; }}
 
 QTableView, QTreeView, QListWidget, QListView {{ background: {PANEL}; border: 1px solid {BORDER};
-    border-radius: 8px; alternate-background-color: {ALT_ROW}; gridline-color: {BORDER};
+    border-radius: 6px; alternate-background-color: {ALT_ROW}; gridline-color: {BORDER};
     selection-background-color: {ACCENT_SOFT}; selection-color: {TEXT}; outline: 0; }}
 QTableView::item {{ padding: 3px 8px; border: none; }}
 QTableView::item:hover, QListWidget::item:hover, QTreeView::item:hover {{ background: {HOVER}; }}
@@ -309,11 +318,11 @@ QListWidget::item {{ padding: 6px 8px; border-radius: 0; border-bottom: 1px soli
 QListWidget::item:selected {{ border-left: 3px solid {ACCENT}; }}
 QHeaderView {{ background: {HEADER}; border: none; }}
 QHeaderView::section {{ background: {HEADER}; border: none; border-right: 1px solid {BORDER};
-    border-bottom: 2px solid {BORDER_STRONG}; padding: 6px 8px; font-weight: 700; color: #374151; }}
+    border-bottom: 1px solid {BORDER_STRONG}; padding: 5px 8px; font-weight: 600; color: #374151; }}
 QHeaderView::section:last {{ border-right: none; }}
-QHeaderView::section:vertical {{ border-bottom: 1px solid {BORDER}; border-right: 2px solid {BORDER_STRONG};
+QHeaderView::section:vertical {{ border-bottom: 1px solid {BORDER}; border-right: 1px solid {BORDER_STRONG};
     padding: 2px 6px; font-weight: 600; color: {MUTED}; }}
-QTableCornerButton::section {{ background: {HEADER}; border: none; border-bottom: 2px solid {BORDER_STRONG}; }}
+QTableCornerButton::section {{ background: {HEADER}; border: none; border-bottom: 1px solid {BORDER_STRONG}; }}
 
 QScrollBar:vertical {{ background: transparent; width: 11px; margin: 2px; }}
 QScrollBar::handle:vertical {{ background: #CBD2DC; border-radius: 4px; min-height: 30px; }}
@@ -347,8 +356,11 @@ QSlider::handle:horizontal {{ background: {PANEL}; border: 2px solid {ACCENT}; w
     border-radius: 8px; }}
 
 QScrollArea#navod_oblast, QWidget#navod_obsah {{ background: transparent; }}
+QFrame#zahlavi_stranky {{ background: {PANEL}; border: none; border-bottom: 1px solid {BORDER}; }}
+QLabel#zahlavi_titul {{ font-size: 13pt; font-weight: 800; background: transparent; }}
+QLabel#zahlavi_popis {{ color: {MUTED}; background: transparent; }}
 QLabel#krok_nadpis {{ font-size: 11.5pt; font-weight: 800; }}
-QLabel#uvod_nadpis {{ font-size: 21pt; font-weight: 800; }}
+QLabel#uvod_nadpis {{ font-size: 16pt; font-weight: 800; }}
 QLabel#uvod_podnadpis {{ color: {MUTED}; font-size: 10pt; }}
 QLabel#karta_cislo {{ font-size: 18pt; font-weight: 800; }}
 QLabel#karta_popis {{ color: {MUTED}; font-size: 9pt; }}
@@ -359,21 +371,29 @@ QLabel#banner {{ background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 
     color: #78350F; }}
 QFrame#karta {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 12px; }}
 QFrame#karta:hover {{ border-color: {BORDER_STRONG}; }}
-QFrame#hero {{ border: none; border-radius: 16px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1E40AF, stop:0.55 #2563EB, stop:1 #0EA5E9); }}
+QFrame#hero {{ border: none; border-radius: 12px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {RAIL}, stop:1 #2B4258); }}
 QFrame#hero QLabel {{ color: white; background: transparent; }}
-QFrame#hero QLabel#uvod_podnadpis {{ color: #E0ECFF; }}
+QFrame#hero QLabel#uvod_podnadpis {{ color: {RAIL_TEXT}; }}
 QLabel#souhrn {{ color: #374151; }}
 QScrollArea#cad_paleta QToolButton {{ padding: 2px; margin: 0; border-radius: 6px; }}
 QScrollArea#cad_paleta, QScrollArea#cad_paleta > QWidget > QWidget {{ background: {PANEL}; }}
 QLabel#cad_paleta_nadpis {{ color: {MUTED}; font-size: 8pt; font-weight: 600; padding: 6px 2px 1px 2px; }}
 QLabel#cad_vyzva {{ font-weight: 600; color: {ACCENT}; }}
 QLabel#cad_titulek {{ font-weight: 600; }}
-QToolBar#hlavni_panel {{ background: {PANEL}; border: none; border-right: 1px solid {BORDER}; padding: 4px 4px;
-    spacing: 1px; }}
-QToolBar#hlavni_panel QToolButton {{ padding: 3px 2px; margin: 0px 4px; border-radius: 10px; font-size: 8pt; }}
-QToolBar#hlavni_panel QToolButton:checked {{ background: {ACCENT_SOFT}; color: #1E40AE; border: 1px solid #C7D2FE;
+QToolBar#hlavni_panel {{ background: {RAIL}; border: none; padding: 6px 0; spacing: 1px; }}
+QToolBar#hlavni_panel::separator {{ height: 1px; background: {RAIL_LINE}; margin: 4px 12px; }}
+QToolBar#hlavni_panel QToolButton {{ padding: 4px 2px 3px 2px; margin: 0 6px; border-radius: 8px; font-size: 8pt;
+    color: {RAIL_TEXT}; border: 1px solid transparent; background: transparent; }}
+QToolBar#hlavni_panel QToolButton:hover {{ background: {RAIL_HOVER}; color: white; border-color: transparent; }}
+QToolBar#hlavni_panel QToolButton:pressed {{ background: {RAIL_LINE}; }}
+QToolBar#hlavni_panel QToolButton:checked {{ background: {RAIL_AKT}; color: white; border: 1px solid {RAIL_LINE};
     font-weight: 700; }}
+QToolBar#hlavni_panel QToolButton:disabled {{ color: {RAIL_OFF}; }}
+QToolBar#hlavni_panel QToolButton#primarni {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; }}
+QToolBar#hlavni_panel QToolButton#primarni:hover {{ background: {ACCENT_HOVER}; }}
+QLabel#lista_sekce {{ color: {RAIL_OFF}; font-size: 7pt; font-weight: 800; letter-spacing: 0.8px;
+    padding: 8px 0 2px 0; background: transparent; }}
 QTableView#karty_chyb {{ background: transparent; border: none; }}
 QTableView#karty_chyb::item, QTableView#karty_chyb::item:hover, QTableView#karty_chyb::item:selected {{
     background: transparent; border: none; }}
@@ -408,11 +428,40 @@ QWidget#cad_ribbon QTabBar::tab:selected, QWidget#pas_karet QTabBar::tab:selecte
 QWidget#cad_ribbon QTabBar::tab:hover:!selected, QWidget#pas_karet QTabBar::tab:hover:!selected {{
     color: {TEXT}; background: {HOVER}; }}
 QWidget#pas_obsah {{ background: {PANEL}; border-top: 1px solid {BORDER}; }}
-QLabel#pas_skupina {{ color: {MUTED}; font-size: 8pt; font-weight: 600; padding: 1px 0 3px 0;
-    border-top: 1px solid {BORDER}; }}
-QFrame#pas_oddelovac {{ background: {BORDER}; max-width: 1px; min-width: 1px; border: none; margin: 4px 3px; }}
-QWidget#cad_ribbon QToolButton, QWidget#pas_karet QToolButton {{ padding: 3px 8px; border-radius: 6px;
-    text-align: left; }}
+QWidget#pas_obsah QPushButton {{ padding: 2px 8px; min-height: 18px; border: 1px solid transparent;
+    background: transparent; text-align: left; border-radius: 5px; }}
+QWidget#pas_obsah QPushButton:hover {{ background: {ACCENT_SOFT}; border-color: #C7D2FE; }}
+QWidget#pas_obsah QPushButton:disabled {{ background: transparent; border-color: transparent; }}
+QWidget#pas_obsah QPushButton[ramecek="true"] {{ border: 1px solid {BORDER_STRONG}; background: {PANEL};
+    text-align: center; }}
+QWidget#pas_obsah QPushButton[ramecek="true"]:hover {{ border-color: {ACCENT}; background: {ACCENT_SOFT}; }}
+QWidget#pas_obsah QPushButton[primarni="true"] {{ background: {ACCENT}; color: white; border-color: {ACCENT};
+    text-align: center; padding: 2px 14px; }}
+QWidget#pas_obsah QPushButton[primarni="true"]:hover {{ background: {ACCENT_HOVER}; }}
+QWidget#cad_stav {{ background: {HEADER}; border-top: 1px solid {BORDER_STRONG}; }}
+QWidget#cad_stav QPushButton {{ padding: 2px 10px; min-height: 18px; border-radius: 5px; }}
+QWidget#cad_stav QLineEdit, QWidget#cad_stav QSpinBox {{ padding-top: 2px; padding-bottom: 2px; min-height: 18px; }}
+QToolButton#cad_uchyt {{ padding: 2px; margin: 0; border-radius: 5px; border: 1px solid transparent; }}
+QToolButton#cad_uchyt:checked {{ background: {PANEL}; border-color: {BORDER_STRONG}; }}
+QToolButton#cad_uchyt:hover {{ border-color: {ACCENT}; }}
+QLabel#cad_souradnice {{ font-family: Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace; color: #374151; }}
+QWidget#pas_obsah QComboBox, QWidget#pas_obsah QLineEdit, QWidget#pas_obsah QSpinBox {{ padding-top: 2px;
+    padding-bottom: 2px; min-height: 18px; }}
+QLabel#pas_skupina {{ color: {MUTED}; font-size: 8pt; font-weight: 600; padding: 2px 0 3px 0; }}
+QFrame#pas_oddelovac {{ background: {BORDER}; max-width: 1px; min-width: 1px; border: none; margin: 6px 4px; }}
+QWidget#cad_ribbon QToolButton, QWidget#pas_karet QToolButton {{ padding: 3px 8px; border-radius: 5px;
+    text-align: left; color: {TEXT}; }}
+QWidget#cad_ribbon QToolButton:checked, QWidget#pas_karet QToolButton:checked {{ background: {ACCENT_SOFT};
+    border-color: {ACCENT}; color: {TEXT}; }}
+QWidget#cad_ribbon QToolButton#pas_posun, QWidget#pas_karet QToolButton#pas_posun {{ background: {HEADER}; border: none; border-left: 1px solid {BORDER_STRONG};
+    border-right: 1px solid {BORDER_STRONG}; border-radius: 0; padding: 0; }}
+QWidget#cad_ribbon QToolButton#pas_posun:hover, QWidget#pas_karet QToolButton#pas_posun:hover {{ background: {ACCENT_SOFT}; border-color: {ACCENT}; }}
+QToolButton#cad_soubor {{ background: {ACCENT}; color: white; padding: 4px 16px; border-radius: 6px;
+    font-weight: 700; margin: 3px 0; border: 1px solid {ACCENT}; }}
+QToolButton#cad_soubor:hover {{ background: {ACCENT_HOVER}; color: white; }}
+QComboBox#pas_volba {{ background: {HEADER}; border: 1px solid {BORDER}; border-radius: 6px; padding: 3px 8px;
+    font-weight: 600; color: #374151; }}
+QComboBox#pas_volba:hover {{ border-color: {ACCENT}; }}
 QWidget#cad_ribbon QToolButton:hover, QWidget#pas_karet QToolButton:hover {{ background: {ACCENT_SOFT};
     border-color: #C7D2FE; }}
 
@@ -422,7 +471,7 @@ QWidget#stavovy_radek {{ background: {HEADER}; border-top: 1px solid {BORDER}; }
 QWidget#stavovy_radek QLabel {{ color: #374151; padding: 2px 10px; border-right: 1px solid {BORDER}; }}
 QLabel#stranka_info {{ background: {HEADER}; border: 1px solid {BORDER}; border-left: 3px solid {ACCENT};
     border-radius: 6px; padding: 7px 10px; color: #374151; }}
-QLabel#nadpis_sekce {{ font-weight: 700; color: {ACCENT_HOVER}; padding: 6px 0 2px 0; }}
+QLabel#nadpis_sekce {{ font-weight: 700; color: #374151; padding: 6px 0 2px 0; }}
 QLabel#poznamka {{ color: {MUTED}; }}
 QFrame#oddil_ulohy {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 6px; }}
 QFrame#oddil_ulohy QLabel {{ background: transparent; }}
@@ -443,7 +492,7 @@ QPlainTextEdit#vypis, QTextEdit#vypis, QTextBrowser#vypis {{ background: {SUBTLE
 QPlainTextEdit#cad_historie {{ background: {SUBTLE}; border: none; border-top: 1px solid {BORDER};
     border-radius: 0; font-family: Consolas, "Cascadia Mono", "DejaVu Sans Mono", monospace; color: {MUTED}; }}
 QToolButton#cad_skupina_uloh {{ text-align: left; font-weight: 700; padding: 4px 6px; border: none;
-    border-bottom: 1px solid {BORDER}; border-radius: 0; background: {HEADER}; color: {TEXT}; margin-top: 4px; }}
+    border-radius: 5px; background: {HEADER}; color: #374151; margin-top: 4px; }}
 QToolButton#cad_skupina_uloh:hover {{ background: {HOVER}; }}
 
 /* ---- datová okna Výpočtů ---- */
@@ -580,6 +629,32 @@ def dlazdice(nazev: str, popis: str):
         lbl.setWordWrap(True)
         v.addWidget(lbl)
     return b
+
+
+def zahlavi_stranky(titul: str, popis: str = ""):
+    """Jednotné záhlaví stránky: název, pod ním jedna věta k čemu stránka je; vpravo místo na tlačítka
+    (rozvržení ``vpravo``). Stejné na všech stránkách – hned je vidět, kde člověk je."""
+    from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
+    f = QFrame()
+    f.setObjectName("zahlavi_stranky")
+    h = QHBoxLayout(f)
+    h.setContentsMargins(18, 9, 18, 9)
+    h.setSpacing(12)
+    v = QVBoxLayout()
+    v.setSpacing(1)
+    f.titul = QLabel(titul)
+    f.titul.setObjectName("zahlavi_titul")
+    v.addWidget(f.titul)
+    f.popis = QLabel(popis)
+    f.popis.setObjectName("zahlavi_popis")
+    f.popis.setWordWrap(True)
+    f.popis.setVisible(bool(popis))
+    v.addWidget(f.popis)
+    h.addLayout(v, 1)
+    f.vpravo = QHBoxLayout()
+    f.vpravo.setSpacing(6)
+    h.addLayout(f.vpravo)
+    return f
 
 
 def prazdny_stav(view, text: str) -> None:

@@ -142,6 +142,18 @@ class DatovaOkna(QMdiArea):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.subWindowActivated.connect(self._aktivovano)
+        self._barva_plochy()
+
+    def _barva_plochy(self) -> None:
+        from PySide6.QtGui import QColor
+
+        from .theme import BG, themed
+        self.setBackground(QColor(themed(BG)))
+
+    def changeEvent(self, e):  # noqa: N802
+        super().changeEvent(e)
+        if e.type() == e.Type.StyleChange:
+            self._barva_plochy()
 
     # --- rozhraní jako QTabWidget
     def addTab(self, w: QWidget, titul: str, viditelne: bool = True) -> int:  # noqa: N802
@@ -407,9 +419,9 @@ class ListaNastaveni(QWidget):
         self.ulohy = QComboBox()
         self.ulohy.setToolTip("Rozpracovaná úloha – každá má svůj seznam souřadnic, zápisník a protokol "
                               "(jako soubory v Gromě). Poslední položka založí novou.")
-        self.ulohy.setMinimumWidth(110)
+        self.ulohy.setMinimumWidth(130)
         self.ulohy.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.ulohy.setMinimumContentsLength(9)
+        self.ulohy.setMinimumContentsLength(18)
         self.ulohy.activated.connect(self._vyber_ulohy)
         lay.addWidget(QLabel("Úloha:"))
         lay.addWidget(self.ulohy)
@@ -603,7 +615,7 @@ class PasGromy(QWidget):
                 g.setSpacing(0)
                 from PySide6.QtCore import QSize
 
-                from .groma_ikony import barva_skupiny
+                from .pas import PasScroll, popisek_skupiny
                 from .groma_ikony import ikona as g_ikona
                 for k, (text, cil) in enumerate(tlacitka):
                     b = QToolButton()
@@ -634,23 +646,13 @@ class PasGromy(QWidget):
                     g.addWidget(b, k % 3, k // 3)
                 v.addLayout(g)
                 v.addStretch(1)
-                lbl = QLabel(skupina)
-                lbl.setAlignment(Qt.AlignCenter)
-                lbl.setObjectName("pas_skupina")
-                bs = barva_skupiny(skupina)
-                lbl.setStyleSheet(f"QLabel#pas_skupina {{ color: {bs}; border-top: 2px solid {bs}; }}")
-                v.addWidget(lbl)
+                v.addWidget(popisek_skupiny(skupina))
                 h.addWidget(box)
                 sep = QFrame()
                 sep.setObjectName("pas_oddelovac")
                 h.addWidget(sep)
             h.addStretch(1)
-            sc = QScrollArea()
-            sc.setWidget(obsah)
-            sc.setWidgetResizable(True)
-            sc.setFrameShape(QFrame.NoFrame)
-            sc.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            sc.setFixedHeight(obsah.sizeHint().height() + 14)
+            sc = PasScroll(obsah)
             self.stack.addWidget(sc)
         self.karty.currentChanged.connect(self.stack.setCurrentIndex)
         i = [k for k, _s in KARTY_GROMA].index("Výpočty")

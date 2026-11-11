@@ -24,13 +24,14 @@ class KokesPage(QWidget):
         super().__init__(parent)
         self.win = win
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
-        nadpis = QLabel("<b>KOKEŠ</b> – seznam souřadnic s čísly bodů KN, kreslící klíče, tabulky ze Směrnice, "
-                        "výkres a katastr. Body jsou společné se stránkou Výpočty, výkres se kreslí v CAD.")
-        nadpis.setWordWrap(True)
-        nadpis.setObjectName("stranka_info")
-        lay.addWidget(nadpis)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        from .theme import zahlavi_stranky
+        self.zahlavi = zahlavi_stranky("Kokeš", "Seznam souřadnic s čísly bodů KN, kreslící klíče, tabulky ze "
+                                       "Směrnice a katastr. Body jsou společné s Výpočty, výkres se kreslí v CAD.")
+        lay.addWidget(self.zahlavi)
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("zalozky_stranky")
         lay.addWidget(self.tabs, 1)
         self._tab_ss()
         self._tab_klice()

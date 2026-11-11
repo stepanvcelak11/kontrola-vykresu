@@ -107,7 +107,7 @@ class Rozcestnik(QScrollArea):
             from ..resources import resource_path
             pm = QPixmap(str(resource_path("ikona.png")))
             if not pm.isNull():
-                logo.setPixmap(pm.scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                logo.setPixmap(pm.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         except Exception:  # noqa: BLE001
             pass
         hl.addWidget(logo)

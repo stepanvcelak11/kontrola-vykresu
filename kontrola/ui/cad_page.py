@@ -674,6 +674,7 @@ class CadPage(QWidget):
         self.b_tisk = QPushButton("Tisk do PDF…")
         self.b_tisk.setToolTip("Vytisknout model v měřítku nebo list do PDF (vektorově, na bílý papír)")
         self.b_check = QPushButton("Zkontrolovat")
+        self.b_check.setProperty("primarni", True)
         self.b_check.setObjectName("primary")
         self.b_check.setToolTip("Uloží výkres a zkontroluje ho v Kontrole výkresu (chyby se ukážou na stránce "
                                 "Výkres)")
@@ -760,6 +761,8 @@ class CadPage(QWidget):
         self.predvolby_cb.setToolTip("Druh prvku ze zadání – hladina, barva, styl, tloušťka a písmo se nastaví samy")
         arow.addWidget(skupina(QLabel("Kreslím:"), self.predvolby_cb), 1)
         self.b_na_vyber = QPushButton("Použít na výběr")
+        self.b_na_vyber.setProperty("ramecek", True)
+        self.b_barva.setProperty("ramecek", True)
         self.b_na_vyber.setToolTip("Vybraným prvkům nastaví atributy zvoleného druhu prvku")
         arow.addWidget(self.b_na_vyber)
         self.predvolba_info = QLabel()
@@ -771,22 +774,28 @@ class CadPage(QWidget):
         self.atributy = QWidget()
         ga = QGridLayout(self.atributy)
         ga.setContentsMargins(0, 0, 0, 0)
-        ga.setHorizontalSpacing(4)
-        ga.setVerticalSpacing(2)
+        ga.setHorizontalSpacing(6)
+        ga.setVerticalSpacing(3)
         self.vrstvy.setMinimumWidth(170)
         self.styl_cb.setMinimumWidth(120)
         self.tl_cb.setMinimumWidth(90)
         self.predvolby_cb.setMinimumWidth(220)
         self.predvolby_cb.setMaximumWidth(320)
-        ga.addWidget(QLabel("Hladina:"), 0, 0)
+        def _pop(t):
+            lb = QLabel(t)
+            lb.setObjectName("poznamka")
+            lb.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            return lb
+        ga.addWidget(_pop("Hladina"), 0, 0)
         ga.addWidget(self.vrstvy, 0, 1)
-        ga.addWidget(QLabel("Barva:"), 0, 2)
+        ga.addWidget(_pop("Barva"), 0, 2)
         ga.addWidget(self.b_barva, 0, 3)
-        ga.addWidget(QLabel("Styl:"), 1, 0)
+        ga.addWidget(_pop("Styl"), 1, 0)
         ga.addWidget(self.styl_cb, 1, 1)
-        ga.addWidget(QLabel("Tloušťka:"), 1, 2)
+        ga.addWidget(_pop("Tloušťka"), 1, 2)
         ga.addWidget(self.tl_cb, 1, 3)
-        ga.addWidget(QLabel("Šablona:"), 2, 0)
+        ga.addWidget(_pop("Šablona"), 2, 0)
+        ga.setColumnMinimumWidth(2, 62)
         self.predvolby_cb.setToolTip("Šablona prvku ze zadání (MicroStation: Element Template) – hladina, barva, "
                                      "styl, tloušťka a písmo se nastaví samy")
         ga.addWidget(self.predvolby_cb, 2, 1, 1, 2)
@@ -813,6 +822,7 @@ class CadPage(QWidget):
             w.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             w.setMinimumWidth(40)
             w.setMaximumWidth(260)
+        self.title.setMinimumWidth(130)
         self.vykresy_cb = QComboBox()
         self.vykresy_cb.setToolTip("Rozpracované výkresy – přepnutí na jiný (každý má svou historii Zpět a pohled)."
                                    " Zavřít výkres: Soubor → Zavřít výkres.")
@@ -895,18 +905,29 @@ class CadPage(QWidget):
         self.vyzva = QLabel(self.VYZVA_KLID)
         self.vyzva.setObjectName("cad_vyzva")
         self.vyzva.setSizePolicy(_SP.Ignored, _SP.Fixed)
+        # spodní lišta (výzva + příkaz + úchyty) je jeden pruh oddělený od výkresu
+        self.spodni_lista = QWidget()
+        self.spodni_lista.setObjectName("cad_stav")
+        self.spodni_lista.setAttribute(Qt.WA_StyledBackground, True)
+        _sl = QVBoxLayout(self.spodni_lista)
+        _sl.setContentsMargins(0, 0, 0, 0)
+        _sl.setSpacing(0)
         self.radek_vyzvy = QHBoxLayout()
-        self.radek_vyzvy.setContentsMargins(8, 2, 8, 0)
+        self.radek_vyzvy.setContentsMargins(10, 4, 10, 0)
         self.radek_vyzvy.addWidget(self.vyzva, 1)
-        lay.addLayout(self.radek_vyzvy)
+        _sl.addLayout(self.radek_vyzvy)
         crow = QHBoxLayout()
-        crow.setContentsMargins(8, 2, 8, 5)
-        crow.addWidget(QLabel("Příkaz:"))
+        crow.setContentsMargins(10, 3, 10, 6)
+        crow.setSpacing(4)
+        _lp = QLabel("Příkaz")
+        _lp.setObjectName("poznamka")
+        crow.addWidget(_lp)
         self.prikaz = QLineEdit()
         self.prikaz.setObjectName("cad_prikaz")
         self.prikaz.setPlaceholderText("Příkaz (u, pl, kr, m, ?) nebo souřadnice „Y X“, „@dx,dy“, "
                                        "„@délka<směrník“ – Enter")
         crow.addWidget(self.prikaz, 1)
+        crow.addSpacing(8)
         self.b_uchyty = QPushButton("Úchyty")
         self.b_ortho = QPushButton("Pravoúhle")
         self.b_polar = QPushButton("Úhlový krok")
@@ -952,8 +973,8 @@ class CadPage(QWidget):
             tb.setDefaultAction(a)
             tb.setAutoRaise(True)
             tb.setIconSize(QSize(16, 16))
-            tb.setStyleSheet("QToolButton{padding:2px;margin:0}")
-            tb.setFixedWidth(30)  # i s větším písmem / jiným vzhledem stejně úzké – okno se vejde na notebook
+            tb.setObjectName("cad_uchyt")
+            tb.setFixedWidth(28)  # i s větším písmem / jiným vzhledem stejně úzké – okno se vejde na notebook
             crow.insertWidget(_poz, tb)
             _poz += 1
         self.krok = QSpinBox()
@@ -962,13 +983,15 @@ class CadPage(QWidget):
         self.krok.setSuffix(" g")
         self.krok.setToolTip("Krok polárního režimu v gonech")
         self.krok.setMaximumWidth(80)
+        crow.insertSpacing(crow.indexOf(self.b_ortho), 8)
         crow.addWidget(self.krok)
         self.anotace_cb = QComboBox()
-        self.anotace_cb.addItem("Anot. vyp.", 0)
+        self.anotace_cb.addItem("Anotace vyp.", 0)
         for m in (200, 250, 500, 1000, 2000, 2880, 5000, 10000):
-            self.anotace_cb.addItem(f"A 1:{m}", m)
+            self.anotace_cb.addItem(f"Anotace 1:{m}", m)
         self.anotace_cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.anotace_cb.setMinimumContentsLength(7)
+        self.anotace_cb.setMinimumContentsLength(11)
+        self.anotace_cb.setObjectName("pas_volba")
         self.anotace_cb.setToolTip(
             "<b>Měřítko anotací</b> (MicroStation: Annotation Scale – typické pro MultiScale)<br>"
             "Texty a buňky (značky) se kreslí ve velikosti na papíře × měřítko: výška 2,5 při 1:1000 = 2,5 m, "
@@ -990,7 +1013,8 @@ class CadPage(QWidget):
         self.coords.setFixedWidth(self.coords.fontMetrics().horizontalAdvance(
             "Y 1 043 999.999   X 1 243 999.999   [střed oblouku]") + 12)
         self.radek_vyzvy.addWidget(self.coords)
-        lay.addLayout(crow)
+        _sl.addLayout(crow)
+        lay.addWidget(self.spodni_lista)
         self.b_barva.clicked.connect(self._vyber_barvy)
         self.styl_cb.activated.connect(self._styl_z_listy)
         self.tl_cb.activated.connect(self._tloustka_z_listy)
@@ -1161,7 +1185,7 @@ class CadPage(QWidget):
         self.anotace = m
         i = self.anotace_cb.findData(m or 0)
         if i < 0 and m:
-            self.anotace_cb.addItem(f"A 1:{m}", m)
+            self.anotace_cb.addItem(f"Anotace 1:{m}", m)
             i = self.anotace_cb.count() - 1
         self.anotace_cb.setCurrentIndex(max(0, i))
         if self.dok is not None:

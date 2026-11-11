@@ -164,6 +164,11 @@ class MainWindow(QMainWindow):
                                     "zkontroluje znovu. Vypnutí: Kontrola → Hlídat změny výkresu.")
         sb.addPermanentWidget(self.watch_label)
         sb.addPermanentWidget(self.coord_label)
+        sb.setSizeGripEnabled(False)
+        # na stránkách s vlastním stavovým řádkem je společný schovaný – zpráva ho na chvíli ukáže
+        sb.messageChanged.connect(lambda t: sb.setVisible(bool(t) or not getattr(self, "_vlastni_stav", False)
+                                                          or self.progress.isVisible())
+                                  if not self.split.focus_mode else None)
 
     def _act(self, text, slot, shortcut=None, tip=None, checkable=False) -> QAction:
         a = QAction(text, self)
@@ -455,7 +460,8 @@ class MainWindow(QMainWindow):
         self.a_exp_pdf.setIconText("Protokol PDF")
         self.a_open.setIconText("Otevřít")
 
-        # ---- svislá lišta vlevo (jako mapové aplikace): stránky nahoře, akce, dole nastavení a nabídka ☰
+        # ---- tmavá navigace vlevo: Start, programy (Výpočty, CAD, Kokeš), kontrola výkresu a její akce;
+        # dole pomoc, soubory, nastavení a nabídka ☰
         tb = QToolBar("Hlavní panel")
         tb.setObjectName("hlavni_panel")
         tb.setMovable(False)
@@ -467,14 +473,15 @@ class MainWindow(QMainWindow):
         self.page_group = QActionGroup(self)
         self.page_group.setExclusive(True)
         self.a_page = {}
-        for key, text, tip in (("start", "Start", "Rozcestník: projekt, nový projekt, části procesu, programy"),
-                               ("uvod", "Přehled", "Přehled kontroly výkresu – stav projektu a další krok"),
-                               ("vykres", "Výkres", "Výkres a seznam chyb"),
-                               ("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady"),
-                               ("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)"),
-                               ("cad", "CAD", "Kreslení v DXF a DGN (jako MicroStation)"),
-                               ("kokes", "Kokeš", "Seznam souřadnic KN, kreslící klíče, tabulky a katastr "
-                                                  "(jako Kokeš)")):
+        self._sekce_listy = {}  # nadpis sekce → (akce nadpisu, klíče stránek)
+
+        def _sekce(text, klice):
+            lbl = QLabel(text)
+            lbl.setObjectName("lista_sekce")
+            lbl.setAlignment(Qt.AlignCenter)
+            self._sekce_listy[text] = (tb.addWidget(lbl), klice)
+
+        def _stranka(key, text, tip):
             act = QAction(text, self)
             act.setCheckable(True)
             act.setToolTip(tip)
@@ -482,30 +489,53 @@ class MainWindow(QMainWindow):
             self.page_group.addAction(act)
             tb.addAction(act)
             self.a_page[key] = act
-        # mezera + oddělovač: akce nejsou stránky (dřív se Otevřít pletlo s Výkresem a Kontrolou)
-        def _mezera(v=10):
-            w = QWidget()
-            w.setFixedHeight(v)
-            tb.addWidget(w)
-        _mezera()
-        tb.addSeparator()
-        _mezera(6)
-        for a in (self.a_check, self.a_recheck, self.a_ready):
-            tb.addAction(a)
-        tb.addAction(self.a_exp_pdf)
+
+        _stranka("start", "Start", "Rozcestník: projekt, nový projekt, části procesu, programy")
+        _sekce("PROGRAMY", ("vypocty", "cad", "kokes"))
+        _stranka("vypocty", "Výpočty", "Seznam souřadnic a geodetické výpočty (jako Groma)")
+        _stranka("cad", "CAD", "Kreslení v DXF a DGN (jako MicroStation)")
+        _stranka("kokes", "Kokeš", "Seznam souřadnic KN, kreslící klíče, tabulky a katastr (jako Kokeš)")
+        _sekce("KONTROLA", ("uvod", "zadani", "vykres"))
+        _stranka("uvod", "Přehled", "Přehled kontroly výkresu – stav projektu a další krok")
+        _stranka("zadani", "Zadání", "Směrnice, pokyny, náčrty, podklady")
+        _stranka("vykres", "Výkres", "Výkres a seznam chyb")
+        tb.addAction(self.a_check)
+
+        def _zastupce(orig, text, ikona_jm):
+            """Tlačítko lišty zastupující akci z nabídky (vlastní světlá ikona, stav podle originálu)."""
+            z = QAction(text, self)
+            z.setCheckable(orig.isCheckable())
+            z._ikona = ikona_jm
+            z._orig = orig
+
+            def sync():
+                z.setEnabled(orig.isEnabled())
+                if orig.isCheckable() and z.isChecked() != orig.isChecked():
+                    z.setChecked(orig.isChecked())
+            orig.changed.connect(sync)
+            if orig.isCheckable():
+                orig.toggled.connect(lambda _on: sync())
+            z.triggered.connect(lambda _c=False: orig.trigger())
+            sync()
+            tb.addAction(z)
+            return z
+        # akce kontroly jsou vidět jen na stránkách kontroly (ve Výpočtech a CAD nedávají smysl)
+        self._akce_kontroly = [_zastupce(self.a_recheck, "Znovu", "znovu"),
+                               _zastupce(self.a_ready, "Odevzdat", "odevzdat"),
+                               _zastupce(self.a_exp_pdf, "Protokol", "pdf")]
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        tb.addWidget(spacer)
         a_por = self.poradce_dock.toggleViewAction()
         self.a_poradce = a_por
         a_por.setText("Poradce")
         a_por.setShortcut(QKeySequence("Ctrl+K"))
         a_por.setToolTip("Zeptejte se na cokoli – odpověď z návodů aplikace (Ctrl+K, diktování Win+H)")
-        tb.addAction(a_por)
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        tb.addWidget(spacer)
-        # soubory dole u nastavení – daleko od Kontroly, aby se při spěchu nekliklo vedle
-        tb.addAction(self.a_open)
         tb.addSeparator()
-        tb.addAction(self.a_settings)
+        self._z_poradce = _zastupce(a_por, "Poradce", "poradce")
+        # soubory dole u nastavení – daleko od Kontroly, aby se při spěchu nekliklo vedle
+        self._z_open = _zastupce(self.a_open, "Otevřít ▾", "otevrit")
+        self._z_settings = _zastupce(self.a_settings, "Nastavení", "nastaveni")
         # klasická nabídka (Soubor, Zobrazení, Kontrola, Nápověda) schovaná pod ☰
         self.a_menu = QAction("Nabídka", self)
         self.a_menu.setToolTip("Všechny funkce: Soubor, Zobrazení, Kontrola, Nápověda (Alt)")
@@ -523,21 +553,20 @@ class MainWindow(QMainWindow):
             if not act.shortcut().isEmpty():
                 self.addAction(act)
         # krátké popisky pod ikonou (celé znění je v tooltipu)
-        for act, short in ((self.a_open, "Otevřít ▾"), (self.a_check, "Kontrola"), (self.a_recheck, "Znovu"),
-                           (self.a_ready, "Odevzdat"), (self.a_exp_pdf, "Protokol"), (a_por, "Poradce"), (self.a_settings, "Nastavení"),
-                           (self.a_menu, "Nabídka")):
-            act.setIconText(short)
+        self.a_check.setIconText("Kontrola")
+        self.a_menu.setIconText("Nabídka")
+        for act in [self.a_check, self.a_menu, self._z_poradce, self._z_open, self._z_settings] + self._akce_kontroly:
             btn = tb.widgetForAction(act)
+            zdroj = getattr(act, "_orig", act)
             if btn is not None:
-                full = act.text().replace("&", "").rstrip("…")
-                btn.setToolTip(full + (f" – {act.toolTip()}" if act.toolTip() and act.toolTip() != act.text()
+                full = zdroj.text().replace("&", "").rstrip("…")
+                btn.setToolTip(full + (f" – {zdroj.toolTip()}" if zdroj.toolTip() and zdroj.toolTip() != zdroj.text()
                                        else ""))
         for btn in tb.findChildren(QToolButton):
-            btn.setMinimumWidth(72)  # stejně široká tlačítka – sloupec je zarovnaný
+            btn.setMinimumWidth(68)  # stejně široká tlačítka – sloupec je zarovnaný
         # na nízké obrazovce (720 px) se spodní akce zmenší na ikony – Nastavení a Nabídka zůstanou vidět
-        self._male_akce = [self.a_recheck, self.a_ready, self.a_exp_pdf, a_por, self.a_open, self.a_settings,
-                           self.a_menu]
-        b_open = tb.widgetForAction(self.a_open)
+        self._male_akce = self._akce_kontroly + [self._z_poradce, self._z_open, self._z_settings, self.a_menu]
+        b_open = tb.widgetForAction(self._z_open)
         if b_open is not None:  # šipka vedle: naposledy otevřené výkresy jedním klikem
             # klik = nabídka: Otevřít výkres… a naposledy otevřené (malá šipka v rohu, ne vysoký pruh)
             m_otevrit = QMenu(b_open)
@@ -589,7 +618,7 @@ class MainWindow(QMainWindow):
             btn.setMenu(self._check_menu())
             btn.setPopupMode(QToolButton.MenuButtonPopup)
             btn.setObjectName("primarni")
-            btn.setMinimumWidth(78)
+            btn.setMinimumWidth(68)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
         mb = tb.widgetForAction(self.a_menu)
@@ -621,6 +650,36 @@ class MainWindow(QMainWindow):
                else "cad" if w is getattr(self, "cad", None)
                else "kokes" if w is getattr(self, "kokes", None) else "zadani")
         self.a_page[key].setChecked(True)
+        self._kontext_listy()
+
+    STRANKY_KONTROLY = ("uvod", "zadani", "vykres")
+
+    def _aktualni_stranka(self) -> str:
+        w = self.tabs.currentWidget()
+        for k in ("start", "uvod", "vypocty", "cad", "kokes"):
+            if w is getattr(self, {"start": "rozcestnik", "uvod": "home"}.get(k, k), None):
+                return k
+        return "vykres" if w is self.split else "zadani"
+
+    def _kontext_listy(self) -> None:
+        """Levá lišta a stavový řádek podle stránky: akce kontroly jen u kontroly výkresu, společný stavový
+        řádek jen tam, kde stránka nemá vlastní (Výpočty, CAD a Kokeš ho mají)."""
+        if not hasattr(self, "_akce_kontroly"):
+            return
+        key = self._aktualni_stranka()
+        kontrola = key in self.STRANKY_KONTROLY and self.a_page[key].isVisible()
+        for a in self._akce_kontroly:
+            a.setVisible(kontrola)
+        if hasattr(self, "coord_label"):
+            self.coord_label.setVisible(key == "vykres")
+        self._vlastni_stav = key in ("vypocty", "cad", "kokes")
+        if self._vlastni_stav and getattr(self, "_stranka_stavu", None) != key:
+            self.statusBar().clearMessage()  # zprávy kontroly výkresu sem nepatří
+        self._stranka_stavu = key
+        if not self.split.focus_mode:
+            sb = self.statusBar()
+            sb.setVisible(not self._vlastni_stav or bool(sb.currentMessage()) or self.progress.isVisible())
+        self._prizpusob_listu()
 
     def _prizpusob_listu(self) -> None:
         """Spodní tlačítka levé lišty jen s ikonou, když se s popisky nevejdou na výšku okna."""
@@ -648,6 +707,9 @@ class MainWindow(QMainWindow):
         vid = stranky_procesu(procesy) | {"start"}
         for k, a in getattr(self, "a_page", {}).items():
             a.setVisible(k in vid)
+        for akce, klice in getattr(self, "_sekce_listy", {}).values():
+            akce.setVisible(any(k in vid for k in klice))
+        self._kontext_listy()
 
     def _popup_main_menu(self):
         btn = self.toolbar.widgetForAction(self.a_menu)
@@ -669,18 +731,21 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QColor
 
         from .theme import is_dark
-        barvy = {"start": "#0F766E", "uvod": "#2563EB", "vykres": "#0D9488", "zadani": "#D97706", "vypocty": "#7C3AED",
-                 "cad": "#EA580C", "kokes": "#059669"}
+        # světlé tóny na tmavé liště; aktivní stránka plnou barvou
+        barvy = {"start": "#5EEAD4", "uvod": "#93C5FD", "vykres": "#5EEAD4", "zadani": "#FCD34D", "vypocty": "#C4B5FD",
+                 "cad": "#FDBA74", "kokes": "#6EE7B7"}
+        from .theme import RAIL_TEXT
 
         def barva(k, akt):
-            c = QColor(barvy.get(k, "#6B7280"))
-            if is_dark():
-                c = c.lighter(150 if akt else 120)
-            return c.name()
+            return barvy.get(k, RAIL_TEXT) if akt else QColor(barvy.get(k, RAIL_TEXT)).darker(125).name()
         for key, act in getattr(self, "a_page", {}).items():
             act.setIcon(icon(key, barva(key, act.isChecked())))
         if getattr(self, "a_menu", None) is not None:
-            self.a_menu.setIcon(icon("menu"))
+            self.a_menu.setIcon(icon("menu", RAIL_TEXT))
+        for z in getattr(self, "_akce_kontroly", []) + [getattr(self, n, None) for n in
+                                                         ("_z_poradce", "_z_open", "_z_settings")]:
+            if z is not None:
+                z.setIcon(icon(z._ikona, RAIL_TEXT))
         if getattr(self, "a_mini", None) is not None:
             self.a_mini.setIcon(icon("okno"))
         if getattr(self, "a_focus", None) is not None:
@@ -2610,6 +2675,8 @@ class MainWindow(QMainWindow):
         self.task = BackgroundTask(fn, self)
         self.progress.setValue(0)
         self.progress.setVisible(True)
+        if not self.split.focus_mode:
+            self.statusBar().show()
         self.cancel_btn.setVisible(True)
         self.info_label.setText(text)
 
@@ -2620,6 +2687,7 @@ class MainWindow(QMainWindow):
 
         def fin(result):
             self.progress.setVisible(False)
+            self._kontext_listy()
             self.cancel_btn.setVisible(False)
             self.task = None
             on_done(result)
@@ -2627,6 +2695,7 @@ class MainWindow(QMainWindow):
 
         def fail(msg):
             self.progress.setVisible(False)
+            self._kontext_listy()
             self.cancel_btn.setVisible(False)
             self.task = None
             self.info_label.setText("")

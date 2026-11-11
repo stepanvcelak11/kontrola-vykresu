@@ -118,7 +118,7 @@ class HomePage(QScrollArea):
             from ..resources import resource_path
             pm = QPixmap(str(resource_path("ikona.png")))
             if not pm.isNull():
-                logo.setPixmap(pm.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                logo.setPixmap(pm.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         except Exception:  # noqa: BLE001
             pass
         head.addWidget(logo)
@@ -135,7 +135,7 @@ class HomePage(QScrollArea):
         nbox = QVBoxLayout()
         nbox.setSpacing(4)
         cap = QLabel("DALŠÍ KROK")
-        cap.setStyleSheet("color:#BFDBFE; font-size:8pt; font-weight:800; letter-spacing:1px;")
+        cap.setStyleSheet("color:#9FB3C8; font-size:8pt; font-weight:800; letter-spacing:1px;")
         self.next_step = QLabel()
         self.next_step.setWordWrap(True)
         self.next_step.setMaximumWidth(600)  # méně řádků → nižší pruh
@@ -144,8 +144,8 @@ class HomePage(QScrollArea):
         self.next_btn = QPushButton()
         self.next_btn.setCursor(Qt.PointingHandCursor)
         from .theme import accent
-        self.next_btn.setStyleSheet("QPushButton { background: white; color: " + accent("#1D4ED8") + "; border: none; border-radius: 8px;"
-                                    " padding: 7px 16px; font-weight: 700; } QPushButton:hover { background: #EFF6FF; }")
+        self.next_btn.setStyleSheet("QPushButton { background: white; color: #18222D; border: none; border-radius: 6px;"
+                                    " padding: 6px 16px; font-weight: 700; } QPushButton:hover { background: #E2E8F0; }")
         self.next_btn.clicked.connect(lambda: self._next_action() if self._next_action else None)
         self._next_action = None
         nbox.addWidget(cap)
