@@ -153,6 +153,10 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                 k.nastav_predvolbu(pv_txt)
                 vys = pv_txt.vyska or nast.vyska_textu
                 k.zarovnani = None if pv_txt.zarovnani is None else pv_txt.zarovnani
+                if pv_txt.zarovnani:  # text se zarovnáním (textový styl): od bodu na stranu, kam zarovnání míří
+                    z = pv_txt.zarovnani
+                    posun = (0.6 if "LEFT" in z else -0.6 if "RIGHT" in z else 0.0,
+                             -0.4 if "TOP" in z else 0.4 if "BOTTOM" in z else 0.0)
                 nove.append(k.text((x + posun[0] * vys, y + posun[1] * vys), str(text), vys))
         if spojnice and (nast.spojnice is not None or nast.spojnice_aktivni):
             k.nastav_predvolbu(nast.spojnice if nast.spojnice is not None else puvodni[0])

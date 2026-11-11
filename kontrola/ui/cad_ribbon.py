@@ -357,8 +357,9 @@ class PasKaret(QWidget):
             self.stack.insertWidget(1 + n, sc)
             self.karty.insertTab(1 + n, _hezky_titul(titul))
             self._dynamicke.append(sc)
-        if prepnout and pas.karty:  # otevřít kartu s nejvíc nástroji (Pasport nezačne na kartě s jedním tlačítkem)
-            n = max(range(len(pas.karty)), key=lambda k: (sum(len(t) for _s, t in pas.karty[k][1]), -k))
+        if prepnout and pas.karty:  # první karta jako v MicroStationu; kartu s pár tlačítky přeskočit (Pasport)
+            pocty = [sum(len(t) for _s, t in k[1]) for k in pas.karty]
+            n = next((k for k, pocet in enumerate(pocty) if pocet >= 5), pocty.index(max(pocty)))
             self.karty.setCurrentIndex(1 + n)
             self.stack.setCurrentIndex(1 + n)
 

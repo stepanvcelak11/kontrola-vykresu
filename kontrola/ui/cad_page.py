@@ -1877,6 +1877,10 @@ class CadPage(QWidget):
         if self.dok is None:
             self.novy()
         nastav, prikazy = preloz(keyin)
+        if "vlož" in prikazy and "ac=" not in nastav:
+            self._aktivni_bunka = None  # obecné „place cell“ bez buňky: vybere se v knihovně buněk
+        if "text" in prikazy and "ts=" not in nastav:  # text bez textového stylu: zarovnání z minulého nástroje neplatí
+            self.kresleni.zarovnani, self.kresleni.sirka_faktor = None, 1.0
         if nastav:
             self._keyiny(nastav)
         zmena = [p for p in prikazy if p.split()[0] in ("vrstva", "barva", "styl", "tloušťka")]
@@ -1889,8 +1893,39 @@ class CadPage(QWidget):
                 self.vypis(f"Atributy změněny u {len(self.vyber)} prvků.")
         for p in prikazy:
             if p not in zmena:
-                self.proved(p)
+                self._nastroj_pasu(p)
                 break
+
+    def predvolby_sady(self) -> list:
+        """Textové a buňkové nástroje pásů aktivní pracovní sady jako předvolby (import bodů s atributy ÚM)."""
+        from ..cad import ms_pas
+        from ..cad import pracovni_sady as PS
+        sada = PS.aktivni()
+        if sada is None:
+            return []
+        try:
+            return ms_pas.predvolby_pasu(PS.styly_kresleni(sada), PS.textove_styly(sada), self._pravidla())
+        except Exception:  # noqa: BLE001 – poškozená knihovna nesmí zablokovat import bodů
+            return []
+
+    def _nastroj_pasu(self, p: str) -> None:
+        """Nástroj z tlačítka pásu jako v MicroStationu: buňka se rovnou umisťuje klikem (aktivní buňka,
+        měřítko a úhel z tlačítka), text otevře okno pro text s výškou podle textového stylu."""
+        if p == "vlož":
+            ac = getattr(self, "_aktivni_bunka", None)
+            jmena = U.bloky(self.dok.doc)
+            if ac and ac not in jmena:
+                from ..rules import block_matches
+                ac = next((j for j in jmena if block_matches(ac, j)), None)
+            if ac:
+                self.umisti_bunku((ac, getattr(self, "_meritko_bunky", 1.0) or 1.0,
+                                   getattr(self, "_uhel_bunky", 0.0) or 0.0))
+            else:
+                self.okno_bunek()
+        elif p == "text":
+            self.text_dialog()
+        else:
+            self.proved(p)
 
     def po_zmene_knihoven(self) -> None:
         self.obnov_styly_kresleni()
@@ -2802,6 +2837,15 @@ class CadPage(QWidget):
         p = self.uloz()
         if p is None:
             return
+        if self._pravidla() is None:  # bez zadání: kontrola podle knihovny pracovní sady (Účelová mapa…)
+            from ..cad import pracovni_sady as PS
+            sada = PS.aktivni()
+            zs = getattr(self.win, "zadani", None)
+            if sada is not None and zs is not None and PS.styly_kresleni(sada):
+                n = zs.table_page.ze_sady(sada.klic)
+                if n:
+                    self.vypis(f"Zadání bylo prázdné – kontroluje se podle pracovní sady {sada.nazev} "
+                               f"({n} druhů prvků z pásu karet). Tabulku od učitele přidáte v Zadání.")
         self.win.load_drawing_file(p)
         self.win.show_page("vykres")
         self.win.a_check.trigger()
@@ -3265,7 +3309,7 @@ class CadPage(QWidget):
         self.vyzva.setText("Příkaz:")
 
     # ------------------------------------------------------------ příkazy
-    _KEYIN = re.compile(r"^\s*(lv|co|lc|wt|th|tw|ac)\s*=\s*([^;]*)$", re.I)
+    _KEYIN = re.compile(r"^\s*(lv|co|lc|wt|th|tw|ac|ts|as|aa)\s*=\s*([^;]*)$", re.I)
 
     def _keyiny(self, t: str) -> bool:
         """Key-iny MicroStationu „lv=5;co=94;lc=0;wt=0“ (i z taháku atributů), „th=0.75“, „ac=3.13“."""
@@ -3304,9 +3348,35 @@ class CadPage(QWidget):
                 elif k == "ac":
                     self._aktivni_bunka = v
                     self.vypis(f"Aktivní buňka {v} (vložení příkazem „vlož“).")
+                elif k == "ts":
+                    self._textovy_styl_ms(v)
+                elif k in ("as", "aa"):
+                    try:
+                        h = float(v.replace(",", "."))
+                    except ValueError:
+                        self.vypis(f"{k}= musí být číslo.")
+                        continue
+                    if k == "as" and h > 0:
+                        self._meritko_bunky = h
+                    elif k == "aa":
+                        self._uhel_bunky = h
         finally:
             self.vyber = vyber
         self.aktivni_atributy()
+        return True
+
+    def _textovy_styl_ms(self, nazev: str) -> bool:
+        """Textový styl pracovní sady (Text Style): výška a šířka písma v mm na papíře a zarovnání."""
+        from ..cad import pracovni_sady as PS
+        st = PS.textove_styly(PS.aktivni()).get(nazev.strip().lower())
+        if st is None:
+            self.vypis(f"Textový styl „{nazev}“ v pracovní sadě není – výška textu zůstává {self.vyska_textu:g}.")
+            return False
+        self.vyska_textu = self.kresleni.vyska_textu = st.vyska
+        self.kresleni.sirka_faktor = round(st.sirka / st.vyska, 4) if st.vyska else 1.0
+        self.kresleni.zarovnani = st.zarovnani
+        self.vypis(f"Textový styl {st.nazev}: výška {st.vyska:g}, šířka {st.sirka:g}"
+                   + (f" mm × měřítko anotací 1:{self.anotace}" if self.anotace else " m"))
         return True
 
     def proved(self, t: str):
@@ -3996,6 +4066,8 @@ class CadPage(QWidget):
                         ("CB střed dole", "BOTTOM_CENTER"), ("RT vpravo nahoře", "TOP_RIGHT"),
                         ("RC vpravo uprostřed", "MIDDLE_RIGHT"), ("RB vpravo dole", "BOTTOM_RIGHT")):
             zar.addItem(jm, kod)
+        if self.kresleni.zarovnani:
+            zar.setCurrentIndex(max(0, zar.findData(self.kresleni.zarovnani)))
         f.addRow("Zarovnání:", zar)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText("Umístit")

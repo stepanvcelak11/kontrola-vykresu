@@ -106,7 +106,12 @@ class TablePage(QWidget):
         b3 = QPushButton("Odebrat tabulku a její pravidla")
         b3.setToolTip("Když jste nahráli špatnou tabulku: odebere ji z projektu i s pravidly, která z ní vznikla.")
         b3.clicked.connect(self._remove)
+        b4 = QPushButton("Zadání z pracovní sady…")
+        b4.setToolTip("Bez tabulky od učitele: pravidla podle školní knihovny MicroStationu (Účelová mapa, Pasport, "
+                      "TM) – hladina, barva, styl a tloušťka čáry, buňka a písmo každého nástroje pásu karet.")
+        b4.clicked.connect(lambda: self.ze_sady())
         row.addWidget(b)
+        row.addWidget(b4)
         row.addWidget(b2)
         row.addWidget(b3)
         row.addStretch(1)
@@ -125,6 +130,38 @@ class TablePage(QWidget):
         nad.setObjectName("nadpis_sekce")
         lay.addWidget(nad)
         lay.addWidget(self.last)
+
+    def ze_sady(self, klic: str | None = None):
+        """Pravidla kontroly z pásů karet pracovní sady (Účelová mapa…): přidají se k pravidlům projektu."""
+        from PySide6.QtWidgets import QInputDialog
+
+        from ..cad import pracovni_sady as PS
+        mozne = {s.klic: s for s in PS.vsechny() if PS.styly_kresleni(s)}
+        if not mozne:
+            QMessageBox.information(self, "Zadání z pracovní sady",
+                                    "Žádná pracovní sada nemá vlastní pás karet s nástroji.")
+            return 0
+        if klic is None:
+            akt = PS.aktivni()
+            jmena = list(mozne)
+            klic, ok = QInputDialog.getItem(self, "Zadání z pracovní sady", "Pracovní sada:", jmena,
+                                            jmena.index(akt.klic) if akt is not None and akt.klic in jmena else 0,
+                                            False)
+            if not ok:
+                return 0
+        rs = PS.pravidla_sady(mozne.get(klic))
+        if rs is None:
+            return 0
+        pr = self.tab.project
+        if not pr.rules.barevna_tabulka and rs.barevna_tabulka:
+            pr.rules.barevna_tabulka = dict(rs.barevna_tabulka)
+        added, replaced = pr.rules.merge(rs)
+        self.tab.rules_changed()
+        self.last.setHtml(f"<b>Zadání z pracovní sady {klic}</b>: {added} nových pravidel, {replaced} nahrazeno. "
+                          "Každé pravidlo odpovídá jednomu nástroji pásu karet (hladina, barva, styl, tloušťka, "
+                          "buňka, výška a zarovnání písma). V CADu se podle nich nastaví druhy prvků a Kontrola "
+                          "hlídá, že je výkres dodržuje.")
+        return added + replaced
 
     def refresh(self):
         self.list.clear()

@@ -3692,9 +3692,22 @@ def test_cad_styl_kresleni_um(window, tmp_path):
         assert r.styl_kresleni.count() == 2 and r.styl_kresleni.isVisibleTo(r)
         pocet = r.karty.count()
         r.nastav_styl(1)
-        nejvic = max(p.karty, key=lambda k: sum(len(t) for _s, t in k[1]))[0]  # karta s nejvíc nástroji
+        prvni = next(k for k, sk in p.karty if sum(len(t) for _s, t in sk) >= 5)  # první karta s nástroji
         from kontrola.ui.cad_ribbon import _hezky_titul
-        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == _hezky_titul(nejvic)
+        assert r.karty.count() > pocet and r.karty.tabText(r.karty.currentIndex()) == _hezky_titul(prvni)
+        # buňka z tlačítka se rovnou umisťuje klikem (aktivní buňka, měřítko a úhel z key-inu), bez dotazů
+        if "1.02" in c.dok.doc.blocks:
+            c.ms_keyin('active level "GS01-body-BP+PMS-buňky"; active color 0; active xscale 2; active angle 30; '
+                       'lock useannotationscale on; active cell 1.02; place cell icon')
+            c.zadej("x=-743100 y=-1043400")
+            c.zadej("")
+            ins = c.prostor.query("INSERT").last
+            assert ins.dxf.name == "1.02" and ins.dxf.layer == "GS01-body-BP+PMS-buňky"
+            assert ins.dxf.rotation == pytest.approx(30)
+        # křivka (vrstevnice) a textový styl z knihovny sady
+        assert ms_pas.preloz("active style 0.06; place curve icon") == ("lc=0.06", ["křivka"])
+        assert ms_pas.preloz('texteditor place; textstyle active "Kód bodu"') == ("ts=Kód bodu", ["text"])
+        assert ms_pas.preloz("textstyleset height 0.0003; texteditor place")[0] == "th=0.3"
         c.ms_keyin('active level "GS02-hranice-plochy zpevněné"; active color 3; active weight 2; active style 0; '
                    'place line constrained')
         assert c.vrstvy.currentText() == "GS02-hranice-plochy zpevněné"
@@ -3959,6 +3972,64 @@ def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
         assert PS.aktivni().nazev == "MultiScale" and c.anotace == 1000
         assert c.ribbon.styl_kresleni.currentText().startswith("Styl: Účelová")
         assert {ly.dxf.name for ly in c.dok.doc.layers} != hl_pasport
+        # textové styly školní knihovny: tlačítko „Kód p. b.“ nastaví výšku, šířku a zarovnání písma
+        styly = PS.textove_styly(PS.aktivni())
+        assert styly["kód bodu"].vyska == 1.6 and styly["popis vodstva"].vyska == 3.0 and len(styly) >= 25
+        c.ms_keyin('active level "GS01-body-kódy"; active color 2; active weight 0; active style 0; '
+                   'textstyle active "Kód bodu"')
+        assert c.vyska_textu == 1.6 and c.kresleni.zarovnani == "BOTTOM_CENTER"
+        assert c.kresleni.sirka_faktor == pytest.approx(1.5 / 1.6, abs=1e-3)
+        d = c.text_dialog(modal=False)
+        assert d.vys.value() == pytest.approx(1.6) and d.zar.currentData() == "BOTTOM_CENTER"
+        c.umisti_text("5.12", d.vys.value(), 0, d.zar.currentData())
+        c.zadej("x=-743100 y=-1043430")
+        c.zadej("")
+        t = c.prostor.query("TEXT").last
+        assert t.dxf.layer == "GS01-body-kódy" and t.dxf.height == pytest.approx(1.6)
+        # vrstevnice z pásu ÚM se kreslí křivkou
+        c.ms_keyin('active level "GS09-výškopis-vrstevnice základní"; active color 70; active weight 1; '
+                   'active style 0; place curve icon')
+        for xy in ("x=-743100 y=-1043410", "x=-743090 y=-1043415", "x=-743080 y=-1043410", ""):
+            c.zadej(xy)
+        assert list(c.prostor)[-1].dxf.layer == "GS09-výškopis-vrstevnice základní"
+        c.kresleni.zarovnani, c.kresleni.sirka_faktor = None, 1.0
+        # import bodů s nástroji ÚM: číslo a výška ve školní hladině, barvě a výšce písma, kód 1.02 jako buňka
+        from kontrola.geodezie.body import Bod
+        d = c.body_ze_seznamu(modal=False)
+        d.nastav_body([Bod("4001", 743100.0, 1043400.0, 250.12, kod="1.02"), Bod("4002", 743110.0, 1043405.0, 251.0)])
+        for klic, cast in (("cislo", "Číslo podrobného bodu"), ("vyska", "Výškové kóty podrobných bodů")):
+            d.ch[klic].setChecked(True)
+            i = next(j for j in range(d.cb[klic].count()) if d.cb[klic].itemText(j) == f"nástroj: {cast}")
+            d.cb[klic].setCurrentIndex(i)
+        assert 5 <= d.cb["znacka"].count() < 40  # jen značky bodů, ne všech 175 buněk
+        d.vlozit()
+        nove = d.vysledek["prvky"]
+        cisla = [e for e in nove if e.dxftype() == "TEXT" and e.dxf.layer == "GS01-body-čísla"]
+        vysky = [e for e in nove if e.dxftype() == "TEXT" and e.dxf.layer == "GS09-výškopis-body podrobné-výšky"]
+        assert len(cisla) == 2 and cisla[0].dxf.height == pytest.approx(0.3)
+        assert len(vysky) == 2 and vysky[0].dxf.height == pytest.approx(1.9) and vysky[0].dxf.text == "250.12"
+        bunky = [e for e in nove if e.dxftype() == "INSERT"]
+        assert len(bunky) == 1 and bunky[0].dxf.name == "1.02" and bunky[0].dxf.layer == "GS01-body-BP+PMS-buňky"
+        # zadání z pracovní sady: pravidla kontroly z nástrojů pásu – výkres nakreslený nástroji ÚM jim vyhoví
+        rs = PS.pravidla_sady(PS.aktivni())
+        assert len(rs.pravidla) > 250 and rs.meritko == 1000 and len({r.kod for r in rs.pravidla}) == len(rs.pravidla)
+        kod = next(r for r in rs.pravidla if r.nazev == "Kód podrobného bodu")
+        assert (kod.hladina, kod.barva, kod.vyska_textu, kod.zarovnani) == ("GS01-body-kódy", 2, 1.6, "střed dole")
+        from kontrola.config import Config
+        from kontrola.io import load_drawing
+        from kontrola.runner import run_checks
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            cesta = Path(tmp) / "um.dxf"
+            c.dok.doc.saveas(cesta)
+            vysl = run_checks(load_drawing(cesta), rs, Config(), only=["symbologie", "nepovolene_hladiny"])
+        assert [i.message for i in vysl.issues if "body" not in i.message.split(":")[0].lower()] == []
+        assert window.zadani.table_page.ze_sady("MultiScale/MultiScale") == len(rs.pravidla)
+        assert len(window.project.rules.pravidla) >= len(rs.pravidla)
+        c.obnov_predvolby()
+        assert len(c._predvolby) >= len(rs.pravidla)
+        window.project.rules.pravidla.clear()
+        window.zadani.rules_changed()
         c.nastav_anotace(500, prepocitat=False)
         c.kresleni.text((0, 0), "12", 2.5)
         c._po_zmene(c.historie_zmen.zpet[-1].pridano)

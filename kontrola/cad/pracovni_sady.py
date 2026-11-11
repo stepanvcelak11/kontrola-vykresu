@@ -190,5 +190,43 @@ def styly_kresleni(sada: Sada | None) -> list:
     return out
 
 
+_STYLY_TEXTU_CACHE: dict = {}
+
+
+def textove_styly(sada: Sada | None) -> dict:
+    """Textové styly pracovní sady (název malými písmeny → ``ms_pas.TextovyStyl``): knihovny hladin a stylů
+    (Dgnlib/DrawComp) mají přednost před pásy karet a seedem – stejně jako je MicroStation načítá."""
+    from .ms_pas import textove_styly as nacti
+    out: dict = {}
+    if sada is None:
+        return out
+    for p in [*sada.dgnlib, *sada.pasy, *([sada.seed] if sada.seed else [])]:
+        try:
+            k = (str(p), p.stat().st_mtime)
+        except OSError:
+            continue
+        if k not in _STYLY_TEXTU_CACHE:
+            try:
+                _STYLY_TEXTU_CACHE[k] = nacti(p)
+            except Exception:  # noqa: BLE001 – poškozená knihovna nesmí shodit CAD
+                _STYLY_TEXTU_CACHE[k] = {}
+        for jm, st in _STYLY_TEXTU_CACHE[k].items():
+            out.setdefault(jm, st)
+    return out
+
+
+def pravidla_sady(sada: Sada | None):
+    """Zadání (pravidla kontroly) z knihoven pracovní sady – nástroje pásů karet s hladinami sady. None, když
+    sada nemá vlastní pás s nástroji (pak není podle čeho kontrolovat)."""
+    from .ms_pas import pravidla_pasu
+    if sada is None:
+        return None
+    pasy = styly_kresleni(sada)
+    if not pasy:
+        return None
+    rs = pravidla_pasu(pasy, textove_styly(sada))
+    return rs if rs.pravidla else None
+
+
 def nastav_aktivni(sada: Sada | None) -> None:
     _qs().setValue(KLIC_AKTIVNI, sada.klic if sada is not None else "")

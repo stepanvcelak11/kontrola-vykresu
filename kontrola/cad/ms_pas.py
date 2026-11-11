@@ -30,7 +30,7 @@ class Tlacitko:
             return "bunka"
         if "texteditor place" in k or "place text" in k:
             return "text"
-        if "place line" in k or "place smartline" in k:
+        if "place line" in k or "place smartline" in k or "place curve" in k or "place bspline" in k:
             return "cara"
         if "place shape" in k or "place block" in k:
             return "plocha"
@@ -259,9 +259,30 @@ def preloz(keyin: str) -> tuple[str, list[str]]:
             zmeny.append(f"{_ZMENA[m.group(1).lower()]} {m.group(2).strip()}")
             continue
         lc = c.lower()
-        if lc.startswith("place line") or lc.startswith("place smartline"):
+        m = re.match(r'textstyle active\s*"?([^"]*)"?$', c, re.I)
+        if m:
+            nastav.append(f"ts={m.group(1).strip()}")
+            continue
+        m = re.match(r"textstyleset (height|width)\s+([\d.,]+)$", c, re.I)
+        if m:  # v hlavních jednotkách (m) → mm na papíře jako u textových stylů
+            try:
+                nastav.append(f"{'th' if m.group(1).lower() == 'height' else 'tw'}="
+                              f"{float(m.group(2).replace(',', '.')) * 1000:g}")
+            except ValueError:
+                pass
+            continue
+        m = re.match(r"active\s*(xscale|angle)\s+(-?[\d.,]+)$", c, re.I)
+        if m:
+            nastav.append(f"{'as' if m.group(1).lower() == 'xscale' else 'aa'}={m.group(2).replace(',', '.')}")
+            continue
+        if lc.startswith("place curve") or lc.startswith("place bspline"):
+            prikazy.append("křivka")
+        elif lc.startswith("macro vba run") and "place" in lc:
+            if "vlož" not in prikazy:
+                prikazy.append("vlož")
+        elif lc.startswith("place line") or lc.startswith("place smartline"):
             prikazy.append("polylinie")
-        elif lc.startswith("place cell") or "place_and_edit" in lc:
+        elif lc.startswith("place cell"):
             if "vlož" not in prikazy:
                 prikazy.append("vlož")
         elif lc.startswith("texteditor place") or lc.startswith("place text"):
@@ -269,6 +290,184 @@ def preloz(keyin: str) -> tuple[str, list[str]]:
         elif lc.startswith("place shape"):
             prikazy.append("polylinie")
     return ";".join(nastav), zmeny + prikazy
+
+
+@dataclass
+class TextovyStyl:
+    """Textový styl z knihovny .dgnlib: rozměry písma v mm na papíře (× měřítko anotací = metry výkresu)."""
+    nazev: str
+    vyska: float
+    sirka: float
+    zarovnani: str | None = None  # TextEntityAlignment (TOP_LEFT…), None = vlevo na účaří
+
+
+def textove_styly(cesta: str | Path) -> dict[str, TextovyStyl]:
+    """Textové styly (Text Styles) z .dgnlib / .dgn V8, klíč = název malými písmeny.
+
+    Záznam v proudu ``Dgn^Nm``: název (UTF-16 nebo 8bit), 10 nul, značka ``5f 00 40 44`` a 48 B za ní čtyři
+    čísla double – šířka, výška, sklon, řádkování; na +128 zarovnání (0 = LT … 14 = RB)."""
+    import struct
+
+    import olefile
+
+    from ..io.dgn_v8 import _JUST, _decode, _inflate
+    from .zadani import _ZAROVNANI
+    cesta = Path(cesta)
+    out: dict[str, TextovyStyl] = {}
+    if not cesta.is_file() or not olefile.isOleFile(str(cesta)):
+        return out
+    ole = olefile.OleFileIO(str(cesta))
+    try:
+        for s in ole.listdir():
+            if not any(x.startswith("Dgn^Nm") for x in s):
+                continue
+            try:
+                d = _inflate(ole.openstream(s).read()) or b""
+            except Exception:  # noqa: BLE001
+                continue
+            for m in re.finditer(rb"\x5f\x00\x40\x44", d):
+                i = m.start()
+                j = i - 10
+                k = d.rfind(b"\xff\xfe", max(0, j - 400), j)
+                if k < 0 or len(d) < i + 132 or d[i + 12:i + 16] != b"\x03\x00\x00\x00":
+                    continue
+                n = struct.unpack_from("<H", d, k - 2)[0] if k >= 2 else 0
+                nazev = _decode(d[k:k + n]) if n else ""
+                nazev = nazev.strip()
+                sirka, vyska = struct.unpack_from("<2d", d, i + 48)
+                if not nazev or not (1e-4 < vyska < 1000 and 1e-4 < sirka < 1000):
+                    continue
+                hv = _JUST.get(d[i + 128])
+                out.setdefault(nazev.lower(), TextovyStyl(nazev, round(vyska, 6), round(sirka, 6),
+                                                          _ZAROVNANI.get(hv) if hv and hv != (0, 0) else None))
+    finally:
+        ole.close()
+    return out
+
+
+def predvolby_pasu(pasy, styly: dict | None = None, rs=None) -> list:
+    """Nástroje pásů karet jako předvolby (``cad.zadani.Predvolba``) pro import bodů: texty (hladina, barva,
+    výška a zarovnání podle textového stylu) a buňky (hladina, barva, název buňky). ``nazev_pravidla`` = název pásu."""
+    from . import symbologie as SY
+    from .zadani import Predvolba
+    styly = styly or {}
+    out, videne = [], set()
+    for pas in pasy or ():
+        for karta, skupiny in pas.karty:
+            for skupina, tl in skupiny:
+                for t in tl:
+                    if t.druh not in ("text", "bunka"):
+                        continue
+                    nast, _prik = preloz(t.keyin)
+                    d = dict(x.split("=", 1) for x in nast.split(";") if "=" in x)
+                    if not d.get("lv") or (t.druh == "bunka" and not d.get("ac")):
+                        continue
+                    nazev = (t.popis or t.popisek or "").strip() or d.get("ac", "")
+                    if (nazev.lower(), t.druh) in videne:
+                        nazev = f"{nazev} ({_hezky_karta(karta)} – {skupina})"
+                    if (nazev.lower(), t.druh) in videne:
+                        continue
+                    videne.add((nazev.lower(), t.druh))
+                    ms, aci = {}, 256
+                    try:
+                        ms = {"barva": int(d["co"])}
+                        aci = SY.ms_na_aci(ms["barva"], rs)
+                    except (KeyError, ValueError):
+                        pass
+                    p = Predvolba(nazev=nazev, geometrie="text" if t.druh == "text" else "bod",
+                                  nastroj="text" if t.druh == "text" else "vlož", vrstva=d["lv"], barva=aci, ms=ms,
+                                  nazev_pravidla=pas.nazev, kod=_hezky_karta(karta))
+                    if t.druh == "text":
+                        st = styly.get(d.get("ts", "").lower())
+                        if st is not None:
+                            p.vyska, p.zarovnani = st.vyska, st.zarovnani
+                            p.sirka_faktor = round(st.sirka / st.vyska, 4) if st.vyska else 1.0
+                        elif "th" in d:
+                            try:
+                                p.vyska = float(d["th"])
+                            except ValueError:
+                                pass
+                    else:
+                        p.blok = d["ac"]
+                        try:
+                            p.meritko_bunky = float(d.get("as", 1) or 1)
+                        except ValueError:
+                            pass
+                    out.append(p)
+    return out
+
+
+_ZAROVNANI_SLOVY = {"LEFT": "vlevo", "CENTER": "střed", "RIGHT": "vpravo", "TOP": "nahoře", "MIDDLE": "uprostřed",
+                    "BOTTOM": "dole"}
+
+
+def pravidla_pasu(pasy, styly: dict | None = None, hladiny=None):
+    """Pravidla kontroly (``rules.RuleSet``) z nástrojů pásů karet pracovní sady – každé tlačítko je jeden druh
+    prvku: hladina, barva, styl a tloušťka čáry, buňka, u textu výška, šířka a zarovnání podle textového stylu.
+
+    ``hladiny`` = hladiny knihoven sady; nástroje se starými hladinami („Vrstva 8“), které v sadě nejsou,
+    se vynechají. Rozměry písma jsou v mm na papíře v měřítku 1:1000 (měřítko anotací MultiScale)."""
+    from ..model import GeomType
+    from ..rules import Rule, RuleSet
+    styly = styly or {}
+    zname = {h.lower() for h in hladiny} if hladiny else None
+    rs = RuleSet(meritko=1000)
+    kody: dict[str, int] = {}
+    videne = set()
+    for pas in pasy or ():
+        for karta, skupiny in pas.karty:
+            for skupina, tl in skupiny:
+                for t in tl:
+                    if t.druh not in ("cara", "bunka", "text", "plocha"):
+                        continue
+                    nast, prik = preloz(t.keyin)
+                    d = dict(x.split("=", 1) for x in nast.split(";") if "=" in x)
+                    lv = d.get("lv")
+                    if not lv or not prik or (zname is not None and lv.lower() not in zname):
+                        continue
+                    r = Rule(kod="", nazev=(t.popis or t.popisek or "").strip(), hladina=lv,
+                             zdroj=f"{pas.nazev} → {_hezky_karta(karta)} → {skupina}")
+                    try:
+                        r.barva = int(d["co"])
+                    except (KeyError, ValueError):
+                        pass
+                    if t.druh == "bunka":
+                        if not d.get("ac"):
+                            continue
+                        r.geometrie, r.blok, zaklad = GeomType.BOD, d["ac"], d["ac"]
+                    elif t.druh == "text":
+                        r.geometrie, zaklad = GeomType.TEXT, "T"
+                        st = styly.get(d.get("ts", "").lower())
+                        if st is not None:
+                            r.vyska_textu, r.sirka_textu = st.vyska, st.sirka
+                            if st.zarovnani:
+                                r.zarovnani = " ".join(_ZAROVNANI_SLOVY[c] for c in st.zarovnani.split("_")[::-1])
+                        elif "th" in d:
+                            try:
+                                r.vyska_textu = float(d["th"])
+                            except ValueError:
+                                pass
+                    else:
+                        r.geometrie = GeomType.LINIE
+                        r.styl_cary = d.get("lc")
+                        try:
+                            r.tloustka = float(d["wt"])
+                        except (KeyError, ValueError):
+                            pass
+                        zaklad = r.styl_cary if r.styl_cary and not r.styl_cary.isdigit() else "L"
+                    klic = (r.geometrie, lv.lower(), r.barva, r.styl_cary, r.tloustka, r.blok, r.vyska_textu, r.sirka_textu,
+                            r.zarovnani)
+                    if klic in videne:  # totéž tlačítko na dvou kartách
+                        continue
+                    videne.add(klic)
+                    kody[zaklad] = kody.get(zaklad, 0) + 1
+                    r.kod = zaklad if kody[zaklad] == 1 and zaklad not in ("T", "L") else f"{zaklad}-{kody[zaklad]}"
+                    rs.pravidla.append(r)
+    return rs
+
+
+def _hezky_karta(t: str) -> str:
+    return re.sub(r"^\d+\.\s*", "", t or "").strip()
 
 
 def pasy_ve_slozce(slozka: str | Path) -> list[Path]:

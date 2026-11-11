@@ -766,6 +766,14 @@ class RuleSet:
             ws, _ = self.expected_weights(r)
             if any(abs(w - f.lineweight) < 0.06 for w in ws):
                 s += 1
+        if is_text and r.geometrie == GeomType.TEXT:  # víc druhů textu na jedné hladině: rozhodne velikost písma
+            h = self.text_size(r.vyska_textu)
+            th = getattr(f, "text_height", None)
+            if h and th and abs(th - h) <= max(0.005, 0.02 * h):
+                s += 1.5
+                w = self.text_size(r.sirka_textu)
+                if w and abs(th * (getattr(f, "width_factor", None) or 1.0) - w) <= max(0.005, 0.02 * w):
+                    s += 0.5
         return s
 
     # ------------------------------------------------------------ YAML

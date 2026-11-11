@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QLabel,
                                QLineEdit, QMessageBox, QVBoxLayout)
 
@@ -22,8 +23,11 @@ class BodyDialog(QDialog):
         self._soubor_body = None
         lay = QVBoxLayout(self)
         uvod = QLabel("Body se umístí na své souřadnice (shodně se světem S-JTSK jako v MicroStationu). "
-                      "U značky, čísla, výšky a kódu zvolte hladinu, barvu a velikost – nebo druh prvku ze zadání.")
+                      "U značky, čísla, výšky a kódu zvolte hladinu, barvu a velikost – nebo druh prvku ze zadání či nástroj "
+                      "pracovní sady (Účelová mapa).")
         uvod.setWordWrap(True)
+        from PySide6.QtWidgets import QSizePolicy
+        uvod.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)  # zalomený úvod okno nerozšiřuje
         lay.addWidget(uvod)
         f = QFormLayout()
         self.zdroj = QComboBox()
@@ -33,7 +37,8 @@ class BodyDialog(QDialog):
         self.filtr = QLineEdit()
         self.filtr.setPlaceholderText("vše, nebo čísla „1-50, 101“, nebo kód „kód=3.13“")
         f.addRow("Body:", self.filtr)
-        self._pv = page._predvolby
+        self._pv_sady = page.predvolby_sady()
+        self._pv = list(page._predvolby) + self._pv_sady  # zadání + nástroje pásu pracovní sady (ÚM)
         vych = vychozi_nastaveni(self._pv)
         lay.addLayout(f)
         f = QFormLayout()
@@ -61,9 +66,16 @@ class BodyDialog(QDialog):
             cb = QComboBox()
             cb.addItem("vlastní atributy", "vlastni")
             for p in self._pv:
+                z_pasu = bool(p.nastroj == "vlož" and p.nazev_pravidla and p.kod)  # buňka z pásu sady
+                if klic == "znacka" and z_pasu and "bod" not in p.kod.lower():
+                    continue  # ze 175 značek ÚM jen značky bodů
                 if p.geometrie in typy or (klic == "znacka" and p.blok):
-                    cb.addItem(f"zadání: {p.nazev}", p)
-            if hodnota is not None:
+                    cb.addItem(f"{'nástroj' if p in self._pv_sady else 'zadání'}: {p.nazev}", p)
+                    cb.setItemData(cb.count() - 1, p.popis(), Qt.ToolTipRole)
+            ulozene = str(self._nast.value(f"cad/body/{klic}/podle", ""))
+            if ulozene and cb.findText(ulozene) > 0:  # naposledy zvolený druh prvku / nástroj (ne „vlastní“)
+                cb.setCurrentIndex(cb.findText(ulozene))
+            elif hodnota is not None:
                 cb.setCurrentIndex(max(0, cb.findText(f"zadání: {hodnota.nazev}")))
             cb.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             cb.setMinimumContentsLength(4)
@@ -156,6 +168,9 @@ class BodyDialog(QDialog):
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
         self.vysledek = None
+        g.setColumnStretch(1, 3)  # „Podle“ (názvy nástrojů a druhů prvků) dostane volné místo
+        g.setColumnStretch(2, 2)
+        self.resize(max(self.sizeHint().width(), 620), self.sizeHint().height())
         self._obnov_info()
 
     def _zdroj(self, i: int):
@@ -241,6 +256,7 @@ class BodyDialog(QDialog):
     def _uloz_volby(self):
         for k in self.cb:
             self._nast.setValue(f"cad/body/{k}/ano", self.ch[k].isChecked())
+            self._nast.setValue(f"cad/body/{k}/podle", self.cb[k].currentText())
             self._nast.setValue(f"cad/body/{k}/hladina", self.hl[k].currentText())
             self._nast.setValue(f"cad/body/{k}/barva", self._barva_ms.get(k, 256))
             self._nast.setValue(f"cad/body/{k}/velikost", self.vel[k].value())
@@ -249,6 +265,8 @@ class BodyDialog(QDialog):
     def _povol(self, klic: str):
         on = self.ch[klic].isChecked()
         vlastni = self.cb[klic].currentData() == "vlastni"
+        d = self.cb[klic].currentData()
+        self.cb[klic].setToolTip(self.cb[klic].currentText() + (" – " + d.popis() if hasattr(d, "popis") else ""))
         self.cb[klic].setEnabled(on)
         for w in (self.hl[klic], self.barvy[klic], self.vel[klic]):
             w.setEnabled(on and vlastni)
