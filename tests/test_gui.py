@@ -4275,3 +4275,48 @@ def test_cad_knihovna_bunek_okno(window):
     c.zadej("")
     ins = list(c.prostor.query("INSERT"))
     assert len(ins) == 2 and all(i.dxf.name == "STROM" and i.dxf.xscale == 2 for i in ins)
+
+
+def test_cad_okno_stylu_car(window):
+    """Styly čar jako Line Styles v MicroStationu: okno s náhledy standardních stylů 0–7 a vlastních stylů
+    z knihoven pracovní sady, hledání; vybraný styl se nastaví jako aktivní."""
+    from PySide6.QtCore import Qt
+
+    from kontrola.cad import pracovni_sady as PS
+    c = window.cad
+    window.show_page("cad")
+    try:
+        c.novy_um()
+        d = c.okno_stylu_car(modal=False)
+        kody = [d.seznam.item(i).data(Qt.UserRole) for i in range(d.seznam.count())]
+        assert kody[:8] == [str(n) for n in range(8)] and len(kody) > 50 and len(set(kody)) == len(kody)
+        assert not d.seznam.item(10).icon().isNull()
+        vlastni = kody[10]
+        d.hledat.setText(d.seznam.item(10).text())
+        assert not d.seznam.item(10).isHidden() and d.seznam.item(0).isHidden()
+        d.seznam.setCurrentRow(10)
+        d._ok()
+        assert d.vysledek == vlastni
+        c._styl_tloustka("styl", d.vysledek)
+        assert c.kresleni.typ_cary == vlastni
+        c.proved("u")
+        c.zadej("x=-743100 y=-1043400")
+        c.zadej("x=-743090 y=-1043400")
+        c.zadej("")
+        e = list(c.prostor)[-1]
+        assert e.dxf.linetype == vlastni
+        # Vlastnosti ukazují skutečný styl a tloušťku vybraného prvku; výzva nástroje je na jednom řádku
+        c.zrus()
+        c.proved("tloušťka 2")
+        c.vyber = [e]
+        c._zvyrazni()
+        assert c.panel_upravy.styl.currentData() == vlastni
+        c.proved("u")
+        assert "bod" in c.vyzva.text().lower() and not c.vyzva.wordWrap()
+        c.zrus()
+        assert c.vyzva.text() == c.VYZVA_KLID
+        c._pohyb(-743100.0, -1043400.0)
+        assert c.coords.text().startswith("Y 743 100.000   X 1 043 400.000")
+        assert c.coords.fontMetrics().horizontalAdvance(c.coords.text()) <= c.coords.width()
+    finally:
+        PS.nastav_aktivni(None)

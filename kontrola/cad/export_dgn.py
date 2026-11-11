@@ -32,6 +32,8 @@ class Souhrn:
         if self.hladiny:
             t += ". Hladiny bez čísla → " + ", ".join(f"{k} = {v}" for k, v in sorted(self.hladiny.items(),
                                                                                     key=lambda kv: kv[1]))
+            t += (" – DGN V7 názvy hladin neumí, v MicroStationu budou jen čísla. Výkres s pojmenovanými hladinami "
+                  "(Účelová mapa, Pasport) proto ukládejte jako DXF: MicroStation ho otevře i s názvy hladin")
         if self.vlastni_styly:
             t += (". Vlastní styly čar (" + ", ".join(sorted(self.vlastni_styly)) + ") DGN V7 neumí – uloženy "
                   "stylem 0, v MicroStationu je přiřaďte (nebo uložte DXF)")

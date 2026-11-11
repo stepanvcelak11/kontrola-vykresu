@@ -489,7 +489,7 @@ class CadPage(QWidget):
         "vzorek": "vzorek plochy (Pattern Area): uzavřenou plochu vyplní buňkami – značky kultur do sponu",
         "styl": "styl čáry nových / vybraných prvků: 0–7, kód stylu z knihovny („styl 2.103“), „styl dle“ = dle hladiny",
         "tloušťka": "tloušťka (wt 0–31) nových / vybraných prvků, „tloušťka dle“ = dle hladiny",
-        "styly čar": "styly čar MicroStationu z knihovny .rsc (ploty, hranice…): seznam, „styly čar připoj“",
+        "styly čar": "styly čar MicroStationu – okno s náhledy (standardní 0–7 a vlastní z knihoven .rsc: ploty, hranice…); „styly čar připoj“ = načíst knihovnu, „styly čar seznam“ = výpis",
         "pracovní sada": "pracovní sada jako v MicroStationu (Bez pracovní sady, MultiScale, Pasport, TM): seed, hladiny, buňky, styly čar",
         "knihovny": "knihovny od učitele – buňky (.cel) a styly čar (.rsc) pro všechny výkresy; přidat nové",
         "písmo": "písmo (font) nových a vybraných textů: „písmo Arial“, „písmo“ = seznam, „písmo CC“ = zarovnání",
@@ -889,17 +889,19 @@ class CadPage(QWidget):
         self.historie.setMaximumHeight(64)
         self.historie.setObjectName("cad_historie")
         lay.addWidget(self.historie)
-        crow = QHBoxLayout()
-        crow.setContentsMargins(8, 4, 8, 5)
-        self.vyzva = QLabel("Příkaz:")
-        self.vyzva.setObjectName("cad_vyzva")
-        # dlouhá výzva nástroje nesmí roztáhnout okno – zalomí se a celá je v bublině
+        # výzva nástroje na vlastním řádku nad příkazem (jako stavový řádek MicroStationu): celá na jednom
+        # řádku, okno neroztahuje (dlouhá se ořízne, celá je v bublině)
         from PySide6.QtWidgets import QSizePolicy as _SP
-        self.vyzva.setWordWrap(True)
-        self.vyzva.setSizePolicy(_SP.Preferred, _SP.Preferred)
-        self.vyzva.setMaximumWidth(340)
-        self.vyzva.setMinimumWidth(50)  # explicitní minimum – dlouhá výzva nesmí zvětšit minimum okna
-        crow.addWidget(self.vyzva)
+        self.vyzva = QLabel(self.VYZVA_KLID)
+        self.vyzva.setObjectName("cad_vyzva")
+        self.vyzva.setSizePolicy(_SP.Ignored, _SP.Fixed)
+        self.radek_vyzvy = QHBoxLayout()
+        self.radek_vyzvy.setContentsMargins(8, 2, 8, 0)
+        self.radek_vyzvy.addWidget(self.vyzva, 1)
+        lay.addLayout(self.radek_vyzvy)
+        crow = QHBoxLayout()
+        crow.setContentsMargins(8, 2, 8, 5)
+        crow.addWidget(QLabel("Příkaz:"))
         self.prikaz = QLineEdit()
         self.prikaz.setObjectName("cad_prikaz")
         self.prikaz.setPlaceholderText("Příkaz (u, pl, kr, m, ?) nebo souřadnice „Y X“, „@dx,dy“, "
@@ -982,11 +984,12 @@ class CadPage(QWidget):
         crow.addWidget(self.aktivni)
         self.coords = QLabel("Y –  X –")
         self.coords.setObjectName("cad_souradnice")
-        self.coords.setMinimumWidth(130)  # malý notebook: celé okno ≤ 1100 px (CI má užší písmo)
-        # text se mění s každým pohybem myši – šířka podle něj by pokaždé přepočítala rozvržení celého okna
-        from PySide6.QtWidgets import QSizePolicy as _SP
-        self.coords.setSizePolicy(_SP.Ignored, _SP.Preferred)
-        crow.addWidget(self.coords)
+        # souřadnice kurzoru vpravo na řádku výzvy – celé čitelné (Y, X na mm), při pohybu myši se
+        # rozvržení nepřepočítává (pevná šířka)
+        self.coords.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.coords.setFixedWidth(self.coords.fontMetrics().horizontalAdvance(
+            "Y 1 043 999.999   X 1 243 999.999   [střed oblouku]") + 12)
+        self.radek_vyzvy.addWidget(self.coords)
         lay.addLayout(crow)
         self.b_barva.clicked.connect(self._vyber_barvy)
         self.styl_cb.activated.connect(self._styl_z_listy)
@@ -2589,6 +2592,16 @@ class CadPage(QWidget):
         from ..cad.styly_rsc import nacti
         return nacti(self.soubory_rsc())
 
+    def okno_stylu_car(self, modal: bool = True):
+        """Styly čar (Line Styles): přehled s náhledy; vybraný styl se nastaví jako aktivní nebo na výběr."""
+        from .cad_styly import StylyCarDialog
+        if self.dok is None:
+            self.novy()
+        d = StylyCarDialog(self)
+        if modal and d.exec() and d.vysledek is not None:
+            self._styl_tloustka("styl", d.vysledek)
+        return d
+
     def _styly_car(self, arg: str):
         """„styly čar“ = seznam stylů z knihoven .rsc; „styly čar soubor.rsc“ / bez souboru dialog = připojit."""
         from PySide6.QtCore import QSettings
@@ -2806,7 +2819,9 @@ class CadPage(QWidget):
             self.nastav_dokument(dok)
             self.vypis(f"Nový výkres ze seedu {seed.name}" + (f" (pracovní sada {sada.nazev})" if sada else "")
                        + f", {len(list(dok.doc.layers))} hladin.")
-        self.sjtsk = False
+        # mapové pracovní sady (MultiScale, TM) kreslí v S-JTSK: souřadnice se zadávají a ukazují jako Y, X
+        self.sjtsk = bool(dok is not None and sada is not None
+                          and any(k in sada.nazev.lower() for k in ("multiscale", "tm")))
 
     def uloz(self, jako: bool = False, path: str | None = None) -> Path | None:
         if self.dok is None:
@@ -3062,7 +3077,7 @@ class CadPage(QWidget):
         self._pod_kurzorem(x, y)
         u = self.view.uchyt
         su = f"   [{u.popis}]" if u is not None else ""
-        if self.sjtsk:
+        if self.sjtsk or (-910_000 < x < -420_000 and -1_240_000 < y < -930_000):  # kurzor v S-JTSK (Česko)
             self.coords.setText(f"Y {-x:,.3f}   X {-y:,.3f}{su}".replace(",", " "))
         else:
             self.coords.setText(f"x {x:,.3f}   y {y:,.3f}{su}".replace(",", " "))
@@ -3151,7 +3166,8 @@ class CadPage(QWidget):
         self.view.gumicka = False
         self.view.nahled = None
         self.view.vyber_oknem = True
-        self.vyzva.setText("Příkaz:")
+        self.vyzva.setText(self.VYZVA_KLID)
+        self.vyzva.setToolTip("")
         if getattr(self, "paleta", None) is not None:
             self._oznac(None)
         self.view.viewport().update()
@@ -3306,9 +3322,12 @@ class CadPage(QWidget):
             self._oznac(None)
         self.view.gumicka = False
         self.view.vyber_oknem = True
-        self.vyzva.setText("Příkaz:")
+        self.vyzva.setText(self.VYZVA_KLID)
+        self.vyzva.setToolTip("")
 
     # ------------------------------------------------------------ příkazy
+    VYZVA_KLID = "Vyberte nástroj, nebo napište příkaz (Esc = zrušit, Enter = zopakovat poslední)"
+
     _KEYIN = re.compile(r"^\s*(lv|co|lc|wt|th|tw|ac|ts|as|aa)\s*=\s*([^;]*)$", re.I)
 
     def _keyiny(self, t: str) -> bool:
@@ -3546,7 +3565,12 @@ class CadPage(QWidget):
         elif cmd == "knihovny":
             self.knihovny()
         elif cmd == "styly čar":
-            self._styly_car(arg)
+            if arg.strip() and arg.strip().lower() != "seznam":
+                self._styly_car(arg)
+            elif arg.strip():
+                self._styly_car("")
+            else:
+                self.okno_stylu_car()
         elif cmd == "otoč pohled" and arg.strip():
             try:
                 u = float(arg.strip().replace(",", "."))

@@ -262,8 +262,21 @@ class PanelUpravy(QWidget):
                 for i in range(zdroj.count()):
                     if zdroj.itemData(i) is not None:
                         cil.addItem(zdroj.itemText(i), zdroj.itemData(i))
-                cil.insertItem(0, "(beze změny)", None)
+                cil.insertItem(0, "(různé)", None)
                 cil.setCurrentIndex(0)
+            from ..cad import symbologie as SY
+            styly = {SY.typ_na_styl(e.dxf.get("linetype", "BYLAYER")) for e in vyber if e.dxf.hasattr("linetype")
+                     or e.dxftype() not in ("TEXT", "MTEXT", "INSERT", "POINT")}
+            tl = {SY.lw_na_wt(e.dxf.get("lineweight", -1), s._pravidla()) for e in vyber
+                  if e.dxftype() not in ("TEXT", "MTEXT", "INSERT", "POINT")}
+            for cil, hodnoty in ((self.styl, styly), (self.tl, tl)):
+                if len(hodnoty) == 1:  # skutečná hodnota prvku (různé hodnoty ve výběru = „(různé)“)
+                    h = hodnoty.pop()
+                    i = cil.findData("dle" if h in (None, "dle hladiny") else str(h))
+                    if i < 0 and h not in (None, "dle hladiny"):
+                        cil.addItem(str(h), str(h))
+                        i = cil.count() - 1
+                    cil.setCurrentIndex(max(0, i))
             carove = not typy <= {"TEXT", "MTEXT", "INSERT", "POINT"}
             self._ukaz("Styl", carove)
             self._ukaz("Tloušťka", carove)
