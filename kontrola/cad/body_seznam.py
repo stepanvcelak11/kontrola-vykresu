@@ -94,7 +94,8 @@ def nastaveni_um(doc, rs=None, anotace: int | None = None) -> NastaveniBodu:
     from .zadani import Predvolba
     b5, b70 = SY.ms_na_aci(5, rs), SY.ms_na_aci(70, rs)
     lw4 = SY.wt_na_lw(4, rs)[0]
-    bod = dict(geometrie="bod", nastroj="bod", barva=b5, tloustka=lw4, ms={"barva": 5})
+    # styl čáry výslovně 0 (ne „dle hladiny“) – jinak ho hlásí kontrola atributů dle vrstvy
+    bod = dict(geometrie="bod", nastroj="bod", barva=b5, tloustka=lw4, typ_cary="CONTINUOUS", ms={"barva": 5})
     return NastaveniBodu(
         znacka=Predvolba(nazev="Body (elementy)", vrstva=HLADINA_UM, **bod),
         info=Predvolba(nazev="Informace o bodu", vrstva="GS01-body-info", **bod),
