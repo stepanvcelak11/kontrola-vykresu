@@ -90,6 +90,11 @@ def test_dgn_do_cad_jako_dxf_z_microstationu():
         bb = bbox.extents(d.doc.blocks[jm])
         assert [bb.extmin.x, bb.extmin.y, bb.extmax.x, bb.extmax.y] == pytest.approx(knihovna[jm], abs=1e-6), jm
     assert not any("značkou bodu" in p for p in d.zprava.poznamky)
+    # texty: stejné styly a zarovnání jako v DXF z MicroStationu
+    def texty(msp):
+        return sorted((e.dxf.layer, e.dxf.text, e.dxf.style, e.dxf.halign, e.dxf.valign) for e in msp
+                      if e.dxftype() == "TEXT")
+    assert texty(d.msp) == texty(vzor.modelspace())
 
 
 def test_dgn_krivky_bspline():
@@ -101,3 +106,12 @@ def test_dgn_krivky_bspline():
     # Bézierova křivka (4 póly, řád 4): střed = (P0 + 3 P1 + 3 P2 + P3) / 8, konce v krajních pólech
     b = _bspline([(0, 0), (1, 2), (3, 2), (4, 0)], 4, [], 4)
     assert b[0] == (0, 0) and b[-1] == (4, 0) and b[2] == pytest.approx((2.0, 1.5))
+
+
+def test_dgn_bunky_pro_zobrazeni():
+    """Stránka Výkres kreslí buňky z DGN jejich kresbou (strom 3.13 má průměr 2 m v měřítku vložení 1)."""
+    d = read_dgn(ROOT / "podklady" / "zadani1-microstation" / "Vcelak_13_a0_t0.dgn")
+    bg = d.blocks["3.13"]
+    xs = [x for p in bg.paths for x, _y in p]
+    assert min(xs) == pytest.approx(-1.0, abs=1e-3) and max(xs) == pytest.approx(1.0, abs=1e-3)
+    assert {"6.01A", "6.14A", "8.11"} <= set(d.blocks)

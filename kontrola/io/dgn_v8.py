@@ -415,11 +415,37 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
     close_spline()
     close_chain()
     close_cell()
+    _bloky(d)
     d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Kurzíva se z DGN čte, "
                       "tučný řez ne (nekontroluje se).")
     if skipped:
         d.warnings.append("Nepřečtené prvky: " + ", ".join(f"typ {k}: {v}×" for k, v in sorted(skipped.items())))
     return d
+
+
+def _bloky(d: Drawing) -> None:
+    """Kresba buněk pro zobrazení výkresu: z prvního vložení každé buňky (části jsou uložené ve výkresu)."""
+    from ..model import BlockGeometry
+    from .cel import prvky_z_vykresu
+    for f in d.features:
+        jm = f.block_name
+        if f.dxftype != "INSERT" or not jm or jm in d.blocks:
+            continue
+        raw, s = getattr(f, "cell_data", (b"", 1.0))
+        bg = BlockGeometry(name=jm)
+        for p in prvky_z_vykresu(raw, s, f.geometry.x, f.geometry.y, f.rotation or 0.0, f.scale[0], f.scale[1]):
+            if p[0] == "cara":
+                bg.paths.append([tuple(b) for b in p[1]])
+                bg.closed.append(bool(p[2]))
+            elif p[0] == "kruh":
+                if p[3] <= 0:
+                    bg.points.append((p[1], p[2]))
+                else:
+                    bg.paths.append([(p[1] + p[3] * math.cos(math.radians(k * 15)),
+                                      p[2] + p[3] * math.sin(math.radians(k * 15))) for k in range(24)])
+                    bg.closed.append(True)
+        if bg.paths or bg.points:
+            d.blocks[jm] = bg
 
 
 def _bspline(poly: list, rad: int, vnitrni: list, na_usek: int = 8) -> list:

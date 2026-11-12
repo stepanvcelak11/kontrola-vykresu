@@ -323,12 +323,14 @@ def _v8_do_ezdxf(p: Path, rs=None):
             e = msp.add_blockref(jm, (g.x, g.y), dxfattribs={**a, "rotation": f.rotation or 0.0,
                                                              "xscale": f.scale[0] or 1.0, "yscale": f.scale[1] or 1.0})
         elif f.geom_type == GeomType.TEXT:
+            styl = _textovy_styl(doc, f.font, f.attributes.get("KURZIVA") == "1")
             e = msp.add_text(f.text or "", height=f.text_height or 1.0, rotation=f.rotation or 0.0,
-                             dxfattribs={**a, "width": f.width_factor or 1.0})
+                             dxfattribs={**a, "width": f.width_factor or 1.0, **({"style": styl} if styl else {})})
             from ezdxf.enums import TextEntityAlignment as TA
-            al = {(0, 0): TA.LEFT, (0, 1): TA.BOTTOM_LEFT, (0, 2): TA.MIDDLE_LEFT, (0, 3): TA.TOP_LEFT,
-                  (1, 0): TA.CENTER, (1, 1): TA.BOTTOM_CENTER, (1, 2): TA.MIDDLE_CENTER, (1, 3): TA.TOP_CENTER,
-                  (2, 0): TA.RIGHT, (2, 1): TA.BOTTOM_RIGHT, (2, 2): TA.MIDDLE_RIGHT, (2, 3): TA.TOP_RIGHT}
+            # „dole“ v MicroStationu = účaří (stejně to ukládá MicroStation do DXF)
+            al = {(0, 0): TA.LEFT, (0, 1): TA.LEFT, (0, 2): TA.MIDDLE_LEFT, (0, 3): TA.TOP_LEFT,
+                  (1, 0): TA.CENTER, (1, 1): TA.CENTER, (1, 2): TA.MIDDLE_CENTER, (1, 3): TA.TOP_CENTER,
+                  (2, 0): TA.RIGHT, (2, 1): TA.RIGHT, (2, 2): TA.MIDDLE_RIGHT, (2, 3): TA.TOP_RIGHT}
             e.set_placement((g.x, g.y), align=al.get((f.halign, f.valign), TA.LEFT))
         elif f.geom_type == GeomType.BOD:
             e = msp.add_point((g.x, g.y), dxfattribs=a)
@@ -361,47 +363,28 @@ def _v8_do_ezdxf(p: Path, rs=None):
     return doc, ms_barvy, pozn
 
 
+def _textovy_styl(doc, font: str | None, kurziva: bool) -> str | None:
+    """Textový styl pro písmo z DGN pojmenovaný jako při exportu z MicroStationu („Style-Arial Narrow“,
+    kurzíva „Style-Arial Narrow IF“); neznámé písmo (jen číslo) → None (styl Standard)."""
+    if not font or font.startswith("font č."):
+        return None
+    from .zadani import _REZY, _nazev_stylu, _soubor_fontu
+    znamy = any(font.lower().strip().startswith(n) for n in _REZY)
+    jm = "Style-" + _nazev_stylu(font) + ((" IF" if znamy else " Italic") if kurziva else "")
+    if jm not in doc.styles:
+        try:
+            doc.styles.add(jm, font=_soubor_fontu(font, False, kurziva))
+        except Exception:  # noqa: BLE001 – neplatný název pro DXF
+            return None
+    return jm
+
+
 def _blok_z_kresby(doc, jm: str, f, g) -> bool:
-    """Definice bloku z kresby buňky uložené přímo ve výkresu DGN V8: části buňky (ve světových souřadnicích)
-    se převedou do souřadnic buňky (počátek, natočení a měřítko vložení). Vrací False, když buňka nemá kresbu."""
-    import math
-
-    from ..io.cel import Bunka, _prvky, do_dokumentu
+    """Definice bloku z kresby buňky uložené přímo ve výkresu DGN V8. Vrací False, když buňka nemá kresbu."""
+    from ..io.cel import Bunka, do_dokumentu, prvky_z_vykresu
     raw, s = getattr(f, "cell_data", (b"", 1.0))
-    sx, sy = (f.scale[0] or 1.0), (f.scale[1] or 1.0)
-    if not raw:
-        return False
-    try:
-        prvky = _prvky(raw, s)
-    except Exception:  # noqa: BLE001
-        return False
-    if not prvky:
-        return False
-    u = math.radians(f.rotation or 0.0)
-    c, sn = math.cos(u), math.sin(u)
-
-    def mist(x, y):
-        dx, dy = x - g.x, y - g.y
-        return ((c * dx + sn * dy) / sx, (-sn * dx + c * dy) / sy)
-
-    out = []
-    for p in prvky:
-        if p[0] == "cara":
-            out.append(("cara", [mist(*b) for b in p[1]], p[2], p[3]))
-        elif p[0] == "kruh":
-            x, y = mist(p[1], p[2])
-            if abs(abs(sx) - abs(sy)) < 1e-9 * max(abs(sx), abs(sy)):
-                out.append(("kruh", x, y, p[3] / abs(sx), p[4]))
-            else:  # různé měřítko v osách: kruh jako lomená čára
-                body = [mist(p[1] + p[3] * math.cos(math.radians(k * 10)), p[2] + p[3] * math.sin(math.radians(k * 10)))
-                        for k in range(37)]
-                out.append(("cara", body, True, p[4]))
-        elif p[0] == "text":
-            _k, x, y, text, vyska, wf, rot, just = p
-            x, y = mist(x, y)
-            out.append(("text", x, y, text, vyska / abs(sy), wf * abs(sy) / abs(sx), (rot - (f.rotation or 0.0)) % 360,
-                        just))
-    return bool(do_dokumentu(doc, [Bunka(jm, out)], prepsat=True))
+    prvky = prvky_z_vykresu(raw, s, g.x, g.y, f.rotation or 0.0, f.scale[0], f.scale[1])
+    return bool(prvky) and bool(do_dokumentu(doc, [Bunka(jm, prvky)], prepsat=True))
 
 
 def dopln_bunky(doc, bez_kresby: set[str]) -> list[str]:

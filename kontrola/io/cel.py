@@ -147,6 +147,42 @@ def nacti_cel(cesta: str | Path) -> list[Bunka]:
         ole.close()
 
 
+def prvky_z_vykresu(raw: bytes, s: float, x0: float, y0: float, rot: float, sx: float, sy: float) -> list:
+    """Kresba buňky vložené ve výkresu DGN V8 (části ve světových souřadnicích) převedená do souřadnic buňky
+    podle počátku, natočení (stupně) a měřítka vložení. Prázdný seznam = buňka nemá čitelnou kresbu."""
+    if not raw:
+        return []
+    try:
+        prvky = _prvky(raw, s)
+    except Exception:  # noqa: BLE001
+        return []
+    sx, sy = sx or 1.0, sy or 1.0
+    u = math.radians(rot or 0.0)
+    c, sn = math.cos(u), math.sin(u)
+
+    def mist(x, y):
+        dx, dy = x - x0, y - y0
+        return ((c * dx + sn * dy) / sx, (-sn * dx + c * dy) / sy)
+
+    out = []
+    for p in prvky:
+        if p[0] == "cara":
+            out.append(("cara", [mist(*b) for b in p[1]], p[2], p[3]))
+        elif p[0] == "kruh":
+            x, y = mist(p[1], p[2])
+            if abs(abs(sx) - abs(sy)) < 1e-9 * max(abs(sx), abs(sy)):
+                out.append(("kruh", x, y, p[3] / abs(sx), p[4]))
+            else:  # různé měřítko v osách: kruh jako lomená čára
+                body = [mist(p[1] + p[3] * math.cos(math.radians(k * 10)), p[2] + p[3] * math.sin(math.radians(k * 10)))
+                        for k in range(37)]
+                out.append(("cara", body, True, p[4]))
+        elif p[0] == "text":
+            _k, x, y, text, vyska, wf, r, just = p
+            x, y = mist(x, y)
+            out.append(("text", x, y, text, vyska / abs(sy), wf * abs(sy) / abs(sx), (r - (rot or 0.0)) % 360, just))
+    return out
+
+
 def _platny_nazev(nazev: str) -> str:
     return re.sub(r'[<>/\\":;?*|=`]', "_", nazev) or "BUNKA"
 
