@@ -16,6 +16,11 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "poloměr ve Vlastnostech. Vyplněné kroužky se čtou jako výplň.",
         "<b>Křivky (B-spline)</b> se z DGN čtou – v CADu i v kontrole výkresu. Ve cvičném výkresu od učitele jich "
         "dřív 112 chybělo (vrstevnice a zaoblené hrany).",
+        "<b>Původní výkres DGN se nikdy nepřepíše.</b> Když otevřete DGN z MicroStationu a dáte Uložit nebo "
+        "Zkontrolovat, úpravy se zapíšou vedle něj do souboru „název (z DGN).dxf“. Dřív by se původní soubor "
+        "přepsal starším formátem DGN V7 a ztratily by se názvy hladin.",
+        "Značky z DGN se kreslí i na stránce <b>Výkres</b> (kontrola) a texty mají stejné písmo, kurzívu a "
+        "zarovnání jako v DXF uloženém z MicroStationu.",
     ]),
     (10, "12. listopadu 2026", [
         "<b>Nový vzhled celé aplikace.</b> Vlevo je tmavá navigace rozdělená na <b>Programy</b> (Výpočty, CAD, "

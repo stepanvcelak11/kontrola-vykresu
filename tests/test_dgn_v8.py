@@ -115,3 +115,20 @@ def test_dgn_bunky_pro_zobrazeni():
     xs = [x for p in bg.paths for x, _y in p]
     assert min(xs) == pytest.approx(-1.0, abs=1e-3) and max(xs) == pytest.approx(1.0, abs=1e-3)
     assert {"6.01A", "6.14A", "8.11"} <= set(d.blocks)
+
+
+def test_puvodni_dgn_se_neprepise(tmp_path):
+    """Výkres otevřený z DGN V8 se ukládá vedle originálu do DXF – původní soubor zůstane bajt po bajtu stejný."""
+    import shutil
+
+    from kontrola.cad.dokument import CadDokument
+    src = tmp_path / "mapa.dgn"
+    shutil.copy(ROOT / "podklady" / "zadani1-microstation" / "Vcelak_13_a0_t0.dgn", src)
+    puvodni = src.read_bytes()
+    d = CadDokument.otevri(src)
+    assert d.zdroj_dgn == src and d.path == tmp_path / "mapa (z DGN).dxf"
+    p = d.uloz()
+    assert p.suffix == ".dxf" and p.exists() and src.read_bytes() == puvodni
+    assert CadDokument.otevri(src).path == tmp_path / "mapa (z DGN 2).dxf"  # dřívější úpravy se také nepřepíšou
+    znovu = CadDokument.otevri(p)
+    assert znovu.zprava.pocty["INSERT"] == d.zprava.pocty["INSERT"]

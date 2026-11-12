@@ -50,6 +50,7 @@ class CadDokument:
         self.zmeneno = False
         self.ms_barvy: dict[str, int] = {}  # handle → barva MicroStationu (z DGN)
         self.souhrn_dgn = None  # souhrn posledního uložení do DGN
+        self.zdroj_dgn: Path | None = None  # původní výkres DGN V8, ze kterého se četlo (nepřepisuje se)
         self._souhrn()
 
     @staticmethod
@@ -103,6 +104,13 @@ class CadDokument:
         d = cls(doc, p)
         d.ms_barvy = ms_barvy
         d.zprava.poznamky = list(pozn)
+        if verze == "V8":
+            # Původní výkres MicroStationu se nikdy nepřepisuje (zápis umí jen starší DGN V7 bez názvů hladin):
+            # úpravy se ukládají vedle něj do DXF, které MicroStation otevře.
+            d.zdroj_dgn = p
+            d.path = _volne_jmeno(p)
+            d.zprava.poznamky.append(f"Původní {p.name} zůstává beze změny – Uložit zapíše úpravy do "
+                                     f"„{d.path.name}“ ve stejné složce (v MicroStationu Soubor → Otevřít).")
         return d
 
     def _souhrn(self):
@@ -361,6 +369,16 @@ def _v8_do_ezdxf(p: Path, rs=None):
         pozn.append("Buňky " + ", ".join(sorted(bez_kresby)[:8]) + ("…" if len(bez_kresby) > 8 else "")
                     + " nejsou v žádné knihovně – jsou jen značkou bodu (Připojit → Knihovny, soubor .CEL).")
     return doc, ms_barvy, pozn
+
+
+def _volne_jmeno(dgn: Path) -> Path:
+    """Jméno DXF pro úpravy výkresu otevřeného z DGN V8: „název (z DGN).dxf“; existující soubor se nepřepíše."""
+    p = dgn.with_name(f"{dgn.stem} (z DGN).dxf")
+    n = 2
+    while p.exists():
+        p = dgn.with_name(f"{dgn.stem} (z DGN {n}).dxf")
+        n += 1
+    return p
 
 
 def _textovy_styl(doc, font: str | None, kurziva: bool) -> str | None:
