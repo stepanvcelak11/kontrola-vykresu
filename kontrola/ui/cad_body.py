@@ -37,6 +37,17 @@ class BodyDialog(QDialog):
         self.filtr = QLineEdit()
         self.filtr.setPlaceholderText("vše, nebo čísla „1-50, 101“, nebo kód „kód=3.13“")
         f.addRow("Body:", self.filtr)
+        from ..cad.body_seznam import HLADINA_UM
+        self.podle_um = QCheckBox("Podle atributové tabulky Účelové mapy – bod, informace o bodu, číslo, výška "
+                                  "a značka 9.12 (jako import Gromou ve škole)")
+        self.podle_um.setToolTip("Hladiny GS01-body-poloha / -info / -čísla a GS09-výškopis-body podrobné-výšky / "
+                                 "-buňky, barvy, písmo a velikosti podle tabulky atributů ÚM. Číslo bodu se píše "
+                                 "bez předčíslí. Vypněte, když chcete atributy nastavit sami.")
+        je_um = page.dok is not None and HLADINA_UM in page.dok.doc.layers
+        self._je_um = je_um
+        self.podle_um.setVisible(je_um)
+        self.podle_um.setChecked(je_um and self._nast_um())
+        f.addRow(self.podle_um)
         self._pv_sady = page.predvolby_sady()
         self._pv = list(page._predvolby) + self._pv_sady  # zadání + nástroje pásu pracovní sady (ÚM)
         vych = vychozi_nastaveni(self._pv)
@@ -46,7 +57,7 @@ class BodyDialog(QDialog):
         from PySide6.QtCore import QSettings
         from PySide6.QtWidgets import QDoubleSpinBox, QGridLayout, QGroupBox, QPushButton
         self._nast = QSettings("KontrolaVykresu", "KontrolaVykresu")
-        grp = QGroupBox("Co vložit a s jakými atributy")
+        grp = self.grp_atributy = QGroupBox("Co vložit a s jakými atributy")
         g = QGridLayout(grp)
         for c, t in enumerate(("", "Podle", "Hladina", "Barva", "Vel. [m]")):
             if t:
@@ -170,6 +181,8 @@ class BodyDialog(QDialog):
         self.vysledek = None
         g.setColumnStretch(1, 3)  # „Podle“ (názvy nástrojů a druhů prvků) dostane volné místo
         g.setColumnStretch(2, 2)
+        self.podle_um.toggled.connect(self._prepni_um)
+        self._prepni_um(self.podle_um.isChecked())
         self.resize(max(self.sizeHint().width(), 620), self.sizeHint().height())
         self._obnov_info()
 
@@ -220,9 +233,26 @@ class BodyDialog(QDialog):
         n = len(self.body())
         self.info.setText(f"Vloží se {n} bodů." if n else "Ve zdroji nejsou žádné body.")
 
+    @staticmethod
+    def _nast_um() -> bool:
+        from PySide6.QtCore import QSettings
+        return QSettings().value("cad/body/podle_um", "true") in (True, "true")
+
+    def _prepni_um(self, on: bool):
+        self.grp_atributy.setEnabled(not on)
+        self.podle_kodu.setEnabled(not on)
+
     def nastaveni(self) -> NastaveniBodu:
         from ..cad import symbologie as SY
         from ..cad.zadani import Predvolba
+        if self.podle_um.isChecked():
+            from ..cad.body_seznam import nastaveni_um
+            n = nastaveni_um(self.page.dok.doc, self.page._pravidla(), self.page.anotace)
+            n.preskocit_existujici, n.v3d = self.preskocit.isChecked(), self.v3d.isChecked()
+            d = self.cb_spoj.currentData()
+            n.spojnice = d if d not in (None, "aktivni") else None
+            n.spojnice_aktivni = d == "aktivni"
+            return n
         n = NastaveniBodu(podle_kodu=self.podle_kodu.isChecked(), preskocit_existujici=self.preskocit.isChecked(),
                           v3d=self.v3d.isChecked())
         rs = self.page._pravidla()
@@ -254,6 +284,8 @@ class BodyDialog(QDialog):
         return n
 
     def _uloz_volby(self):
+        if self._je_um:
+            self._nast.setValue("cad/body/podle_um", self.podle_um.isChecked())
         for k in self.cb:
             self._nast.setValue(f"cad/body/{k}/ano", self.ch[k].isChecked())
             self._nast.setValue(f"cad/body/{k}/podle", self.cb[k].currentText())

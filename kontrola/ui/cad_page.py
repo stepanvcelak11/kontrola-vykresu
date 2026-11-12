@@ -1162,6 +1162,22 @@ class CadPage(QWidget):
             e.dxf.xscale = e.dxf.get("xscale", 1.0) * f
             e.dxf.yscale = e.dxf.get("yscale", 1.0) * f
 
+    def _bunka_v_metrech_papiru(self, jmeno: str) -> bool:
+        """Buňka nakreslená v metrech na papíře (celá menší než 5 cm) – knihovna MultiScale.cel."""
+        doc = self.dok.doc if self.dok is not None else None
+        if doc is None or jmeno not in doc.blocks:
+            return False
+        cache = self.__dict__.setdefault("_bunky_papir", {})
+        k = (id(doc), jmeno)
+        if k not in cache:
+            from ezdxf import bbox
+            try:
+                bb = bbox.extents(doc.blocks[jmeno])
+                cache[k] = bool(bb.has_data and 0 < max(bb.size.x, bb.size.y) < 0.05)
+            except Exception:  # noqa: BLE001
+                cache[k] = False
+        return cache[k]
+
     def _anotuj(self, ents) -> None:
         """Nové texty a buňky: velikost na papíře × měřítko anotací (prvek si měřítko zapamatuje)."""
         m = self.anotace
@@ -1174,8 +1190,11 @@ class CadPage(QWidget):
         for e in ents:
             if not self._je_anotace(e) or self._meritko_prvku(e) is not None:
                 continue  # kopie už anotovaného prvku si měřítko nese
-            if abs(f - 1.0) > 1e-12:
-                self._skaluj(e, f)
+            # buňky školní knihovny MultiScale jsou kreslené v metrech na papíře (strom 3.13 = 0,004) – jako
+            # v MicroStationu se násobí přímo měřítkem anotací (1:200 → 200), buňky v mm jen m / 1000
+            fe = float(m) if e.dxftype() == "INSERT" and self._bunka_v_metrech_papiru(e.dxf.name) else f
+            if abs(fe - 1.0) > 1e-12:
+                self._skaluj(e, fe)
             e.set_xdata(self.ANOTACE_APP, [(1071, int(m))])
 
     def nastav_anotace(self, m: int | None, prepocitat: bool = True) -> int:
@@ -2840,6 +2859,8 @@ class CadPage(QWidget):
                     if jm not in dok.doc.layers:
                         dok.doc.layers.add(jm)
             dok.path = None  # nový výkres, seed se nepřepíše
+            dok.zdroj_dgn = None
+            dok.zprava.poznamky = [t for t in dok.zprava.poznamky if "zůstává beze změny" not in t]
             self.nastav_dokument(dok)
             self.vypis(f"Nový výkres ze seedu {seed.name}" + (f" (pracovní sada {sada.nazev})" if sada else "")
                        + f", {len(list(dok.doc.layers))} hladin.")
@@ -3390,6 +3411,7 @@ class CadPage(QWidget):
                         self.kresleni.sirka_faktor = h / max(self.vyska_textu, 1e-9)
                 elif k == "ac":
                     self._aktivni_bunka = v
+                    self._ac_primo = v  # „vlož“ pak rovnou umisťuje aktivní buňku (jako Place Active Cell)
                     self.vypis(f"Aktivní buňka {v} (vložení příkazem „vlož“).")
                 elif k == "ts":
                     self._textovy_styl_ms(v)
@@ -3809,7 +3831,14 @@ class CadPage(QWidget):
     # ------------------------------------------------------------ nástroje kreslení
     def _bod_seznamu(self, cislo: str):
         v = getattr(self.win, "vypocty", None)
-        return v.seznam.najdi(cislo) if v is not None else None
+        if v is None:
+            return None
+        from .groma_formulare import predcisli_listy
+        b = v.seznam.najdi_kratke(cislo, predcisli_listy())  # #1 najde i bod 610844000130001
+        if b is None:
+            return None
+        import dataclasses  # na mm jako značka bodu vložená ze seznamu – čára pak končí přesně na bodě
+        return dataclasses.replace(b, y=round(b.y, 3), x=round(b.x, 3))
 
     def _bod_req(self, vyzva, ref=None, volitelne=False, slova=(), nahled=None):
         return Pozadavek("bod", vyzva, volitelne, slova, ref, nahled=nahled)
@@ -4905,6 +4934,11 @@ class CadPage(QWidget):
             jmena = vhodne + [j for j in jmena if j not in vhodne]
         if not jmena:
             raise ValueError("Ve výkresu nejsou žádné bloky (vytvořte příkazem „blok“).")
+        primo = getattr(self, "_ac_primo", None)
+        self._ac_primo = None
+        if primo and primo in jmena:  # po key-inu ac=… se neptá na název, měřítko ani natočení
+            yield from self.n_umisti_bunku(primo, getattr(self, "_meritko_bunky", 1.0) or 1.0, 0.0)
+            return
         self.vypis("Bloky: " + ", ".join(jmena[:40]) + ("…" if len(jmena) > 40 else ""))
         ac = getattr(self, "_aktivni_bunka", None)
         if ac and ac in jmena:

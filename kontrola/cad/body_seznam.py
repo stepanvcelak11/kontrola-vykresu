@@ -30,6 +30,10 @@ class NastaveniBodu:
     velikost_znacky: float | None = None  # m ($PDSIZE), None = beze změny
     bunka: str | None = None  # značka bodu jako buňka (blok) – vlastní volba bez zadání
     meritko_bunky: float = 1.0
+    info: object | None = None  # Predvolba pro druhý bod „Informace o bodu“ (import Gromou ve škole)
+    vyskova_znacka: object | None = None  # Predvolba buňky u každého bodu (ÚM: 9.12 podrobný výškový bod)
+    kratka_cisla: bool = False  # číslo bodu ve výkresu bez předčíslí a úvodních nul (610844000130001 → 1)
+    na_bod: float | None = None  # měřítko anotací: číslo těsně u bodu, výška zarovnaná přesně na bod
 
 
 TVARY = {"tečka": 0, "křížek +": 2, "křížek ×": 3, "kroužek": 32, "kroužek s křížkem": 34}
@@ -76,6 +80,44 @@ def vychozi_nastaveni(pv) -> NastaveniBodu:
     return NastaveniBodu(znacka=znacka, cislo=cislo, vyska=vyska)
 
 
+HLADINA_UM = "GS01-body-poloha"  # podle ní se pozná výkres Účelové mapy (pracovní sada MultiScale)
+
+
+def nastaveni_um(doc, rs=None, anotace: int | None = None) -> NastaveniBodu:
+    """Import bodů přesně podle atributové tabulky Účelové mapy (jako import Gromou do MicroStationu ve škole):
+    bod v GS01-body-poloha a GS01-body-info (barva 5, tloušťka 4), číslo bez předčíslí v GS01-body-čísla
+    (Arial Narrow kurzíva 0,3 mm), výška na dvě desetinná místa v GS09-výškopis-body podrobné-výšky
+    (Arial Narrow 0,6 / 0,3 mm, barva 70) a značka 9.12 v GS09-výškopis-body podrobné-buňky (barva 70).
+    Velikosti jsou v mm na papíře – přepočte je měřítko anotací."""
+    from . import symbologie as SY
+    from .dokument import _textovy_styl
+    from .zadani import Predvolba
+    b5, b70 = SY.ms_na_aci(5, rs), SY.ms_na_aci(70, rs)
+    lw4 = SY.wt_na_lw(4, rs)[0]
+    bod = dict(geometrie="bod", nastroj="bod", barva=b5, tloustka=lw4, ms={"barva": 5})
+    return NastaveniBodu(
+        znacka=Predvolba(nazev="Body (elementy)", vrstva=HLADINA_UM, **bod),
+        info=Predvolba(nazev="Informace o bodu", vrstva="GS01-body-info", **bod),
+        cislo=Predvolba(nazev="Podrobné body - čísla", geometrie="text", nastroj="text", vrstva="GS01-body-čísla",
+                        barva=b5, vyska=0.3, zarovnani="TOP_LEFT", ms={"barva": 5},
+                        textovy_styl=_textovy_styl(doc, "Arial Narrow", True)),
+        vyska=Predvolba(nazev="Podrobné body - výškové kóty", geometrie="text", nastroj="text",
+                        vrstva="GS09-výškopis-body podrobné-výšky", barva=b70, vyska=0.6, sirka_faktor=0.5,
+                        zarovnani="CENTER", ms={"barva": 70}, textovy_styl=_textovy_styl(doc, "Arial Narrow", False)),
+        vyskova_znacka=Predvolba(nazev="Podrobné výškové body - bodové značky", geometrie="bod", nastroj="vlož",
+                                 vrstva="GS09-výškopis-body podrobné-buňky", barva=b70, blok="9.12",
+                                 meritko_bunky=0.001, ms={"barva": 70}),  # jako Groma: 1:200 → měřítko 0,2
+        podle_kodu=False, kratka_cisla=True, na_bod=float(anotace or 1000), tvar=0, des_vysky=2)
+
+
+def kratke_cislo(cislo: str) -> str:
+    """Číslo bodu pro popis ve výkresu: z úplného čísla (k.ú. + ZPMZ + číslo) jen vlastní číslo bez nul."""
+    c = (cislo or "").strip()
+    if len(c) == 15 and c.isdigit():
+        return str(int(c[11:]))
+    return c
+
+
 def _predvolba_kodu(pv, kod: str, doc):
     """Předvolba buňky pro kód bodu (kód = název buňky ze Směrnice, např. 9.12) – jen je-li buňka ve výkresu."""
     if not kod:
@@ -100,7 +142,7 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
         for t in msp.query("TEXT"):
             if t.dxf.layer == nast.cislo.vrstva:
                 existujici.add(t.dxf.text.strip())
-    for pv_ in (nast.znacka, nast.cislo, nast.vyska, nast.kod, nast.spojnice):  # hladiny, které ve výkresu nejsou
+    for pv_ in (nast.znacka, nast.cislo, nast.vyska, nast.kod, nast.spojnice, nast.info, nast.vyskova_znacka):
         jm = getattr(pv_, "vrstva", None)
         if jm and jm not in doc.layers:
             doc.layers.add(jm)
@@ -112,11 +154,12 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
     k.h = pomocna
     try:
         for b in body:
-            if b.cislo in existujici:
+            if (kratke_cislo(b.cislo) if nast.kratka_cisla else b.cislo) in existujici:
                 preskoceno += 1
                 continue
-            x, y = -b.y, -b.x  # shodně se světem: S-JTSK jako v MicroStationu
-            z = float(b.z) if nast.v3d and b.z is not None else 0.0
+            # shodně se světem: S-JTSK jako v MicroStationu; na mm jako v seznamu souřadnic (Groma)
+            x, y = -round(b.y, 3), -round(b.x, 3)
+            z = round(float(b.z), 3) if nast.v3d and b.z is not None else 0.0
             pk, blok = _predvolba_kodu(pv, (b.kod or "").strip(), doc) if nast.podle_kodu else (None, None)
             if pk is not None:
                 k.nastav_predvolbu(pk)
@@ -141,10 +184,20 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                     nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
             else:  # bez zadání: bod v aktivní hladině
                 nove.append(k.bod((x, y)) if not z else msp.add_point((x, y, z), dxfattribs=k._attr()))
+            if nast.info is not None:  # druhý bod s informacemi o bodu (ve škole ho vkládá Groma)
+                k.nastav_predvolbu(nast.info)
+                nove.append(msp.add_point((x, y, z), dxfattribs=k._attr()))
+            vz = nast.vyskova_znacka
+            if vz is not None and vz.blok and vz.blok in doc.blocks:
+                k.nastav_predvolbu(vz)
+                m = vz.meritko_bunky or 1.0
+                nove.append(msp.add_blockref(vz.blok, (x, y, z), dxfattribs=k._attr(xscale=m, yscale=m)))
+                bunky += 1
             if nast.cislo is None and nast.znacka is None and pk is None:  # bez zadání: číslo bodu vedle
                 vys = nast.vyska_textu or 1.0
                 nove.append(k.text((x + 0.6 * vys, y + 0.3 * vys), str(b.cislo), vys))
-            for pv_txt, text, posun in ((nast.cislo, b.cislo, (0.6, 0.3)),
+            for pv_txt, text, posun in ((nast.cislo, kratke_cislo(b.cislo) if nast.kratka_cisla else b.cislo,
+                                          (0.6, 0.3)),
                                          (nast.vyska, None if b.z is None else f"{b.z:.{nast.des_vysky}f}",
                                           (0.6, -1.4)),
                                          (nast.kod, b.kod or None, (0.6, -2.6))):
@@ -157,7 +210,12 @@ def vloz_body(msp, h, body, nast: NastaveniBodu, pv=(), kresleni=None, spojnice=
                     z = pv_txt.zarovnani
                     posun = (0.6 if "LEFT" in z else -0.6 if "RIGHT" in z else 0.0,
                              -0.4 if "TOP" in z else 0.4 if "BOTTOM" in z else 0.0)
-                nove.append(k.text((x + posun[0] * vys, y + posun[1] * vys), str(text), vys))
+                if nast.na_bod:  # jako import Gromou: číslo těsně u bodu, výška zarovnaná přesně na bod
+                    o = 1e-5 * nast.na_bod if pv_txt is nast.cislo else 0.0
+                    posun, vys_p = (o, -o), 1.0
+                else:
+                    vys_p = vys
+                nove.append(k.text((x + posun[0] * vys_p, y + posun[1] * vys_p), str(text), vys))
         if spojnice and (nast.spojnice is not None or nast.spojnice_aktivni):
             k.nastav_predvolbu(nast.spojnice if nast.spojnice is not None else puvodni[0])
             if nast.spojnice is None:

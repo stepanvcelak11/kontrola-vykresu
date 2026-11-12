@@ -199,6 +199,13 @@ class ImportDialog(QDialog):
         self.prepsat = QCheckBox("Body se stejným číslem, které už v seznamu jsou, přepsat (jinak se ponechají "
                                  "původní a vypíšou se)")
         lay.addWidget(self.prepsat)
+        from .groma_formulare import predcisli_listy
+        self._predcisli = predcisli_listy()
+        self.uplna = QCheckBox(f"Krátká čísla bodů doplnit předčíslím {self._predcisli} na úplná čísla (jako Groma)")
+        self.uplna.setChecked(bool(self._predcisli))
+        self.uplna.setVisible(bool(self._predcisli))
+        self.uplna.toggled.connect(lambda _on: self._update())
+        lay.addWidget(self.uplna)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         _cesky(bb, "Přidat do seznamu")
         bb.accepted.connect(self.accept)
@@ -234,6 +241,10 @@ class ImportDialog(QDialog):
 
     def _update(self):
         self.body, self.varovani, _ = nacti_text(self.text, self.format())
+        if self._predcisli and self.uplna.isChecked():
+            from ..geodezie.body import uplne_cislo
+            for b in self.body:
+                b.cislo = uplne_cislo(b.cislo, self._predcisli)
         self.prev.setRowCount(min(len(self.body), 200))
         for r, b in enumerate(self.body[:200]):
             for c, v in enumerate((b.cislo, f"{b.y:.3f}", f"{b.x:.3f}", "" if b.z is None else f"{b.z:.3f}",
@@ -501,7 +512,7 @@ class VypoctyPage(QWidget):
         self.table.selectionModel().selectionChanged.connect(
             lambda *_a: self.grafika.oznac([b.cislo for b in self.selected()]))
         self.table.selectionModel().selectionChanged.connect(lambda *_a: self._stav())
-        self.des.setValue(2)
+        self.des.setValue(3)  # jako Groma: souřadnice a výšky na 3 desetinná místa
         self._refresh()
 
     # ------------------------------------------------------------ projekt / ukládání

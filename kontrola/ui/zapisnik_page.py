@@ -249,10 +249,19 @@ class ZapisnikPanel(QWidget):
         if not st:
             QMessageBox.warning(self, "Zápisník", "V souboru nejsou žádná stanoviska.")
             return False
+        from ..geodezie.body import uplne_cislo
+        from .groma_formulare import predcisli_listy
+        pc = predcisli_listy()
+        if pc:  # jako Groma při importu měření: krátká čísla dostanou předčíslí z lišty (úplná čísla bodů)
+            for s_ in st:
+                s_.bod = uplne_cislo(s_.bod, pc)
+                for o in s_.orient + s_.detail:
+                    o.bod = uplne_cislo(o.bod, pc)
         self.soubor = Path(cesta)
         self.nastav(st)
         n = sum(len(s.orient) + len(s.detail) for s in st)
-        self.info.setText(f"Načteno {len(st)} stanovisek, {n} záměr ({self.soubor.name}).")
+        self.info.setText(f"Načteno {len(st)} stanovisek, {n} záměr ({self.soubor.name})."
+                          + (f" Krátká čísla bodů doplněna předčíslím {pc}." if pc else ""))
         return True
 
     def ulozit(self, cesta: str | None = None):
@@ -369,7 +378,18 @@ class ZapisnikPanel(QWidget):
         nove = [Bod(b.bod, b.y, b.x, b.z, poznamka=f"polární metoda ze st. {b.stanovisko}")
                 for b in self.vysledek.body if not b.kontrolni]
         n, konf = self.page.seznam.pridej(nove, "Zápisník: vypočtené body")
+        # výšky stanovisek připojené na nivelační bod se opraví i v seznamu (ve škole: „opravíme výšku bodů
+        # 4001 a 4002 v seznamu souřadnic“)
+        vysky = []
+        for cislo, sp in self.vysledek.stanoviska.items():
+            b = self.page.seznam.najdi(cislo)
+            if b is not None and sp.stanovisko == "niv" and sp.z is not None and (b.z is None or abs(b.z - sp.z) > 5e-4):
+                vysky.append(Bod(b.cislo, b.y, b.x, round(sp.z, 3), b.kod, b.kvalita, b.poznamka))
+        if vysky:
+            self.page.seznam.pridej(vysky, "Zápisník: výšky stanovisek z nivelačního bodu", prepsat=True)
         self.page._after_change()
         self.info.setText(f"Přidáno {n} bodů do seznamu." + (f" {len(konf)} čísel už v seznamu bylo a ponechala se "
-                                                              "původní." if konf else ""))
+                                                              "původní." if konf else "")
+                          + (" Opravena výška stanovisek " + ", ".join(f"{b.cislo[-4:]} = {b.z:.3f}" for b in vysky)
+                             + " (připojení na nivelační bod)." if vysky else ""))
         return n

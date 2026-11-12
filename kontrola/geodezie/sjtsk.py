@@ -141,12 +141,7 @@ def stupne_text(v: float, kladne: str, zaporne: str) -> str:
 
 
 def meritko_zobrazeni(y: float, x: float) -> float:
-    """Měřítko Křovákova zobrazení v bodě (Y, X kladné) – poměr délky v rovině S-JTSK k délce na elipsoidu.
-
-    Zobrazení je konformní, měřítko nezávisí na směru: spočte se z malého kroku po poledníku."""
-    phi, lam = krovak_inv(y, x)
-    dphi = 1e-6
-    y1, x1 = krovak(phi - dphi / 2, lam)
-    y2, x2 = krovak(phi + dphi / 2, lam)
-    m_pol = BESSEL_A * (1 - _E2) / (1 - _E2 * math.sin(phi) ** 2) ** 1.5  # poloměr křivosti poledníku
-    return math.hypot(y2 - y1, x2 - x1) / (m_pol * dphi)
+    """Měřítko Křovákova zobrazení v bodě (Y, X kladné) – délkové zkreslení podle vzdálenosti od vrcholu
+    kužele (řada používaná v praxi i v Gromě; s Gromou se shoduje na 11 desetinných míst)."""
+    dr = (math.hypot(y, x) - 1298039.0046) / 1e6  # v tisících km od základní rovnoběžky
+    return 0.9999 + 0.012282279 * dr ** 2 - 0.003154 * dr ** 3 + 0.001848 * dr ** 4 - 0.00115 * dr ** 5

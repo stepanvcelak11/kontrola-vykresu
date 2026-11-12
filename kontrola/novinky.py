@@ -8,6 +8,25 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (12, "12. listopadu 2026 – školní úloha Husovice od výpočtu po kresbu", [
+        "Celou úlohu (výpočet jako v Gromě a kresbu Účelové mapy) jsem v aplikaci prošel krok za krokem podle "
+        "školních návodů a opravil, co nešlo nebo vycházelo jinak.",
+        "<b>Úplná čísla bodů.</b> Když je v liště vyplněné Předčíslí (např. 61084400013), import souřadnic "
+        "i zápisníku doplní krátká čísla na úplná (1 → 610844000130001) – stejně jako Groma. Ve výpočtech i v CADu "
+        "stačí dál psát krátké číslo (#1).",
+        "<b>Výpočet vychází jako v Gromě.</b> Měřítkový koeficient ze zkreslení a výšky (0,999859725906) sedí na "
+        "10 desetinných míst, výšky se připojí na nivelační bod a opraví se i v seznamu (4001 = 258,601, "
+        "4002 = 255,887). Refrakce je ve výchozím nastavení vypnutá jako ve škole (opravuje se jen zakřivení Země). "
+        "Seznam Husovic vyjde s odevzdaným na milimetr u 114 ze 118 bodů, zbytek se liší o 1 mm.",
+        "<b>Import bodů do Účelové mapy podle atributové tabulky</b> (CAD → Body ze seznamu, zaškrtnuto samo): "
+        "bod a informace o bodu, číslo bez předčíslí, výška na dvě desetinná místa a značka 9.12 – hladiny, "
+        "barvy, písmo a velikosti přesně jako po importu Gromou do MicroStationu.",
+        "<b>Značky z pásu Účelové mapy mají správnou velikost</b> – dřív se vkládaly 1000× menší než "
+        "v MicroStationu (strom v měřítku 1:200 má teď měřítko 200).",
+        "Čára kreslená přes čísla bodů končí přesně na bodě (na milimetr). Po key-inu <b>ac=</b> příkaz "
+        "<b>vlož</b> rovnou umisťuje aktivní buňku. Pole Předčíslí a Měřítko v liště Výpočtů jsou širší a seznam "
+        "ukazuje 3 desetinná místa.",
+    ]),
     (11, "12. listopadu 2026 – výkresy DGN", [
         "<b>Výkres DGN z MicroStationu se v CADu otevře tak, jak vypadá v MicroStationu.</b> Značky (buňky) mají "
         "svou skutečnou kresbu přímo z výkresu – dřív to byly jen tečky a kresba se musela načítat z knihovny. "

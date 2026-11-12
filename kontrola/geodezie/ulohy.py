@@ -48,7 +48,7 @@ def _bod(seznam: SeznamBodu, h: dict, key: str, nazev: str) -> Bod:
     c = (h.get(key) or "").strip()
     if not c:
         raise ChybaVstupu(f"Vyplňte {nazev}.")
-    b = seznam.najdi(c)
+    b = seznam.najdi_kratke(c)
     if b is None:
         raise ChybaVstupu(f"Bod {c} ({nazev}) v seznamu souřadnic není.")
     return b
@@ -83,7 +83,7 @@ def _radky_bodu(seznam: SeznamBodu, text: str) -> list[Bod]:
     cisla = [c for c in text.replace(",", " ").replace(";", " ").split() if c]
     out = []
     for c in cisla:
-        b = seznam.najdi(c)
+        b = seznam.najdi_kratke(c)
         if b is None:
             raise ChybaVstupu(f"Bod {c} v seznamu souřadnic není.")
         out.append(b)

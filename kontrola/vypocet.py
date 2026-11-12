@@ -90,7 +90,7 @@ class Zpracovani:
     """Volby zpracování zápisníku (Groma: Měření → Zpracování zápisníku, Nastavení → Teodolit)."""
     polohy: bool = True  # zprůměrovat I. a II. polohu dalekohledu (jinak se použije I. poloha)
     sikme: bool = True  # délky jsou šikmé → redukce na vodorovné; False = stanice už uložila vodorovné
-    refrakce: bool = True
+    refrakce: bool = False  # ve škole (Groma: Nastavení refrakce) se opravuje jen zakřivení Země
     zakriveni: bool = True
     k_refrakce: float = 0.13
     obousmerne: bool = True  # obousměrně měřené délky → průměr tam a zpět
@@ -232,7 +232,9 @@ def _dh(o: Obs, vp: float, m: float, zp: Zpracovani | None = None) -> tuple[floa
         dh = (d * math.cos(o.z * GON) / sz if abs(sz) > 1e-12 else 0.0) + vp - o.vc
     k = (1.0 if zp.zakriveni else 0.0) - (zp.k_refrakce if zp.refrakce else 0.0)
     dh += d * d * k / (2.0 * R_EARTH)
-    return d * m, dh
+    # Groma počítá převýšení z délky už opravené měřítkovým koeficientem (dH = D·cotg z) – stejně i zde,
+    # jinak se výšky od Gromy liší o 1 mm na hranách zaokrouhlení
+    return d * m, dh * m
 
 
 def compute(stations: list[Station], known_points: list[ListPoint], koeficient: float | None = None,
@@ -269,8 +271,9 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
         for o in st.orient + st.detail:
             kp = known.get(o.bod) or (_find(known, o.bod) if re.search(r"[A-Za-z]", o.bod) else None)
             if kp is not None and kp.z and re.search(r"[A-Za-z]", o.bod):
-                _, dh = _dh(o, st.vp, 1.0, zp)
-                sp.z = kp.z - dh
+                _, dh = _dh(o, st.vp, m, zp)
+                dh = round(dh, 3)  # převýšení i výšky na mm, jako když se v Gromě opisují do seznamu
+                sp.z = round(kp.z - dh, 3)
                 msgs.append(f"Výška stanoviska {st.bod} z nivelačního bodu {o.bod}: "
                             f"{kp.z:.3f} − ({dh:.3f}) = {sp.z:.3f} m")
                 sp.stanovisko = "niv"
@@ -288,11 +291,11 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             zpet = next((o for o in st.orient + st.detail if short_numbers(o.bod) & short_numbers(other.bod)), None)
             vals = []
             if tam is not None:
-                vals.append(_dh(tam, other.vp, 1.0, zp)[1])
+                vals.append(_dh(tam, other.vp, m, zp)[1])
             if zpet is not None:
-                vals.append(-_dh(zpet, st.vp, 1.0, zp)[1])
+                vals.append(-_dh(zpet, st.vp, m, zp)[1])
             if vals:
-                sp.z = op.z + sum(vals) / len(vals)
+                sp.z = round(op.z + round(sum(vals) / len(vals), 3), 3)
                 msgs.append(f"Výška stanoviska {st.bod} z {other.bod} (převýšení "
                             f"{'obousměrně' if len(vals) == 2 else 'jednosměrně'}): {sp.z:.3f} m")
                 sp.stanovisko = "niv"
@@ -421,7 +424,11 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             body.append(Point(o.bod, y, x, z, st.bod, ctrl))
             # převýšení terén–terén (s výškou přístroje, cíle, zakřivením a refrakcí) a odpovídající
             # zenitový úhel „redukovaný na terén“ – výška cíle je pak 0
-            z_red = math.acos(max(-1.0, min(1.0, dh / o.sd))) / GON if o.sd > 0 else o.z
+            # (jen výpis v protokolu: z převýšení před měřítkovým koeficientem a s refrakcí k = 0,13 – takhle
+            # vychází zenitový úhel v protokolu Gromy na všechna čtyři desetinná místa)
+            mm = m or 1.0
+            dh_z = dh / mm - (0.0 if zp.refrakce or not zp.zakriveni else 0.13 * (d / mm) ** 2 / (2.0 * R_EARTH))
+            z_red = math.acos(max(-1.0, min(1.0, dh_z / o.sd))) / GON if o.sd > 0 else o.z
             st_rec["detail"].append({"bod": o.bod, "hz": o.hz, "z_uhel": z_red, "dh": dh, "vc": 0.0,
                                      "vc_mer": o.vc, "delka": d, "y": y, "x": x, "z": z, "kontrolni": ctrl,
                                      "obs": o})

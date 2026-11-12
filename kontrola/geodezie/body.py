@@ -74,6 +74,20 @@ class SeznamBodu:
         c = cislo.strip()
         return next((b for b in self.body if b.cislo == c), None)
 
+    def najdi_kratke(self, cislo: str, predcisli: str = "") -> Bod | None:
+        """Bod podle čísla zadaného i bez předčíslí (jako v Gromě): nejdřív přesně, pak s předčíslím z lišty,
+        nakonec jediný bod s úplným číslem, které na zadané číslo končí (1 → 610844000130001)."""
+        c = cislo.strip()
+        b = self.najdi(c)
+        if b is not None or not c.isdigit() or len(c) > 4:
+            return b
+        if predcisli:
+            b = self.najdi(uplne_cislo(c, predcisli))
+            if b is not None:
+                return b
+        shodne = [x for x in self.body if len(x.cislo) == 15 and x.cislo.isdigit() and int(x.cislo[11:]) == int(c)]
+        return shodne[0] if len(shodne) == 1 else None
+
     def filtruj(self, text: str = "", kod: str | None = None, kvalita: int | None = None) -> list[Bod]:
         """Body podle hledaného textu (v čísle, kódu, poznámce), kódu a kódu kvality."""
         t = text.strip().lower()
@@ -314,3 +328,13 @@ class SeznamBodu:
         if not p.exists():
             return cls()
         return cls.from_json(p.read_text(encoding="utf-8"))
+
+
+def uplne_cislo(cislo: str, predcisli: str) -> str:
+    """Úplné číslo bodu jako v Gromě: krátké číslo (nejvýše 4 číslice) se doplní nulami a předčíslím
+    (k.ú. + ZPMZ, 11 číslic) na 15 míst. Delší čísla, čísla s písmeny (JM-071-519) a prázdné předčíslí
+    se nemění."""
+    c, pc = (cislo or "").strip(), (predcisli or "").strip()
+    if not pc.isdigit() or not c.isdigit() or len(c) > 4 or len(pc) + 4 > 15:
+        return c
+    return pc + c.zfill(max(4, 15 - len(pc)))

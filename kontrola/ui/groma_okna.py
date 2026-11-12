@@ -431,7 +431,7 @@ class ListaNastaveni(QWidget):
         self.predcisli.setEditable(True)
         self.predcisli.setMinimumWidth(90)
         self.predcisli.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.predcisli.setMinimumContentsLength(6)  # dlouhá hodnota nesmí roztáhnout lištu
+        self.predcisli.setMinimumContentsLength(13)  # vejde se celé předčíslí (k.ú. + ZPMZ = 11 číslic)
         self.predcisli.setToolTip("Předčíslí (k.ú. + ZPMZ) – doplní se k číslům bodů zadaným bez předčíslí a "
                                   "předvyplní se u nových bodů ve výpočetních oknech (jako v Gromě)")
         self.predcisli.addItem(str(QSettings().value("vypocty/predcisli", "") or ""))
@@ -455,7 +455,7 @@ class ListaNastaveni(QWidget):
         self.meritko.setRange(0.99, 1.01)
         self.meritko.setSingleStep(0.00001)
         self.meritko.setButtonSymbols(QDoubleSpinBox.NoButtons)
-        self.meritko.setMinimumWidth(118)
+        self.meritko.setMinimumWidth(150)  # celý koeficient na 12 míst
         self.meritko.setToolTip("Měřítkový koeficient – násobí měřené délky (zkreslení Křovákova zobrazení "
                                 "a nadmořská výška). 1,000000 = bez korekce.")
         self.najit = QLineEdit()

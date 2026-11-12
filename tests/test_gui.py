@@ -3910,7 +3910,7 @@ def test_zpracovani_zapisniku_vypocet():
     """Volby zpracování mění výpočet: bez refrakce a zakřivení jiné převýšení, vodorovné délky bez redukce."""
     from kontrola.vypocet import Obs, Zpracovani, _dh, _merge_faces
     o = Obs("5", 300.0, 1.5, 100.0, 98.0)
-    d1, h1 = _dh(o, 1.6, 1.0)
+    d1, h1 = _dh(o, 1.6, 1.0, Zpracovani(refrakce=True))
     d2, h2 = _dh(o, 1.6, 1.0, Zpracovani(refrakce=False, zakriveni=False))
     assert abs(d1 - d2) < 1e-12 and abs((h1 - h2) - d1 * d1 * 0.87 / (2 * 6380703.6105)) < 1e-9
     d3, _ = _dh(o, 1.6, 1.0, Zpracovani(sikme=False))
@@ -4029,6 +4029,8 @@ def test_cad_pracovni_sady_ze_skoly_a_anotace(window):
         from kontrola.geodezie.body import Bod
         d = c.body_ze_seznamu(modal=False)
         d.nastav_body([Bod("4001", 743100.0, 1043400.0, 250.12, kod="1.02"), Bod("4002", 743110.0, 1043405.0, 251.0)])
+        assert d.podle_um.isChecked()  # v Účelové mapě je výchozí import podle atributové tabulky
+        d.podle_um.setChecked(False)  # tady vlastní volba nástrojů pásu
         for klic, cast in (("cislo", "Číslo podrobného bodu"), ("vyska", "Výškové kóty podrobných bodů")):
             d.ch[klic].setChecked(True)
             i = next(j for j in range(d.cb[klic].count()) if d.cb[klic].itemText(j) == f"nástroj: {cast}")
@@ -4352,3 +4354,131 @@ def test_cad_okno_stylu_car(window):
         assert c.coords.fontMetrics().horizontalAdvance(c.coords.text()) <= c.coords.width()
     finally:
         PS.nastav_aktivni(None)
+
+
+def test_skolni_vypocet_husovice_jako_student(window):
+    """Celý postup z návodu BEA009 (Groma): předčíslí, dané body, zkreslení, zápisník, polární metoda dávkou,
+    body do seznamu – výsledek je seznam s úplnými čísly bodů shodný s odevzdaným seznamem z Gromy."""
+    from PySide6.QtCore import QSettings
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+    if not (z / "zap_husovice.zap").exists():
+        pytest.skip("chybí zadání Husovice")
+    w = window
+    w.show_page("vypocty")
+    v = w.vypocty
+    stare = QSettings().value("vypocty/predcisli", "")
+    try:
+        v.lista.predcisli.setEditText("61084400013")
+        v.import_dialog(str(z / "gnss_husovice.txt"), accept=True)
+        v.import_dialog(str(z / "dane_body.txt"), accept=True)
+        assert v.seznam.najdi("610844000134001") is not None and v.seznam.najdi("JM-071-519") is not None
+        v.table.selectRow(0)
+        d = v.zkresleni_dialog(modal=False)
+        d.vypocet()
+        assert d.nastavit() == pytest.approx(0.999859725906, abs=5e-11)  # hodnota z Gromy v návodu
+        d.close()
+        zp = v.zapisnik
+        assert zp.nacist(str(z / "zap_husovice.zap"))
+        assert zp.stanoviska[0].bod == "610844000134001"
+        assert zp.vypocitej() is not None
+        zp.do_seznamu()
+        assert v.seznam.najdi("610844000134001").z == pytest.approx(258.601)  # výškové připojení na JM-071-519
+        assert v.seznam.najdi("610844000134002").z == pytest.approx(255.887)
+        ref = {}
+        for radek in (z / "Husovice_Včelák_seznam.txt").read_text(encoding="utf-8", errors="replace").splitlines():
+            p = radek.split()
+            if len(p) >= 4:
+                ref[p[0]] = tuple(float(t) for t in p[1:4])
+        assert len(ref) == 118 and all(v.seznam.najdi(c) is not None for c in ref)
+        for c, (y, x, h) in ref.items():
+            b = v.seznam.najdi(c)
+            if c.endswith("0010"):  # určený ze dvou stanovisek: podle návodu se ukládá průměr
+                assert (round(b.y, 3), round(b.x, 3), round(b.z, 3)) == (595977.264, 1158238.567, 258.571)
+                continue
+            assert abs(b.y - y) < 0.0015 and abs(b.x - x) < 0.0015 and abs(b.z - h) < 0.0015, c
+        stejne = sum(1 for c, r in ref.items()
+                     if (round(v.seznam.najdi(c).y, 3), round(v.seznam.najdi(c).x, 3), round(v.seznam.najdi(c).z, 3)) == r)
+        assert stejne >= 114
+    finally:
+        QSettings().setValue("vypocty/predcisli", stare)
+
+
+def test_skolni_kresba_husovice_jako_student(window):
+    """Kresba Účelové mapy jako ve škole: body podle atributové tabulky (jako import Gromou), čáry nástrojem pásu
+    přes čísla bodů, značka nástrojem pásu a key-inem – prvky vyjdou stejně jako ve výkresu z MicroStationu."""
+    import collections
+
+    import ezdxf
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QAbstractButton, QApplication
+
+    from kontrola.geodezie.body import Bod
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice"
+    if not (z / "Husovice_Včelák_mapa.dxf").exists():
+        pytest.skip("chybí zadání Husovice")
+    w = window
+    v, c = w.vypocty, w.cad
+    body = []
+    for radek in (z / "Husovice_Včelák_seznam.txt").read_text(encoding="utf-8", errors="replace").splitlines():
+        p = radek.split()
+        if len(p) >= 4:
+            body.append(Bod(p[0], float(p[1]) + 0.00004, float(p[2]) - 0.00003, float(p[3])))  # seznam není na mm
+    v.seznam.pridej(body, "Husovice")
+    stare = QSettings().value("vypocty/predcisli", "")
+    QSettings().setValue("vypocty/predcisli", "61084400013")
+    try:
+        w.show_page("cad")
+        c.novy_um()
+        c.nastav_anotace(200)
+        d = c.body_ze_seznamu(modal=False)
+        assert d.podle_um.isChecked() and not d.grp_atributy.isEnabled()
+        d.v3d.setChecked(True)
+        d.vlozit()
+
+        def klic(e):
+            t, x = e.dxftype(), e.dxf
+            if t == "POINT":
+                return (t, x.layer, x.color, x.get("lineweight"), tuple(round(s, 3) for s in x.location))
+            if t == "TEXT":
+                p = x.align_point if (x.halign or x.valign) else x.insert
+                return (t, x.layer, x.color, x.text, round(x.height, 4), round(x.get("width", 1.0), 3), x.style,
+                        x.halign, x.valign, tuple(round(s, 3) for s in p)[:2])
+            return (t, x.layer, x.color, x.name.split("_")[0], round(x.xscale, 4), tuple(round(s, 3) for s in x.insert))
+        hl = ("GS01-body-poloha", "GS01-body-info", "GS01-body-čísla", "GS09-výškopis-body podrobné-výšky",
+              "GS09-výškopis-body podrobné-buňky")
+        vzor = ezdxf.readfile(z / "Husovice_Včelák_mapa.dxf")
+        moje = collections.Counter(klic(e) for e in c.dok.msp if e.dxf.layer in hl)
+        ref = collections.Counter(klic(e) for e in vzor.modelspace() if e.dxf.layer in hl)
+        assert sum(moje.values()) == sum(ref.values()) == 590
+        assert sum((moje & ref).values()) >= 588  # až na zaokrouhlení jedné výšky (258.525 → 258.52 / 258.53)
+
+        def nastroj(karta, text):
+            r = c.ribbon
+            i = next(i for i in range(r.karty.count()) if r.karty.tabText(i) == karta)
+            r.karty.setCurrentIndex(i)
+            QApplication.processEvents()
+            # stejný název mívají dvě tlačítka (starší s číselnou hladinou a novější s hladinou GS…) – to novější
+            [b for b in r.findChildren(QAbstractButton) if b.isVisible() and b.text() == text][-1].click()
+
+        n0 = len(c.dok.msp)
+        nastroj("Hranice", "Vozovka")
+        for t in ("#1", "#2", "#3", ""):  # čísla bodů bez předčíslí
+            c.zadej(t)
+        cara = list(c.dok.msp)[n0]
+        assert (cara.dxf.layer, cara.dxf.color, cara.dxf.lineweight) == ("GS02-hranice-vozovky", 7, 30)
+        assert [tuple(round(s, 3) for s in p) for p in cara.get_points("xy")] == \
+            [(-595975.72, -1158246.973), (-595975.43, -1158246.915), (-595975.148, -1158246.939)]
+        nastroj("Druhy a způsob užívání", "Jednotlivé stromy")
+        c.zadej("#55")
+        c.zrus(tise=True)
+        strom = list(c.dok.msp)[-1]
+        ref_strom = next(e for e in vzor.modelspace() if e.dxftype() == "INSERT" and e.dxf.name.startswith("3.13"))
+        assert (strom.dxf.name, strom.dxf.layer, strom.dxf.color, strom.dxf.xscale) == \
+            ("3.13", ref_strom.dxf.layer, ref_strom.dxf.color, ref_strom.dxf.xscale)  # 1:200 → měřítko 200
+        for t in ("lv=GS06-sítě-veřejné osvětlení", "co=3", "ac=6.560", "vlož", "#56"):
+            c.zadej(t)
+        c.zrus(tise=True)
+        lampa = list(c.dok.msp)[-1]
+        assert (lampa.dxftype(), lampa.dxf.name, lampa.dxf.color, lampa.dxf.xscale) == ("INSERT", "6.560", 1, 200.0)
+    finally:
+        QSettings().setValue("vypocty/predcisli", stare)

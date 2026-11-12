@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass, fields
 
-R_ZEME = 6_380_000.0
+R_ZEME = 6_380_703.6105  # poloměr Gaussovy koule S-JTSK (stejně počítá Groma)
 
 # střední souřadnicová chyba m_xy podle třídy přesnosti ČSN 01 3410 (polohopis, účelové mapy) – stejná tabulka
 # jako testování přesnosti (vypocty.TRIDY_PRESNOSTI)
@@ -48,7 +48,7 @@ class NastaveniVypoctu:
     # zpracování zápisníku (Groma: Měření → Zpracování zápisníku)
     zp_polohy: bool = True  # zprůměrovat měření v I. a II. poloze dalekohledu
     zp_sikme: bool = True  # délky v zápisníku jsou šikmé → redukovat na vodorovné (False = už vodorovné)
-    zp_refrakce: bool = True  # oprava převýšení z refrakce
+    zp_refrakce: bool = False  # oprava převýšení z refrakce (ve škole vypnutá – jen zakřivení Země)
     zp_zakriveni: bool = True  # oprava převýšení ze zakřivení Země
     k_refrakce: float = 0.13
     zp_obousmerne: bool = True  # obousměrně měřené délky a převýšení – průměr tam a zpět

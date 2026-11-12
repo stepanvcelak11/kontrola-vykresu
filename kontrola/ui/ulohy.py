@@ -33,6 +33,9 @@ class _SeznamSRucnimi:
                     break
         return b
 
+    def najdi_kratke(self, c, predcisli=""):
+        return self.najdi(c) or self._s.najdi_kratke(c, predcisli)
+
     @property
     def body(self):
         return list(self._s.body) + list(self._e.values())
