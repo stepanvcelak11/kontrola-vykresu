@@ -364,6 +364,25 @@ QListWidget#navigace_nastaveni::item {{ padding: 9px 12px; border: none; border-
     font-weight: 600; }}
 QListWidget#navigace_nastaveni::item:selected {{ background: {ACCENT_SOFT}; color: {TEXT}; border: none;
     border-left: 3px solid {ACCENT}; }}
+/* úvodní obrazovka CAD (tmavá karta nad výkresem ve světlém i tmavém vzhledu) */
+QWidget#cad_start {{ background: #1A2430; border: 1px solid {RAIL_LINE}; border-radius: 14px; }}
+QWidget#cad_start QLabel {{ background: transparent; color: #E6EDF4; }}
+QLabel#start_titul {{ font-size: 17pt; font-weight: 800; color: white; }}
+QWidget#cad_start QLabel#start_popis {{ color: #9DAEBF; }}
+QWidget#cad_start QLabel#start_sekce {{ color: {RAIL_OFF}; font-size: 7.5pt; font-weight: 800; letter-spacing: 1px;
+    padding-top: 2px; }}
+QWidget#cad_start QLabel#start_nazev {{ font-weight: 700; color: white; }}
+QWidget#start_dlazdice {{ background: #223040; border: 1px solid {RAIL_LINE}; border-radius: 10px; }}
+QWidget#start_dlazdice:hover, QWidget#start_dlazdice:focus {{ background: #2A3B4E; border: 1px solid {ACCENT}; }}
+QPushButton#start_hlavni {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 700;
+    padding: 6px 16px; border-radius: 8px; }}
+QPushButton#start_hlavni:hover {{ background: {ACCENT_HOVER}; }}
+QPushButton#start_vedlejsi {{ background: transparent; color: #E6EDF4; border: 1px solid {RAIL_LINE};
+    padding: 6px 14px; border-radius: 8px; }}
+QPushButton#start_vedlejsi:hover {{ background: #2A3B4E; border-color: #5B7189; }}
+QPushButton#start_nedavny {{ background: transparent; color: #C9D5E1; border: none; text-align: left;
+    padding: 4px 8px; border-radius: 6px; }}
+QPushButton#start_nedavny:hover {{ background: #223040; color: white; }}
 QFrame#zahlavi_stranky {{ background: {PANEL}; border: none; border-bottom: 1px solid {BORDER}; }}
 QLabel#zahlavi_titul {{ font-size: 13pt; font-weight: 800; background: transparent; }}
 QLabel#zahlavi_popis {{ color: {MUTED}; background: transparent; }}

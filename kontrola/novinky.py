@@ -17,6 +17,8 @@ NOVINKY: list[tuple[int, str, list[str]]] = [
         "<b>Pásy karet</b> ve Výpočtech i v CADu vypadají stejně a nemají posuvník – když se nástroje nevejdou, "
         "na kraji je šipka (jde to i kolečkem myši). V CADu je horní řádek uklizený: Soubor, karty, styl kreslení, "
         "měřítko anotací, Zpět / Znovu a název výkresu. Volba, které karty jsou vidět, je v Soubor → Karty pásu.",
+        "<b>Nová úvodní obrazovka CADu</b> (Začněte výkres): dlaždice Účelová mapa, Pasport, Technická mapa a Bez "
+        "pracovní sady, pod nimi Otevřít DXF / DGN a nedávné výkresy.",
         "<b>Jednotná záhlaví a záložky</b>: stránky Zadání a Kokeš mají nahoře název a jednu větu, k čemu jsou; "
         "záložky jsou všude podtržené stejně. Spodní lišta CADu (výzva, příkaz, úchyty) je jeden pruh a zapnuté "
         "přepínače jsou zřetelně zvýrazněné.",

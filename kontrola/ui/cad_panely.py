@@ -474,59 +474,145 @@ def obal_hladin(panel: PanelHladin, stranka) -> QWidget:
     return w
 
 
+from PySide6.QtWidgets import QHBoxLayout as _QHBox  # noqa: E402
+
+
+class _Dlazdice(QWidget):
+    """Klikací dlaždice úvodní obrazovky: barevný čtverec s ikonou, název a popis."""
+
+    def __init__(self, ikona_svg: str, barva: str, nazev: str, popis: str, fn, tip: str = ""):
+        super().__init__()
+        from PySide6.QtWidgets import QSizePolicy
+
+        from .theme import svg_ikona
+        self._fn = fn
+        self.setObjectName("start_dlazdice")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(tip or popis)
+        self.setAccessibleName(nazev)
+        self.setFocusPolicy(Qt.TabFocus)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        h = _QHBox(self)
+        h.setContentsMargins(10, 9, 12, 9)
+        h.setSpacing(11)
+        zn = QLabel()
+        zn.setFixedSize(38, 38)
+        zn.setAlignment(Qt.AlignCenter)
+        zn.setStyleSheet(f"background:{barva}; border-radius:9px;")
+        zn.setPixmap(svg_ikona(ikona_svg, "#FFFFFF", 44).pixmap(22, 22))
+        h.addWidget(zn)
+        v = QVBoxLayout()
+        v.setSpacing(0)
+        n = QLabel(nazev)
+        n.setObjectName("start_nazev")
+        v.addWidget(n)
+        if popis:
+            pp = QLabel(popis)
+            pp.setObjectName("start_popis")
+            v.addWidget(pp)
+        h.addLayout(v, 1)
+
+    def click(self):
+        self._fn()
+
+    def mouseReleaseEvent(self, e):  # noqa: N802
+        if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
+            self._fn()
+        super().mouseReleaseEvent(e)
+
+    def keyPressEvent(self, e):  # noqa: N802
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self._fn()
+        else:
+            super().keyPressEvent(e)
+
+
 class StartVykresu(QWidget):
-    """Úvod CAD bez otevřeného výkresu (jako úvodní obrazovka MicroStationu): nový, otevřít, nedávné soubory."""
+    """Úvod CAD bez otevřeného výkresu: dlaždice pracovních sad, otevření souboru a nedávné výkresy."""
+
+    _IK_MAPA = ('<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>')
+    _IK_DUM = '<path d="M4 21V9l8-6 8 6v12"/><path d="M9 21v-6h6v6"/>'
+    _IK_SIT = ('<circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="18" r="2.2"/>'
+               '<path d="M8.2 6H13a5 5 0 0 1 5 5v4.8"/>')
+    _IK_LIST = '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>'
+    _IK_SLOZKA = ('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>')
 
     def __init__(self, stranka, parent=None):
         super().__init__(parent)
         from pathlib import Path
 
         from PySide6.QtCore import QSettings
+        from PySide6.QtWidgets import QGridLayout
         self.setObjectName("cad_start")
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setStyleSheet("QWidget#cad_start{background:#F8FAFC;border:1px solid #CBD5E1;border-radius:10px}"
-                           "QWidget#cad_start QLabel{color:#1E293B;background:transparent}"
-                           "QWidget#cad_start QPushButton{text-align:left;padding:4px 10px}")
         v = QVBoxLayout(self)
-        v.setContentsMargins(18, 12, 18, 12)
-        v.setSpacing(4)
-        t = QLabel("<span style='font-size:15pt;font-weight:700'>Začněte výkres</span>")
+        v.setContentsMargins(22, 18, 22, 18)
+        v.setSpacing(6)
+        t = QLabel("Začněte výkres")
+        t.setObjectName("start_titul")
         v.addWidget(t)
-        pozn = QLabel("Souřadnice S-JTSK jako školní seed. Sada určuje hladiny, buňky a styly čar – výkres "
-                      "z MultiScale a z Pasportu jsou odlišné soubory.")
+        pozn = QLabel("Vyberte pracovní sadu jako ve škole – určuje hladiny, buňky a styly čar. Souřadnice jsou "
+                      "v S-JTSK jako školní seed.")
+        pozn.setObjectName("start_popis")
         pozn.setWordWrap(True)
         v.addWidget(pozn)
-        v.addWidget(QLabel("<b>Nový výkres v pracovní sadě</b> (jako ve škole)"))
-        for text, tip, fn in (
-                ("✚  MultiScale – Účelová mapa", "Seed, hladiny, buňky a styly čar sady MultiScale, karty Účelové "
-                 "mapy (prvek jedním kliknutím) a měřítko anotací 1:1000", stranka.novy_um),
-                ("✚  Pasport (pasportizace staveb)", "Seed, buňky a styly čar sady Pasport – jiné hladiny i značky "
-                 "než MultiScale", lambda: stranka.novy_v_sade("MultiScale/Pasport")),
-                ("✚  TM (technická mapa)", "Seed, buňky TM25 a styly čar sady TM",
-                 lambda: stranka.novy_v_sade("MultiScale/TM")),
-                ("✚  Bez pracovní sady", "Prázdný výkres jen s nastavením aplikace",
-                 lambda: stranka.novy_v_sade(None)),
-                ("📄  Nový – vybrat sadu, seed a název…", "Okno Nový jako v MicroStationu: pracovní sada, "
-                 "seed (2D, výkres, list, 3D… nebo vlastní soubor přes Procházet), název a složka souboru",
-                 lambda: stranka.novy_soubor()),
-                ("📋  Nový podle zadání", "Hladiny, styly, písma a buňky podle pravidel ze zadání",
-                 lambda: stranka.novy_podle_zadani()),
-                ("📂  Otevřít DXF / DGN…", "Otevřít existující výkres", lambda: stranka.otevri())):
+        v.addSpacing(6)
+        s1 = QLabel("NOVÝ VÝKRES")
+        s1.setObjectName("start_sekce")
+        v.addWidget(s1)
+        g = QGridLayout()
+        g.setSpacing(8)
+        self.dlazdice = []
+        for i, (ik, barva, nazev, popis, tip, fn) in enumerate((
+                (self._IK_MAPA, "#0D9488", "Účelová mapa", "sada MultiScale, anotace 1:1000",
+                 "Seed, hladiny, buňky a styly čar sady MultiScale, karty Účelové mapy (prvek jedním kliknutím) "
+                 "a měřítko anotací 1:1000", stranka.novy_um),
+                (self._IK_DUM, "#EA580C", "Pasport", "pasportizace staveb",
+                 "Seed, buňky a styly čar sady Pasport – jiné hladiny i značky než MultiScale",
+                 lambda: stranka.novy_v_sade("MultiScale/Pasport")),
+                (self._IK_SIT, "#7C3AED", "Technická mapa", "sada TM, buňky TM25",
+                 "Seed, buňky TM25 a styly čar sady TM", lambda: stranka.novy_v_sade("MultiScale/TM")),
+                (self._IK_LIST, "#64748B", "Bez pracovní sady", "prázdný výkres",
+                 "Prázdný výkres jen s nastavením aplikace", lambda: stranka.novy_v_sade(None)))):
+            d = _Dlazdice(ik, barva, nazev, popis, fn, tip)
+            g.addWidget(d, i // 2, i % 2)
+            self.dlazdice.append(d)
+        v.addLayout(g)
+        r = _QHBox()
+        r.setSpacing(8)
+        self.b_otevrit = QPushButton("Otevřít DXF / DGN…")
+        self.b_otevrit.setObjectName("start_hlavni")
+        self.b_otevrit.setToolTip("Otevřít existující výkres")
+        self.b_otevrit.clicked.connect(lambda: stranka.otevri())
+        r.addWidget(self.b_otevrit)
+        for text, tip, fn in (("Nový s výběrem seedu…", "Okno Nový jako v MicroStationu: pracovní sada, seed (2D, "
+                               "výkres, list, 3D… nebo vlastní soubor přes Procházet), název a složka souboru",
+                               lambda: stranka.novy_soubor()),
+                              ("Nový podle zadání", "Hladiny, styly, písma a buňky podle pravidel ze zadání",
+                               lambda: stranka.novy_podle_zadani())):
             b = QPushButton(text)
+            b.setObjectName("start_vedlejsi")
             b.setToolTip(tip)
             b.clicked.connect(lambda _c=False, f=fn: f())
-            v.addWidget(b)
+            r.addWidget(b)
+        r.addStretch(1)
+        v.addSpacing(4)
+        v.addLayout(r)
         items = QSettings("KontrolaVykresu", "KontrolaVykresu").value("cesty/posledni_vykresy", []) or []
         items = [items] if isinstance(items, str) else list(items)
-        items = [p for p in items if Path(p).suffix.lower() in (".dxf", ".dgn") and Path(p).is_file()][:5]
+        items = [p for p in items if Path(p).suffix.lower() in (".dxf", ".dgn") and Path(p).is_file()][:3]
         if items:
-            v.addSpacing(4)
-            v.addWidget(QLabel("<b>Nedávné soubory</b>"))
-            for p in items[:3]:
-                b = QPushButton(Path(p).name)
+            v.addSpacing(8)
+            s2 = QLabel("NEDÁVNÉ VÝKRESY")
+            s2.setObjectName("start_sekce")
+            v.addWidget(s2)
+            for p in items:
+                b = QPushButton(f"{Path(p).name}   ·   {Path(p).parent.name}")
+                b.setObjectName("start_nedavny")
                 b.setToolTip(p)
-                b.setFlat(True)
                 b.clicked.connect(lambda _c=False, p=p: stranka.otevri(p))
                 v.addWidget(b)
-        self.setFixedWidth(400)
+        self.setFixedWidth(560)
         self.adjustSize()
