@@ -70,3 +70,20 @@ def popisek_skupiny(text: str) -> QLabel:
     lbl.setAlignment(Qt.AlignCenter)
     lbl.setObjectName("pas_skupina")
     return lbl
+
+
+def srovnej_vysky(karty) -> None:
+    """Všechny karty pásu stejně vysoké – při přepnutí karty výkres ani okna pod pásem neposkočí."""
+    karty = list(karty)
+    if karty:
+        h = max(k.height() for k in karty)
+        for k in karty:
+            k.setFixedHeight(h)
+
+
+def prazdna_ikona(velikost: int = 18):
+    """Průhledná ikona pro tlačítko bez vlastní ikony, aby názvy ve sloupci lícovaly."""
+    from PySide6.QtGui import QIcon, QPixmap
+    pm = QPixmap(velikost, velikost)
+    pm.fill(Qt.transparent)
+    return QIcon(pm)

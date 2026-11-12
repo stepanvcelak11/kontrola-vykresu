@@ -252,6 +252,7 @@ QPushButton:hover {{ background: {HOVER}; border-color: #9CA3AF; }}
 QPushButton:pressed {{ background: #E5E7EB; }}
 QPushButton:disabled {{ color: #9CA3AF; background: {SUBTLE}; border-color: {BORDER}; }}
 QPushButton:checked {{ background: {ACCENT_SOFT}; border-color: {ACCENT}; color: {TEXT}; font-weight: 600; }}
+QPushButton[uzky="true"] {{ padding-left: 6px; padding-right: 6px; }}
 QPushButton:flat {{ border: none; background: transparent; }}
 QDialogButtonBox QPushButton:default {{ background: {ACCENT}; color: white; border-color: {ACCENT};
     font-weight: 600; }}

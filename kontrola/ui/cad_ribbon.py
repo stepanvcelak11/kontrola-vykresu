@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLab
                                QStackedWidget, QTabBar, QToolButton, QVBoxLayout, QWidget)
 
 from .cad_ikony import ikona
-from .pas import PasScroll, popisek_skupiny
+from .pas import PasScroll, popisek_skupiny, srovnej_vysky
 
 # příkaz → (český název, název v MicroStationu)
 NAZVY = {
@@ -281,6 +281,7 @@ class PasKaret(QWidget):
             self.stack.addWidget(sc)
             self.karty.addTab(titul)
             self._stranky[titul] = sc
+        srovnej_vysky(self._stranky.values())
         self.karty.currentChanged.connect(self.stack.setCurrentIndex)
         self.POSTUPY = {"Kreslení": [k for k, _ in KARTY if k not in ("Geodézie",)],
                         "Geodézie a škola": ["Domů", "Geodézie", "Zadání a kontrola", "Popisy", "Výkres a tisk",

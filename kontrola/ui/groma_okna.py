@@ -615,14 +615,15 @@ class PasGromy(QWidget):
                 g.setSpacing(0)
                 from PySide6.QtCore import QSize
 
-                from .pas import PasScroll, popisek_skupiny
+                from .pas import PasScroll, popisek_skupiny, prazdna_ikona, srovnej_vysky
                 from .groma_ikony import ikona as g_ikona
                 for k, (text, cil) in enumerate(tlacitka):
                     b = QToolButton()
                     b.setAutoRaise(True)
                     b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
                     b.setIconSize(QSize(18, 18))
-                    b.setIcon(g_ikona(skupina, text))
+                    ik = g_ikona(skupina, text)
+                    b.setIcon(ik if not ik.isNull() else prazdna_ikona())
                     klic = f"{karta}/{skupina}/{text}"
                     if isinstance(cil, list):
                         b.setText(text + " ▾")
@@ -654,6 +655,7 @@ class PasGromy(QWidget):
             h.addStretch(1)
             sc = PasScroll(obsah)
             self.stack.addWidget(sc)
+        srovnej_vysky(self.stack.widget(k) for k in range(self.stack.count()))
         self.karty.currentChanged.connect(self.stack.setCurrentIndex)
         i = [k for k, _s in KARTY_GROMA].index("Výpočty")
         self.karty.setCurrentIndex(i)

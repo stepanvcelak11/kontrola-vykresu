@@ -543,8 +543,12 @@ class IssuePanel(QWidget):
         self.b_new = QPushButton("Vrátit")
         self.b_new.setToolTip("Vrátit stav na „nová“")
         self.b_new.clicked.connect(lambda: self.set_state("nová"))
+        nav.setSpacing(4)
         for b in (self.b_prev, self.b_next, self.b_fixed, self.b_ignore, self.b_new):
+            b.setProperty("uzky", True)  # v úzkém panelu se popisky neořezávají
             nav.addWidget(b)
+        for b in (self.b_prev, self.b_next):
+            b.setFixedWidth(34)
         tl.addLayout(nav)
         self.hint = QLabel()
         self.hint.setObjectName("navod")
