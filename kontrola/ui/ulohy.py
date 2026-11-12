@@ -150,6 +150,7 @@ def _davka(s, vysky: bool):
     def vypocet(_seznam, _h):
         if not zap.stanoviska:
             raise ChybaVstupu("Seznam měření je prázdný – načtěte zápisník (Načíst měření…).")
+        obnov()  # měření se mohlo načíst až po otevření okna (v Seznamu měření)
         r = zap.vypocitej()
         if r is None:
             raise ChybaVstupu(zap.info.text().lstrip("⚠ ") or "Výpočet se nepovedl.")
@@ -167,7 +168,8 @@ def _davka(s, vysky: bool):
             v = Vysledek(prot, [], vys)
         else:
             from ..geodezie.body import Bod
-            v = Vysledek(prot, [Bod(b.bod, b.y, b.x, b.z, poznamka=f"polární metoda ze st. {b.stanovisko}")
+            v = Vysledek(prot, [Bod(b.bod, b.y, b.x, b.z, kod=b.popis,
+                                    poznamka=f"polární metoda ze st. {b.stanovisko}")
                                 for b in body])
         if ulozit.isChecked():
             QTimer_single(lambda: p.pridej())

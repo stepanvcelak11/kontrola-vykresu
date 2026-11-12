@@ -8,6 +8,25 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (13, "12. listopadu 2026 – úlohy z Gromy a zadání 1 z MicroStationu projité jako student", [
+        "<b>Kreslicí nástroje zůstávají aktivní jako v MicroStationu.</b> Po dokončení čáry (Enter / pravé "
+        "tlačítko) se hned kreslí další prvek stejnými atributy; nástroj ukončí Esc. Dřív se musel po každém "
+        "prvku spouštět znovu.",
+        "<b>Key-iny uprostřed kreslení.</b> lv=, co=, lc=, wt=, aa= jdou napsat, i když nástroj čeká na bod "
+        "(např. lc=2 pro převislou část budovy) – dřív je CAD odmítl jako neplatné souřadnice.",
+        "<b>Značky ze zadání se vkládají rovnou.</b> Druh prvku s jednou buňkou (strom, sloup, šoupě…) se neptá "
+        "na název, měřítko a natočení – měřítko je ze zadání, natočení aktivní úhel (aa=).",
+        "<b>Vstup do objektu a na pozemek</b> se kreslí úsečkou (zadání lomenou čáru nepovoluje a kontrola ji "
+        "hlásila).",
+        "<b>Import bodů do výkresu:</b> nová volba Čísla bodů bez předčíslí (1000130001 → 1) a okno ukazuje "
+        "hladinu, barvu a velikost, se kterými se body opravdu vloží. Zápis #1 najde i bod s desetimístným číslem.",
+        "<b>Groma – popisy bodů.</b> Text za hvězdičkou v zápisníku (např. „roh budovy“) se přenese do protokolu "
+        "i do sloupce Kód v seznamu souřadnic; v Seznamu měření má vlastní sloupec Popis.",
+        "<b>Groma – Nulové výšky cíle</b> (Nastavení → Záznamník) teď opravdu fungují: když volbu vypnete, bod "
+        "měřený s výškou cíle 0 se určí jen polohově, bez výšky (tréninková úloha, body NV).",
+        "Statistika importu měření v protokolu počítá položky, kódy a délky stejně jako Groma. Úloha 01 (rajón) "
+        "vychází s protokolem Gromy na milimetr, zadání 1 nakreslené v CADu se shoduje s odevzdaným výkresem.",
+    ]),
     (12, "12. listopadu 2026 – školní úloha Husovice od výpočtu po kresbu", [
         "Celou úlohu (výpočet jako v Gromě a kresbu Účelové mapy) jsem v aplikaci prošel krok za krokem podle "
         "školních návodů a opravil, co nešlo nebo vycházelo jinak.",

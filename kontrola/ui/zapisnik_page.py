@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayo
 from ..geodezie import zapisnik as Z
 from ..vypocet import Obs, Station
 
-SL = ("Bod", "Šikmá délka [m]", "Výška cíle [m]", "Hz [g]", "Z [g]", "Část")
+SL = ("Bod", "Šikmá délka [m]", "Výška cíle [m]", "Hz [g]", "Z [g]", "Část", "Popis")
 
 
 class _TabZameru(QTableWidget):
@@ -199,6 +199,7 @@ class ZapisnikPanel(QWidget):
         cb.setCurrentText(cast)
         cb.currentTextChanged.connect(lambda _t: self._zmena_zamery())
         self.tab.setCellWidget(r, 5, cb)
+        self.tab.setItem(r, 6, QTableWidgetItem(o.popis))
 
     def _z_tabulky(self) -> tuple[list[Obs], list[Obs]] | None:
         orient, detail = [], []
@@ -212,7 +213,8 @@ class ZapisnikPanel(QWidget):
             if not bod:
                 self.info.setText(f"⚠ Řádek {r + 1}: chybí číslo bodu.")
                 return None
-            o = Obs(bod, *vals)
+            pop = self.tab.item(r, 6)
+            o = Obs(bod, *vals, popis=pop.text().strip() if pop else "")
             (orient if self.tab.cellWidget(r, 5).currentText() == "orientace" else detail).append(o)
         return orient, detail
 
@@ -375,7 +377,7 @@ class ZapisnikPanel(QWidget):
         from ..geodezie.body import Bod
         if self.vysledek is None:
             return 0
-        nove = [Bod(b.bod, b.y, b.x, b.z, poznamka=f"polární metoda ze st. {b.stanovisko}")
+        nove = [Bod(b.bod, b.y, b.x, b.z, kod=b.popis, poznamka=f"polární metoda ze st. {b.stanovisko}")
                 for b in self.vysledek.body if not b.kontrolni]
         n, konf = self.page.seznam.pridej(nove, "Zápisník: vypočtené body")
         # výšky stanovisek připojené na nivelační bod se opraví i v seznamu (ve škole: „opravíme výšku bodů

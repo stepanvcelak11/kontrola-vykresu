@@ -81,14 +81,22 @@ def oddil_import_mereni(stanoviska: list[Station], koeficient: float, soubor: st
     vse = [o for st in stanoviska for o in st.orient + st.detail]
     r += _pod("STATISTIKA:")
     if vse:
-        r += [f"Počet položek                 : {len(vse)}",
+        import math
+        from .body import klic_cisla
+        cis = sorted({o.bod for o in vse} | {st.bod for st in stanoviska}, key=klic_cisla)
+        vod = [o.sd * math.sin(o.z * math.pi / 200.0) * koeficient if o.z else o.sd * koeficient for o in vse]
+        kod = sum(1 for o in vse if o.popis)
+        # jako Groma: položky = stanoviska + záměry, délky už vodorovné v zobrazení
+        r += [f"Počet položek                 : {len(vse) + len(stanoviska)}",
               f"Počet stanovisek              : {len(stanoviska)}",
               f"Počet bodů se šikmou délkou   : {sum(1 for o in vse if o.sd > 0)}",
               f"Počet bodů se zenitovým úhlem : {sum(1 for o in vse if o.z)}",
-              f"Počet měření v I/II poloze    : {sum(1 for o in vse if o.n == 1)} / "
+              f"Počet bodů s kódem / bez kódu : {kod} / {len(vse) + len(stanoviska) - kod}",
+              f"Počet měření v I/II poloze    : {sum(1 for o in vse if o.n == 1) + len(stanoviska)} / "
               f"{sum(1 for o in vse if o.n > 1)}",
+              f"Číslo min / Číslo max         : {cis[0]} / {cis[-1]}",
               f"Z min / Z max                 : {min(o.z for o in vse):.4f} / {max(o.z for o in vse):.4f}",
-              f"Délka min / Délka max         : {min(o.sd for o in vse):.3f} / {max(o.sd for o in vse):.3f}",
+              f"Délka min / Délka max         : {min(vod):.3f} / {max(vod):.3f}",
               f"Signál min / Signál max       : {min(o.vc for o in vse):.3f} / {max(o.vc for o in vse):.3f}"]
     return r
 
@@ -181,7 +189,8 @@ def oddil_polarni(res: Result, kody_kvality: dict[str, int] | None = None) -> li
         for d in s["detail"]:
             r.append(f"{d['bod']:<17} {d['hz']:>9.4f} {d['z_uhel']:>9.4f} {d['dh']:>8.3f} {d['vc']:>7.3f} "
                      f"{d['delka']:>9.3f} {d['y']:>12.3f} {d['x']:>13.3f} {_c(d['z'], 3, 9)}"
-                     + ("  kontrolní určení" if d["kontrolni"] else ""))
+                     + "  " + " – ".join(t for t in (d["obs"].popis, "kontrolní určení" if d["kontrolni"] else "")
+                                           if t))
         for q in getattr(res, "prumery", []):
             if q["stanovisko"] == s["stanovisko"]:
                 r += oddil_kontrolni_urceni(q)

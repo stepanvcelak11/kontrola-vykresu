@@ -114,8 +114,8 @@ def nastaveni_um(doc, rs=None, anotace: int | None = None) -> NastaveniBodu:
 def kratke_cislo(cislo: str) -> str:
     """Číslo bodu pro popis ve výkresu: z úplného čísla (k.ú. + ZPMZ + číslo) jen vlastní číslo bez nul."""
     c = (cislo or "").strip()
-    if len(c) == 15 and c.isdigit():
-        return str(int(c[11:]))
+    if len(c) >= 8 and c.isdigit() and int(c[-4:]):  # 15 míst (k.ú. + ZPMZ), 12 míst (Groma), 10 míst (škola)
+        return str(int(c[-4:]))
     return c
 
 

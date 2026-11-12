@@ -52,6 +52,7 @@ class NastaveniVypoctu:
     zp_zakriveni: bool = True  # oprava převýšení ze zakřivení Země
     k_refrakce: float = 0.13
     zp_obousmerne: bool = True  # obousměrně měřené délky a převýšení – průměr tam a zpět
+    zp_nulove_vc: bool = True  # Groma „Nulové výšky cíle“: vypnuto = bod s výškou cíle 0 bez výšky
     zp_vahy: str = "délka"  # váhy orientací: „délka“ (Groma) nebo „1“
     zp_prumer_kontrolnich: bool = True  # bod určený dvakrát → uložit průměr
     prumer_max_xy: float = 0.35
@@ -91,7 +92,7 @@ class NastaveniVypoctu:
         """Volby zpracování zápisníku pro výpočet polární metody (kontrola.vypocet.Zpracovani)."""
         from ..vypocet import Zpracovani
         return Zpracovani(polohy=self.zp_polohy, sikme=self.zp_sikme, refrakce=self.zp_refrakce,
-                          zakriveni=self.zp_zakriveni, k_refrakce=self.k_refrakce, obousmerne=self.zp_obousmerne,
+                          zakriveni=self.zp_zakriveni, k_refrakce=self.k_refrakce, obousmerne=self.zp_obousmerne, nulove_vc=self.zp_nulove_vc,
                           vahy=self.zp_vahy, prumer_kontrolnich=self.zp_prumer_kontrolnich,
                           prumer_max_xy=self.prumer_max_xy, prumer_max_z=self.prumer_max_z,
                           kol_p=self.kol_p, kol_ch=self.kol_ch, idx_p=self.idx_p, idx_ch=self.idx_ch,

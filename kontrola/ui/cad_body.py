@@ -159,6 +159,10 @@ class BodyDialog(QDialog):
         self.podle_kodu = QCheckBox("Kód 9.12 → buňka")
         self.podle_kodu.setToolTip("Bod s kódem buňky (např. 9.12) se vloží jako buňka")
         self.podle_kodu.setChecked(True)
+        self.kratka = QCheckBox("Čísla bodů bez předčíslí (1000130001 → 1)")
+        self.kratka.setToolTip("Ve výkresu se u bodu píše jen vlastní číslo (poslední čtyřčíslí bez nul) – tak, jak "
+                               "se body popisují ve škole. Úplné číslo zůstává v seznamu souřadnic.")
+        self.kratka.setChecked(self._nast.value("cad/body/kratka_cisla", "true") in (True, "true"))
         self.preskocit = QCheckBox("Přeskočit body už ve výkresu")
         self.preskocit.setChecked(True)
         self.v3d = QCheckBox("Ve 3D (ve výšce bodu Z)")
@@ -168,6 +172,7 @@ class BodyDialog(QDialog):
             c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
             c.setMinimumContentsLength(14)
         f.addRow(self.podle_kodu)
+        f.addRow(self.kratka)
         f.addRow(self.preskocit)
         f.addRow(self.v3d)
         lay.addLayout(f)
@@ -241,6 +246,7 @@ class BodyDialog(QDialog):
     def _prepni_um(self, on: bool):
         self.grp_atributy.setEnabled(not on)
         self.podle_kodu.setEnabled(not on)
+        self.kratka.setEnabled(not on)  # tabulka ÚM píše čísla vždy bez předčíslí
 
     def nastaveni(self) -> NastaveniBodu:
         from ..cad import symbologie as SY
@@ -254,7 +260,7 @@ class BodyDialog(QDialog):
             n.spojnice_aktivni = d == "aktivni"
             return n
         n = NastaveniBodu(podle_kodu=self.podle_kodu.isChecked(), preskocit_existujici=self.preskocit.isChecked(),
-                          v3d=self.v3d.isChecked())
+                          v3d=self.v3d.isChecked(), kratka_cisla=self.kratka.isChecked())
         rs = self.page._pravidla()
         for klic, cb in self.cb.items():
             if not self.ch[klic].isChecked():
@@ -289,10 +295,12 @@ class BodyDialog(QDialog):
         for k in self.cb:
             self._nast.setValue(f"cad/body/{k}/ano", self.ch[k].isChecked())
             self._nast.setValue(f"cad/body/{k}/podle", self.cb[k].currentText())
-            self._nast.setValue(f"cad/body/{k}/hladina", self.hl[k].currentText())
-            self._nast.setValue(f"cad/body/{k}/barva", self._barva_ms.get(k, 256))
-            self._nast.setValue(f"cad/body/{k}/velikost", self.vel[k].value())
+            hl, barva, vel = self._vlastni_hodnoty(k)
+            self._nast.setValue(f"cad/body/{k}/hladina", hl)
+            self._nast.setValue(f"cad/body/{k}/barva", barva)
+            self._nast.setValue(f"cad/body/{k}/velikost", vel)
         self._nast.setValue("cad/body/tvar", self.tvar.currentText())
+        self._nast.setValue("cad/body/kratka_cisla", self.kratka.isChecked())
 
     def _povol(self, klic: str):
         on = self.ch[klic].isChecked()
@@ -302,8 +310,44 @@ class BodyDialog(QDialog):
         self.cb[klic].setEnabled(on)
         for w in (self.hl[klic], self.barvy[klic], self.vel[klic]):
             w.setEnabled(on and vlastni)
+        self._ukaz_atributy(klic, None if vlastni else d)
         if klic == "znacka":
             self.tvar.setEnabled(on and vlastni)
+
+    def _vlastni_hodnoty(self, klic: str):
+        """Hladina, barva a velikost, které si uživatel nastavil sám (i když je zrovna zvolen druh prvku ze zadání)."""
+        return getattr(self, "_vlastni", {}).get(klic) or (self.hl[klic].currentText(), self._barva_ms.get(klic, 256),
+                                                         self.vel[klic].value())
+
+    def _ukaz_atributy(self, klic: str, pv):
+        """U druhu prvku ze zadání / nástroje sady ukáže jeho hladinu, barvu a velikost (pole jsou jen ke čtení) –
+        aby bylo vidět, s čím se body opravdu vloží; po návratu na „vlastní atributy“ vrátí vlastní hodnoty."""
+        self._vlastni = getattr(self, "_vlastni", {})
+        hl, b, vel = self.hl[klic], self.barvy[klic], self.vel[klic]
+        if pv is None:
+            if klic in self._vlastni:
+                h0, b0, v0 = self._vlastni.pop(klic)
+                hl.setCurrentText(h0)
+                self._nastav_barvu(klic, b0)
+                vel.setValue(v0)
+            return
+        if klic not in self._vlastni:
+            self._vlastni[klic] = (hl.currentText(), self._barva_ms.get(klic, 256), vel.value())
+        hl.setCurrentText(str(pv.vrstva))
+        ms = (pv.ms or {}).get("barva")
+        try:
+            ms = int(str(ms))
+        except ValueError:
+            ms = None
+        if ms is not None:
+            vl = self._vlastni[klic]
+            self._nastav_barvu(klic, ms)
+            self._barva_ms[klic] = vl[1]  # uložená vlastní barva se nemění, jen zobrazení
+        else:
+            b.setText("dle hl." if pv.barva == 256 else f"ACI {pv.barva}")
+            b.setStyleSheet("")
+        if pv.vyska:
+            vel.setValue(pv.vyska)
 
     def _nastav_barvu(self, klic: str, ms: int):
         from ..cad import symbologie as SY

@@ -1033,6 +1033,9 @@ class CadPage(QWidget):
         self.modely.currentTextChanged.connect(lambda t: self.nastav_model(t) if t else None)
         self.b_novy_zadani.clicked.connect(lambda: self.novy_podle_zadani())
         self.predvolby_cb.currentIndexChanged.connect(self._predvolba_zmenena)
+        # znovu vybraný stejný druh prvku (po Esc) spustí kreslení znovu – změnu indexu Qt neohlásí
+        self.predvolby_cb.activated.connect(
+            lambda _i: self._predvolba_zmenena() if self._gen is None and not self._prikaz else None)
         self.b_na_vyber.clicked.connect(self.predvolba_na_vyber)
         self.b_tahak.clicked.connect(lambda: self.uloz_tahak(otevrit=True))
         self.b_atributy.clicked.connect(lambda: self.atributy_zadani())
@@ -1624,7 +1627,10 @@ class CadPage(QWidget):
         t = text.strip().lower()
         for i, p in enumerate(self._predvolby):
             if t and (t == p.kod.lower() or t in p.nazev.lower()):
-                self.predvolby_cb.setCurrentIndex(i + 1)
+                if self.predvolby_cb.currentIndex() == i + 1:
+                    self._predvolba_zmenena()  # stejný druh prvku znovu → nástroj se spustí znovu
+                else:
+                    self.predvolby_cb.setCurrentIndex(i + 1)
                 return True
         return False
 
@@ -1652,8 +1658,9 @@ class CadPage(QWidget):
         self.aktivni_atributy()
         self.predvolba_info.setToolTip("\n".join([p.popis()] + p.poznamky))
         self.vypis(f"Kreslím: {p.nazev} – {p.popis()}" + ("".join(f"\n  ⚠ {x}" for x in p.poznamky)))
-        if self._gen is None and not self._prikaz:
-            self.proved(p.nastroj)
+        if (self._gen is None and not self._prikaz) or (self._gen is not None
+                                                         and getattr(self, "_gen_vstupu", 0) == 0):
+            self.proved(p.nastroj)  # i když nástroj teprve čeká na první bod (zůstal aktivní po minulém prvku)
 
     def predvolba_na_vyber(self):
         p = self.predvolba
@@ -3253,6 +3260,11 @@ class CadPage(QWidget):
             else:
                 self.vypis(r.vyzva)
             return
+        if r.typ != "text" and "=" in t and not t.lower().startswith("xy=") and self._keyiny(t):
+            # key-in atributů uprostřed nástroje (lv=, co=, lc=, wt=, aa= …) jako v MicroStationu – nástroj čeká dál
+            self.vypis(f"> {t}")
+            self.vypis(r.vyzva)
+            return
         if r.typ == "text":
             self._posli(t)
         elif r.typ in ("cislo", "uhel"):
@@ -3317,8 +3329,14 @@ class CadPage(QWidget):
         return t.lower() in self.ALIASY or slovo in self.ALIASY or slovo in self.PRIKAZY
 
     # ------------------------------------------------------------ běh nástroje
+    # kreslicí nástroje zůstávají po dokončení prvku aktivní (jako v MicroStationu) – další prvek hned, Esc ukončí
+    OPAKOVANE = ("úsečka", "polylinie", "kružnice", "oblouk", "obdélník")
+
     def _spust(self, gen):
         self._gen = gen
+        self._gen_vstupu = 0  # kolik odpovědí nástroj dostal (0 = čeká na první bod → lze ho ještě vyměnit)
+        h = self.historie_zmen
+        self._gen_hist = (len(h.zpet), h.zpet[-1] if h.zpet else None) if h else None
         if getattr(self, "paleta", None) is not None:
             self._oznac(self._posledni_prikaz)
         self._posli(None, prvni=True)
@@ -3327,11 +3345,15 @@ class CadPage(QWidget):
         h = self.historie_zmen
         pred = len(h.zpet) if h else 0
         pred_op = h.zpet[-1] if h and h.zpet else None
+        dokonceno = False
+        if not prvni:
+            self._gen_vstupu = getattr(self, "_gen_vstupu", 0) + 1
         try:
             r = next(self._gen) if prvni else self._gen.send(hodnota)
         except StopIteration:
             self._konec_nastroje()
             r = None
+            dokonceno = True
         except ValueError as e:
             self.vypis(f"⚠ {e}")
             self._konec_nastroje()
@@ -3345,6 +3367,11 @@ class CadPage(QWidget):
             nove = h.zpet[pred:] if len(h.zpet) >= pred else []
             for op in nove:
                 self._po_zmene(op.pridano, op.odebrano)
+        if dokonceno and self._gen is None and h is not None and self._posledni_prikaz in self.OPAKOVANE:
+            start = getattr(self, "_gen_hist", None)
+            if start is not None and (len(h.zpet), h.zpet[-1] if h.zpet else None) != start:
+                self.proved(self._posledni_prikaz)  # prvek nakreslen → nástroj běží dál
+                return
         if r is not None:
             self._req = r
             self.view.nahled = r.nahled
@@ -4929,15 +4956,23 @@ class CadPage(QWidget):
             from ..rules import block_matches, split_alternatives
             vhodne = [j for j in jmena if any(block_matches(v, j) for v in split_alternatives(p.blok))]
             if not vhodne:
-                raise ValueError(f"Buňka {p.blok} pro „{p.nazev}“ ve výkresu není – nahrajte vzorový výkres "
-                                 "s buňkami do Zadání → Vzorový výkres a založte výkres tlačítkem Nový podle zadání.")
+                raise ValueError(f"Buňka {p.blok} pro „{p.nazev}“ ve výkresu není – připojte knihovnu buněk od "
+                                 "učitele (např. geo-V8.cel) příkazem „knihovny“ (Připojit → Knihovny), nebo nahrajte "
+                                 "vzorový výkres s buňkami do Zadání → Vzorový výkres.")
             jmena = vhodne + [j for j in jmena if j not in vhodne]
         if not jmena:
             raise ValueError("Ve výkresu nejsou žádné bloky (vytvořte příkazem „blok“).")
         primo = getattr(self, "_ac_primo", None)
         self._ac_primo = None
+        uhel = getattr(self, "_uhel_bunky", 0.0) or 0.0  # aktivní úhel (key-in aa=)
         if primo and primo in jmena:  # po key-inu ac=… se neptá na název, měřítko ani natočení
-            yield from self.n_umisti_bunku(primo, getattr(self, "_meritko_bunky", 1.0) or 1.0, 0.0)
+            yield from self.n_umisti_bunku(primo, getattr(self, "_meritko_bunky", 1.0) or 1.0, uhel)
+            return
+        if p is not None and p.blok and len(vhodne) == 1:
+            # druh prvku ze zadání s jedinou buňkou: rovnou se umisťuje (měřítko ze zadání, natočení = aktivní úhel)
+            self.vypis(f"Buňka {vhodne[0]}, měřítko {(p.meritko_bunky or 1.0):g}, natočení {uhel:g}° "
+                       "(aktivní úhel změníte key-inem aa=…).")
+            yield from self.n_umisti_bunku(vhodne[0], p.meritko_bunky or 1.0, uhel)
             return
         self.vypis("Bloky: " + ", ".join(jmena[:40]) + ("…" if len(jmena) > 40 else ""))
         ac = getattr(self, "_aktivni_bunka", None)

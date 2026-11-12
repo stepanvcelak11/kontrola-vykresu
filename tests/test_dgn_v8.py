@@ -132,3 +132,13 @@ def test_puvodni_dgn_se_neprepise(tmp_path):
     assert CadDokument.otevri(src).path == tmp_path / "mapa (z DGN 2).dxf"  # dřívější úpravy se také nepřepíšou
     znovu = CadDokument.otevri(p)
     assert znovu.zprava.pocty["INSERT"] == d.zprava.pocty["INSERT"]
+
+
+def test_kratke_cislo_bodu_ruzne_delky():
+    from kontrola.cad.body_seznam import kratke_cislo
+    from kontrola.geodezie.body import Bod, SeznamBodu
+    assert kratke_cislo("610844000130001") == "1" and kratke_cislo("1000130014") == "14"
+    assert kratke_cislo("4001") == "4001" and kratke_cislo("JM-071-519") == "JM-071-519"
+    s = SeznamBodu()
+    s.pridej([Bod("1000130001", 1.0, 2.0), Bod("1000130014", 3.0, 4.0)], "test")
+    assert s.najdi_kratke("14").cislo == "1000130014" and s.najdi_kratke("2") is None

@@ -147,6 +147,8 @@ def predvolby(rs: RuleSet) -> list[Predvolba]:
         if geo is None and (r.font or r.vyska_textu):
             geo = "text"
         nastroj = {"bod": "bod", "linie": "polylinie", "polygon": "polylinie", "text": "text"}.get(geo, "polylinie")
+        if nastroj == "polylinie" and 3 in (r.typy_prvku or []) and 4 not in r.typy_prvku:
+            nastroj = "úsečka"  # zadání povoluje jen Úsečku (typ 3), ne Lomenou čáru (typ 4) – kontrola by ji hlásila
         if r.blok:
             nastroj = "vlož"
         p = Predvolba(nazev=r.nazev or r.kod or (r.hladina or "?"), kod=r.kod or "", geometrie=geo,

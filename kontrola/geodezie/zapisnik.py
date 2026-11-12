@@ -37,10 +37,12 @@ def zapis_zap(stations: list[Station], zakazka: str = "") -> str:
     for st in stations:
         r.append(f"1 {st.bod:<10} {_f(st.vp, 3)} *")
         for o in st.orient:
-            r.append(f"{o.bod:<12}{_f(o.sd, 3):>9}{_f(o.vc, 3):>8}{_f(o.hz, 4):>10}{_f(o.z, 4):>10}")
+            r.append(f"{o.bod:<12}{_f(o.sd, 3):>9}{_f(o.vc, 3):>8}{_f(o.hz, 4):>10}{_f(o.z, 4):>10}"
+                     + (f"  *{o.popis}" if o.popis else ""))
         r.append("-1")
         for o in st.detail:
-            r.append(f"{o.bod:<12}{_f(o.sd, 3):>9}{_f(o.vc, 3):>8}{_f(o.hz, 4):>10}{_f(o.z, 4):>10}")
+            r.append(f"{o.bod:<12}{_f(o.sd, 3):>9}{_f(o.vc, 3):>8}{_f(o.hz, 4):>10}{_f(o.z, 4):>10}"
+                     + (f"  *{o.popis}" if o.popis else ""))
         r.append("/")
     return "\n".join(r) + "\n"
 
@@ -51,8 +53,8 @@ def pro_vypocet(stations: list[Station], prumer: bool = True) -> list[Station]:
     out = []
     for st in stations:
         c = Station(st.bod, st.vp)
-        c.orient = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z) for o in st.orient], prumer)
-        c.detail = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z) for o in st.detail], prumer)
+        c.orient = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z, popis=o.popis) for o in st.orient], prumer)
+        c.detail = _merge_faces([Obs(o.bod, o.sd, o.vc, o.hz, o.z, popis=o.popis) for o in st.detail], prumer)
         out.append(c)
     return out
 

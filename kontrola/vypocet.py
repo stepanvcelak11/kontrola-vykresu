@@ -41,6 +41,7 @@ class Obs:
     d_hz: float | None = None  # rozdíl Hz mezi polohami (I − II ± 200) [g] – kolimační chyba ×2
     index_z: float | None = None  # indexová chyba zenitového úhlu (z_I + z_II − 400) / 2 [g]
     d_sd: float | None = None  # rozdíl šikmých délek mezi polohami [m]
+    popis: str = ""  # popis (kód) bodu ze zápisníku – text za hvězdičkou
 
 
 @dataclass
@@ -59,6 +60,7 @@ class Point:
     z: float | None
     stanovisko: str = ""
     kontrolni: bool = False  # druhé (kontrolní) určení bodu
+    popis: str = ""
 
 
 @dataclass
@@ -94,6 +96,7 @@ class Zpracovani:
     zakriveni: bool = True
     k_refrakce: float = 0.13
     obousmerne: bool = True  # obousměrně měřené délky → průměr tam a zpět
+    nulove_vc: bool = True  # Groma „Nulové výšky cíle“: vypnuto = bod s výškou cíle 0 se určí bez výšky
     vahy: str = "délka"  # váhy orientací: „délka“ nebo „1“
     prumer_kontrolnich: bool = True
     prumer_max_xy: float = 0.350
@@ -153,7 +156,7 @@ def _merge_faces(obs: list[Obs], prumer: bool = True) -> list[Obs]:
             hz, z = o.hz, o.z
             if z > 200:
                 hz, z = (o.hz - 200.0) % 400.0, 400.0 - o.z
-            nw = Obs(o.bod, o.sd, o.vc, hz, z)
+            nw = Obs(o.bod, o.sd, o.vc, hz, z, popis=o.popis)
             nw._z_raw = o.z
             out.append(nw)
     return out
@@ -189,9 +192,13 @@ def read_zap(path: str | Path, spojit: bool = True) -> list[Station]:
         if s == "/":
             cur = None
             continue
+        popis = ""
+        if "*" in s:  # popis (kód) bodu za hvězdičkou: „1  24.07 1.55 7.6287 96.9540 * roh budovy“
+            s, popis = (t.strip() for t in s.split("*", 1))
+            tok = s.split()
         if len(tok) >= 5:
             try:
-                o = Obs(tok[0], float(tok[1]), float(tok[2]), float(tok[3]), float(tok[4]))
+                o = Obs(tok[0], float(tok[1]), float(tok[2]), float(tok[3]), float(tok[4]), popis=popis)
             except ValueError:
                 continue
             (cur.orient if part == "orient" else cur.detail).append(o)
@@ -419,9 +426,11 @@ def compute(stations: list[Station], known_points: list[ListPoint], koeficient: 
             y = sp.y + d * math.sin(sigma * GON)
             x = sp.x + d * math.cos(sigma * GON)
             z = sp.z + dh if sp.z is not None else None
+            if not zp.nulove_vc and abs(o.vc) < 1e-9:  # Groma: nulová výška cíle = bod jen polohově
+                z = None
             key = frozenset(short_numbers(o.bod))
             ctrl = any(key & frozenset(short_numbers(s)) for s in seen)
-            body.append(Point(o.bod, y, x, z, st.bod, ctrl))
+            body.append(Point(o.bod, y, x, z, st.bod, ctrl, o.popis))
             # převýšení terén–terén (s výškou přístroje, cíle, zakřivením a refrakcí) a odpovídající
             # zenitový úhel „redukovaný na terén“ – výška cíle je pak 0
             # (jen výpis v protokolu: z převýšení před měřítkovým koeficientem a s refrakcí k = 0,13 – takhle

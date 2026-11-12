@@ -2096,7 +2096,7 @@ def test_cad_vloz_bunku_s_aktivnimi_atributy(window, tmp_path):
         c.obnov_predvolby()
         assert c.otevri(str(f))
         assert c.vyber_predvolbu("8.1")
-        for t in ("4.110", "", "0", "x=50 y=50", ""):  # druh prvku s buňkou spustí „vlož“ sám
+        for t in ("x=50 y=50", ""):  # druh prvku s jedinou buňkou ji rovnou umisťuje (měřítko ze zadání)
             c.zadej(t)
         ins = [e for e in c.prostor.query("INSERT") if e.dxf.insert.x == pytest.approx(50)]
         assert ins, c.historie.toPlainText()[-1500:]
@@ -4482,3 +4482,96 @@ def test_skolni_kresba_husovice_jako_student(window):
         assert (lampa.dxftype(), lampa.dxf.name, lampa.dxf.color, lampa.dxf.xscale) == ("INSERT", "6.560", 1, 200.0)
     finally:
         QSettings().setValue("vypocty/predcisli", stare)
+
+
+def test_groma_01_rajon_jako_student(window):
+    """Školní úloha 01 (rajón): výsledek jako protokol Gromy, popisy bodů ze zápisníku jdou do seznamu,
+    statistika importu měření a volba „Nulové výšky cíle“ se chovají jako v Gromě."""
+    z = Path(__file__).resolve().parents[1] / "podklady" / "groma-01-rajon"
+    if not (z / "01_zap.zap").exists():
+        pytest.skip("chybí úloha 01")
+    from kontrola.geodezie import nastaveni as N
+    w = window
+    w.show_page("vypocty")
+    v = w.vypocty
+    v.import_dialog(str(z / "01_SezSour.txt"), accept=True)
+    v.lista.meritko.setValue(0.9999021514)  # koeficient z protokolu Gromy
+    zp = v.zapisnik
+    assert zp.nacist(str(z / "01_zap.zap"))
+    assert zp.stanoviska[0].detail[0].popis == "roh budovy"
+    assert zp.vypocitej() is not None
+    prot = zp.vystup.toPlainText()
+    for radek in ("Počet položek                 : 11", "Počet bodů s kódem / bez kódu : 5 / 6",
+                  "Číslo min / Číslo max         : 1 / 4003", "Délka min / Délka max         : 9.626 / 48.541"):
+        assert radek in prot, radek
+    zp.do_seznamu()
+    groma = {"1": (591366.171, 1062161.511), "2": (591359.459, 1062164.863), "3": (591354.073, 1062154.110),
+             "4": (591360.804, 1062150.756)}
+    for c, (y, x) in groma.items():
+        b = v.seznam.najdi(c)
+        assert (round(b.y, 3), round(b.x, 3)) == (y, x), c
+        assert b.kod == "roh budovy" and b.z is not None
+    # popis přežije uložení zápisníku
+    from kontrola.geodezie.zapisnik import zapis_zap
+    assert "*roh budovy" in zapis_zap(zp.stanoviska)
+    # Nulové výšky cíle vypnuté (jako v Gromě): body měřené s výškou cíle 0 jsou jen polohové
+    puvodni = N.aktualni()
+    try:
+        import dataclasses
+        N.nastav(dataclasses.replace(puvodni, zp_nulove_vc=False))
+        r = zp.vypocitej()
+        vysky = {b.bod: b.z for b in r.body if not b.kontrolni}
+        assert vysky["2"] is None and vysky["4"] is None and vysky["1"] is not None
+    finally:
+        N.nastav(puvodni)
+
+
+def test_zadani1_kresba_jako_student(window):
+    """Zadání 1 (MicroStation) kreslené nástroji ze zadání: čísla bodů bez předčíslí, #číslo najde bod
+    s desetimístným číslem, kreslicí nástroj zůstává aktivní, key-in uprostřed nástroje, vstup = úsečka."""
+    from kontrola.rules import RuleSet
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani1-microstation"
+    if not (z / "pravidla_zadani1.yaml").exists():
+        pytest.skip("chybí zadání 1")
+    w = window
+    puvodni = w.project.rules
+    w.project.rules = RuleSet.load(z / "pravidla_zadani1.yaml")
+    try:
+        w.show_page("vypocty")
+        w.vypocty.import_dialog(str(z / "Body13_tr.txt"), accept=True)
+        w.show_page("cad")
+        c = w.cad
+        c.obnov_predvolby()
+        c.novy_podle_zadani(vzory=[])
+        d = c.body_ze_seznamu(modal=False)
+        assert d.kratka.isChecked() and d.hl["cislo"].currentText() == "59"  # pole ukazují hodnoty ze zadání
+        assert d.vel["cislo"].value() == pytest.approx(0.75)
+        d.vlozit()
+        cisla = {e.dxf.text for e in c.dok.msp if e.dxftype() == "TEXT"}
+        assert "1" in cisla and "1000130001" not in cisla
+        # budova: #čísla bodů, po dokončení nástroj běží dál (jako v MicroStationu)
+        assert c.vyber_predvolbu("Budovy zděné")
+        for t in ("#1", "#2", "#3", ""):
+            c.zadej(t)
+        assert c._gen is not None and "první bod" in c.vyzva.text()
+        pl = [e for e in c.dok.msp if e.dxftype() == "LWPOLYLINE"]
+        assert len(pl) == 1 and tuple(round(v, 2) for v in pl[0].get_points("xy")[0]) == (-565501.41, -1187927.40)
+        # key-in stylu uprostřed nástroje (převislá část budovy = styl 2)
+        for t in ("lc=2", "#3", "#4", ""):
+            c.zadej(t)
+        pl = [e for e in c.dok.msp if e.dxftype() == "LWPOLYLINE"]
+        assert len(pl) == 2 and pl[1].dxf.linetype == "DGN Style 2"
+        # Esc nástroj ukončí; Enter bez nakresleného prvku ho neopakuje donekonečna
+        c.zrus(tise=True)
+        assert c._gen is None
+        # vstup do objektu smí být jen úsečka → nástroj úsečka; jiný druh prvku nástroj vymění, i když čeká
+        assert c.vyber_predvolbu("Vstup do objektu")
+        for t in ("#1", "#2", ""):
+            c.zadej(t)
+        assert [e.dxf.layer for e in c.dok.msp if e.dxftype() == "LINE"] == ["6"]
+        assert c._gen is not None
+        assert c.vyber_predvolbu("Čísla popisná")
+        assert "Text" in c.vyzva.text()
+        c.zrus(tise=True)
+    finally:
+        w.project.rules = puvodni

@@ -460,7 +460,12 @@ class NastaveniVypoctuDialog(QDialog):
             ("Koeficient Z:", self._ed("koef_z", "1.000000000000"))), self._ch("zamenit_xy", "Zaměnit X a Y")), 1, 0)
         vc = self._ed("vyska_cile")
         vc.setStyleSheet(_tint("fialova"))
-        g.addWidget(_skupina("Volby výšek:", self._ch("nulove_vc", "Nulové výšky cíle", True),
+        self.ch_nulove_vc = self._ch("nulove_vc", "Nulové výšky cíle", True)
+        self.ch_nulove_vc.setChecked(self._n.zp_nulove_vc)
+        self.ch_nulove_vc.setToolTip("Zapnuto: výška se počítá i u bodů s výškou cíle 0 (cílení přímo na bod).\n"
+                                     "Vypnuto (jako v Gromě): bod s nulovou výškou cíle se určí jen polohově, "
+                                     "bez výšky.")
+        g.addWidget(_skupina("Volby výšek:", self.ch_nulove_vc,
                              _formular(("Standardní výška cíle:", vc))), 2, 0)
         g.addWidget(_skupina("Typ délek:", *self._radia("typ_delek", ["Vodorovné", "Šikmé"], 1),
                              self._ch("neredukovat", "Neredukovat"),
@@ -665,8 +670,10 @@ class NastaveniVypoctuDialog(QDialog):
 
     def _zpracovani(self) -> dict:
         from dataclasses import fields as _f
-        return {f.name: getattr(self._n, f.name) for f in _f(self._n)
-                if f.name.startswith(("zp_", "k_refrakce", "prumer_max"))}
+        d = {f.name: getattr(self._n, f.name) for f in _f(self._n)
+             if f.name.startswith(("zp_", "k_refrakce", "prumer_max"))}
+        d["zp_nulove_vc"] = self.ch_nulove_vc.isChecked()
+        return d
 
     def _teodolit_hodnoty(self) -> dict:
         out = {}

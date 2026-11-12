@@ -76,7 +76,7 @@ class SeznamBodu:
 
     def najdi_kratke(self, cislo: str, predcisli: str = "") -> Bod | None:
         """Bod podle čísla zadaného i bez předčíslí (jako v Gromě): nejdřív přesně, pak s předčíslím z lišty,
-        nakonec jediný bod s úplným číslem, které na zadané číslo končí (1 → 610844000130001)."""
+        nakonec jediný bod s úplným číslem, které na zadané číslo končí (1 → 610844000130001, 1000130001)."""
         c = cislo.strip()
         b = self.najdi(c)
         if b is not None or not c.isdigit() or len(c) > 4:
@@ -85,7 +85,8 @@ class SeznamBodu:
             b = self.najdi(uplne_cislo(c, predcisli))
             if b is not None:
                 return b
-        shodne = [x for x in self.body if len(x.cislo) == 15 and x.cislo.isdigit() and int(x.cislo[11:]) == int(c)]
+        # úplná čísla: 15 míst (k.ú. + ZPMZ), 12 míst (Groma), 10 míst (školní seznamy) – vlastní číslo = poslední 4
+        shodne = [x for x in self.body if len(x.cislo) >= 8 and x.cislo.isdigit() and int(x.cislo[-4:]) == int(c)]
         return shodne[0] if len(shodne) == 1 else None
 
     def filtruj(self, text: str = "", kod: str | None = None, kvalita: int | None = None) -> list[Bod]:
