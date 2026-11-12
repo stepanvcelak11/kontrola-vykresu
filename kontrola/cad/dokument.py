@@ -282,6 +282,7 @@ def _v8_do_ezdxf(p: Path, rs=None):
     SY.zajisti_styly(doc)
     msp = doc.modelspace()
     ms_barvy: dict[str, int] = {}
+    bez_kresby: set[str] = set()  # buňky, které mají zatím jen značku bodu
     for jm in hladiny_v8(p):  # všechny hladiny jako ve Správci vrstev MicroStationu (i prázdné ze seedu)
         if jm not in doc.layers:
             doc.layers.add(jm)
@@ -317,6 +318,8 @@ def _v8_do_ezdxf(p: Path, rs=None):
             jm = f.block_name
             if jm not in doc.blocks:
                 doc.blocks.new(jm).add_point((0, 0))
+                if not _blok_z_kresby(doc, jm, f, g):
+                    bez_kresby.add(jm)
             e = msp.add_blockref(jm, (g.x, g.y), dxfattribs={**a, "rotation": f.rotation or 0.0,
                                                              "xscale": f.scale[0] or 1.0, "yscale": f.scale[1] or 1.0})
         elif f.geom_type == GeomType.TEXT:
@@ -329,6 +332,15 @@ def _v8_do_ezdxf(p: Path, rs=None):
             e.set_placement((g.x, g.y), align=al.get((f.halign, f.valign), TA.LEFT))
         elif f.geom_type == GeomType.BOD:
             e = msp.add_point((g.x, g.y), dxfattribs=a)
+        elif f.attributes.get("DGN_OBLOUK"):
+            ob = [float(v) for v in f.attributes["DGN_OBLOUK"].split()]
+            if len(ob) == 3 and f.attributes.get("DGN_VYPLN"):  # vyplněný kruh = plná šrafa (jako DXF z MicroStationu)
+                e = msp.add_hatch(color=a.get("color", 256), dxfattribs={"layer": f.layer})
+                e.paths.add_edge_path().add_arc(ob[:2], ob[2], 0, 360)
+            elif len(ob) == 3:
+                e = msp.add_circle(ob[:2], ob[2], dxfattribs=a)
+            else:
+                e = msp.add_arc(ob[:2], ob[2], ob[3], ob[4], dxfattribs=a)
         elif f.geom_type == GeomType.POLYGON:
             pts = [tuple(c[:2]) for c in g.exterior.coords][:-1]
             e = msp.add_lwpolyline(pts, close=True, dxfattribs=a)
@@ -339,6 +351,90 @@ def _v8_do_ezdxf(p: Path, rs=None):
         if mb is not None and mb.isdigit():
             ms_barvy[e.dxf.handle] = int(mb)
     pozn = list(d.warnings)
-    if any(f.dxftype == "INSERT" for f in d.features):
-        pozn.append("Buňky z DGN V8 jsou jen značky bodu – kresbu načtete příkazem „knihovna buněk“ (.CEL).")
+    if bez_kresby:
+        zdroje = dopln_bunky(doc, bez_kresby)
+        if zdroje:
+            pozn.append("Kresba buněk doplněna z knihovny " + ", ".join(zdroje) + ".")
+    if bez_kresby:
+        pozn.append("Buňky " + ", ".join(sorted(bez_kresby)[:8]) + ("…" if len(bez_kresby) > 8 else "")
+                    + " nejsou v žádné knihovně – jsou jen značkou bodu (Připojit → Knihovny, soubor .CEL).")
     return doc, ms_barvy, pozn
+
+
+def _blok_z_kresby(doc, jm: str, f, g) -> bool:
+    """Definice bloku z kresby buňky uložené přímo ve výkresu DGN V8: části buňky (ve světových souřadnicích)
+    se převedou do souřadnic buňky (počátek, natočení a měřítko vložení). Vrací False, když buňka nemá kresbu."""
+    import math
+
+    from ..io.cel import Bunka, _prvky, do_dokumentu
+    raw, s = getattr(f, "cell_data", (b"", 1.0))
+    sx, sy = (f.scale[0] or 1.0), (f.scale[1] or 1.0)
+    if not raw:
+        return False
+    try:
+        prvky = _prvky(raw, s)
+    except Exception:  # noqa: BLE001
+        return False
+    if not prvky:
+        return False
+    u = math.radians(f.rotation or 0.0)
+    c, sn = math.cos(u), math.sin(u)
+
+    def mist(x, y):
+        dx, dy = x - g.x, y - g.y
+        return ((c * dx + sn * dy) / sx, (-sn * dx + c * dy) / sy)
+
+    out = []
+    for p in prvky:
+        if p[0] == "cara":
+            out.append(("cara", [mist(*b) for b in p[1]], p[2], p[3]))
+        elif p[0] == "kruh":
+            x, y = mist(p[1], p[2])
+            if abs(abs(sx) - abs(sy)) < 1e-9 * max(abs(sx), abs(sy)):
+                out.append(("kruh", x, y, p[3] / abs(sx), p[4]))
+            else:  # různé měřítko v osách: kruh jako lomená čára
+                body = [mist(p[1] + p[3] * math.cos(math.radians(k * 10)), p[2] + p[3] * math.sin(math.radians(k * 10)))
+                        for k in range(37)]
+                out.append(("cara", body, True, p[4]))
+        elif p[0] == "text":
+            _k, x, y, text, vyska, wf, rot, just = p
+            x, y = mist(x, y)
+            out.append(("text", x, y, text, vyska / abs(sy), wf * abs(sy) / abs(sx), (rot - (f.rotation or 0.0)) % 360,
+                        just))
+    return bool(do_dokumentu(doc, [Bunka(jm, out)], prepsat=True))
+
+
+def dopln_bunky(doc, bez_kresby: set[str]) -> list[str]:
+    """Buňkám z DGN V8, které mají jen značku bodu, doplní kresbu z knihoven .CEL: nejdřív aktivní pracovní
+    sada, pak knihovny od učitele, nakonec ostatní sady (výkres ze školy se pozná podle názvů buněk).
+    Z ``bez_kresby`` odebere doplněné buňky a vrátí názvy použitých knihoven."""
+    from ..io.cel import do_dokumentu, nacti_cel
+    from . import knihovny as K
+    from . import pracovni_sady as PS
+    cesty: list[Path] = []
+    try:
+        akt = PS.aktivni()
+        sady = ([akt] if akt is not None else []) + [s for s in PS.vsechny() if akt is None or s.klic != akt.klic]
+        for i, s in enumerate(sady):
+            cesty += list(s.bunky)
+            if i == 0 and akt is not None:
+                cesty += K.soubory((".cel",))
+        if akt is None:
+            cesty = K.soubory((".cel",)) + cesty
+    except Exception:  # noqa: BLE001 – knihovny nesmí zabránit otevření výkresu
+        return []
+    pouzite: list[str] = []
+    for c in cesty:
+        if not bez_kresby:
+            break
+        try:
+            bunky = [b for b in nacti_cel(c) if b.nazev in bez_kresby]
+        except Exception:  # noqa: BLE001
+            continue
+        if not bunky:
+            continue
+        hotove = do_dokumentu(doc, bunky, prepsat=True)
+        bez_kresby.difference_update(b.nazev for b in bunky)
+        if hotove and Path(c).name not in pouzite:
+            pouzite.append(Path(c).name)
+    return pouzite

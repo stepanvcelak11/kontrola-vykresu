@@ -34,7 +34,8 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Úprava hranic (směna pozemků) | ❌ | |
 | Převod S-JTSK ↔ WGS84 (EPSG:5239, ≈ 1 m) s odkazem na mapy.cz | ✅ | shoda s PROJ na 2·10⁻⁸ ° |
 | Import zápisníku Leica GSI-8 / GSI-16 (gon, stupně, mil; mm–0,01 mm) | ✅ | Husovice přes GSI = stejné souřadnice jako ze .zap |
-| Další formáty totálních stanic (Trimble, Topcon, Sokkia, Nikon) | ❌ | |
+| Trimble (.jxl, .job, .sdr) | ✅ | školní měření SK3 |
+| Další formáty totálních stanic (Topcon, Nikon) | ❌ | |
 | QTrig (vlastní terénní aplikace): body zakázky z firemního cloudu (přírůstkově, hlídání), export bodů, nivelace, zápisník směrů | ✅ | převod WGS84 → S-JTSK shodný s QTrig pod 0,001 mm |
 | Spojnice bodů v grafice (ručně, podle kódu), přenos do CAD | ✅ | test |
 | Export seznamu do DXF (body, čísla, výšky, kódy, spojnice), KML, GeoJSON, PDF k odevzdání | ✅ | DXF i WGS84 zpět na mm |
@@ -47,6 +48,7 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Funkce MicroStationu | Stav |
 |---|---|
 | Otevření/uložení DXF beze ztrát, zpráva o načtení, poškozené soubory, čeština v kódové stránce 1250 | ✅ |
+| Otevření DGN V8 přímo (buňky s kresbou z výkresu, oblouky, kružnice, výplně, křivky B-spline, texty, hladiny, styly) – Husovice: stejné počty prvků jako DXF z MicroStationu | ✅ |
 | Zobrazení (barvy, styly, texty, bloky, šrafy), zoom, posun | ✅ |
 | Souřadnice kurzoru S-JTSK, úchyty (konec, střed, průsečík, kolmice, tečna), ortho, polární | ✅ |
 | Příkazový řádek (key-in), zadání souřadnic, měření vzdálenosti | ✅ |

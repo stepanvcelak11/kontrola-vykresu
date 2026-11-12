@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from kontrola.io.dgn_v8 import read_dgn
-UCITEL = Path(__file__).resolve().parents[1] / "podklady" / "ucitel-geo"
+ROOT = Path(__file__).resolve().parents[1]
+UCITEL = ROOT / "podklady" / "ucitel-geo"
 
 
 @pytest.mark.skipif(not (UCITEL / "GEO.dgn").exists(), reason="chybí výkres učitele")
@@ -66,3 +67,37 @@ def test_kurziva_z_dgn_i_dxf():
         assert cisla and all(rez_pisma(f)[1] for f in cisla)
         assert vysky and not any(rez_pisma(f)[1] for f in vysky)
         assert not [i for i in check(d, "symbologie", rules=rs) if "kurzív" in i.message]
+
+
+def test_dgn_do_cad_jako_dxf_z_microstationu():
+    """Otevření DGN v CAD dá totéž co DXF uložené MicroStationem: oblouky zůstanou oblouky, vyplněné kruhy
+    jsou šrafy a buňky mají kresbu přímo z výkresu (stejný rozsah jako v knihovně buněk)."""
+    import ezdxf
+    from ezdxf import bbox
+
+    from kontrola.cad.dokument import CadDokument
+    from kontrola.io.cel import nacti_cel
+    slozka = ROOT / "podklady" / "zadani2-husovice"
+    d = CadDokument.otevri(slozka / "Husovice_Včelák_mapa.dgn")
+    vzor = ezdxf.readfile(slozka / "Husovice_Včelák_mapa.dxf")
+    for typ in ("ARC", "HATCH", "INSERT", "TEXT", "POINT", "LINE"):
+        assert d.zprava.pocty[typ] == sum(1 for e in vzor.modelspace() if e.dxftype() == typ), typ
+    polomery = sorted(round(e.dxf.radius, 3) for e in d.msp if e.dxftype() == "ARC")
+    assert polomery == sorted(round(e.dxf.radius, 3) for e in vzor.modelspace() if e.dxftype() == "ARC")
+    cel = next((ROOT / "kontrola" / "resources" / "microstation").rglob("MultiScale.cel"))
+    knihovna = {b.nazev: b.rozsah() for b in nacti_cel(cel)}
+    for jm in ("9.12", "3.13", "6.560", "6.30", "1.07"):
+        bb = bbox.extents(d.doc.blocks[jm])
+        assert [bb.extmin.x, bb.extmin.y, bb.extmax.x, bb.extmax.y] == pytest.approx(knihovna[jm], abs=1e-6), jm
+    assert not any("značkou bodu" in p for p in d.zprava.poznamky)
+
+
+def test_dgn_krivky_bspline():
+    """Křivky (B-spline, typ 27 + póly 21 + uzly 26) se čtou – ve výkresu učitele jich je 112 a nic nezbude."""
+    from kontrola.io.dgn_v8 import _bspline, read_dgn
+    d = read_dgn(ROOT / "podklady" / "ucitel-geo" / "GEO.dgn")
+    assert sum(1 for f in d.features if f.dxftype == "SPLINE") == 112
+    assert not any("Nepřečtené" in w for w in d.warnings)
+    # Bézierova křivka (4 póly, řád 4): střed = (P0 + 3 P1 + 3 P2 + P3) / 8, konce v krajních pólech
+    b = _bspline([(0, 0), (1, 2), (3, 2), (4, 0)], 4, [], 4)
+    assert b[0] == (0, 0) and b[-1] == (4, 0) and b[2] == pytest.approx((2.0, 1.5))

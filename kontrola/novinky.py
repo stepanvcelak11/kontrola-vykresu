@@ -8,6 +8,15 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (11, "12. listopadu 2026 – výkresy DGN", [
+        "<b>Výkres DGN z MicroStationu se v CADu otevře tak, jak vypadá v MicroStationu.</b> Značky (buňky) mají "
+        "svou skutečnou kresbu přímo z výkresu – dřív to byly jen tečky a kresba se musela načítat z knihovny. "
+        "Ověřeno na mapě Husovice: stejné prvky jako v DXF uloženém z MicroStationu.",
+        "<b>Oblouky zůstávají oblouky</b> (dřív se měnily na lomené čáry) – jde je ořezávat, prodlužovat a mají "
+        "poloměr ve Vlastnostech. Vyplněné kroužky se čtou jako výplň.",
+        "<b>Křivky (B-spline)</b> se z DGN čtou – v CADu i v kontrole výkresu. Ve cvičném výkresu od učitele jich "
+        "dřív 112 chybělo (vrstevnice a zaoblené hrany).",
+    ]),
     (10, "12. listopadu 2026", [
         "<b>Nový vzhled celé aplikace.</b> Vlevo je tmavá navigace rozdělená na <b>Programy</b> (Výpočty, CAD, "
         "Kokeš) a <b>Kontrolu</b> (Přehled, Zadání, Výkres). Tlačítka Znovu, Odevzdat a Protokol jsou vidět jen "

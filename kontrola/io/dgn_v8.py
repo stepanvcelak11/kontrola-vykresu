@@ -276,6 +276,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
     chain: list | None = None  # rozpracovaný složený řetězec/tvar: [hlavička, body]
     cell: tuple | None = None  # (hlavička, název, x, y, natočení)
     cell_pts: list = []
+    cell_raw: list = []  # surové části právě čtené buňky
 
     def close_chain():
         nonlocal chain
@@ -293,8 +294,26 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             e, name, x, y, rot, meritko = cell
             if cell_pts and struct.unpack_from("<I", e, 16)[0] == 0:
                 e = e[:16] + cell_pts[0][16:20] + e[20:48] + cell_pts[0][48:60] + e[60:]
-            add(Point(x, y), GeomType.BOD, "INSERT", e, block_name=name or "buňka", rotation=rot, scale=meritko)
+            f = add(Point(x, y), GeomType.BOD, "INSERT", e, block_name=name or "buňka", rotation=rot, scale=meritko)
+            f.cell_data = (b"".join(cell_raw), s)  # kresba buňky (části ve světových souřadnicích) pro CAD
         cell, cell_pts = None, []
+        cell_raw.clear()
+
+    spline: list | None = None  # rozpracovaná křivka B-spline: [hlavička, řád, póly, vnitřní uzly]
+
+    def close_spline():
+        nonlocal spline
+        if spline is not None and len(spline[2]) >= 2:
+            pts = _bspline(spline[2], spline[1], spline[3])
+            if chain is not None and spline[4]:  # křivka jako část složeného řetězce / tvaru
+                if chain[1] and math.dist(chain[1][-1], pts[0]) < 1e-9:
+                    pts = pts[1:]
+                chain[1].extend(pts)
+                spline = None
+                return
+            f = add(LineString(pts), GeomType.LINIE, "SPLINE", spline[0])
+            f.attributes["DGN_KRIVKA"] = "1"
+        spline = None
 
     pending = 0  # kolik následujících prvků ještě patří do buňky / složeného prvku (počet z hlavičky)
     while off + 16 <= n:
@@ -312,8 +331,10 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             if t in (2, 12, 14, 7):  # vnořená buňka / řetězec: jeho části patří také do vnější buňky
                 pending += struct.unpack_from("<I", e, 108)[0]
         else:
-            close_chain()
-            close_cell()
+            if t not in (21, 26):
+                close_spline()
+                close_chain()
+                close_cell()
         try:
             geo = _geometry(t, e, s)
         except (struct.error, ValueError):
@@ -322,6 +343,20 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
         if t in (12, 14) and not comp:
             pending = struct.unpack_from("<I", e, 108)[0]
             chain = [e, [], t == 14]
+            continue
+        if t == 27 and cell is None:  # křivka B-spline: hlavička, za ní případně uzly (typ 26) a póly (typ 21)
+            spline = [e, (e[112] & 0x0F) + 2, [], [], comp and chain is not None]
+            continue
+        if spline is not None and cell is None and t in (21, 26):
+            if t == 26:
+                spline[3] = list(struct.unpack_from(f"<{(len(e) - 36) // 8}d", e, 36))  # uzly začínají hned za krátkou hlavičkou
+                continue
+            cnt, = struct.unpack_from("<I", e, 108)
+            if 0 < cnt <= 100000:
+                dim = 3 if len(e) - 116 >= cnt * 24 else 2
+                c = struct.unpack_from(f"<{cnt * dim}d", e, 116)
+                spline[2] = [(c[i] * s, c[i + 1] * s) for i in range(0, cnt * dim, dim)]
+            close_spline()
             continue
         if t == 2 and not comp:
             pending = struct.unpack_from("<I", e, 108)[0]
@@ -336,6 +371,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
             chain[1].extend(pts)
             continue
         if comp and cell is not None:
+            cell_raw.append(e)
             if not cell_pts and struct.unpack_from("<I", e, 16)[0]:  # vrstva buňky = vrstva jejích částí
                 cell_pts.append(e)
             continue  # kresba uvnitř buňky – buňka je jeden prvek (značka)
@@ -355,9 +391,13 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
         elif kind == "arc":
             pts, closed = geo[1], geo[2]
             if closed:
-                add(Polygon(pts), GeomType.POLYGON, "ELLIPSE", e, closed=True, radius=geo[3])
+                f = add(Polygon(pts), GeomType.POLYGON, "ELLIPSE", e, closed=True, radius=geo[3])
             else:
-                add(LineString(pts), GeomType.LINIE, "ARC", e, radius=geo[3])
+                f = add(LineString(pts), GeomType.LINIE, "ARC", e, radius=geo[3])
+            if geo[4] is not None:  # přesné parametry pro CAD (oblouk zůstane obloukem, ne lomenou čarou)
+                f.attributes["DGN_OBLOUK"] = " ".join(repr(float(v)) for v in geo[4])
+                if closed and _filled(e):
+                    f.attributes["DGN_VYPLN"] = "1"
         elif kind == "text":
             x, y, text, h, wf, rot, just = geo[1:]
             ha, va = _JUST.get(just, (0, 0))
@@ -372,6 +412,7 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
                 add(Point(*p), GeomType.BOD, "POINT", e)
         if progress and fid % 2000 == 0:
             progress(min(95, 100 * off // max(1, n)), "Čtu DGN…")
+    close_spline()
     close_chain()
     close_cell()
     d.warnings.append(f"Výkres přečten přímo z DGN ({len(d.features)} prvků) – experimentálně. Kurzíva se z DGN čte, "
@@ -379,6 +420,48 @@ def read_dgn(path: str | Path, progress=None) -> Drawing:
     if skipped:
         d.warnings.append("Nepřečtené prvky: " + ", ".join(f"typ {k}: {v}×" for k, v in sorted(skipped.items())))
     return d
+
+
+def _bspline(poly: list, rad: int, vnitrni: list, na_usek: int = 8) -> list:
+    """Body na křivce B-spline (de Boor) – uzlový vektor sevřený na koncích, vnitřní uzly z výkresu,
+    nebo rovnoměrné, když ve výkresu nejsou."""
+    n = len(poly)
+    k = max(2, min(rad, n))
+    m = n - k  # počet vnitřních uzlů
+    if len(vnitrni) != m or any(b < a for a, b in zip(vnitrni, vnitrni[1:])):
+        vnitrni = [(i + 1) / (m + 1) for i in range(m)]
+    uzly = [0.0] * k + [float(v) for v in vnitrni] + [1.0] * k
+    out = []
+    kroku = max(1, (m + 1) * na_usek)
+    for j in range(kroku + 1):
+        u = j / kroku
+        r = k - 1  # index úseku: uzly[r] <= u < uzly[r + 1]
+        while r < n - 1 and u >= uzly[r + 1]:
+            r += 1
+        dd = [poly[i + r - (k - 1)] for i in range(k)]
+        for st in range(1, k):
+            for i in range(k - 1, st - 1, -1):
+                ia = i + r - (k - 1)
+                jm = uzly[ia + k - st] - uzly[ia]
+                al = (u - uzly[ia]) / jm if jm > 0 else 0.0
+                dd[i] = ((1 - al) * dd[i - 1][0] + al * dd[i][0], (1 - al) * dd[i - 1][1] + al * dd[i][1])
+        out.append(dd[k - 1])
+    return out
+
+
+def _filled(e: bytes) -> bool:
+    """Prvek má výplň (připojená data 0x0041 za geometrií)."""
+    attr, = struct.unpack_from("<I", e, 12)
+    o = 4 + attr * 2
+    while o + 4 <= len(e):
+        hdr, lid = struct.unpack_from("<HH", e, o)
+        ln = ((hdr & 0xFF) + 1) * 2
+        if ln <= 4:
+            break
+        if lid == 0x0041:
+            return True
+        o += ln
+    return False
 
 
 def _is3d(e: bytes, n2: int, n3: int) -> bool | None:
@@ -434,7 +517,18 @@ def _geometry(t: int, e: bytes, s: float):
             px, py = a * math.cos(u), b * math.sin(u)
             pts.append((cx + m[0] * px + m[1] * py, cy + m[2] * px + m[3] * py))
         closed = t == 15 or abs(abs(sweep) - 2 * math.pi) < 1e-9
-        return ("arc", pts, closed, a)
+        kruh = None  # kruhový oblouk / kružnice: (střed, poloměr, počáteční a koncový úhel proti směru hodin)
+        if a > 0 and abs(a - b) <= 1e-9 * max(1.0, a):
+            if closed:
+                kruh = (cx, cy, a)
+            else:
+                u0 = math.atan2(pts[0][1] - cy, pts[0][0] - cx)
+                u1 = math.atan2(pts[-1][1] - cy, pts[-1][0] - cx)
+                vlevo = ((pts[0][0] - cx) * (pts[1][1] - cy) - (pts[0][1] - cy) * (pts[1][0] - cx)) > 0
+                if not vlevo:
+                    u0, u1 = u1, u0
+                kruh = (cx, cy, a, math.degrees(u0) % 360, math.degrees(u1) % 360)
+        return ("arc", pts, closed, a, kruh)
     if t == 17:
         just, nchar = struct.unpack_from("<HH", e, 112)  # zarovnání a počet znaků
         lng, hgt = struct.unpack_from("<2d", e, 116)
