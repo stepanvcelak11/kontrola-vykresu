@@ -535,11 +535,16 @@ class MainWindow(QMainWindow):
         self._z_poradce = _zastupce(a_por, "Poradce", "poradce")
         # soubory dole u nastavení – daleko od Kontroly, aby se při spěchu nekliklo vedle
         self._z_open = _zastupce(self.a_open, "Otevřít ▾", "otevrit")
-        self._z_settings = _zastupce(self.a_settings, "Nastavení", "nastaveni")
+        self.a_nastaveni_app = QAction("Nastavení…", self)
+        self.a_nastaveni_app.setToolTip("Vzhled, kontrola výkresu, výpočty, CAD a aktualizace na jednom místě")
+        self.a_nastaveni_app.triggered.connect(lambda: self.nastaveni_aplikace())
+        self._z_settings = _zastupce(self.a_nastaveni_app, "Nastavení", "nastaveni")
         # klasická nabídka (Soubor, Zobrazení, Kontrola, Nápověda) schovaná pod ☰
         self.a_menu = QAction("Nabídka", self)
         self.a_menu.setToolTip("Všechny funkce: Soubor, Zobrazení, Kontrola, Nápověda (Alt)")
         menu_all = QMenu(self)
+        menu_all.addAction(self.a_nastaveni_app)
+        menu_all.addSeparator()
         for ma in self.menuBar().actions():
             if ma.menu() is not None:
                 menu_all.addMenu(ma.menu())
@@ -1615,6 +1620,17 @@ class MainWindow(QMainWindow):
                 self.load_drawing_file(Path(out), add_to_project=True, after=lambda d: self.run_checks())
 
         self._run_task(job, done, "Opravuji výkres…")
+
+    def nastaveni_aplikace(self, sekce: str | None = None, modal: bool = True):
+        """Nastavení na jednom místě (vzhled, kontrola, výpočty, CAD, aktualizace)."""
+        from .nastaveni_app import NastaveniAplikace
+        dlg = NastaveniAplikace(self, sekce)
+        self._nastaveni_dlg = dlg
+        if modal:
+            dlg.exec()
+        else:
+            dlg.show()
+        return dlg
 
     def edit_settings(self):
         dlg = SettingsDialog(self.project.config, self.project.rules, self)

@@ -62,7 +62,10 @@ class ImageView(QGraphicsView):
         self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setBackgroundBrush(Qt.darkGray)
+        from PySide6.QtGui import QColor
+
+        from .theme import themed
+        self.setBackgroundBrush(QColor(themed("#E5E7EB")))
         self.item: QGraphicsPixmapItem | None = None
         self.rotation = 0
 

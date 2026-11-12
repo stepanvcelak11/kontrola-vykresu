@@ -25,6 +25,7 @@ class ZpravaNacteni:
     nezname: Counter = field(default_factory=Counter)  # typy entit, které CAD jen zachová
     opravy: list[str] = field(default_factory=list)  # co se při načtení opravilo (poškozený soubor)
     chyby: list[str] = field(default_factory=list)
+    poznamky: list[str] = field(default_factory=list)  # poznámky převodu z DGN (nejde o poškozený soubor)
 
     def text(self) -> str:
         r = [f"DXF {self.verze}, kódování {self.kodovani}, {sum(self.pocty.values())} prvků v modelu."]
@@ -34,6 +35,8 @@ class ZpravaNacteni:
         if self.opravy:
             r.append(f"Soubor byl poškozený – opraveno {len(self.opravy)} míst: " + "; ".join(self.opravy[:5])
                      + ("…" if len(self.opravy) > 5 else ""))
+        if self.poznamky:
+            r.append("Převod z DGN: " + "; ".join(self.poznamky[:5]) + ("…" if len(self.poznamky) > 5 else ""))
         if self.chyby:
             r.append("Nepodařilo se načíst: " + "; ".join(self.chyby[:5]))
         return "\n".join(r)
@@ -99,7 +102,7 @@ class CadDokument:
             raise ValueError(f"{p.name} není výkres DGN.")
         d = cls(doc, p)
         d.ms_barvy = ms_barvy
-        d.zprava.opravy = pozn
+        d.zprava.poznamky = list(pozn)
         return d
 
     def _souhrn(self):

@@ -356,6 +356,13 @@ QSlider::handle:horizontal {{ background: {PANEL}; border: 2px solid {ACCENT}; w
     border-radius: 8px; }}
 
 QScrollArea#navod_oblast, QWidget#navod_obsah {{ background: transparent; }}
+QFrame#radek_nastaveni {{ background: {PANEL}; border: 1px solid {BORDER}; border-radius: 8px; }}
+QFrame#radek_nastaveni QLabel {{ background: transparent; }}
+QListWidget#navigace_nastaveni {{ background: transparent; border: none; }}
+QListWidget#navigace_nastaveni::item {{ padding: 9px 12px; border: none; border-radius: 6px; margin: 1px 0;
+    font-weight: 600; }}
+QListWidget#navigace_nastaveni::item:selected {{ background: {ACCENT_SOFT}; color: {TEXT}; border: none;
+    border-left: 3px solid {ACCENT}; }}
 QFrame#zahlavi_stranky {{ background: {PANEL}; border: none; border-bottom: 1px solid {BORDER}; }}
 QLabel#zahlavi_titul {{ font-size: 13pt; font-weight: 800; background: transparent; }}
 QLabel#zahlavi_popis {{ color: {MUTED}; background: transparent; }}
@@ -421,7 +428,7 @@ QWidget#cad_ribbon QScrollArea, QWidget#pas_karet QScrollArea,
 QWidget#cad_ribbon QScrollArea > QWidget > QWidget, QWidget#pas_karet QScrollArea > QWidget > QWidget {{
     background: {PANEL}; }}
 QWidget#cad_ribbon QTabBar::tab, QWidget#pas_karet QTabBar::tab {{ background: transparent; border: none;
-    border-bottom: 3px solid transparent; border-radius: 0; padding: 7px 14px 5px 14px; margin: 0 2px;
+    border-bottom: 3px solid transparent; border-radius: 0; padding: 7px 11px 5px 11px; margin: 0 1px;
     color: {MUTED}; font-weight: 600; }}
 QWidget#cad_ribbon QTabBar::tab:selected, QWidget#pas_karet QTabBar::tab:selected {{ color: {TEXT};
     border-bottom: 3px solid {ACCENT}; background: transparent; }}

@@ -104,6 +104,34 @@ def test_opraveno_a_ignorovat(window):
     assert first.key in states and states[first.key]["stav"] == "opraveno"
 
 
+def test_nastaveni_na_jednom_miste(window):
+    """Tlačítko Nastavení v levé liště otevře rozcestník nastavení; vzhled se mění hned."""
+    from kontrola.ui import theme
+    w = window
+    d = w.nastaveni_aplikace(modal=False)
+    assert d.seznam.count() == len(d.SEKCE) == d.stack.count()
+    d.rezim.setCurrentIndex(1)
+    d._nastav_rezim(1)
+    assert theme.is_dark() and w.a_dark.isChecked()
+    d._nastav_rezim(0)
+    assert not theme.is_dark()
+    i = d.pismo.findData("vetsi")
+    d.pismo.setCurrentIndex(i)
+    d.pismo.activated.emit(i)
+    assert theme.font_scale_name() == "vetsi"
+    w.set_font_scale("normalni")
+    d.close()
+    # levá lišta: akce kontroly jen na stránkách kontroly, sekce se schovají s procesy
+    w.show_page("vypocty")
+    assert not any(a.isVisible() for a in w._akce_kontroly)
+    w.show_page("vykres")
+    assert all(a.isVisible() for a in w._akce_kontroly)
+    w.nastav_procesy(["vypocty"])
+    assert not w._sekce_listy["KONTROLA"][0].isVisible() and w._sekce_listy["PROGRAMY"][0].isVisible()
+    w.nastav_procesy([])
+    assert w._sekce_listy["KONTROLA"][0].isVisible()
+
+
 def test_nastaveni_kontrol_se_ulozi(window, monkeypatch):
     from PySide6.QtWidgets import QDialog
     from kontrola.checks.base import Severity
