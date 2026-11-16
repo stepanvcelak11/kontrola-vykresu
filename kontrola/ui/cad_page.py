@@ -497,6 +497,9 @@ class CadPage(QWidget):
                 "„arch otoč 30“, „arch smaž“)",
         "pohled": "uložené pohledy (Saved Views): „pohled ulož Náměstí“, „pohled Náměstí“, „pohled“ = seznam",
         "nahraď buňku": "nahradit vybrané buňky jinou buňkou – stejný bod, natočení a měřítko (Replace Cell)",
+        "rozmísti popisy": "čísla a výšky bodů, které přeškrtává čára nebo se překrývají, posunout na volné místo "
+                           "u jejich bodu (výběr, nebo celý výkres)",
+        "legenda": "legenda mapy – tabulka vzorek + název ze všech druhů prvků použitých ve výkresu (podle zadání)",
         "zvyš text": "kopírovat text se zvýšeným číslem kliknutím (Copy and Increment Text – čísla bodů)",
         "qtrig": "body ze zakázky QTrig rovnou do výkresu – značky, čísla a linie z kódů (i průběžně z terénu)",
         "zkratky": "nastavit klávesové zkratky (funkční klávesy) a zkratky příkazového řádku",
@@ -566,6 +569,8 @@ class CadPage(QWidget):
         "saved views": "pohled", "sv": "pohled", "pohledy": "pohled", "uloz pohled": "pohled",
         "replace cell": "nahraď buňku", "nahrad bunku": "nahraď buňku",
         "vymen bunku": "nahraď buňku", "vyměň buňku": "nahraď buňku",
+        "rozmisti popisy": "rozmísti popisy", "popisy": "rozmísti popisy", "rp": "rozmísti popisy",
+        "legend": "legenda", "leg": "legenda",
         "increment text": "zvyš text", "zvys text": "zvyš text", "it": "zvyš text", "copy increment": "zvyš text",
         "predvolba": "předvolba", "recent": "naposledy", "teren": "qtrig", "terén": "qtrig",
         "z terenu": "qtrig", "z terénu": "qtrig",
@@ -3688,6 +3693,8 @@ class CadPage(QWidget):
             self._barva(arg)
         elif cmd in ("styl", "tloušťka"):
             self._styl_tloustka(cmd, arg)
+        elif cmd == "rozmísti popisy":
+            self.rozmisti_popisy()
         elif cmd == "info":
             self._info()
         elif cmd == "výměra":
@@ -3822,6 +3829,66 @@ class CadPage(QWidget):
             self.kresleni.tloustka = attr["lineweight"]
         self.vypis(f"{'Styl' if cmd == 'styl' else 'Tloušťka'} {a}.")
         self.aktivni_atributy()
+
+    def n_legenda(self):
+        """Legenda mapy z použitých prvků: klik = levý horní roh (náhled obrysu pod kurzorem)."""
+        from shapely.geometry import LineString
+        from ..cad import legenda as LG
+        doc = self.dok.doc
+        pol = LG.polozky(doc, self.dok.msp, list(self._predvolby))
+        if not pol:
+            raise ValueError("Ve výkresu zatím nejsou žádné čáry ani značky – legendu není z čeho sestavit.")
+        rs = self._pravidla()
+        m = self.anotace or (rs.meritko if rs is not None and rs.meritko else None)
+        if not m:  # zadání měřítko neuvádí: popisy mají na papíře obvykle 1,5 mm → měřítko z výšek písma zadání
+            vysky = sorted(p.vyska for p in self._predvolby if p.geometrie == "text" and p.vyska)
+            odhad = vysky[len(vysky) // 2] / 1.5 * 1000.0 if vysky else 1000.0
+            m = min((200, 250, 500, 1000, 2000, 2880, 5000), key=lambda x: abs(x - odhad))
+        if self._je_model():
+            k, kb = m / 1000.0, 1.0
+        else:
+            k, kb = 1.0, 1000.0 / m
+        w, h = LG.rozmer(len(pol), k, max(len(p.nazev) for p in pol))
+        self.vypis(f"Legenda: {len(pol)} položek, {w / k:.0f} × {h / k:.0f} mm na papíře v měřítku 1:{m:g} "
+                   f"(hladina {LG.VRSTVA}, Kontrola ji nekontroluje).")
+        roh = yield self._bod_req("Legenda – levý horní roh:", nahled=lambda x, y: [LineString(
+            [(x, y), (x + w, y), (x + w, y - h), (x, y - h), (x, y)])])
+        stare = [e for e in self.prostor if e.dxf.layer == LG.VRSTVA]
+        if stare:  # legenda se obnovuje: stará se nahradí novou (jedno Zpět ji vrátí)
+            U.smaz(self.historie_zmen, stare)
+            self._po_zmene([], stare)
+        styl = self.kresleni.textovy_styl or next((p.textovy_styl for p in self._predvolby if p.textovy_styl), None)
+        nove = LG.nakresli(doc, self.prostor, self.historie_zmen, pol, roh, k, styl=styl, kb=kb)
+        self._po_zmene(nove, [], anotovat=False)
+        self.vypis("Legenda nakreslena" + (" (předchozí nahrazena)" if stare else "")
+                   + ". Názvy upravíte příkazem „uprav text“; po dokreslení mapy ji příkazem „legenda“ obnovíte.")
+
+    def rozmisti_popisy(self):
+        """Čísla a výšky bodů přeškrtnuté čarou nebo přes sebe → na volné místo u bodu (jedno Zpět)."""
+        from ..cad import popisy as P
+        if self.dok is None:
+            self.vypis("Nejdřív otevřete výkres.")
+            return None
+        vyber = [e for e in self.vyber if e.dxftype() == "TEXT"]
+        try:
+            v = P.rozmisti(self.prostor, self.historie_zmen, vyber or None)
+        except Exception as e:  # noqa: BLE001 – oprava nesmí shodit CAD
+            self.vypis(f"⚠ Rozmístění popisů se nepovedlo: {type(e).__name__}: {e}")
+            return None
+        if v.nove:
+            self._po_zmene(v.nove, v.stare, anotovat=False)
+            self.vyber = []
+            self._zvyrazni()
+        rozsah = "ve výběru" if vyber else "ve výkresu"
+        if not v.nove:
+            self.vypis(f"Popisy bodů {rozsah} jsou v pořádku – žádný nepřeškrtává čára ani nepřekrývá jiný popis."
+                       if not v.nevyreseno else
+                       f"U {v.nevyreseno} popisů není kolem bodu volné místo – posuňte je ručně (příkaz posun).")
+        else:
+            self.vypis(f"Rozmístěno {v.posunuto} popisů bodů {rozsah}"
+                       + (f", u {v.nevyreseno} není kolem bodu úplně volné místo (zkontrolujte je)" if v.nevyreseno
+                          else "") + f"; {v.v_poradku} bylo v pořádku. Zpět = Ctrl+Z.")
+        return v
 
     def _info(self):
         if not self.vyber:

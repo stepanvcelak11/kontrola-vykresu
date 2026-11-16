@@ -3,6 +3,8 @@ stavový řádek s úchyty dole. Popisky česky, v bublině je i anglický náze
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QPointF, QSettings, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu, QScrollArea,
@@ -23,6 +25,7 @@ NAZVY = {
     "text": ("Text", "Place Text"), "uprav text": ("Upravit text", "Edit Text"),
     "text po prvku": ("Text podél prvku", "Place Text Along Element"),
     "zvyš text": ("Kopie textu se zvýšením", "Copy and Increment Text"),
+    "rozmísti popisy": ("Rozmístit popisy bodů", "—"), "legenda": ("Legenda mapy", "—"),
     "popisek": ("Popisek s odkazem", "Place Note"), "popis souřadnic": ("Popis souřadnic", "Label Coordinate"),
     "písmo": ("Písmo", "Text Styles"), "najdi": ("Najít text", "Find Text"),
     "nahraď": ("Nahradit text", "Replace Text"),
@@ -137,7 +140,7 @@ KARTY = [
     ]),
     ("Popisy", [
         ("Text", ["text", "uprav text", "text po prvku", "zvyš text", "popisek", "popis souřadnic", "písmo",
-                  "najdi", "nahraď"]),
+                  "najdi", "nahraď", "rozmísti popisy"]),
         ("Kóty", ["kóta", "kóta úhlu", "kóta poloměru"]),
         ("Buňky", ["vlož", "knihovna buněk", "nahraď buňku", "buňky po prvku", "blok"]),
     ]),
@@ -161,7 +164,7 @@ KARTY = [
     ]),
     ("Geodézie", [
         ("Body", ["body", "qtrig", "kódy", "kódovník"]),
-        ("Mapa", ["síť", "oměrné míry", "transformace", "vrstevnice", "profil", "mračno"]),
+        ("Mapa", ["síť", "legenda", "oměrné míry", "transformace", "vrstevnice", "profil", "mračno"]),
     ]),
     ("Zadání a kontrola", [
         ("Kontrola", ["@b_check"]),
@@ -443,6 +446,12 @@ class PasKaret(QWidget):
                 if not ik.isNull():
                     b.setIcon(ik)
                 tip = t.popis or t.popisek
+                stara = _STARA_HLADINA.search(t.keyin)
+                if stara:  # rozpracovaný školní pás: nástroj ještě míří do staré číslované hladiny
+                    b.setStyleSheet("QToolButton { color: #9CA3AF; font-style: italic; }")
+                    tip += (f"</b><br>⚠ Kreslí do staré hladiny „{stara.group(1)}“, která není v atributové tabulce "
+                            "Účelové mapy – Kontrola takový prvek ohlásí. Když existuje, použijte nástroj s hladinou "
+                            "GS… (normální písmo), nebo po nakreslení změňte hladinu.<b>")
                 b.setToolTip(f"<b>{tip}</b><br><span style='color:#888'>{t.keyin}</span>")
                 b.clicked.connect(lambda _c=False, ki=t.keyin: self.keyin.emit(ki))
                 g.addWidget(b, k % 3, k // 3)
@@ -699,6 +708,9 @@ def menu_soubor(stranka) -> QMenu:
     z.triggered.connect(lambda: stranka.zavri_vykres())
     m.aboutToShow.connect(lambda: [a.setEnabled(a.data().isEnabled()) for a in m.actions() if a.data()])
     return m
+
+
+_STARA_HLADINA = re.compile(r'active level "?(Vrstva \d+)"?', re.I)
 
 
 def _hezky_titul(t: str) -> str:

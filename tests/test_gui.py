@@ -4575,3 +4575,27 @@ def test_zadani1_kresba_jako_student(window):
         c.zrus(tise=True)
     finally:
         w.project.rules = puvodni
+
+
+def test_cad_legenda_a_rozmisteni_popisu_prikazem(window):
+    w = window
+    w.show_page("cad")
+    c = w.cad
+    c.novy()
+    for t in ("u", "0 0", "20 0", ""):
+        c.zadej(t)
+    c.zrus(tise=True)
+    c.kresleni.bod((5.0, 0.0))
+    tx = c.kresleni.text((5.2, -0.5), "101", 1.0)
+    c._po_zmene(list(c.dok.msp), [])
+    c.zadej("rp")
+    assert "Rozmístěno 1 popisů" in c.historie.toPlainText() and tx.dxf.owner is None
+    c.zadej("legenda")
+    assert c._gen is not None and "levý horní roh" in c.vyzva.text()
+    c.zadej("30 30")
+    leg = [e for e in c.dok.msp if e.dxf.layer == "LEGENDA"]
+    assert leg and any(e.dxftype() == "TEXT" and e.dxf.text == "LEGENDA" for e in leg)
+    n = len(leg)
+    c.zadej("legenda")
+    c.zadej("40 40")  # obnovení: stará legenda se nahradí
+    assert len([e for e in c.dok.msp if e.dxf.layer == "LEGENDA"]) == n

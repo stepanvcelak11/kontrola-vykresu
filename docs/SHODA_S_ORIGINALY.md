@@ -75,6 +75,8 @@ Vše je vlastní implementace podle matematiky a norem (nic se nekopíruje ani n
 | Makra, dávky, pluginy | ❌ |
 | Výkon na velkých výkresech | 🟡 | 
 |  – 50 000 prvků: otevření ≈ 10 s, výběr všeho 0,1 s, posun všeho ≈ 11 s, Zpět ≈ 9 s (překreslení knihovnou ezdxf) | |
+| Legenda mapy z použitých prvků (vzorek + název podle zadání, hladina LEGENDA mimo kontrolu, obnovení příkazem) | ✅ | test |
+| Rozmístění popisů bodů: čísla a výšky přeškrtnuté čarou nebo přes sebe na volné místo u bodu (jedno Zpět) | ✅ | zadání 1 a Husovice: 0 nálezů „popis přeškrtává čára“ |
 | Skupiny prvků (Graphic Group): skupina z výběru, klik vybere celou skupinu, zámek skupin, vyjmutí; skupina vydrží úpravy i uložení | ✅ |
 
 ## Jednotné pojmenování (Kontrola, CAD, tahák, atributy)

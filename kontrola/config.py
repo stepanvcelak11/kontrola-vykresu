@@ -47,7 +47,7 @@ class Config:
     presnost: float = 0.0001  # m – pod touto vzdáleností jsou body totožné
     okruh_textu: float = 5.0  # m – do jaké vzdálenosti hledat text k bodu/linii
     max_chyb_na_kontrolu: int = 5000
-    ignorovane_hladiny: list[str] = field(default_factory=lambda: ["KONTROLA_CHYBY", "DEFPOINTS"])
+    ignorovane_hladiny: list[str] = field(default_factory=lambda: ["KONTROLA_CHYBY", "DEFPOINTS", "LEGENDA"])
     oda_cesta: str = ""
     rozpracovany: bool = False  # rozpracovaný výkres: nehlásit, co vzniká jen nedokončenou kresbou
     seznam_souradnic: str = ""  # cesta k seznamu souřadnic (nastaví projekt / příkazová řádka, neukládá se)
@@ -99,7 +99,7 @@ class Config:
             presnost=float(n.get("presnost", 0.0001)),
             okruh_textu=float(n.get("okruh_textu", 5.0)),
             max_chyb_na_kontrolu=int(n.get("max_chyb_na_kontrolu", 5000)),
-            ignorovane_hladiny=list(n.get("ignorovane_hladiny", ["KONTROLA_CHYBY", "DEFPOINTS"]) or []),
+            ignorovane_hladiny=list(n.get("ignorovane_hladiny", ["KONTROLA_CHYBY", "DEFPOINTS", "LEGENDA"]) or []),
             oda_cesta=str(n.get("oda_cesta", "") or ""),
             rozpracovany=bool(n.get("rozpracovany", False)),
             kontroly={},

@@ -8,6 +8,18 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (14, "16. listopadu 2026 – legenda mapy a rozmístění popisů bodů jedním příkazem", [
+        "<b>Legenda mapy</b> (CAD → Geodézie → Legenda mapy, příkaz „legenda“). Z prvků, které ve výkresu opravdu "
+        "jsou, sestaví tabulku vzorek + název podle zadání (budovy, ploty, stromy, šoupata…) – čáry svou barvou, "
+        "stylem a tloušťkou, značky ve velikosti jako v mapě. Kliknete, kam ji chcete; po dokreslení mapy ji stejný "
+        "příkaz obnoví. Kreslí se do hladiny LEGENDA, kterou Kontrola nekontroluje.",
+        "<b>Rozmístit popisy bodů</b> (CAD → Popisy, příkaz „rozmísti popisy“ nebo „rp“). Čísla a výšky bodů, "
+        "které přeškrtává čára nebo se překrývají, posune na volné místo u jejich bodu – všechny najednou, nebo jen "
+        "vybrané. Popisy, které jsou v pořádku, nechává být; jedno Zpět vrátí vše. Na školních výkresech tím "
+        "zmizely všechny nálezy „Popis přeškrtává čára“ (41, 18 a 12 nálezů).",
+        "<b>Pás Účelové mapy:</b> nástroje, které ještě kreslí do starých hladin „Vrstva N“ (školní pás je "
+        "rozpracovaný), jsou šedě a kurzívou a bublina na to upozorní – Kontrola by takový prvek ohlásila.",
+    ]),
     (13, "12. listopadu 2026 – úlohy z Gromy a zadání 1 z MicroStationu projité jako student", [
         "<b>Kreslicí nástroje zůstávají aktivní jako v MicroStationu.</b> Po dokončení čáry (Enter / pravé "
         "tlačítko) se hned kreslí další prvek stejnými atributy; nástroj ukončí Esc. Dřív se musel po každém "

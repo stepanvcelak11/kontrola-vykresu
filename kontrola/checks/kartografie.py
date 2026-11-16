@@ -78,7 +78,8 @@ class PopisPresCaru(Check):
     id = "popis_pres_caru"
     nazev = "Popis přeškrtnutý čarou"
     skupina = "Kartografie"
-    popis = ("Čára vede přes popis (text), takže je popis špatně čitelný. Posuňte popis vedle čáry. "
+    popis = ("Čára vede přes popis (text), takže je popis špatně čitelný. Posuňte popis vedle čáry – čísla a výšky "
+             "bodů přesune najednou příkaz „rozmísti popisy“ v CADu. "
              "Ignorují se čáry, které k popisu patří (odkazová čára, rámeček) – kratší než popis.")
     vychozi_zavaznost = Severity.INFO
     parametry = [Param("min_podil", "Hlásit, když čára vede přes [% šířky popisu]", "float", 40.0)]
