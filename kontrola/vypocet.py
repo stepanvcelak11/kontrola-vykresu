@@ -162,29 +162,63 @@ def _merge_faces(obs: list[Obs], prumer: bool = True) -> list[Obs]:
     return out
 
 
+def text_souboru(path: str | Path, limit: int | None = None) -> str:
+    """Text zápisníku nebo seznamu v jakémkoli kódování, které Windows použije: UTF-16 (Poznámkový blok
+    „Unicode“), UTF-8 s BOM i bez, jinak cp1250 (Groma)."""
+    raw = Path(path).read_bytes()
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        t = raw.decode("utf-16", errors="replace")
+    elif raw[:3] == b"\xef\xbb\xbf":
+        t = raw[3:].decode("utf-8", errors="replace")
+    elif raw[:200].count(b"\x00") > 20:  # UTF-16 bez BOM
+        t = raw.decode("utf-16-le" if raw[1:2] == b"\x00" else "utf-16-be", errors="replace")
+    else:
+        try:
+            t = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            t = raw.decode("cp1250", errors="replace")
+    t = t.replace("\x00", "").replace("\x1a", "")
+    return t[:limit] if limit else t
+
+
+def _je_cislo(t: str) -> bool:
+    try:
+        float(t.replace(",", "."))
+        return True
+    except ValueError:
+        return False
+
+
 def read_zap(path: str | Path, spojit: bool = True) -> list[Station]:
     """Zápisník Gromy: ``1 <stanovisko> <vp> *``, orientace, ``-1``, podrobné body, ``/``.
 
     ``spojit=False`` vrátí měření tak, jak jsou zapsaná (obě polohy dalekohledu zvlášť) – pro editor."""
-    raw = Path(path).read_bytes()
-    text = raw.decode("cp1250", errors="replace")
+    text = text_souboru(path)
     stations: list[Station] = []
     cur: Station | None = None
     part = "orient"
+    bez_stanoviska: list[Obs] = []  # záměry před prvním stanoviskem (zápisník bez řádku „1 <st> <vp> *“)
     for line in text.splitlines():
         s = line.strip()
         if not s or s.startswith(";"):
             continue
         tok = s.split()
-        if tok[0] == "1" and len(tok) >= 3 and (s.endswith("*") or len(tok) == 3):
-            try:
-                cur = Station(tok[1], float(tok[2]))
-            except ValueError:
-                continue
+        # stanovisko: „1 4001 1.57 *“, i s popisem za hvězdičkou („1 4001 1.57 *u plotu“) nebo bez ní
+        pred = s.split("*", 1)[0].split()
+        if tok[0] == "1" and len(pred) in (2, 3) and ("*" in s or len(pred) == 3) and (
+                len(pred) == 2 or _je_cislo(pred[2])):
+            cur = Station(pred[1], float(pred[2].replace(",", ".")) if len(pred) == 3 else 0.0)
             stations.append(cur)
             part = "orient"
             continue
         if cur is None:
+            if s == "-1":
+                part = "detail"
+            elif len(tok) >= 5 and all(_je_cislo(x) for x in tok[1:5]):
+                try:
+                    bez_stanoviska.append(Obs(tok[0], *(float(x.replace(",", ".")) for x in tok[1:5])))
+                except ValueError:
+                    pass
             continue
         if s == "-1":
             part = "detail"
@@ -202,6 +236,12 @@ def read_zap(path: str | Path, spojit: bool = True) -> list[Station]:
             except ValueError:
                 continue
             (cur.orient if part == "orient" else cur.detail).append(o)
+    if not stations and bez_stanoviska:
+        # Groma takový zápisník také načte – záměry dostanou neznámé stanovisko, číslo a výšku přístroje
+        # doplní uživatel v Seznamu měření
+        cur = Station("?", 0.0)
+        cur.detail = bez_stanoviska
+        stations.append(cur)
     if spojit:
         for st in stations:
             st.orient = _merge_faces(st.orient)

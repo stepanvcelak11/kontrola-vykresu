@@ -25,6 +25,7 @@ def _bod(x, y):
 IKONY = {
     # Soubor
     "Import souřadnic…": '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/>',
+    "Import měření…": '<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/><path d="M12 6v3"/>',
     "Export souřadnic…": '<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 20h16"/>',
     "Načíst z QTrig…": '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18h2"/>',
     "Trimble (File and Report)…": '<rect x="8" y="4" width="8" height="8" rx="1.5"/><path d="M12 12v3"/>'

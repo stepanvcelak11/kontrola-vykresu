@@ -4599,3 +4599,30 @@ def test_cad_legenda_a_rozmisteni_popisu_prikazem(window):
     c.zadej("legenda")
     c.zadej("40 40")  # obnovení: stará legenda se nahradí
     assert len([e for e in c.dok.msp if e.dxf.layer == "LEGENDA"]) == n
+
+
+def test_zapisnik_v_ruznem_kodovani_a_bez_stanoviska(window, tmp_path):
+    """Zápisník uložený Poznámkovým blokem jako Unicode / UTF-8, stanovisko s popisem a zápisník bez řádku
+    stanoviska se načtou (dřív „V souboru nejsou žádná stanoviska“); .zap otevřený v okně jde do Seznamu měření."""
+    z = Path(__file__).resolve().parents[1] / "podklady" / "zadani2-husovice" / "zap_husovice.zap"
+    if not z.exists():
+        pytest.skip("chybí zápisník")
+    text = z.read_bytes().decode("cp1250")
+    w = window
+    w.show_page("vypocty")
+    zp = w.vypocty.zapisnik
+    for nazev, data in (("unicode.zap", text.encode("utf-16")), ("utf8bom.zap", b"\xef\xbb\xbf" + text.encode()),
+                        ("utf16bez.zap", text.encode("utf-16-le"))):
+        f = tmp_path / nazev
+        f.write_bytes(data)
+        assert zp.nacist(str(f)), nazev
+        assert [s.bod for s in zp.stanoviska] == ["4001", "4002"], nazev
+    f = tmp_path / "popis.zap"
+    f.write_text(text.replace("1 4001        1.57 *", "1 4001        1.57 *u plotu"), encoding="cp1250")
+    assert zp.nacist(str(f)) and zp.stanoviska[0].bod == "4001" and zp.stanoviska[0].vp == pytest.approx(1.57)
+    f = tmp_path / "bez.zap"
+    f.write_text("4001  21.378  1.250  0.0000  93.0720\n55  15.040  0.500  36.7580  97.6140\n", encoding="cp1250")
+    assert zp.nacist(str(f)) and zp.stanoviska[0].bod == "?" and len(zp.stanoviska[0].detail) == 2
+    assert "chybí řádek stanoviska" in zp.info.text()
+    w.open_path(str(z))
+    assert len(zp.stanoviska) == 2 and w.tabs.currentWidget() is w.vypocty

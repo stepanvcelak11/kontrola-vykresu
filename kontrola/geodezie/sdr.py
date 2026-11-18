@@ -39,7 +39,8 @@ def _cisla(s: str) -> list[float]:
 def read_sdr(cesta: str | Path, dane: set[str] | None = None) -> list[Station]:
     """Stanoviska se záměrami tak, jak jsou zapsané (obě polohy zvlášť, spojí je výpočet).
     Orientace = záměry na orientační bod stanoviska (záznam 11TP / 07) a na dané body na začátku."""
-    text = Path(cesta).read_bytes().decode("cp1250", errors="replace")
+    from ..vypocet import text_souboru as _text_souboru
+    text = _text_souboru(cesta)
     dane = dane or set()
     stanoviska: list[Station] = []
     st: Station | None = None

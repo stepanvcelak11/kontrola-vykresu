@@ -80,7 +80,8 @@ def precti_radek(line: str) -> dict[str, object]:
 
 def read_gsi(path: str | Path) -> tuple[list[Station], list[str]]:
     """Stanoviska se všemi záměrami jako podrobné body + varování (řádky, které nešlo použít)."""
-    text = Path(path).read_bytes().decode("cp1250", errors="replace")
+    from ..vypocet import text_souboru as _text_souboru
+    text = _text_souboru(path)
     stations: list[Station] = []
     cur: Station | None = None
     vc = 0.0

@@ -534,7 +534,7 @@ KARTY_GROMA = [
     ("Soubor", [
         ("Soubor", [("Import souřadnic…", "@import_dialog"), ("Export souřadnic…", "@export_dialog"),
                     ("Načíst z QTrig…", "@qtrig_dialog")]),
-        ("Import", [("Trimble (File and Report)…", "@trimble_dialog")]),
+        ("Import", [("Import měření…", "@_import_mereni"), ("Trimble (File and Report)…", "@trimble_dialog")]),
         ("Editace", [("Krok zpět", "@undo"), ("Krok vpřed", "@redo"), ("Odstranit", "@delete_selected")]),
         ("Seznam", [("Další seznam souřadnic…", "@dalsi_seznam"), ("Přidej bod…", "@add_point"), ("Hromadné změny…", "@bulk_dialog"),
                     ("Porovnání souřadnic…", "@porovnat_seznam"), ("Identické body…", "@duplicates_dialog")]),
@@ -671,6 +671,7 @@ class PasGromy(QWidget):
             "@okna": lambda: self._menu_oken(), "@_protokol": lambda: o.otevri(p.protokol),
             "@_protokol_pdf": p.ulohy.protokol_pdf, "@_zapisnik": lambda: o.otevri(p.zapisnik),
             "@_zpracovani": lambda: p.zpracovani_dialog(),
+            "@_import_mereni": lambda: p.zapisnik.nacist() and o.otevri(p.zapisnik),
             "@_tolerance": lambda: (p.ulohy.nastaveni_vypoctu(stranka="Tolerance"), p.lista.nacti()),
             "@_teodolit": lambda: (p.ulohy.nastaveni_vypoctu(stranka="Teodolit"), p.lista.nacti()),
         }

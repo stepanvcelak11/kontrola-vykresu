@@ -162,7 +162,8 @@ class VypocetDialog(QDialog):
     def _nacti_mereni(self, zap: str, known) -> list:
         """Zápisník Gromy (.zap) nebo Leica GSI-8/16 (orientace = dané body na začátku stanoviska)."""
         from ..geodezie.gsi import je_gsi, read_gsi, rozdel_orientace
-        text = Path(zap).read_bytes()[:4000].decode("cp1250", errors="replace")
+        from ..vypocet import text_souboru
+        text = text_souboru(zap, 4000)
         self._gsi_zpravy = []
         if not je_gsi(text):
             return read_zap(zap)

@@ -8,6 +8,14 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (15, "18. listopadu 2026 – zápisník se načte vždy", [
+        "<b>Zápisník .zap se načte i tam, kde dřív aplikace hlásila „V souboru nejsou žádná stanoviska“:</b> "
+        "soubor uložený Poznámkovým blokem jako Unicode nebo UTF-8, stanovisko s popisem za hvězdičkou "
+        "(„1 4001 1.57 *u plotu“) i zápisník úplně bez řádku stanoviska – záměry se pak načtou ke stanovisku „?“, "
+        "které doplníte v Seznamu měření (jako v Gromě).",
+        "<b>Import měření</b> je v Gromě i tady: Výpočty → Soubor → Import měření…. Zápisník (.zap, .gsi, .sdr) "
+        "přetažený do okna aplikace nebo otevřený přes Otevřít se rovnou načte do Seznamu měření.",
+    ]),
     (14, "16. listopadu 2026 – legenda mapy a rozmístění popisů bodů jedním příkazem", [
         "<b>Legenda mapy</b> (CAD → Geodézie → Legenda mapy, příkaz „legenda“). Z prvků, které ve výkresu opravdu "
         "jsou, sestaví tabulku vzorek + název podle zadání (budovy, ploty, stromy, šoupata…) – čáry svou barvou, "

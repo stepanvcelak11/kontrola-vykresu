@@ -1393,6 +1393,12 @@ class MainWindow(QMainWindow):
                 self.zadani.template_page.set_template(path)
             else:
                 self.load_drawing_file(Path(path), add_to_project=True)
+        elif suffix in (".zap", ".gsi", ".sdr"):
+            # zápisník měření → rovnou do Seznamu měření ve Výpočtech (jako Import měření v Gromě)
+            self.show_page("vypocty")
+            v = self.vypocty
+            if v.zapisnik.nacist(path):
+                v.tabs.otevri(v.zapisnik)
         else:
             # tabulky, náčrty a fotky patří do Zadání
             self.tabs.setCurrentWidget(self.zadani)

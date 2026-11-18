@@ -249,7 +249,14 @@ class ZapisnikPanel(QWidget):
             QMessageBox.warning(self, "Zápisník", f"Zápisník nejde načíst: {e}")
             return False
         if not st:
-            QMessageBox.warning(self, "Zápisník", "V souboru nejsou žádná stanoviska.")
+            from ..vypocet import text_souboru
+            try:
+                ukazka = [r for r in text_souboru(cesta, 3000).splitlines() if r.strip()][:6]
+            except OSError:
+                ukazka = []
+            QMessageBox.warning(self, "Zápisník", "V souboru nejsou žádná měření – nenašel jsem stanovisko "
+                                "(„1 4001 1.57 *“) ani záměry (číslo bodu, délka, výška cíle, Hz, Z).\n\n"
+                                "Začátek souboru:\n" + "\n".join(ukazka))
             return False
         from ..geodezie.body import uplne_cislo
         from .groma_formulare import predcisli_listy
@@ -264,6 +271,10 @@ class ZapisnikPanel(QWidget):
         n = sum(len(s.orient) + len(s.detail) for s in st)
         self.info.setText(f"Načteno {len(st)} stanovisek, {n} záměr ({self.soubor.name})."
                           + (f" Krátká čísla bodů doplněna předčíslím {pc}." if pc else ""))
+        if any(s_.bod == "?" for s_ in st):
+            self.info.setText(self.info.text() + " ⚠ V souboru chybí řádek stanoviska („1 4001 1.57 *“) – "
+                              "záměry jsou u stanoviska „?“. Doplňte číslo stanoviska a výšku přístroje vlevo dole "
+                              "a orientace přepněte ve sloupci Část.")
         return True
 
     def ulozit(self, cesta: str | None = None):
