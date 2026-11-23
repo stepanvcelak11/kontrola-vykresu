@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGroupBox,
-                               QHBoxLayout, QLabel, QListWidget, QMessageBox, QPushButton,
+                               QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QMessageBox, QPushButton,
                                QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
@@ -27,7 +27,7 @@ class TableImportWizard(QDialog):
     """Náhled tabulky a přiřazení sloupců k polím pravidel."""
 
     def __init__(self, path: str, parent=None, mapping: dict | None = None, header_row: int | None = None,
-                 sheet: str | None = None):
+                 sheet: str | None = None, radky: str = ""):
         super().__init__(parent)
         self.setWindowTitle("Import tabulky atributů")
         self.resize(1150, 720)
@@ -35,6 +35,7 @@ class TableImportWizard(QDialog):
         self.data: TableData = read_table(path, sheet)
         self.result: ImportResult | None = None
         self._combos: dict[str, QComboBox] = {}
+        self.cislo_zadani: int | None = None
 
         lay = QVBoxLayout(self)
         top = QHBoxLayout()
@@ -66,6 +67,23 @@ class TableImportWizard(QDialog):
         top.addWidget(b_guess)
         top.addStretch(1)
         lay.addLayout(top)
+
+        # zadání „každý student má několik řádků Směrnice“ (datový model v MGEO)
+        rad = QHBoxLayout()
+        rad.addWidget(QLabel("Jen řádky:"))
+        self.radky = QLineEdit(radky or "")
+        self.radky.setPlaceholderText("všechny – nebo čísla řádků jako v Excelu, např. 7, 15, 28, 59, 92, 241, 247")
+        self.radky.setToolTip("Vezmou se jen tyto řádky tabulky (třídy prvků vašeho zadání). Rozsah: 28-30.")
+        self.radky.textChanged.connect(self._update_summary)
+        rad.addWidget(self.radky, 1)
+        b_zad = QPushButton("Podle čísla zadání…")
+        b_zad.setToolTip("Načte rozpis zadání od učitele (Word/Excel: „Č. zadání | řádek | řádek …“) "
+                         "a vyplní řádky vašeho zadání.")
+        b_zad.clicked.connect(lambda: self._radky_ze_zadani())
+        rad.addWidget(b_zad)
+        self.radky_info = QLabel("")
+        rad.addWidget(self.radky_info)
+        lay.addLayout(rad)
 
         split = QSplitter(Qt.Horizontal)
         self.preview = QTableWidget()
@@ -198,8 +216,43 @@ class TableImportWizard(QDialog):
         v = self.header.value()
         return v - 1 if v > 0 else None
 
+    def jen_radky(self) -> set[int] | None:
+        from ..importer.zadani_radky import parse_radky
+        r = parse_radky(self.radky.text())
+        return r or None
+
+    def _radky_ze_zadani(self, cesta: str | None = None, cislo: int | None = None):
+        from PySide6.QtWidgets import QFileDialog
+
+        from ..importer.zadani_radky import nacti
+        if not cesta:
+            cesta, _ = QFileDialog.getOpenFileName(self, "Rozpis zadání (číslo zadání → řádky)", "",
+                                                   "Dokumenty (*.doc *.docx *.odt *.pdf *.xls *.xlsx *.csv *.txt);;"
+                                                   "Vše (*)")
+            if not cesta:
+                return
+        try:
+            zad = nacti(cesta)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Rozpis zadání", f"Soubor nejde přečíst: {exc}")
+            return
+        if not zad:
+            QMessageBox.warning(self, "Rozpis zadání", "V souboru není tabulka „Č. zadání | řádek | řádek …“.")
+            return
+        if cislo is None:
+            cislo, ok = QInputDialog.getInt(self, "Číslo zadání", f"Vaše číslo zadání ({min(zad)}–{max(zad)}):",
+                                            min(zad), min(zad), max(zad))
+            if not ok:
+                return
+        if cislo not in zad:
+            QMessageBox.warning(self, "Rozpis zadání", f"Zadání {cislo} v rozpisu není.")
+            return
+        self.cislo_zadani = cislo
+        self.radky.setText(", ".join(map(str, zad[cislo])))
+        self.radky_info.setText(f"zadání č. {cislo}")
+
     def _update_summary(self, *_):
-        res = generate_rules(self.data.rows, self.header_row(), self.mapping(), self.path)
+        res = generate_rules(self.data.rows, self.header_row(), self.mapping(), self.path, self.jen_radky())
         s = f"<b>Náhled:</b> {res.summary()}"
         if text_units_mm(self.data.rows, self.header_row(), self.mapping()) and not self.scale.value():
             s += ("<br><span style='color:#c60'>Výšky textu jsou v tabulce v mm – vyplňte měřítko mapy "
@@ -210,7 +263,7 @@ class TableImportWizard(QDialog):
         self.summary.setText(s)
 
     def _accept(self):
-        self.result = generate_rules(self.data.rows, self.header_row(), self.mapping(), self.path)
+        self.result = generate_rules(self.data.rows, self.header_row(), self.mapping(), self.path, self.jen_radky())
         if self.scale.value():
             self.result.rules.meritko = self.scale.value()
         elif text_units_mm(self.data.rows, self.header_row(), self.mapping()):

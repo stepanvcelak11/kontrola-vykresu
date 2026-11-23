@@ -31,7 +31,7 @@ _UNITS = {0: 1.0, 1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1.0, 7: 1000.0, 14
 FLATTEN_DISTANCE = 0.005  # m – odchylka náhrady oblouku lomenou čarou
 
 SUPPORTED = {"LINE", "LWPOLYLINE", "POLYLINE", "ARC", "CIRCLE", "POINT", "INSERT",
-             "TEXT", "MTEXT", "HATCH", "SPLINE", "ELLIPSE"}
+             "TEXT", "MTEXT", "HATCH", "SPLINE", "ELLIPSE", "DIMENSION"}
 
 _KV_RE = re.compile(r"^\s*([^=:]{1,64}?)\s*[=:]\s*(.*)$")
 
@@ -335,6 +335,16 @@ class _Loader:
             yield self._text(e, base)
         elif t == "HATCH":
             yield from self._hatch(e, base)
+        elif t == "DIMENSION":
+            # kóta (typ prvku 33 MicroStationu): kontroluje se jako její text – hladina, barva, písmo, výška
+            try:
+                texty = [v for v in e.virtual_entities() if v.dxftype() in ("TEXT", "MTEXT")]
+            except Exception:  # noqa: BLE001 – kóta bez geometrie (blok chybí)
+                texty = []
+            if texty:
+                f = self._text(texty[0], base)
+                f.dxftype = "DIMENSION"
+                yield f
 
     def _insert(self, e, base: dict) -> Feature:
         c = self.ctx.xy(_to_wcs(e, e.dxf.insert))

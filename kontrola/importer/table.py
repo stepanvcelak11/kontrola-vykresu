@@ -319,7 +319,9 @@ def _num(txt: str) -> float | None:
 
 
 def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[str, int],
-                   source: str = "") -> ImportResult:
+                   source: str = "", jen_radky=None) -> ImportResult:
+    """``jen_radky`` = čísla řádků tabulky (jako v Excelu), ze kterých se mají pravidla vzít – zadání
+    „každý student má 7 řádků Směrnice“. Ostatní řádky se přeskočí bez hlášení."""
     rs = RuleSet()
     res = ImportResult(rs)
     seen: dict[str, int] = {}
@@ -339,6 +341,8 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
     for i in range(start, len(rows)):
         r = rows[i]
         rowno = i + 1
+        if jen_radky is not None and rowno not in jen_radky:
+            continue
         filled = [c for c in r if str(c).strip()]
         if any(re.match(r"^\s*pozn[aá]mk[ay]\s*:?\s*$", c, re.IGNORECASE) for c in filled[:2]):
             notes = True  # „Poznámky:“ – dál už jsou jen vysvětlivky pod tabulkou
@@ -362,6 +366,12 @@ def generate_rules(rows: list[list[str]], header_row: int | None, mapping: dict[
         if not hladina and not blok and "kod" not in mapping:
             res.errors.append(f"Řádek {rowno}: chybí hladina i buňka.")
             continue
+        if kod in seen and "kod" not in mapping and (hladina or blok):
+            # bez sloupce s kódem je kódem název – stejný název jako čára i značka (Telefonní budka)
+            # nebo na jiné hladině (Náplň nedefinována) se rozliší
+            alt = f"{kod} (značka)" if blok else f"{kod} (hladina {hladina})"
+            if alt not in seen:
+                kod = alt
         if kod in seen:
             # skupinový kód pro více řádků (např. „6.xx2“ pro různé druhy kanalizace) – rozliší se názvem
             alt = f"{kod} {nazev}".strip() if nazev and re.search(r"x", kod, re.IGNORECASE) else ""

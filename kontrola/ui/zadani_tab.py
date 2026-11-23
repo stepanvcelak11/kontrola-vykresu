@@ -235,7 +235,8 @@ class TablePage(QWidget):
         mapping = {k: int(v) for k, v in (info.get("mapovani") or {}).items()} or None
         try:
             dlg = TableImportWizard(str(p.root / rel), self, mapping=mapping,
-                                    header_row=info.get("hlavicka"), sheet=info.get("list"))
+                                    header_row=info.get("hlavicka"), sheet=info.get("list"),
+                                    radky=info.get("radky", ""))
         except Exception as exc:
             QMessageBox.warning(self, "Import tabulky", f"Tabulku nelze přečíst: {exc}")
             return
@@ -245,7 +246,8 @@ class TablePage(QWidget):
         res = dlg.result
         added, replaced = p.rules.merge(res.rules, replace=True)
         p.meta["tabulky"][rel] = {"hlavicka": dlg.header_row(), "mapovani": dlg.mapping(),
-                                  "list": dlg.data.sheet, "souhrn": res.summary()}
+                                  "list": dlg.data.sheet, "souhrn": res.summary(),
+                                  "radky": dlg.radky.text().strip()}
         html = f"<b>{Path(rel).name}:</b> {res.summary()} Nových {added}, nahrazeno {replaced}."
         if res.errors:
             html += "<br><b>Nezpracované řádky:</b><br>" + "<br>".join(res.errors)

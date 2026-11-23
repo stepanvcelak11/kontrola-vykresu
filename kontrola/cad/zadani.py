@@ -119,6 +119,8 @@ def _typ_cary(styl) -> tuple[str, str | None]:
         if n in MS_STYLY:
             return f"DGN Style {n}", None
     m = re.match(r"^(\d+\.[0-9A-Za-z]+)", s)
+    if m and not re.search(r"[–—]|\d\s*-\s*\d", s) and s != m.group(1):
+        return s.strip(), None  # celé jméno stylu z knihovny („2.123  PL VP“) – MGEO bere „2.123“ jako jiný styl
     if m:  # vlastní styl MicroStationu (z rozsahu „2.09–2.17“ první) – typ čáry se jménem kódu stylu
         return m.group(1), None
     return s.upper(), None
@@ -129,6 +131,8 @@ def _tloustka(rule, rs: RuleSet) -> tuple[int, str | None]:
         return 0, None
     exp, unknown = rs.expected_weights(rule)
     if not exp:
+        if unknown and set(unknown) == {0}:
+            return 0, None  # tloušťka 0 = nejtenčí čára, převod netřeba
         return 0, (f"tloušťka MicroStationu {', '.join(map(str, unknown))} nemá převod na mm – doplňte "
                     "převodní tabulku tloušťek" if unknown else None)
     mm = exp[0]
@@ -151,6 +155,8 @@ def predvolby(rs: RuleSet) -> list[Predvolba]:
             nastroj = "úsečka"  # zadání povoluje jen Úsečku (typ 3), ne Lomenou čáru (typ 4) – kontrola by ji hlásila
         if r.blok:
             nastroj = "vlož"
+        if r.typy_prvku and set(r.typy_prvku) == {33}:
+            nastroj = "kóta"  # „Okótování situace“ – prvek Kóta
         p = Predvolba(nazev=r.nazev or r.kod or (r.hladina or "?"), kod=r.kod or "", geometrie=geo,
                       nastroj=nastroj, vrstva=_vrstva(r.hladina), blok=r.blok, meritko_stylu=r.meritko_stylu,
                       meritko_bunky=r.meritko_bunky if isinstance(r.meritko_bunky, (int, float)) else None)
@@ -192,6 +198,8 @@ def predvolby(rs: RuleSet) -> list[Predvolba]:
                 from ..checks.attributes import parse_alignment
                 h, v = parse_alignment(r.zarovnani)
                 p.zarovnani = _ZAROVNANI.get((h if h is not None else 0, v if v is not None else 0))
+        if geo == "text":
+            p.ms["vyska"] = p.vyska  # výška písma je známá až teď (výše se teprve počítá)
         if r.kod and r.kod != p.nazev:
             p.nazev = f"{r.kod} – {r.nazev}" if r.nazev else r.kod
         out.append(p)

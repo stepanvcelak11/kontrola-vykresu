@@ -14,6 +14,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QVBoxLayout, QWidget
 
 FAQ = [
+    ("Datový model z MGEO (řádky Směrnice podle čísla zadání)",
+     "datovy model mgeo dotovy smernice radky radek cislo zadani trida prvku tridy jmp ucelova mapa",
+     "1) <b>Zadání → Tabulka atributů</b>: nahrajte Směrnici (Smernice.xls), list <b>účelová mapa</b>. 2) V průvodci klikněte <b>Podle čísla zadání…</b>, vyberte Zadání.doc a své číslo – vyplní se vašich 7 řádků (nebo je napište do pole „Jen řádky“). 3) <b>Vytvořit pravidla</b>. 4) Přidejte knihovny učitele GEO-V8.CEL a GEO.RSC (CAD → Připojit → Knihovny od učitele). 5) CAD → <b>Nový podle zadání</b>: v Šabloně jsou třídy prvků s hladinou, barvou, stylem, buňkou a písmem – nakreslete každou. 6) <b>Kontrola</b> ověří, že vše odpovídá Směrnici."),
     ("Jak začít / jak to funguje", "zacit funguje postup jak pouzivat navod",
      "1) V záložce <b>Zadání</b> nahrajte Směrnici (Excel/PDF) a Word se zadáním. 2) <b>Otevřít</b> výkres – DXF "
      "uložený z MicroStationu. 3) <b>Zkontrolovat</b> (F5). 4) Klikejte na chyby – výkres se přiblíží a ukáže se "

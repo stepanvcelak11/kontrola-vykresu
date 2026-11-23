@@ -380,7 +380,7 @@ class TextRule:
 MS_ELEMENT_NAMES = {
     2: "Buňka", 3: "Úsečka", 4: "Lomená čára", 6: "Tvar", 7: "Textový uzel", 11: "Křivka",
     12: "Komplexní řetězec", 14: "Komplexní tvar", 15: "Elipsa", 16: "Oblouk", 17: "Text",
-    22: "Bodový řetězec",
+    22: "Bodový řetězec", 33: "Kóta",
 }
 
 
@@ -407,8 +407,8 @@ def geometry_from_element_types(types: list[int]) -> GeomType | None:
     if not types:
         return None
     s = set(types)
-    if s <= {17, 7}:
-        return GeomType.TEXT
+    if s <= {17, 7, 33}:
+        return GeomType.TEXT  # kóta se kontroluje jako svůj text
     if s == {2}:
         return GeomType.BOD
     if s <= {6, 14}:
@@ -437,6 +437,8 @@ def feature_element_type(f: Feature) -> int | None:
         return 17
     if t == "MTEXT":
         return 7
+    if t == "DIMENSION":
+        return 33
     return None
 
 

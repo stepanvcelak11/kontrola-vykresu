@@ -8,6 +8,15 @@ from __future__ import annotations
 KEY = "novinky/videno"
 
 NOVINKY: list[tuple[int, str, list[str]]] = [
+    (16, "23. listopadu 2026 – datový model z MGEO bez MGEO", [
+        "<b>Úloha „datový model“ (řádky Směrnice podle čísla zadání):</b> v průvodci importem tabulky je pole "
+        "<b>Jen řádky</b> a tlačítko <b>Podle čísla zadání…</b> – načte rozpis zadání od učitele (Word „Č. zadání | "
+        "řádek | řádek …“) a vezme jen vašich 7 tříd prvků. Z nich vzniknou kreslicí nástroje (hladina, barva, "
+        "styl z GEO.RSC, buňka z GEO-V8.CEL, písmo a výška) a Kontrola hlídá, že nakreslené prvky odpovídají.",
+        "Stejný název pro čáru i značku (Telefonní budka, Priska) se už nepřeskakuje – značka dostane „(značka)“.",
+        "<b>Kóty</b>: třída „Okótování situace“ (typ prvku 33) kreslí kótu písmem ze zadání a Kontrola kóty načte "
+        "a zkontroluje jejich hladinu, barvu a písmo. Plot se kreslí celým jménem stylu z GEO.RSC („2.123  PL VP“), jak ho chce MGEO.",
+    ]),
     (15, "18. listopadu 2026 – zápisník se načte vždy", [
         "<b>Zápisník .zap se načte i tam, kde dřív aplikace hlásila „V souboru nejsou žádná stanoviska“:</b> "
         "soubor uložený Poznámkovým blokem jako Unicode nebo UTF-8, stanovisko s popisem za hvězdičkou "

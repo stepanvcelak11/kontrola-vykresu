@@ -328,9 +328,10 @@ class Kresleni:
             raise ValueError("Kótované body splývají.")
         (ax, ay), (bx, by) = _xy(a), _xy(b)
         ang = math.degrees(math.atan2(by - ay, bx - ax))
-        d = self.msp.add_linear_dim(base=_xy(poloha), p1=(ax, ay), p2=(bx, by), angle=ang,
-                                    override={"dimtxt": vyska_textu, "dimasz": vyska_textu * 0.8,
-                                              "dimdec": 2},
+        ov = {"dimtxt": vyska_textu, "dimasz": vyska_textu * 0.8, "dimdec": 2}
+        if self.textovy_styl and self.textovy_styl in self.msp.doc.styles:
+            ov["dimtxsty"] = self.textovy_styl  # písmo kóty podle zadání (Okótování situace – CS_WORKING)
+        d = self.msp.add_linear_dim(base=_xy(poloha), p1=(ax, ay), p2=(bx, by), angle=ang, override=ov,
                                     dxfattribs=self._attr())
         d.render()
         return self._hotovo("Kóta", d.dimension)
